@@ -1,0 +1,100 @@
+- [Home](/)
+- [Curriculum map](curriculum/course-outline.md)
+- [Paper curriculum](papers/index.md)
+- [Readiness matrix](curriculum/readiness-matrix.md)
+
+- **0 · ML / PyTorch foundations**
+  - [00.1 · Tensors: shape, dtype, device](lessons/module-00/lesson-01.md)
+  - [00.2 · Ops, broadcasting, views vs copies](lessons/module-00/lesson-02.md)
+  - [00.3 · Autograd: backward and grad](lessons/module-00/lesson-03.md)
+  - [00.4 · nn.Module and a minimal training loop](lessons/module-00/lesson-04.md)
+- **1 · Probability & language modeling**
+  - [01.1 · Random variables, expectation, variance](lessons/module-01/lesson-01.md)
+  - [01.2 · Conditional probability, Bayes, likelihood](lessons/module-01/lesson-02.md)
+  - [01.3 · Entropy, cross-entropy, KL divergence](lessons/module-01/lesson-03.md)
+  - [01.4 · The language-modeling objective & perplexity](lessons/module-01/lesson-04.md)
+- **2 · Gradients & backpropagation**
+  - [02.1 · Derivatives, partials, chain rule, gradients](lessons/module-02/lesson-01.md)
+  - [02.2 · Jacobians, VJPs, computational graphs](lessons/module-02/lesson-02.md)
+  - [02.3 · Backprop through linear + softmax + CE by hand](lessons/module-02/lesson-03.md)
+  - [02.4 · Autograd internals](lessons/module-02/lesson-04.md)
+- **3 · Optimization**
+  - [03.1 · Gradient descent, SGD, momentum](lessons/module-03/lesson-01.md)
+  - [03.2 · RMSProp, Adam, AdamW, weight decay](lessons/module-03/lesson-02.md)
+  - [03.3 · Warmup, cosine decay, gradient clipping](lessons/module-03/lesson-03.md)
+- **4 · Tokenization & data representation**
+  - [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md)
+  - [04.2 · Byte-Pair Encoding from scratch](lessons/module-04/lesson-02.md)
+  - [04.3 · Special tokens, packing, data loading](lessons/module-04/lesson-03.md)
+- **5 · Transformer from scratch**
+  - [05.1 · Embeddings & positional encoding](lessons/module-05/lesson-01.md)
+  - [05.2 · Q/K/V & scaled dot-product attention](lessons/module-05/lesson-02.md)
+  - [05.3 · Multi-head attention](lessons/module-05/lesson-03.md)
+  - [05.4 · MLP, residual, LayerNorm, the block](lessons/module-05/lesson-04.md)
+- **6 · GPT-2 from scratch**
+  - [06.1 · Assembling GPT-2](lessons/module-06/lesson-01.md)
+  - [06.2 · Init, forward pass, parameter count](lessons/module-06/lesson-02.md)
+  - [06.3 · Generation: greedy, temperature, top-k, top-p](lessons/module-06/lesson-03.md)
+- **7 · Pretraining infrastructure**
+  - [07.1 · The training loop: batching & loss](lessons/module-07/lesson-01.md)
+  - [07.2 · Micro-batch, global batch, grad accumulation](lessons/module-07/lesson-02.md)
+  - [07.3 · Checkpointing, resuming, seeds, reproducibility](lessons/module-07/lesson-03.md)
+  - [07.4 · Throughput, FLOPs, MFU, memory accounting](lessons/module-07/lesson-04.md)
+- **8 · GPU performance & memory**
+  - [08.1 · GPU architecture & memory hierarchy](lessons/module-08/lesson-01.md)
+  - [08.2 · Arithmetic intensity, roofline, fusion](lessons/module-08/lesson-02.md)
+  - [08.3 · Profiling & mixed precision](lessons/module-08/lesson-03.md)
+  - [08.4 · FlashAttention & a Triton kernel; benchmark](lessons/module-08/lesson-04.md)
+- **9 · Distributed training**
+  - [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md)
+  - [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md)
+  - [09.3 · Tensor / pipeline / expert parallelism](lessons/module-09/lesson-03.md)
+- **10 · Scaling laws**
+  - [10.1 · FLOPs & parameter counting](lessons/module-10/lesson-01.md)
+  - [10.2 · Kaplan scaling laws; fit a curve](lessons/module-10/lesson-02.md)
+  - [10.3 · Chinchilla compute-optimality](lessons/module-10/lesson-03.md)
+- **11 · Data engineering**
+  - [11.1 · Common Crawl → clean text](lessons/module-11/lesson-01.md)
+  - [11.2 · Deduplication & MinHash](lessons/module-11/lesson-02.md)
+  - [11.3 · Contamination, mixing, curriculum](lessons/module-11/lesson-03.md)
+- **12 · Modern architectures**
+  - [12.1 · RoPE](lessons/module-12/lesson-01.md)
+  - [12.2 · RMSNorm & SwiGLU](lessons/module-12/lesson-02.md)
+  - [12.3 · MQA / GQA](lessons/module-12/lesson-03.md)
+  - [12.4 · Mixture of Experts (DeepSeek-style)](lessons/module-12/lesson-04.md)
+- **13 · Evaluation**
+  - [13.1 · Loss, perplexity, zero-/few-shot](lessons/module-13/lesson-01.md)
+  - [13.2 · Contamination, calibration, task eval](lessons/module-13/lesson-02.md)
+  - [13.3 · A reproducible eval harness](lessons/module-13/lesson-03.md)
+- **14 · Supervised fine-tuning**
+  - [14.1 · Instruction data & chat templates](lessons/module-14/lesson-01.md)
+  - [14.2 · Loss masking & packing](lessons/module-14/lesson-02.md)
+  - [14.3 · LoRA & QLoRA from scratch](lessons/module-14/lesson-03.md)
+- **15 · Preference learning / RLHF / DPO**
+  - [15.1 · Bradley-Terry & the reward model](lessons/module-15/lesson-01.md)
+  - [15.2 · Policy gradient, advantage, PPO](lessons/module-15/lesson-02.md)
+  - [15.3 · DPO: derivation & implementation](lessons/module-15/lesson-03.md)
+  - [15.4 · SFT vs RM+PPO vs DPO](lessons/module-15/lesson-04.md)
+- **16 · RL for reasoning**
+  - [16.1 · From PPO to GRPO](lessons/module-16/lesson-01.md)
+  - [16.2 · RLVR & verifiable rewards](lessons/module-16/lesson-02.md)
+  - [16.3 · Rejection sampling & verifiers](lessons/module-16/lesson-03.md)
+- **17 · Modern reasoning models**
+  - [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md)
+  - [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md)
+  - [17.3 · DeepSeek-R1 case study](lessons/module-17/lesson-03.md)
+- **18 · Tool use**
+  - [18.1 · Tool schemas & function calling](lessons/module-18/lesson-01.md)
+  - [18.2 · The observation/action loop](lessons/module-18/lesson-02.md)
+- **19 · Agents & research engineering**
+  - [19.1 · ReAct → a mini SWE-agent](lessons/module-19/lesson-01.md)
+  - [19.2 · Experiment design & research writing](lessons/module-19/lesson-02.md)
+- **20 · Capstone**
+  - [20 · Mini frontier LLM](lessons/module-20/lesson-01.md)
+
+- **Reference**
+  - [Paper curriculum](papers/index.md)
+  - [Math & ML cheat sheet](assets/math-cheatsheet.md)
+  - [PyTorch / systems cheat sheet](assets/pytorch-cheatsheet.md)
+  - [Glossary](assets/glossary.md)
+  - [Readiness matrix](curriculum/readiness-matrix.md)
