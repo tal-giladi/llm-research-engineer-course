@@ -21,11 +21,11 @@
 - [x] Module 12 — Modern architectures (+ rope,rmsnorm,swiglu,gqa,moe)
 - [x] Module 13 — Evaluation (+ evaluation/harness,calibration)
 - [x] Module 14 — SFT (+ sft/ chat,masking,lora)
-- [ ] Module 15 — RLHF/DPO (+ preference/, rl/)
+- [x] Module 15 — RLHF/DPO (+ preference/, rl/ppo)
 - [ ] Module 16 — Reasoning RL (+ rl/, reasoning/)
 - [ ] Module 17 — Reasoning models (+ reasoning/)
-- [ ] Module 18 — Tool use (+ tools/)
-- [ ] Module 19 — Agents & research eng (+ agents/)
+- [x] Module 18 — Tool use (+ tools/)
+- [x] Module 19 — Agents & research eng (+ agents/)
 - [ ] Module 20 — Capstone
 - [ ] Reference: cheat sheets, glossary, Anki CSV exports
 - [ ] Enable GitHub Pages (Settings → Pages → deploy from `main` / root)
