@@ -8,8 +8,8 @@
 - [x] Paper curriculum: all 30 URLs web-verified, ordered reading guide with per-paper template.
 - [x] Module 0 — PyTorch foundations
 - [x] Module 1 — Probability & LM (+ evaluation/metrics)
-- [ ] Module 2 — Gradients & backprop
-- [ ] Module 3 — Optimization (+ optim/)
+- [x] Module 2 — Gradients & backprop (+ model/micrograd)
+- [x] Module 3 — Optimization (+ optim/)
 - [ ] Module 4 — Tokenization & data (+ tokenizer/, data/)
 - [ ] Module 5 — Transformer (+ attention/, model/)
 - [ ] Module 6 — GPT-2 (+ model/)
