@@ -6,8 +6,8 @@
 ## Build order (commit + push after each — partial work is always safe)
 - [x] Scaffold: docsify site, `code/` package skeleton, curriculum map, dependency graph, readiness matrix.
 - [x] Paper curriculum: all 30 URLs web-verified, ordered reading guide with per-paper template.
-- [ ] Module 0 — PyTorch foundations (+ code)
-- [ ] Module 1 — Probability & LM
+- [x] Module 0 — PyTorch foundations
+- [x] Module 1 — Probability & LM (+ evaluation/metrics)
 - [ ] Module 2 — Gradients & backprop
 - [ ] Module 3 — Optimization (+ optim/)
 - [ ] Module 4 — Tokenization & data (+ tokenizer/, data/)
