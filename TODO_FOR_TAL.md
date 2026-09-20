@@ -1,7 +1,12 @@
 # Status — LLM Research Engineer course
 
+**COMPLETE.** 21 modules · 67 lessons · 30 verified papers · one coherent `llmre` codebase · 159 passing tests · 3 cheat sheets + glossary + 96-card Anki deck.
+
 **Repo:** https://github.com/tal-giladi/llm-research-engineer-course
-**Live (after Pages is enabled):** https://tal-giladi.github.io/llm-research-engineer-course/
+**Live:** https://tal-giladi.github.io/llm-research-engineer-course/ (Pages enabled, HTTP 200)
+
+Verify locally: `cd code && py -m pip install -e . && py -m pytest -q` (159 pass).
+Run the whole pipeline tiny/CPU: `py code/scripts/capstone.py` (~20s; pretrain loss 5.9 → 0.07).
 
 ## Build order (commit + push after each — partial work is always safe)
 - [x] Scaffold: docsify site, `code/` package skeleton, curriculum map, dependency graph, readiness matrix.
