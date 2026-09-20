@@ -1,0 +1,96 @@
+What shape and dtype must a token-id tensor have for nn.Embedding?,"(B, T) with dtype long (int64)"
+What does nn.Embedding do mechanically?,"A row lookup by integer id, not a matmul; (B,T) long -> (B,T,C)"
+"What is the (B, T, C) convention?","Batch, then time/position, then channels/width; the standard tensor layout"
+Scaled dot-product attention formula,softmax(QK^T / sqrt(d_h) + M) V
+Why divide attention scores by sqrt(d_h)?,"Keeps score variance ~1 so softmax doesn't saturate as d_h grows"
+What does the causal mask do?,Sets future-position scores to -inf before softmax so position t attends only to positions <= t
+Shape of the attention score matrix?,"(B, nh, T, T) — the memory bottleneck, quadratic in T"
+What is a query in attention?,The vector a position uses to ask what it is looking for
+What is a key in attention?,The vector each position advertises to be matched against queries
+What is a value in attention?,The content a position hands over when it is attended to
+Why multiple attention heads?,"Each of nh heads (dim d_h = C/nh) attends in a different subspace, then outputs are concatenated"
+Pre-norm transformer block equations,x = x + attn(ln1(x)); x = x + mlp(ln2(x))
+What does a residual connection give you?,A direct gradient path (x + f(x)) that lets very deep stacks train
+What does LayerNorm normalize over?,"The last (width) dim C, per (batch, position), then a learned scale and shift"
+How does RMSNorm differ from LayerNorm?,"Rescales by root-mean-square only — no mean subtraction, no bias; cheaper"
+What is SwiGLU?,"A gated MLP: (Swish(xW) * xV) W2, replacing GELU-MLP in modern LLMs"
+What does RoPE encode and how?,"Relative position, by rotating q/k pairs by an angle proportional to position index"
+MQA vs GQA vs MHA?,"MHA: one KV per head; MQA: one KV shared by all heads; GQA: one KV per group of heads"
+What problem do MQA/GQA solve?,They shrink the KV cache (memory and bandwidth) during generation
+What is a Mixture of Experts?,"Many expert MLPs plus a router sending each token to a few, raising capacity at fixed per-token compute"
+What does an MoE load-balancing loss do?,Spreads tokens evenly across experts so none is starved or overloaded
+Softmax formula,softmax(z)_i = e^(z_i) / sum_j e^(z_j)
+How do you make softmax numerically stable?,Subtract the max logit before exponentiating: e^(z_i - m) / sum_j e^(z_j - m)
+Language-modeling loss,"Cross-entropy: mean of -log p(true next token), averaged over scored tokens"
+Perplexity in terms of loss,PPL = exp(cross-entropy loss)
+Perplexity of a uniform guess over V tokens?,V
+Entropy of a distribution p,H(p) = -sum_i p_i log p_i
+KL divergence formula,KL(p||q) = sum_i p_i log(p_i / q_i); >= 0 and asymmetric
+What is temperature in sampling?,"A divisor on logits before softmax: <1 sharpens toward greedy, >1 flattens"
+What does temperature -> 0 give?,Greedy decoding (argmax)
+Top-k sampling,Restrict sampling to the k highest-probability tokens then renormalize
+Top-p (nucleus) sampling,Sample from the smallest set of tokens whose cumulative probability exceeds p
+Correct logits/targets shapes for F.cross_entropy,"Logits (B*T, V) and targets (B*T,) long — flatten batch and time"
+Why not softmax before cross_entropy?,cross_entropy fuses log_softmax + nll_loss for numerical stability
+What is a gradient?,The vector of partial derivatives of the loss w.r.t. params; points uphill so we step against it
+What is a VJP?,Vector-Jacobian product — multiply an upstream gradient by a layer's Jacobian without forming it
+What does .grad do across backward calls?,It ACCUMULATES; you must zero it each step
+What does torch.no_grad() do?,Disables graph construction for inference or manual updates (saves memory)
+What does .detach() do?,Cuts a tensor from the autograd graph while sharing its data
+The four steps of an optimizer step in order,"zero_grad, backward, (clip_grad_norm), step"
+SGD with momentum idea,Accumulate an exponential average of past gradients to smooth and accelerate the trajectory
+What does Adam track per parameter?,Running means of the gradient (1st moment) and squared gradient (2nd moment)
+AdamW vs Adam,"AdamW decouples weight decay — applied to weights directly, not folded into the gradient"
+What does gradient clipping do?,Rescales the gradient when its global norm exceeds a threshold to prevent loss spikes
+What is learning-rate warmup?,Ramp LR up from ~0 over the first steps before the main decay to avoid early instability
+What is a cosine LR schedule?,Decay LR from peak to a floor along a half-cosine curve after warmup
+How is BPE trained?,By repeatedly merging the most frequent adjacent symbol pair into the vocabulary
+What is global batch size?,micro_batch * grad_accumulation_steps * data_parallel_world_size
+Why gradient accumulation?,Reach a large global batch under limited memory by summing grads over micro-batches before one step
+"When accumulating grads, why divide loss by N?","So gradients average rather than sum, matching a true large batch"
+What must a checkpoint save to resume exactly?,"model weights, optimizer state, step, and RNG state"
+What is MFU?,"Model FLOPs Utilization — achieved model FLOPs / hardware peak FLOPs, typically 40-55%"
+Training FLOPs rule of thumb,"~6ND: about 2ND forward + 4ND backward, for N params and D tokens"
+Forward-pass FLOPs per token (dense)?,About 2N for N parameters
+What is arithmetic intensity?,"FLOPs per byte moved; low means memory-bound, high means compute-bound"
+What does a roofline plot show?,Whether a kernel is memory-bandwidth-bound or compute-bound versus peak
+HBM vs SRAM,"HBM: large slow off-chip DRAM; SRAM: small fast on-chip memory kernels keep their working set in"
+Key idea of FlashAttention,"Tile attention and never write the full T x T scores to HBM — exact, less memory and bandwidth"
+bf16 vs fp16 for training,"bf16 has fp32's exponent range (no scaler); fp16 has more precision but a narrow range (needs GradScaler)"
+What stays fp32 under mixed precision?,Master weights and optimizer state; only forward/backward compute is low precision
+What does all-reduce do?,Sums or averages a tensor across all workers and returns it to every worker
+How does DDP use all-reduce?,"Each worker holds a full model copy; gradients are averaged with all-reduce each step, overlapped with backward"
+What does FSDP/ZeRO shard?,"Optimizer state, gradients, and parameters across workers to fit larger models"
+Tensor vs pipeline vs expert parallelism,"Tensor: split a matrix; Pipeline: split layers into stages; Expert: place MoE experts on different devices"
+What is the Chinchilla finding?,"For fixed compute, scale params and tokens together — roughly 20 tokens per parameter"
+What do Kaplan scaling laws describe?,"Power-law relationships between loss and compute, params, and data"
+What is dataset contamination?,"Test examples leaking into training data, inflating benchmark scores"
+What does MinHash estimate?,"Jaccard similarity between documents cheaply, for near-duplicate detection"
+What is SFT?,"Supervised fine-tuning on instruction-response pairs, with loss on the response tokens"
+What is a chat template?,Fixed role markers and special tokens turning a conversation into one token stream
+What is loss masking in SFT?,"Set prompt/system target ids to ignore (-100) so loss is only on tokens the model should produce"
+What is LoRA?,"Freeze base weights, train a small low-rank update BA per matrix — far fewer trainable params"
+What is QLoRA?,LoRA on top of a 4-bit quantized frozen base model so large models fine-tune on one GPU
+Bradley-Terry preference probability,"P(A beats B) = sigmoid(r_A - r_B), the reward-model training objective"
+What is a reward model?,A model trained on preference pairs to score outputs; supplies the RLHF reward
+What is the RLHF pipeline?,"Fit a reward model to human preferences, then optimize the policy against it (e.g. PPO)"
+What is an advantage in policy gradients?,How much better an action was than a baseline (A = R - b); lowers gradient variance
+What does the KL penalty do in RLHF?,Keeps the policy close to the reference model to prevent reward hacking and collapse
+What does PPO clip?,"The policy ratio, keeping each update near the old policy"
+DPO in one line,Optimize preferences directly with a classification-style loss — no reward model or RL loop
+How does GRPO differ from PPO?,It drops the value network and estimates advantage from the mean reward of a group of samples
+What is RLVR?,"RL with Verifiable Rewards — an automatic checker (math answer, unit tests) supplies the reward"
+What is a verifier?,An automatic checker that judges output correctness and supplies the reward
+What is chain-of-thought?,Emitting intermediate reasoning steps before the final answer to improve multi-step accuracy
+What is self-consistency?,Sample several reasoning chains and take a majority vote over final answers
+What is STaR?,Bootstrap reasoning by fine-tuning on model-generated chains that reached the correct answer
+Process reward vs outcome reward,"Process: score each reasoning step; Outcome: reward only the final answer's correctness"
+What made DeepSeek-R1 notable?,Reasoning emerged largely from RL on verifiable rewards (GRPO) with little SFT
+What is distillation?,Train a smaller student to imitate a larger teacher's outputs (logits or generated data)
+What is a tool schema?,"A machine-readable declaration of a tool's name, description, and JSON parameters"
+What is function calling?,A model emitting a structured call (name + JSON args) the harness executes and feeds back
+What is the ReAct pattern?,Interleave reasoning traces with actions (tool calls) so thinking and acting inform each other
+What is an ablation?,An experiment removing/changing one component to measure its contribution
+What is pass@k?,The probability that at least one of k sampled solutions is correct
+What does F.scaled_dot_product_attention with is_causal=True do?,Runs fused (FlashAttention-style) causal attention without materializing the full score matrix
+"In generation, which position's logits predict the next token?",Only the last position's logits
