@@ -22,12 +22,12 @@
 - [x] Module 13 — Evaluation (+ evaluation/harness,calibration)
 - [x] Module 14 — SFT (+ sft/ chat,masking,lora)
 - [x] Module 15 — RLHF/DPO (+ preference/, rl/ppo)
-- [ ] Module 16 — Reasoning RL (+ rl/, reasoning/)
-- [ ] Module 17 — Reasoning models (+ reasoning/)
+- [x] Module 16 — Reasoning RL (+ rl/grpo, reasoning/rlvr,verifiers)
+- [x] Module 17 — Reasoning models (+ reasoning/cot,r1_pipeline)
 - [x] Module 18 — Tool use (+ tools/)
 - [x] Module 19 — Agents & research eng (+ agents/)
 - [ ] Module 20 — Capstone
-- [ ] Reference: cheat sheets, glossary, Anki CSV exports
+- [x] Reference: cheat sheets, glossary, Anki CSV exports
 - [ ] Enable GitHub Pages (Settings → Pages → deploy from `main` / root)
 
 ## To publish the site
