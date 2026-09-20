@@ -1,0 +1,53 @@
+# Capstone: "Mini Frontier LLM" — the reproducible configuration for
+# `scripts/capstone.py` (Module 20). Everything here is sized to run the WHOLE
+# course pipeline end-to-end on a CPU in well under a couple of minutes. The
+# lesson (lessons/module-20/lesson-01.md) explains how to scale each number up
+# for a real run.
+
+seed: 1234
+
+# ---- tokenizer (Module 4) --------------------------------------------------
+tokenizer:
+  vocab_size: 384          # 256 raw byte ids + 128 learned BPE merges
+
+# ---- model (Modules 5-6): a tiny GPT-2 ------------------------------------
+model:
+  block_size: 32           # context length T
+  n_layer: 2
+  n_head: 4
+  n_embd: 64
+  dropout: 0.0
+  bias: true
+
+# ---- pretraining (Modules 3-7) --------------------------------------------
+pretrain:
+  max_steps: 300
+  micro_batch_size: 16
+  grad_accum_steps: 1
+  warmup_steps: 20
+  max_lr: 0.003
+  min_lr: 0.0003
+  weight_decay: 0.1
+  grad_clip: 1.0
+  eval_interval: 50
+  eval_iters: 20
+
+# ---- evaluation (Module 13) -----------------------------------------------
+eval:
+  batch_size: 8
+  max_batches: 20
+
+# ---- SFT + LoRA (Module 14) -----------------------------------------------
+sft:
+  steps: 20
+  lr: 0.001
+lora:
+  rank: 4
+  alpha: 8.0
+
+# ---- reasoning RL: GRPO + RLVR on arithmetic (Module 16) ------------------
+rlvr:
+  steps: 80
+  group_size: 8
+  lr: 0.2
+  clip_eps: 0.2

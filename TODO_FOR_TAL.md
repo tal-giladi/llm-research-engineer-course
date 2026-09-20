@@ -26,9 +26,9 @@
 - [x] Module 17 — Reasoning models (+ reasoning/cot,r1_pipeline)
 - [x] Module 18 — Tool use (+ tools/)
 - [x] Module 19 — Agents & research eng (+ agents/)
-- [ ] Module 20 — Capstone
+- [x] Module 20 — Capstone (+ scripts/capstone.py, runs end-to-end on CPU)
 - [x] Reference: cheat sheets, glossary, Anki CSV exports
-- [ ] Enable GitHub Pages (Settings → Pages → deploy from `main` / root)
+- [x] GitHub Pages enabled — live at https://tal-giladi.github.io/llm-research-engineer-course/
 
 ## To publish the site
 GitHub → repo Settings → Pages → Source: "Deploy from a branch", branch `main`, folder `/ (root)`.
