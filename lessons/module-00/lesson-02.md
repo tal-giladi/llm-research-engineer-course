@@ -180,6 +180,25 @@ mt.is_contiguous()               # False  <-- the flat order no longer matches t
 
 After the transpose, reading `mt` left-to-right, top-to-bottom would visit the flat buffer as `0, 3, 1, 4, 2, 5` — not in flat order. The tensor is now **non-contiguous**: its logical layout and its physical layout disagree. That is legal and fine for most operations, but it sets up the classic mistake.
 
+<div class="callout key"><p><strong>View rules</strong> (the counterpart of the broadcasting rule):</p>
+<p><strong>1. Same element count.</strong> The product of the new shape must equal <code>numel()</code>. One axis may be <code>-1</code> and is inferred: <code>(2,3)</code> → <code>(6,)</code>, <code>(3,2)</code>, <code>(3,-1)</code> are fine; <code>(4,2)</code> is not.</p>
+<p><strong>2. Contiguous tensor → any such shape works.</strong> It is just a new way to read the same flat buffer.</p>
+<p><strong>3. Non-contiguous tensor → only some shapes work.</strong> <em>Splitting</em> one axis into several, or inserting a size-1 axis, always works. <em>Merging</em> neighbouring axes $i$ and $i+1$ works only if they already sit back-to-back in memory: $\text{stride}[i] = \text{stride}[i+1] \times \text{size}[i+1]$.</p>
+<p><strong>4. Otherwise <code>view</code> raises.</strong> Use <code>.contiguous().view(...)</code> (explicit copy) or <code>.reshape(...)</code> (copies only when rule 3 fails).</p>
+</div>
+
+Rule 3 by example. `mt` above has shape `(3, 2)` and stride `(1, 3)`:
+
+```python
+mt.view(3, 1, 2)     # OK: only inserts a size-1 axis
+mt.view(6)           # RuntimeError: merging axes 0,1 needs stride[0] == stride[1]*size[1], i.e. 1 == 3*2 -> false
+
+x = torch.arange(24).view(2, 3, 4)[:, :, :2]   # shape (2,3,2), stride (12,4,1), NON-contiguous
+x.view(6, 2)         # OK anyway: merging axes 0,1 needs 12 == 4*3 -> true
+```
+
+The last line is why "non-contiguous" does not automatically mean "`view` fails": slicing the last axis broke contiguity *between* rows, but the first two axes are still laid out back-to-back, so they can be merged.
+
 ### The classic mistake: reshape/view after transpose
 
 ```python
