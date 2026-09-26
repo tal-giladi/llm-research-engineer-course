@@ -265,6 +265,18 @@ x_centered = x - x.mean(dim=-1, keepdim=True)
 
 `(3, 1)` and `(1, 4)` broadcast to `(3, 4)` (each axis has a 1 that stretches). `(2, 3)` and `(3,)` align from the right: `3` vs `3` match, and the missing leading axis of the second is treated as 1, so it broadcasts to `(2, 3)`.
 
+Numeric example: the `(3,)` vector is treated as one row `(1, 3)` and added to every row of the `(2, 3)` matrix.
+
+$$
+\underbrace{\begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{bmatrix}}_{(2,\,3)} \;+\; \underbrace{\begin{bmatrix} 10 & 20 & 30 \end{bmatrix}}_{(3,)\,\to\,(1,\,3)} \;=\; \begin{bmatrix} 1{+}10 & 2{+}20 & 3{+}30 \\ 4{+}10 & 5{+}20 & 6{+}30 \end{bmatrix} \;=\; \underbrace{\begin{bmatrix} 11 & 22 & 33 \\ 14 & 25 & 36 \end{bmatrix}}_{(2,\,3)}
+$$
+
+```python
+a = torch.tensor([[1, 2, 3], [4, 5, 6]])   # (2, 3)
+b = torch.tensor([10, 20, 30])             # (3,)
+a + b                                      # tensor([[11, 22, 33], [14, 25, 36]]), shape (2, 3)
+```
+
 </details>
 
 <details><summary>You run <code>y = x.view(2, 3)</code> then <code>y[0, 0] = 0</code>, and later find <code>x</code> also changed. Why? How would you have avoided it?</summary>

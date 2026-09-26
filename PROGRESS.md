@@ -6,9 +6,9 @@ _Last updated 2026-09-26. Started 2026-09-26._
 
 ## Where I am
 
-- **Lessons done:** 1/69 (1%)
+- **Lessons done:** 2/69 (2%)
 - **Open struggles:** 0
-- **Next:** [00.2 Ops, broadcasting, views vs copies](lessons/module-00/lesson-02.md)
+- **Next:** [00.3 Autograd: backward and grad](lessons/module-00/lesson-03.md)
 
 Legend: ⬜ not started · 🟨 in progress · 📖 read (exercises not done) · ✅ completed · ⏭️ skipped · ⚠ open struggle
 
@@ -21,10 +21,10 @@ python course.py struggle 05.2 "note"
 ## Lessons
 
 <details open>
-<summary><b>0 · ML / PyTorch foundations</b> — 1/4</summary>
+<summary><b>0 · ML / PyTorch foundations</b> — 2/4</summary>
 
 - [x] ✅ [00.1 Tensors: shape, dtype, device](lessons/module-00/lesson-01.md) · quiz 5/5
-- [ ] ⬜ [00.2 Ops, broadcasting, views vs copies](lessons/module-00/lesson-02.md)
+- [x] ✅ [00.2 Ops, broadcasting, views vs copies](lessons/module-00/lesson-02.md) · quiz 5/5
 - [ ] ⬜ [00.3 Autograd: backward and grad](lessons/module-00/lesson-03.md)
 - [ ] ⬜ [00.4 nn.Module and a minimal training loop](lessons/module-00/lesson-04.md)
 
@@ -231,5 +231,7 @@ None recorded. `python course.py struggle <id> "what was hard"`
 
 ## Recent activity
 
+- 2026-09-26 — quiz 00.2 5/5
+- 2026-09-26 — completed 00.2
 - 2026-09-26 — quiz 00.1 5/5
 - 2026-09-26 — completed 00.1
