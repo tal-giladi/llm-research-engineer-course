@@ -1,7 +1,33 @@
 {
   "schema": 1,
   "started": "2026-09-26",
-  "lessons": {},
+  "lessons": {
+    "00.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-26",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-26",
+      "quiz": [
+        {
+          "date": "2026-09-26",
+          "score": "5/5"
+        }
+      ]
+    }
+  },
   "struggles": [],
-  "log": []
+  "log": [
+    {
+      "date": "2026-09-26",
+      "event": "completed 00.1"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "quiz 00.1 5/5"
+    }
+  ]
 }
