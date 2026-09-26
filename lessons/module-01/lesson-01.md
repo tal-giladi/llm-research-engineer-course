@@ -175,6 +175,41 @@ Keep the shapes straight, because this exact object reappears in every later mod
 - A model over a sequence of `T` positions in a batch of `B` sequences: shape `(B, T, V)`, and it sums to 1 along the **last** axis (`dim=-1`) — one categorical per (sequence, position). The `V` axis is always the one that "sums to 1".
 - Sampling one token per position: `torch.multinomial` operates on a `(N, V)` matrix and returns `(N,)` indices, so you typically reshape `(B, T, V)` to `(B*T, V)` first.
 
+<div class="callout"><p><strong>What that last bullet means, step by step.</strong> A model's output holds one categorical per (sequence, position), so <code>B * T</code> separate distributions. You want one sampled token from <em>each</em> of them. But <code>torch.multinomial</code> only accepts a 1-D tensor (one distribution) or a 2-D tensor (a stack of distributions, one per row). A 3-D <code>(B, T, V)</code> tensor is rejected. The fix is to flatten the first two axes into one long list of rows, sample once per row, and fold the result back into <code>(B, T)</code>.</p></div>
+
+Tiny example: `B = 2` sequences, `T = 3` positions, `V = 4` tokens, so 6 distributions.
+
+```python
+import torch
+torch.manual_seed(0)
+
+probs = torch.tensor([
+    [[0.7, 0.1, 0.1, 0.1],     # seq 0, pos 0: token 0 very likely
+     [0.1, 0.7, 0.1, 0.1],     # seq 0, pos 1: token 1 very likely
+     [0.1, 0.1, 0.7, 0.1]],    # seq 0, pos 2: token 2 very likely
+    [[0.1, 0.1, 0.1, 0.7],     # seq 1, pos 0: token 3 very likely
+     [0.25, 0.25, 0.25, 0.25], # seq 1, pos 1: uniform, any token
+     [0.0, 0.0, 1.0, 0.0]],    # seq 1, pos 2: always token 2
+])                              # shape (2, 3, 4) = (B, T, V)
+
+torch.multinomial(probs, 1)     # RuntimeError: prob_dist must be 1 or 2 dim
+
+flat = probs.reshape(-1, 4)     # (6, 4): row r = b*T + t, one distribution per row
+idx = torch.multinomial(flat, num_samples=1)   # (6, 1): one index per row
+print(idx.squeeze(-1).tolist()) # [0, 2, 2, 3, 1, 2]
+
+tokens = idx.view(2, 3)         # back to (B, T)
+print(tokens.tolist())          # [[0, 2, 2], [3, 1, 2]]
+```
+
+Read the result row by row. `tokens[b, t]` is the token sampled for sequence `b` at position `t`. The last one is `2` every time, since that distribution puts probability `1.0` on token 2. The others are random draws, so a different seed can give different tokens (e.g. seq 0, pos 1 came out `2` this time, even though `1` was most likely).
+
+Three details to notice:
+
+- **Why the reshape is safe.** `probs` is contiguous, so `reshape(-1, 4)` is just a `view` (lesson [00.2](lessons/module-00/lesson-02.md)). No data is copied. Row `r` of `flat` is exactly position `(b, t)` with `r = b * T + t`: rows 0–2 are sequence 0, rows 3–5 are sequence 1. That same ordering is what lets `view(2, 3)` put each sample back in the right place.
+- **The exact output shape.** `torch.multinomial(flat, num_samples=k)` returns shape `(N, k)`, one column per sample. With `k = 1` that is `(N, 1)`, and "`(N,)` indices" above means after dropping that size-1 column (`squeeze(-1)`), or you can go straight to `(B, T)` with `view(B, T)` as shown.
+- **Where you will see this.** During generation you usually only sample the **last** position, `probs[:, -1, :]`, which is already 2-D `(B, V)`, so no reshape is needed there. The full `(B*T, V)` flatten is for when you want a sample at every position at once. The same `(B*T, V)` flatten reappears in the cross-entropy loss in lesson 01.4, which also expects 2-D input.
+
 ## Common mistakes
 
 - **Forgetting the distribution must sum to 1.** If you build a "probability" vector that sums to `0.98` or `1.3`, every downstream quantity (expectation, entropy, loss) is wrong. When in doubt, `assert torch.isclose(p.sum(), torch.tensor(1.0))`.
