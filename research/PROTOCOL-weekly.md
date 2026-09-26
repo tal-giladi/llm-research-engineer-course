@@ -10,6 +10,8 @@ material is a failure; missing a genuinely important development for a week or t
 The test for every decision: *"Would learning this make the student a better LLM research
 engineer?"* — not "is it new", "is it popular", or "did a famous lab mention it".
 
+**Never touch Tal's personal progress files:** `course.py`, `progress/`, `PROGRESS.md`.
+
 ## Step 0 — Read the course before judging anything
 
 Read `CLAUDE.md` (lesson template, rules), `_sidebar.md`, `curriculum/course-outline.md`

@@ -55,3 +55,8 @@ The course is kept current by a daily-research → weekly-review pipeline in `re
 (`research/PROTOCOL-weekly.md`): additions extend existing lessons and code, never replace
 them, and every change leaves an audit trail (candidate → weekly report → topic file →
 CHANGELOG). Helper: `python research/tools/research.py check|index|lookup|new-day|scope`.
+
+## Personal progress tracking
+`course.py` (repo root, stdlib) tracks Tal's lesson status, quiz scores, struggles and notes in
+`progress/progress.json` and regenerates `PROGRESS.md`. Lessons are read from `_sidebar.md`, so new
+lessons appear automatically. It is not course content: never edit it as part of lesson work.
