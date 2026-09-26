@@ -1,14 +1,14 @@
 # 16.3 · Rejection sampling & verifiers
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-02.md">16.2 · RLVR &amp; verifiable rewards</a> (a verifier is a <code>(problem, answer) -&gt; {0,1}</code> checker), <a href="lesson-01.md">16.1 · GRPO</a> (sampling a group of completions), and <a href="../module-14/lesson-01.md">14.1 · SFT</a> (fine-tuning on demonstrations).</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-16/lesson-02">16.2 · RLVR &amp; verifiable rewards</a> (a verifier is a <code>(problem, answer) -&gt; {0,1}</code> checker), <a href="#/lessons/module-16/lesson-01">16.1 · GRPO</a> (sampling a group of completions), and <a href="#/lessons/module-14/lesson-01">14.1 · SFT</a> (fine-tuning on demonstrations).</p>
 <p><strong>You will learn:</strong> <strong>rejection sampling</strong> / best-of-$n$ / STaR-style bootstrapping — generate many completions, keep the verifier-accepted ones, and SFT on them; when this beats a full RL loop and when it doesn't; the difference between an <strong>outcome</strong> reward model (ORM) and a <strong>process</strong> reward model (PRM) and the trade-offs between them; and the ways a verifier can betray you — false positives and gaming — with concrete pitfalls from the code you already have.</p>
 <p><strong>Why this matters for ML:</strong> not every reasoning improvement needs a policy-gradient loop. The cheapest, most robust lever in the reasoning toolkit is often "sample a lot, keep what verifies, fine-tune on it." Knowing when to reach for rejection sampling versus GRPO, and understanding that <em>your verifier is now the definition of correct</em>, is core research-engineering judgment — a wrong verifier trains a wrong model, silently.</p>
 </div>
 
 ## 1. You don't always need the RL loop
 
-Lesson [16.2](lesson-02.md) optimized the policy *directly* against the verifier with GRPO — a gradient step per group, the policy's distribution nudged every iteration. That is powerful but has moving parts: ratios, clipping, a KL term, a reference model, sampling groups every step.
+Lesson [16.2](lessons/module-16/lesson-02.md) optimized the policy *directly* against the verifier with GRPO — a gradient step per group, the policy's distribution nudged every iteration. That is powerful but has moving parts: ratios, clipping, a KL term, a reference model, sampling groups every step.
 
 There is a blunter method that uses the *same verifier* and no policy-gradient machinery at all:
 
@@ -53,7 +53,7 @@ Every candidate not equal to 7 is *rejected*; the survivors (all `7`) are the su
 - **Rejection sampling** is simpler, very stable (it's just SFT), parallelizes trivially (generation then a standard fine-tune), and is a strong first move — often most of the gain for a fraction of the complexity. Its ceiling is lower: it throws away the information in *wrong* answers and can't push probability *down*, and iterating it can narrow diversity.
 - **GRPO / RLVR** squeezes more out of the same verifier — it uses negative signal (wrong completions get negative advantage) and keeps optimizing past what pure imitation reaches — at the cost of a more delicate training loop.
 
-A common, publicly-described pattern is to do **both**: rejection-sampling SFT to get a strong start, then RL (GRPO) on top. (DeepSeek-R1's pipeline, covered in [17.3](../module-17/lesson-03.md), interleaves SFT on filtered data with RL stages.)
+A common, publicly-described pattern is to do **both**: rejection-sampling SFT to get a strong start, then RL (GRPO) on top. (DeepSeek-R1's pipeline, covered in [17.3](lessons/module-17/lesson-03.md), interleaves SFT on filtered data with RL stages.)
 
 ## 2. Outcome vs process rewards (ORM vs PRM)
 
@@ -62,9 +62,9 @@ So far every verifier scored the **final answer**: right or wrong. That is an **
 - **Outcome reward (ORM):** one scalar for the whole completion, from the final answer only. Cheap, and for verifiable tasks it's *exact* (the answer is checkably right). Its blind spot: it cannot tell a **lucky wrong-reasoning-right-answer** chain from a genuinely correct one, and it gives no signal about *where* a failed chain went wrong.
 - **Process reward (PRM):** a score for *each intermediate step* of the chain — was this step valid given the previous ones? Denser signal: it can credit the good part of a chain that later derails, and it pushes toward *correct reasoning*, not just correct final tokens. Its cost: you need step-level labels or a learned PRM to produce them, which is expensive and itself a proxy that can be gamed.
 
-<div class="callout key"><p><strong>Outcome</strong> = reward the final answer (cheap, exact when verifiable, but blind to <em>how</em>). <strong>Process</strong> = reward each step (dense, targets real reasoning, but needs step labels / a learned model and reintroduces proxy risk). Verifiable-outcome rewards are why Module 16's toy works; process rewards are the subject of <a href="../module-17/lesson-02.md">17.2</a>.</p></div>
+<div class="callout key"><p><strong>Outcome</strong> = reward the final answer (cheap, exact when verifiable, but blind to <em>how</em>). <strong>Process</strong> = reward each step (dense, targets real reasoning, but needs step labels / a learned model and reintroduces proxy risk). Verifiable-outcome rewards are why Module 16's toy works; process rewards are the subject of <a href="#/lessons/module-17/lesson-02">17.2</a>.</p></div>
 
-The trade-off is genuinely open and task-dependent: outcome rewards are simpler and, crucially, *un-hackable when the verifier is exact*; process rewards give richer credit assignment but drag a learned, gameable component back in. We take PRMs up properly — including the "Let's Verify Step by Step" line of work — in [17.2 · Process reward & DeepSeekMath](../module-17/lesson-02.md).
+The trade-off is genuinely open and task-dependent: outcome rewards are simpler and, crucially, *un-hackable when the verifier is exact*; process rewards give richer credit assignment but drag a learned, gameable component back in. We take PRMs up properly — including the "Let's Verify Step by Step" line of work — in [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md).
 
 ## 3. Verifier design pitfalls: your checker *is* the reward
 
@@ -173,4 +173,4 @@ The verifier has false positives (or is gameable): the model is learning to sati
 
 You now have the full Module 16 toolkit: GRPO (critic-free RL), RLVR (verifiable rewards), and rejection sampling — plus the judgment to distinguish outcome from process rewards and to distrust your own verifier. Module 17 turns these into modern reasoning models: chain-of-thought and self-consistency, process reward models and the DeepSeekMath training recipe in depth, and the DeepSeek-R1 case study that ties every piece together.
 
-Continue to [17.1 · CoT, self-consistency, STaR](../module-17/lesson-01.md).
+Continue to [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md).

@@ -1,7 +1,7 @@
 # 01.2 · Conditional probability, Bayes, likelihood
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">01.1 · Random variables, expectation, variance</a> — especially the PMF, the "sums to 1" rule, and the categorical distribution as a language model's per-position output.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-01/lesson-01">01.1 · Random variables, expectation, variance</a> — especially the PMF, the "sums to 1" rule, and the categorical distribution as a language model's per-position output.</p>
 <p><strong>You will learn:</strong> conditional probability $p(A \mid B)$, joint and marginal probability, Bayes' rule (with a worked medical-test example), and the <strong>chain rule of probability</strong> — the exact factorization that <em>defines</em> language modeling: a sentence's probability is the product of its next-token probabilities. Then the difference between likelihood and probability, maximum likelihood estimation, and why we sum log-probabilities instead of multiplying raw probabilities (a worked underflow example).</p>
 <p><strong>Why this matters for ML:</strong> a language model does not assign a probability to a sentence in one shot — it predicts one token at a time. The chain rule is the theorem that says doing so is not an approximation: the product of per-token conditional probabilities <em>is</em> the exact probability of the whole sequence. Training the model is maximum likelihood estimation on that product, and the log-likelihood you will maximize is the direct ancestor of the cross-entropy loss in lesson 01.4.</p>
 </div>
@@ -248,4 +248,4 @@ About $0.01^{300} = 10^{-600}$. The smallest positive float32 is around $1.2 \ti
 
 You now have the chain rule — the exact factorization of a sentence into next-token probabilities — and you know training a language model is maximum likelihood on that product, done in log space. The next lesson introduces the tools that measure the *quality* of a predicted distribution: entropy, cross-entropy, and KL divergence. Cross-entropy is, up to a sign and an average, the negative log-likelihood you just met — and it is the loss you will minimize.
 
-Continue to [01.3 · Entropy, cross-entropy, KL divergence](lesson-03.md).
+Continue to [01.3 · Entropy, cross-entropy, KL divergence](lessons/module-01/lesson-03.md).

@@ -1,7 +1,7 @@
 # 15.1 · Bradley-Terry & the reward model
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> supervised fine-tuning from <a href="../module-14/lesson-01.md">14.1 · Instruction data & chat templates</a> and the response-only loss of <a href="../module-14/lesson-02.md">14.2 · Loss masking</a>; the assembled model and its hidden states from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>; the log-softmax / cross-entropy machinery from <a href="../module-01/lesson-04.md">01.4</a> and <code>llmre.evaluation.metrics</code>.</p>
+<p><strong>Prerequisites:</strong> supervised fine-tuning from <a href="#/lessons/module-14/lesson-01">14.1 · Instruction data & chat templates</a> and the response-only loss of <a href="#/lessons/module-14/lesson-02">14.2 · Loss masking</a>; the assembled model and its hidden states from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the log-softmax / cross-entropy machinery from <a href="#/lessons/module-01/lesson-04">01.4</a> and <code>llmre.evaluation.metrics</code>.</p>
 <p><strong>You will learn:</strong> why imitation (SFT) cannot rank answers by quality; what pairwise preference data <code>(x, y_w, y_l)</code> is; the <strong>Bradley-Terry</strong> model that turns a scalar reward into a probability of preference; and how to build and train a <strong>reward model</strong> — a language model with a scalar head — with the loss <code>-log &sigma;(r_w - r_l)</code>.</p>
 <p><strong>Why this matters for ML:</strong> the reward model is the numerical definition of "good" that the whole RLHF pipeline (lesson 15.2) optimizes against. Get it wrong and the policy will faithfully optimize the wrong thing. Even DPO (lesson 15.3), which trains no explicit reward model, is <em>derived from</em> exactly this Bradley-Terry loss — so this lesson is the foundation of the entire module.</p>
 </div>
@@ -97,15 +97,15 @@ print([round(-F.logsigmoid(x).item(),6) for x in m])"
 # [0.693147, 0.313262, 0.126928, 0.01815]
 ```
 
-<div class="callout warn"><p>Compute the loss as <code>-F.logsigmoid(margin)</code>, <strong>not</strong> <code>-torch.log(torch.sigmoid(margin))</code>. For a large negative margin, <code>sigmoid</code> underflows to <code>0.0</code> and <code>log(0)</code> is <span>$-\infty$</span>; <code>logsigmoid</code> is a single numerically stable kernel (it internally uses the <code>log(1+exp())</code> = softplus identity) and never overflows. Same reasoning as the stable log-softmax in <a href="../module-01/lesson-04.md">01.4</a>.</p></div>
+<div class="callout warn"><p>Compute the loss as <code>-F.logsigmoid(margin)</code>, <strong>not</strong> <code>-torch.log(torch.sigmoid(margin))</code>. For a large negative margin, <code>sigmoid</code> underflows to <code>0.0</code> and <code>log(0)</code> is <span>$-\infty$</span>; <code>logsigmoid</code> is a single numerically stable kernel (it internally uses the <code>log(1+exp())</code> = softplus identity) and never overflows. Same reasoning as the stable log-softmax in <a href="#/lessons/module-01/lesson-04">01.4</a>.</p></div>
 
 ## What *is* a reward model, mechanically?
 
 ### 1. Intuition
 
-A reward model is just a language model (Module 6) with its head swapped. The GPT of [06.1](../module-06/lesson-01.md) ends in an `lm_head` of shape $(C \to V)$ that scores every one of the $V$ vocabulary tokens at every position. A reward model throws that away and bolts on a **scalar head** of shape $(C \to 1)$: it reads one position's hidden state and outputs a single number — the reward for the whole sequence.
+A reward model is just a language model (Module 6) with its head swapped. The GPT of [06.1](lessons/module-06/lesson-01.md) ends in an `lm_head` of shape $(C \to V)$ that scores every one of the $V$ vocabulary tokens at every position. A reward model throws that away and bolts on a **scalar head** of shape $(C \to 1)$: it reads one position's hidden state and outputs a single number — the reward for the whole sequence.
 
-Which position? The reward summarizes the *entire* prompt+completion, so we read the reward off the hidden state of the **last token**. Because attention is causal (a token attends only to itself and earlier tokens — [05.x](../module-05/lesson-01.md)), the final token's hidden state is the only one that has "seen" everything, so it is the natural place to pool the sequence into one score. This is what InstructGPT and HH-RLHF do.
+Which position? The reward summarizes the *entire* prompt+completion, so we read the reward off the hidden state of the **last token**. Because attention is causal (a token attends only to itself and earlier tokens — [05.x](lessons/module-05/lesson-01.md)), the final token's hidden state is the only one that has "seen" everything, so it is the natural place to pool the sequence into one score. This is what InstructGPT and HH-RLHF do.
 
 ### 2. Mathematics
 
@@ -229,7 +229,7 @@ A colleague's reward-model loss is stuck exactly at `0.6931` and never moves, ev
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Read:</strong> <a href="../../papers/index.md">InstructGPT (Ouyang et al. 2022)</a> — the reward-model section defines exactly the Bradley-Terry loss above and the "reward = value at the final token" convention; and <a href="../../papers/index.md">Anthropic HH-RLHF (Bai et al. 2022)</a> for how helpful/harmless preference data is collected at scale. Read the reward-modeling subsections closely; skim the RL details (that is lesson 15.2). Both are core Module 15 readings.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> <a href="#/papers/index">InstructGPT (Ouyang et al. 2022)</a> — the reward-model section defines exactly the Bradley-Terry loss above and the "reward = value at the final token" convention; and <a href="#/papers/index">Anthropic HH-RLHF (Bai et al. 2022)</a> for how helpful/harmless preference data is collected at scale. Read the reward-modeling subsections closely; skim the RL details (that is lesson 15.2). Both are core Module 15 readings.</p></div>
 
 ## Check yourself
 
@@ -261,4 +261,4 @@ Margin $= 1.0$, so it is identical to the $r_w=2.0, r_l=1.0$ case: $\sigma(1.0) 
 
 We now have a function that scores completions and a way to train it from preferences. Next we treat the language model as a **policy** and use the reward model's scores to actually improve it — REINFORCE, advantages, and the PPO clipped objective that makes RLHF stable.
 
-Continue to [15.2 · Policy gradient, advantage, PPO](lesson-02.md).
+Continue to [15.2 · Policy gradient, advantage, PPO](lessons/module-15/lesson-02.md).

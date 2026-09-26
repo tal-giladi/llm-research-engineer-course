@@ -1,7 +1,7 @@
 # 12.1 · RoPE (Rotary Position Embedding)
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-05/lesson-02.md">05.2 · Q/K/V &amp; scaled dot-product attention</a> (the score is a dot product $\mathbf{q}\cdot\mathbf{k}$); <a href="../module-05/lesson-01.md">05.1 · Embeddings &amp; positional encoding</a> (absolute learned position embeddings, the <code>wpe</code> table); the $(B, n_h, T, d_h)$ head layout from <a href="../module-05/lesson-03.md">05.3 · Multi-head attention</a>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-05/lesson-02">05.2 · Q/K/V &amp; scaled dot-product attention</a> (the score is a dot product $\mathbf{q}\cdot\mathbf{k}$); <a href="#/lessons/module-05/lesson-01">05.1 · Embeddings &amp; positional encoding</a> (absolute learned position embeddings, the <code>wpe</code> table); the $(B, n_h, T, d_h)$ head layout from <a href="#/lessons/module-05/lesson-03">05.3 · Multi-head attention</a>.</p>
 <p><strong>You will learn:</strong> why absolute learned position embeddings do not generalize past their trained length and do not encode <em>relative</em> position; how RoPE injects position by <em>rotating</em> each query and key in 2-D coordinate pairs by an angle proportional to position; the one-line proof that the rotated dot product depends only on the offset $m-n$; a 2-D rotation worked by hand; and the LLaMA complex-number implementation line by line.</p>
 <p><strong>Why this matters for ML:</strong> RoPE is the position encoding in nearly every current open LLM — LLaMA, Llama&nbsp;3, Mistral, Qwen, DeepSeek. It is the first change you make when turning a GPT-2 into a modern model, and it is what lets a model trained at 4K context be stretched to 32K+ with light adaptation.</p>
 </div>
@@ -195,7 +195,7 @@ Rotating keys by $-n\omega$ makes the key factor $R(-n\omega)$, so the score bec
 
 ## Research connection
 
-<div class="callout paper"><p><strong>RoFormer: Enhanced Transformer with Rotary Position Embedding</strong> (Su et al. 2021) introduced RoPE. See the reading guide in <a href="../../papers/index.md">the paper curriculum</a> (#8). The full paper derives RoPE in the complex plane for arbitrary dimension; the 2-D rotation intuition here is all you need to read it. RoPE is then a building block of <strong>LLaMA</strong> (#9) and <strong>Llama&nbsp;3</strong> (#10).</p></div>
+<div class="callout paper"><p><strong>RoFormer: Enhanced Transformer with Rotary Position Embedding</strong> (Su et al. 2021) introduced RoPE. See the reading guide in <a href="#/papers/index">the paper curriculum</a> (#8). The full paper derives RoPE in the complex plane for arbitrary dimension; the 2-D rotation intuition here is all you need to read it. RoPE is then a building block of <strong>LLaMA</strong> (#9) and <strong>Llama&nbsp;3</strong> (#10).</p></div>
 
 ## Check yourself
 
@@ -225,4 +225,4 @@ A rotation matrix is orthogonal ($R^\top R = I$), so $\|R\mathbf{q}\|^2 = \mathb
 
 ## Next
 
-RoPE replaced the position machinery. The next two changes replace the *normalization* and the *feed-forward network*. Continue to [12.2 · RMSNorm &amp; SwiGLU](lesson-02.md).
+RoPE replaced the position machinery. The next two changes replace the *normalization* and the *feed-forward network*. Continue to [12.2 · RMSNorm &amp; SwiGLU](lessons/module-12/lesson-02.md).

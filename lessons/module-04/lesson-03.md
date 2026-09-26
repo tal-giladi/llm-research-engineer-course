@@ -1,7 +1,7 @@
 # 04.3 · Special tokens, packing & data loading
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> a working byte-level BPE tokenizer — <code>train</code> / <code>encode</code> / <code>decode</code> — from <a href="lesson-02.md">04.2 · Byte-Pair Encoding from scratch</a>; the language-modeling objective (each position predicts the next token) from <a href="../module-01/lesson-04.md">01.4 · The language-modeling objective &amp; perplexity</a>; tensors, <code>.shape</code>, and slicing from <a href="../module-00/lesson-01.md">Module 0</a>.</p>
+<p><strong>Prerequisites:</strong> a working byte-level BPE tokenizer — <code>train</code> / <code>encode</code> / <code>decode</code> — from <a href="#/lessons/module-04/lesson-02">04.2 · Byte-Pair Encoding from scratch</a>; the language-modeling objective (each position predicts the next token) from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling objective &amp; perplexity</a>; tensors, <code>.shape</code>, and slicing from <a href="#/lessons/module-00/lesson-01">Module 0</a>.</p>
 <p><strong>You will learn:</strong> what a <em>special token</em> like <code>&lt;|endoftext|&gt;</code> is and why pretraining needs one; how a whole corpus becomes a single 1-D stream of token ids; how that stream is cut into fixed-length <code>block_size</code> windows; and exactly how the input <code>x</code> and target <code>y</code> of a training batch are the same slice shifted by one position — the entire supervision signal for pretraining.</p>
 <p><strong>Why this matters for ML:</strong> the data loader is the thing your training loop calls every single step (Module 7). If the <code>(x, y)</code> shift is off by one, or documents bleed into each other, the model learns the wrong objective and you will chase a "mysteriously bad loss" for days. This is one of the most common and most invisible sources of training bugs.</p>
 </div>
@@ -40,7 +40,7 @@ at the end of a sample.
 <div class="callout key"><p>A special token is a reserved vocabulary id with structural, not
 lexical, meaning. <code>&lt;|endoftext|&gt;</code> separates documents so the model does not learn
 spurious cross-document continuations and learns where generation should stop. Chat models add
-more special tokens (role markers, turn boundaries) — we build those in <a href="../module-14/lesson-01.md">Module 14</a>.</p></div>
+more special tokens (role markers, turn boundaries) — we build those in <a href="#/lessons/module-14/lesson-01">Module 14</a>.</p></div>
 
 Concretely: if your BPE tokenizer trained a vocabulary of `V` ordinary tokens, you reserve one
 more id — say `V` itself — as the `<|endoftext|>` id, so the model's embedding table and output
@@ -91,7 +91,7 @@ Now the key step. The model reads a length-$T$ window `x` and, at *every* positi
 predict the token that actually comes next. So the target window `y` is just `x` slid one step to
 the left: `y[t] = x[t+1]`. One window therefore supplies $T$ next-token prediction problems at
 once (position 0 predicts token 1, position 1 predicts token 2, …), and the causal mask from
-[05.2](../module-05/lesson-02.md) guarantees position $t$ can only use tokens $\le t$ to make its
+[05.2](lessons/module-05/lesson-02.md) guarantees position $t$ can only use tokens $\le t$ to make its
 prediction — no cheating by peeking at the answer.
 
 To build a window we need $T+1$ consecutive tokens from the stream: the first $T$ are `x`, and the
@@ -147,7 +147,7 @@ steps almost always means the targets are not shifted.</p></div>
 | `y` (a batch) | `(B, T)` | `long` | same windows shifted one token left |
 
 `x` then enters the model's embedding table (`(B, T)` → `(B, T, C)`, next module), and `y` is the
-target passed to the cross-entropy loss you built in [01.4](../module-01/lesson-04.md).
+target passed to the cross-entropy loss you built in [01.4](lessons/module-01/lesson-04.md).
 
 ## 6. Under the hood: why random windows, and the cost
 
@@ -225,4 +225,4 @@ turns each id into a learned embedding vector, adds positional information, and 
 attention and transformer machinery that transforms those vectors. That is where the id `x`
 becomes the `(B, T, C)` activation that flows through the network.
 
-Continue to [05.1 · Embeddings & positional encoding](../module-05/lesson-01.md).
+Continue to [05.1 · Embeddings & positional encoding](lessons/module-05/lesson-01.md).

@@ -1,7 +1,7 @@
 # 11.3 · Contamination, mixing, curriculum
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> shingling and n-grams from <a href="lesson-02.md">11.2 · Deduplication &amp; MinHash</a> (an n-gram is the same idea as a k-shingle); the quality funnel from <a href="lesson-01.md">11.1</a>; token budgets and compute-optimality from <a href="../module-10/lesson-03.md">10.3 · Chinchilla compute-optimality</a>. A preview of evaluation from <a href="../module-13/lesson-02.md">13.2 · Contamination, calibration, task eval</a> — this lesson is the <em>data-side</em> of a topic Module 13 revisits from the <em>eval-side</em>.</p>
+<p><strong>Prerequisites:</strong> shingling and n-grams from <a href="#/lessons/module-11/lesson-02">11.2 · Deduplication &amp; MinHash</a> (an n-gram is the same idea as a k-shingle); the quality funnel from <a href="#/lessons/module-11/lesson-01">11.1</a>; token budgets and compute-optimality from <a href="#/lessons/module-10/lesson-03">10.3 · Chinchilla compute-optimality</a>. A preview of evaluation from <a href="#/lessons/module-13/lesson-02">13.2 · Contamination, calibration, task eval</a> — this lesson is the <em>data-side</em> of a topic Module 13 revisits from the <em>eval-side</em>.</p>
 <p><strong>You will learn:</strong> benchmark <strong>contamination / leakage</strong> — how test-set text in the training data inflates evaluation, and how to detect it with n-gram overlap; <strong>dataset mixing</strong> — weighting sources (web / code / books / math), why high-quality sources are upsampled, and how a total token budget splits across sources; and the <strong>data curriculum</strong> — ordering and annealing, e.g. saving higher-quality data for late in training. You will run a small n-gram contamination check that flags an overlapping document.</p>
 <p><strong>Why this matters for ML:</strong> two models with identical architecture and compute can differ enormously in quality purely because of what data they saw and in what proportion. Contamination makes a mediocre model <em>look</em> great on paper (and is a real, recurring scandal in LLM leaderboards); mixing decides which capabilities the model even has; curriculum squeezes extra quality from the same tokens. These are among the highest-leverage decisions in a pretraining project — and the least visible in the model code.</p>
 </div>
@@ -236,7 +236,7 @@ high-quality final phase is documented in open models. <strong>OLMo 2</strong>
 (2024) describes a two-stage pretrain with a late high-quality data phase;
 <strong>Llama 3</strong> (2024) documents adjusting the data mix and annealing on
 high-quality data toward the end of pretraining. These are real, written-down
-recipes — see <a href="../../papers/index.md">the paper curriculum</a>.</p>
+recipes — see <a href="#/papers/index">the paper curriculum</a>.</p>
 
 <p><strong>REASONABLE INDUSTRY PRACTICE:</strong> pairing the quality-annealing
 phase with learning-rate decay, and using the annealing phase to fold in freshly
@@ -328,8 +328,8 @@ rule, revisit <strong>Chinchilla</strong> (Hoffmann et al., 2022). For documente
 data mixing and quality annealing, read the data sections of <strong>GPT-3</strong>
 (source upsampling), <strong>OLMo 2</strong> (two-stage pretrain with a late
 high-quality phase), and <strong>Llama 3</strong> (data-mix and annealing choices).
-All are in <a href="../../papers/index.md">the paper curriculum</a>. Module 13
-(<a href="../module-13/lesson-02.md">13.2</a>) revisits contamination from the
+All are in <a href="#/papers/index">the paper curriculum</a>. Module 13
+(<a href="#/lessons/module-13/lesson-02">13.2</a>) revisits contamination from the
 evaluation side.</p></div>
 
 ## Check yourself
@@ -393,4 +393,4 @@ in hand, the next module returns to the *model*, upgrading the vanilla GPT-2 blo
 into the modern architecture (RoPE, RMSNorm, SwiGLU, GQA, MoE) used by current
 frontier LLMs.
 
-Continue to [12.1 · RoPE](../module-12/lesson-01.md).
+Continue to [12.1 · RoPE](lessons/module-12/lesson-01.md).

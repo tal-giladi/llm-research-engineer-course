@@ -3,14 +3,14 @@
 <div class="callout key"><p><strong>Frontier update, not core curriculum.</strong> GVPO is <em>directional, not validated</em>: one paper line, no known frontier-lab adoption yet. Read it to understand the design space, not to swap out GRPO in your pipeline.</p></div>
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-16/lesson-01.md">16.1 · From PPO to GRPO</a> (group advantage, clipped ratio), <a href="../module-15/lesson-03.md">15.3 · DPO</a> (the closed-form optimum of KL-constrained reward maximization and the "implicit reward"), <a href="update-01.md">F.1</a>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-16/lesson-01">16.1 · From PPO to GRPO</a> (group advantage, clipped ratio), <a href="#/lessons/module-15/lesson-03">15.3 · DPO</a> (the closed-form optimum of KL-constrained reward maximization and the "implicit reward"), <a href="#/lessons/frontier/update-01">F.1</a>.</p>
 <p><strong>You will learn:</strong> where GRPO's instability comes from; what Dr. GRPO and DAPO change; how GVPO builds the analytical optimum into the gradient weights and drops importance sampling; a from-scratch <code>gvpo_loss</code> in <code>llmre/rl/gvpo.py</code> whose minimum is exactly $\pi^* \propto \pi_{\text{ref}}\, e^{R/\beta}$.</p>
 <p><strong>Why this matters for ML:</strong> "why is GRPO unstable and what are the fixes" is common interview and practice material on the fine-tuning path. The fixes reuse ideas you already have (PPO clipping, DPO's closed form), just combined differently.</p>
 </div>
 
 ## 1. Where GRPO gets unstable
 
-Recall the GRPO per-sample objective from [16.1](../module-16/lesson-01.md):
+Recall the GRPO per-sample objective from [16.1](lessons/module-16/lesson-01.md):
 
 $$
 \min\Big(r_i A_i,\ \text{clip}(r_i, 1-\epsilon, 1+\epsilon)\, A_i\Big), \qquad r_i = \frac{\pi_\theta(y_i \mid x)}{\pi_{\text{old}}(y_i \mid x)}, \qquad A_i = \frac{R_i - \bar R}{\text{std}(R)}
@@ -20,7 +20,7 @@ Three weak points, each targeted by a published fix:
 
 1. **The importance ratio $r_i$ is unbounded.** For a long completion, $\log r_i$ is a *sum* over hundreds of tokens, so small per-token drift compounds. Clipping caps the objective, not the underlying variance, and clipped samples contribute zero gradient (wasted compute).
 2. **Normalizations add bias.** Dividing by std up-weights groups with low variance (nearly-all-right or nearly-all-wrong), and per-sequence length normalization $1/|y_i|$ changes how much long vs short answers are penalized.
-3. **Zero-signal groups.** All-correct or all-wrong groups give $A = 0$ (seen in [F.1 §3](update-01.md)), shrinking the effective batch.
+3. **Zero-signal groups.** All-correct or all-wrong groups give $A = 0$ (seen in [F.1 §3](lessons/frontier/update-01.md)), shrinking the effective batch.
 
 ## 2. The fixes, side by side
 
@@ -36,7 +36,7 @@ Dr. GRPO and DAPO *patch* GRPO. GVPO *changes the objective*. That is why it is 
 
 ### 3.1 Intuition
 
-You already know from [15.3 · DPO](../module-15/lesson-03.md) the exact answer to "maximize reward, stay close to a reference policy in KL":
+You already know from [15.3 · DPO](lessons/module-15/lesson-03.md) the exact answer to "maximize reward, stay close to a reference policy in KL":
 
 $$
 \pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_{\text{ref}}(y \mid x)\, e^{R(x, y)/\beta}.
@@ -181,7 +181,7 @@ $e^2 \approx 7.389$. Total $= 2 \cdot 7.389 + 1 = 15.778$. So $\pi^* \approx [0.
 
 ## Code this after reading
 
-Swap `gvpo_loss` into the toy RLVR loop from [16.2](../module-16/lesson-02.md) in place of the GRPO objective (log-probs of sampled answers are already `(P, G)`), and plot correct-rate vs step for both on the same seeds.
+Swap `gvpo_loss` into the toy RLVR loop from [16.2](lessons/module-16/lesson-02.md) in place of the GRPO objective (log-probs of sampled answers are already `(P, G)`), and plot correct-rate vs step for both on the same seeds.
 
 ## Check yourself
 
@@ -211,4 +211,4 @@ Dr. GRPO: remove length normalization and std normalization. DAPO: clip-higher (
 
 ## Next
 
-Back to the core path: [17.1 · CoT, self-consistency, STaR](../module-17/lesson-01.md), or go straight to the [F.1 lab](update-01.md).
+Back to the core path: [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md), or go straight to the [F.1 lab](lessons/frontier/update-01.md).

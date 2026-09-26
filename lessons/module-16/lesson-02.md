@@ -1,7 +1,7 @@
 # 16.2 · RLVR & verifiable rewards
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">16.1 · From PPO to GRPO</a> (the group-relative advantage and the clipped objective), the <a href="../module-15/lesson-01.md">15.1 · reward model</a> (the <em>learned</em> reward this lesson replaces), and <code>softmax</code> / <code>log_softmax</code> / <code>torch.multinomial</code> from the earlier PyTorch lessons.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-16/lesson-01">16.1 · From PPO to GRPO</a> (the group-relative advantage and the clipped objective), the <a href="#/lessons/module-15/lesson-01">15.1 · reward model</a> (the <em>learned</em> reward this lesson replaces), and <code>softmax</code> / <code>log_softmax</code> / <code>torch.multinomial</code> from the earlier PyTorch lessons.</p>
 <p><strong>You will learn:</strong> what <strong>RLVR</strong> (RL with Verifiable Rewards) is and why an <em>automatic checker</em> beats a learned reward model for reasoning; how a verifier is just a function <code>(problem, answer) -&gt; {0.0, 1.0}</code>; the exact-match and arithmetic verifiers in <code>llmre/reasoning/verifiers.py</code>; and the complete RLVR training loop in <code>llmre/reasoning/rlvr.py</code> — sample a group, verify, compute GRPO advantages, take a clipped step — watching a toy policy's correct-rate climb from chance to 1.0.</p>
 <p><strong>Why this matters for ML:</strong> the single change that made RL for reasoning take off was swapping the fragile, gameable learned reward model for a cheap, exact, ungameable rule that <em>knows the right answer</em>. That is why math and code — domains where correctness is checkable by a program — are where reasoning RL first worked (DeepSeekMath, DeepSeek-R1). This lesson is the mechanism, end to end, small enough to run on a laptop.</p>
 </div>
@@ -81,11 +81,11 @@ print(arithmetic_verifier("12*11", 132))  # 1.0
 print(arithmetic_verifier("6 x 7", "42")) # 1.0  (string answer, x = multiply)
 ```
 
-<div class="callout warn"><p>A real math verifier is far hairier than this: it normalizes LaTeX, parses fractions and surds, handles $\pm$, units, and multiple equivalent forms, and often calls a computer-algebra system for symbolic equality. The <em>shape</em> of the signal is identical — <code>(problem, answer) -&gt; 0/1</code> — but the parsing is where the engineering (and the false-positive bugs of lesson <a href="lesson-03.md">16.3</a>) live.</p></div>
+<div class="callout warn"><p>A real math verifier is far hairier than this: it normalizes LaTeX, parses fractions and surds, handles $\pm$, units, and multiple equivalent forms, and often calls a computer-algebra system for symbolic equality. The <em>shape</em> of the signal is identical — <code>(problem, answer) -&gt; 0/1</code> — but the parsing is where the engineering (and the false-positive bugs of lesson <a href="#/lessons/module-16/lesson-03">16.3</a>) live.</p></div>
 
 ## 3. The RLVR loop, end to end
 
-Now assemble the two halves — the verifier (this lesson) and GRPO (lesson [16.1](lesson-01.md)) — into a training loop that actually improves. `code/src/llmre/reasoning/rlvr.py` does this on a deliberately tiny problem so it runs on a CPU in under a second and you can *watch the correct-rate rise*.
+Now assemble the two halves — the verifier (this lesson) and GRPO (lesson [16.1](lessons/module-16/lesson-01.md)) — into a training loop that actually improves. `code/src/llmre/reasoning/rlvr.py` does this on a deliberately tiny problem so it runs on a CPU in under a second and you can *watch the correct-rate rise*.
 
 ### 3.1 A toy policy so the algorithm is unobscured
 
@@ -170,7 +170,7 @@ Distinguishing the honesty levels the brief asks for:
 - **Reasonable industry practice:** pairing a verifiable reward with GRPO; using unit tests as the verifier for code; combining an outcome-correctness reward with light format rewards.
 - **Inference / speculation:** the precise verifier internals, reward shaping, and filtering any given lab uses are mostly not public — do not assume a specific recipe beyond "the reward is rule-based and checks correctness."
 
-<div class="callout paper"><p><strong>Read:</strong> DeepSeekMath (Shao et al. 2024, paper #25) for GRPO + verifiable rewards, and DeepSeek-R1 (paper #26) for pure-RL-from-base with rule-based rewards — both in the <a href="../../papers/index.md">paper curriculum</a>. Note in R1 how the reward is answer-correctness plus format, no learned RM.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> DeepSeekMath (Shao et al. 2024, paper #25) for GRPO + verifiable rewards, and DeepSeek-R1 (paper #26) for pure-RL-from-base with rule-based rewards — both in the <a href="#/papers/index">paper curriculum</a>. Note in R1 how the reward is answer-correctness plus format, no learned RM.</p></div>
 
 ## Exercise
 
@@ -237,4 +237,4 @@ The policy starts uniform over 10 answers, so a sampled answer is correct with p
 
 You've seen RL *directly* optimize a policy against a verifier. There is a simpler, often-cheaper cousin that uses the same verifier without a policy-gradient loop at all: generate many candidates, **keep only the ones the verifier accepts, and fine-tune on those** — rejection sampling and STaR-style bootstrapping. It also raises the question of *what* you reward: only the final answer (outcome), or each step of the chain (process)?
 
-Continue to [16.3 · Rejection sampling & verifiers](lesson-03.md).
+Continue to [16.3 · Rejection sampling & verifiers](lessons/module-16/lesson-03.md).

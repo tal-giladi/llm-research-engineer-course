@@ -1,7 +1,7 @@
 # 05.2 · Q/K/V & scaled dot-product attention
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the position-aware input grid $h$ of shape $(B, T, C)$ from <a href="lesson-01.md">05.1 · Embeddings &amp; positional encoding</a>; softmax and the cross-entropy machinery from <a href="../module-02/lesson-03.md">02.3 · Backprop through linear + softmax + CE by hand</a>; the dot product and matrix multiply from Module 2.</p>
+<p><strong>Prerequisites:</strong> the position-aware input grid $h$ of shape $(B, T, C)$ from <a href="#/lessons/module-05/lesson-01">05.1 · Embeddings &amp; positional encoding</a>; softmax and the cross-entropy machinery from <a href="#/lessons/module-02/lesson-03">02.3 · Backprop through linear + softmax + CE by hand</a>; the dot product and matrix multiply from Module 2.</p>
 <p><strong>You will learn:</strong> what queries, keys, and values are and how they come from three learned linear projections; the scaled dot-product attention formula $\mathrm{softmax}(QK^\top/\sqrt{d_h} + M)V$ term by term; why we divide by $\sqrt{d_h}$; how the causal mask forbids looking at the future; and why the $T \times T$ score matrix is the memory bottleneck of the whole architecture. You will work a $T=3$, $d_h=2$ example fully by hand and check it against PyTorch's fused kernel.</p>
 <p><strong>Why this matters for ML:</strong> attention is the one operation that makes a transformer a transformer — it is how each token pulls in information from the other tokens. Every GPT layer is attention plus a small feed-forward network, so once you can compute attention by hand and read its PyTorch form, the rest of the model is assembly.</p>
 </div>
@@ -194,7 +194,7 @@ Look at $S$ and $A$: both are $(B, T, T)$. Their size grows with $T^2$. For a co
 
 The mathematics does not require ever storing the full $T \times T$ matrix, though. Production **FlashAttention** kernels compute the identical output by streaming over the score matrix in tiles, keeping a running softmax (a running max and sum) and accumulating the weighted value sum on the fly — never materializing $A$. The result is bit-for-bit the same weighted average you computed by hand; only the memory traffic changes. We build the intuition and a Triton kernel in Module 8.
 
-<div class="callout paper"><p>FlashAttention is paper #7 in the <a href="../../papers/index.md">paper curriculum</a> (Dao et al., 2022), read after Module 8, and covered in <a href="../module-08/lesson-04.md">08.4 · FlashAttention &amp; a Triton kernel</a>. Its one-line thesis: attention is bottlenecked by memory reads/writes of that $T\times T$ matrix, not by FLOPs, so avoiding the materialization — not doing fewer multiplies — is the win.</p></div>
+<div class="callout paper"><p>FlashAttention is paper #7 in the <a href="#/papers/index">paper curriculum</a> (Dao et al., 2022), read after Module 8, and covered in <a href="#/lessons/module-08/lesson-04">08.4 · FlashAttention &amp; a Triton kernel</a>. Its one-line thesis: attention is bottlenecked by memory reads/writes of that $T\times T$ matrix, not by FLOPs, so avoiding the materialization — not doing fewer multiplies — is the win.</p></div>
 
 **Gradients.** Autograd carries backward rules for `@`, `softmax`, and `masked_fill`, so `loss.backward()` differentiates the whole block using the vector–Jacobian products from Module 2. Softmax has a known Jacobian; the masked (`-inf`) entries receive zero gradient, so no signal flows to forbidden positions — the causal structure is respected in the backward pass too.
 
@@ -254,4 +254,4 @@ Because it lets attention be stacked: its output can feed the next sub-layer (an
 
 You can now compute single-head scaled dot-product attention by hand and read its three-line PyTorch core. But a real transformer runs *several* attentions in parallel, each on its own slice of the channels, so different heads can specialize in different kinds of relationships. The next lesson splits the channel dimension into heads and shows every shape of multi-head attention.
 
-Continue to [05.3 · Multi-head attention](lesson-03.md).
+Continue to [05.3 · Multi-head attention](lessons/module-05/lesson-03.md).

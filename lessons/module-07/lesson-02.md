@@ -1,14 +1,14 @@
 # 07.2 · Micro-batch, global batch, gradient accumulation
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the training loop from <a href="lesson-01.md">07.1 · The training loop</a>; that gradients <em>accumulate</em> across <code>backward()</code> calls (07.1, §5); the mean cross-entropy loss from <a href="../module-06/lesson-01.md">06.1</a>.</p>
+<p><strong>Prerequisites:</strong> the training loop from <a href="#/lessons/module-07/lesson-01">07.1 · The training loop</a>; that gradients <em>accumulate</em> across <code>backward()</code> calls (07.1, §5); the mean cross-entropy loss from <a href="#/lessons/module-06/lesson-01">06.1</a>.</p>
 <p><strong>You will learn:</strong> the precise vocabulary of batch sizes — sequence length $T$, micro-batch $b$, gradient-accumulation steps $G$, data-parallel workers $W$, global batch $B_{\text{global}} = b\cdot G\cdot W$, and tokens per optimizer step $= B_{\text{global}}\cdot T$; <em>why</em> gradient accumulation exists (a large effective batch that does not fit in memory); and how to implement it correctly by scaling each micro-batch loss by $1/G$.</p>
 <p><strong>Why this matters for ML:</strong> large models are trained with global batches of hundreds of thousands to millions of tokens, far more than fit in one GPU's memory at once. Gradient accumulation is the universal trick that decouples the batch size your <em>math</em> wants from the batch size your <em>memory</em> allows. Every serious training config is, at heart, a choice of $b$, $G$, and $W$.</p>
 </div>
 
 ## 1. Intuition: the batch you want vs. the batch that fits
 
-In [07.1](lesson-01.md) each step used one small batch. But the *quality* of a gradient step depends on how many examples it averages over: a bigger batch gives a less noisy estimate of the true gradient, which lets you take larger, more confident steps and is part of why large-scale training uses enormous batches (millions of tokens per step for the biggest models).
+In [07.1](lessons/module-07/lesson-01.md) each step used one small batch. But the *quality* of a gradient step depends on how many examples it averages over: a bigger batch gives a less noisy estimate of the true gradient, which lets you take larger, more confident steps and is part of why large-scale training uses enormous batches (millions of tokens per step for the biggest models).
 
 The problem: a batch of a million tokens does not fit in a single GPU's memory — the activations alone (07.1, §6) would be enormous. So we split the batch we *want* into pieces small enough to fit, run them one at a time, and **add up their gradients** before taking a single optimizer step. The optimizer never knows the batch arrived in pieces; it sees one big accumulated gradient. That is **gradient accumulation**.
 
@@ -99,7 +99,7 @@ Three things to notice:
 - **`(loss / G).backward()`** applies the $1/G$ scale from section 2, so the accumulated `.grad` equals the full-batch gradient.
 - **Clip and step run once**, after all $G$ micro-batches, on the summed gradient — so clipping sees the true full-batch gradient norm, exactly as it would without accumulation.
 
-Data-parallel workers $W$ are the third multiplier: each of $W$ devices runs this same loop on its own micro-batches, and an **all-reduce** averages their gradients before `step()` so all workers stay identical. We build that in [Module 9](../module-09/lesson-01.md); until then, $W = 1$ and $B_{\text{global}} = b\cdot G$.
+Data-parallel workers $W$ are the third multiplier: each of $W$ devices runs this same loop on its own micro-batches, and an **all-reduce** averages their gradients before `step()` so all workers stay identical. We build that in [Module 9](lessons/module-09/lesson-01.md); until then, $W = 1$ and $B_{\text{global}} = b\cdot G$.
 
 ## 6. Under the hood: accumulation is compute-for-memory
 
@@ -171,4 +171,4 @@ LayerNorm normalizes each token over its feature dimension, independently of oth
 
 You can now size a global batch and split it to fit memory. Real runs also stop and restart — hardware fails, jobs get pre-empted, you want to resume from last night. Doing that *exactly*, so a resumed run is bit-for-bit identical, means saving more than the weights.
 
-Continue to [07.3 · Checkpointing, resuming, seeds, reproducibility](lesson-03.md).
+Continue to [07.3 · Checkpointing, resuming, seeds, reproducibility](lessons/module-07/lesson-03.md).

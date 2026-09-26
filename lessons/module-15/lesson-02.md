@@ -1,7 +1,7 @@
 # 15.2 · Policy gradient, advantage, PPO
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the reward model and Bradley-Terry loss from <a href="lesson-01.md">15.1</a>; gradient descent, the optimizer, and log-probabilities from <a href="../module-03/lesson-01.md">03.1 · Optimization</a>; the model's <code>generate</code> loop and next-token distribution from <a href="../module-06/lesson-01.md">06.1</a>; log-softmax from <a href="../module-01/lesson-04.md">01.4</a>.</p>
+<p><strong>Prerequisites:</strong> the reward model and Bradley-Terry loss from <a href="#/lessons/module-15/lesson-01">15.1</a>; gradient descent, the optimizer, and log-probabilities from <a href="#/lessons/module-03/lesson-01">03.1 · Optimization</a>; the model's <code>generate</code> loop and next-token distribution from <a href="#/lessons/module-06/lesson-01">06.1</a>; log-softmax from <a href="#/lessons/module-01/lesson-04">01.4</a>.</p>
 <p><strong>You will learn:</strong> how to view a language model as a <strong>policy</strong> <span>$\pi(\text{token} \mid \text{context})$</span>; the <strong>REINFORCE</strong> policy gradient <span>$\nabla J = \mathbb{E}[\nabla \log \pi \cdot R]$</span> and why it has high variance; how a <strong>baseline</strong> gives the <strong>advantage</strong> <span>$\hat{A}$</span>; the <strong>PPO clipped surrogate</strong> objective; and the <strong>KL penalty</strong> to a frozen reference that stops the policy from reward-hacking.</p>
 <p><strong>Why this matters for ML:</strong> PPO is the "RL" in RLHF — the algorithm InstructGPT and the first ChatGPT used to turn a reward model into a better model. Every later method (DPO in 15.3, GRPO in Module 16) is understood by contrast with this one. You need the clipped objective and the KL term in your hands to see what DPO is quietly replacing.</p>
 </div>
@@ -10,7 +10,7 @@
 
 Lesson 15.1 gave us $r(x, y)$, a number that says how good a completion is. We want to make the model produce completions with *higher* reward. The obvious move — "backprop the reward into the model" — does not work, and seeing *why* motivates everything in this lesson.
 
-The reward comes from a **sampled** completion. The model produced tokens by sampling from its own distribution ([06.1](../module-06/lesson-01.md)), and *then* the reward model scored the result. Sampling is not differentiable: there is no derivative of "which token got drawn" with respect to the model weights. So we cannot just call `reward.backward()`. We need **reinforcement learning**: a way to increase the probability of the choices that led to high reward, using only the reward *value*, not its gradient.
+The reward comes from a **sampled** completion. The model produced tokens by sampling from its own distribution ([06.1](lessons/module-06/lesson-01.md)), and *then* the reward model scored the result. Sampling is not differentiable: there is no derivative of "which token got drawn" with respect to the model weights. So we cannot just call `reward.backward()`. We need **reinforcement learning**: a way to increase the probability of the choices that led to high reward, using only the reward *value*, not its gradient.
 
 <div class="callout key"><p>SFT has a differentiable target (the gold token) so it uses ordinary backprop. RLHF has only a scalar reward on a <em>sampled</em> output — the sampling step blocks the gradient. RL's core trick, the <strong>policy gradient</strong>, recovers a usable gradient from just the reward value and the log-probability of the action taken.</p></div>
 
@@ -20,7 +20,7 @@ Rename what we already have. At each step the model reads a context and outputs 
 
 - **state** $s$ — the context so far (the tokens generated up to now).
 - **action** $a$ — the next token emitted.
-- **policy** $\pi_\theta(a \mid s)$ — the probability the model (parameters $\theta$) assigns to that token. This is *exactly* the softmax over logits from [06.1](../module-06/lesson-01.md); nothing new.
+- **policy** $\pi_\theta(a \mid s)$ — the probability the model (parameters $\theta$) assigns to that token. This is *exactly* the softmax over logits from [06.1](lessons/module-06/lesson-01.md); nothing new.
 - **reward** $R$ — the reward-model score, given once at the **end** of the full generation (a "terminal" reward). Intermediate tokens get no reward of their own.
 - **return** — the total reward attributed to the trajectory; with a single terminal reward, the return for every action in the sequence is that one $R$.
 
@@ -203,7 +203,7 @@ Full RLHF-PPO keeps **four** models in play at once:
 3. the **reward model** (frozen, scores completions),
 4. the **value model** (the baseline; often the value head on the policy).
 
-Each PPO iteration must **generate** completions from the policy (slow autoregressive sampling, [06.1](../module-06/lesson-01.md)), score them with the reward model, compute log-probs under policy and reference, estimate advantages, then take several clipped-objective steps. It is memory-hungry (multiple model copies) and finicky (many interacting hyperparameters: $\epsilon$, $\beta_{\text{KL}}$, learning rate, GAE $\lambda$, rollout size). This engineering weight is exactly the pain DPO removes in lesson 15.3.
+Each PPO iteration must **generate** completions from the policy (slow autoregressive sampling, [06.1](lessons/module-06/lesson-01.md)), score them with the reward model, compute log-probs under policy and reference, estimate advantages, then take several clipped-objective steps. It is memory-hungry (multiple model copies) and finicky (many interacting hyperparameters: $\epsilon$, $\beta_{\text{KL}}$, learning rate, GAE $\lambda$, rollout size). This engineering weight is exactly the pain DPO removes in lesson 15.3.
 
 <div class="callout pt"><p>The production library is <strong>TRL</strong> (<code>PPOTrainer</code>), which wires generation, reward scoring, reference log-probs, GAE, and the clipped update into one loop, with the value head and KL controller built in. We implemented the load-bearing math — the clipped objective, the advantage, the KL estimate — from scratch first so you can read that loop and know exactly what each line does.</p></div>
 
@@ -264,4 +264,4 @@ It penalizes the policy for drifting from the frozen reference (SFT) policy, kee
 
 PPO works but is heavy: four models, a generation loop, and a pile of interacting hyperparameters. Next we derive **DPO**, which starts from the exact same KL-constrained RLHF objective and the exact same Bradley-Terry model from 15.1, and collapses the whole thing into a single supervised loss on preference pairs — no reward model, no sampling.
 
-Continue to [15.3 · DPO: derivation & implementation](lesson-03.md).
+Continue to [15.3 · DPO: derivation & implementation](lessons/module-15/lesson-03.md).

@@ -1,7 +1,7 @@
 # 10.2 · Kaplan scaling laws; fit a curve
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> parameter counting and the $6ND$ compute rule from <a href="lesson-01.md">10.1 · FLOPs & parameter counting</a>; the training loop from <a href="../module-07/lesson-01.md">07.1</a> and <code>get_batch</code> from <a href="../module-04/lesson-03.md">04.3</a>; cross-entropy loss as the training signal from <a href="../module-01/lesson-04.md">01.4</a>. Logarithms and a straight-line fit ($y = mx + b$) — no more than that.</p>
+<p><strong>Prerequisites:</strong> parameter counting and the $6ND$ compute rule from <a href="#/lessons/module-10/lesson-01">10.1 · FLOPs & parameter counting</a>; the training loop from <a href="#/lessons/module-07/lesson-01">07.1</a> and <code>get_batch</code> from <a href="#/lessons/module-04/lesson-03">04.3</a>; cross-entropy loss as the training signal from <a href="#/lessons/module-01/lesson-04">01.4</a>. Logarithms and a straight-line fit ($y = mx + b$) — no more than that.</p>
 <p><strong>You will learn:</strong> what a <strong>power law</strong> is and why it becomes a straight line on <strong>log-log axes</strong>; the Kaplan et al. 2020 empirical laws $L(N)=(N_c/N)^{\alpha_N}$ (and the analogous laws in data $D$ and compute $C$); and — hands on — how to <strong>fit one</strong>: train several tiny GPTs of increasing size on one toy corpus, record their final loss, and recover the exponent by linear regression in log-log space with <code>fit_power_law</code>.</p>
 <p><strong>Why this matters for ML:</strong> scaling laws are how labs <em>predict the future</em>. Fit the power law on cheap small runs, then extrapolate the straight line to say what loss a 100× bigger model will reach — <em>before</em> building it. This is the empirical backbone of every modern pretraining decision, and the tool that makes 10.3's compute-optimal allocation possible.</p>
 </div>
@@ -132,7 +132,7 @@ Loss falls monotonically as width grows, and the six points lie close to a log-l
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Scaling Laws for Neural Language Models</strong> (Kaplan et al., 2020) — <a href="../../papers/index.md">paper #3 in the reading list</a>. This is the paper you have just reproduced in miniature. <strong>Read:</strong> the abstract, the main power-law figure (loss vs $N$, $D$, $C$ as straight log-log lines), and equation set for $L(N), L(D), L(C)$. <strong>What to understand:</strong> loss follows power laws over many orders of magnitude; larger models are more sample-efficient; how they split a compute budget between $N$ and $D$. <strong>Skip on a first pass:</strong> the batch-size critical-value derivations and the detailed fitting-methodology appendices. Note the conclusion about compute allocation — Kaplan favours spending most of extra compute on <em>bigger models</em>. Lesson 10.3 (Chinchilla) revises exactly that conclusion, so hold it loosely.</p></div>
+<div class="callout paper"><p><strong>Scaling Laws for Neural Language Models</strong> (Kaplan et al., 2020) — <a href="#/papers/index">paper #3 in the reading list</a>. This is the paper you have just reproduced in miniature. <strong>Read:</strong> the abstract, the main power-law figure (loss vs $N$, $D$, $C$ as straight log-log lines), and equation set for $L(N), L(D), L(C)$. <strong>What to understand:</strong> loss follows power laws over many orders of magnitude; larger models are more sample-efficient; how they split a compute budget between $N$ and $D$. <strong>Skip on a first pass:</strong> the batch-size critical-value derivations and the detailed fitting-methodology appendices. Note the conclusion about compute allocation — Kaplan favours spending most of extra compute on <em>bigger models</em>. Lesson 10.3 (Chinchilla) revises exactly that conclusion, so hold it loosely.</p></div>
 
 ## Exercise
 
@@ -198,4 +198,4 @@ Two common causes: (1) the largest model is starting to hit the irreducible loss
 
 You can now fit a scaling law and read its exponent. But Kaplan's laws describe $L(N)$ and $L(D)$ *separately*; the real planning question couples them: given a fixed compute budget $C = 6ND$, how do you split it between model size and tokens to get the lowest loss? Chinchilla answers that with a single fit $L(N, D)$ and a constrained optimisation — and overturns Kaplan's "spend it on bigger models" conclusion.
 
-Continue to [10.3 · Chinchilla compute-optimality](lesson-03.md).
+Continue to [10.3 · Chinchilla compute-optimality](lessons/module-10/lesson-03.md).

@@ -1,7 +1,7 @@
 # 15.3 · DPO: derivation & implementation
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the Bradley-Terry model and reward loss from <a href="lesson-01.md">15.1</a>; the KL-constrained RLHF objective, the reference policy, and sequence log-probabilities from <a href="lesson-02.md">15.2</a>; log-softmax and gathering token log-probs from <a href="../module-01/lesson-04.md">01.4</a>; the response-only masking of <a href="../module-14/lesson-02.md">14.2</a>.</p>
+<p><strong>Prerequisites:</strong> the Bradley-Terry model and reward loss from <a href="#/lessons/module-15/lesson-01">15.1</a>; the KL-constrained RLHF objective, the reference policy, and sequence log-probabilities from <a href="#/lessons/module-15/lesson-02">15.2</a>; log-softmax and gathering token log-probs from <a href="#/lessons/module-01/lesson-04">01.4</a>; the response-only masking of <a href="#/lessons/module-14/lesson-02">14.2</a>.</p>
 <p><strong>You will learn:</strong> how to derive <strong>Direct Preference Optimization</strong> from the RLHF objective — the closed-form optimal policy, inverting it to express the reward through the policy, and substituting into Bradley-Terry so the reward model and the partition function <em>disappear</em>; and how to implement <code>sequence_logprob</code> and <code>dpo_loss</code> from scratch, verified numerically.</p>
 <p><strong>Why this matters for ML:</strong> DPO turned preference tuning from a fragile four-model RL loop into a stable supervised loss you can run like SFT. It is the default alignment method for most open-weight models today. And its derivation is the single most instructive piece of algebra in post-training: it shows the RLHF objective and a simple classification loss are two views of the same thing.</p>
 </div>
@@ -62,7 +62,7 @@ This is the key move. The reward — the thing we trained a whole separate netwo
 
 ## Step 4 — substitute into Bradley-Terry; $Z(x)$ cancels
 
-Recall the Bradley-Terry preference probability from [15.1](lesson-01.md):
+Recall the Bradley-Terry preference probability from [15.1](lessons/module-15/lesson-01.md):
 
 $$
 P(y_w \succ y_l \mid x) = \sigma\big(r(x,y_w) - r(x,y_l)\big).
@@ -132,7 +132,7 @@ print(round(-F.logsigmoid(torch.tensor(beta*m)).item(),6))"
 
 ## Computing the sequence log-probs: `sequence_logprob`
 
-The DPO loss needs $\log\pi(y|x) = \sum_t \log \pi(y_t\mid y_{<t}, x)$ — the **sum** of per-token log-probs over the completion. This is the same gather-the-true-token-log-prob operation as cross-entropy ([01.4](../module-01/lesson-04.md)), but summed (not averaged) and over response tokens only (prompt masked to `ignore_index`, exactly as in [14.2](../module-14/lesson-02.md)).
+The DPO loss needs $\log\pi(y|x) = \sum_t \log \pi(y_t\mid y_{<t}, x)$ — the **sum** of per-token log-probs over the completion. This is the same gather-the-true-token-log-prob operation as cross-entropy ([01.4](lessons/module-01/lesson-04.md)), but summed (not averaged) and over response tokens only (prompt masked to `ignore_index`, exactly as in [14.2](lessons/module-14/lesson-02.md)).
 
 ### Tensor shapes / dtype / device
 
@@ -212,7 +212,7 @@ The unit test `test_dpo_gradient_increases_the_chosen_minus_rejected_margin` sta
 
 - **Averaging instead of summing token log-probs.** `sequence_logprob` must **sum** over the completion (it is $\log$ of a product of per-token probabilities). Averaging changes the implicit reward's scale and interacts badly with $\beta$.
 - **Letting the reference train / dropping `torch.no_grad()`.** The reference is a fixed anchor; if it moves, the objective degenerates.
-- **Not masking the prompt.** Only the completion tokens should contribute to $\log\pi(y|x)$. Set prompt/pad labels to `ignore_index` (see [14.2](../module-14/lesson-02.md)).
+- **Not masking the prompt.** Only the completion tokens should contribute to $\log\pi(y|x)$. Set prompt/pad labels to `ignore_index` (see [14.2](lessons/module-14/lesson-02.md)).
 - **Sign or ratio-order slips.** It is $(\text{policy chosen} - \text{policy rejected}) - (\text{ref chosen} - \text{ref rejected})$. Swapping chosen/rejected trains the model to prefer the *worse* answer.
 
 ## Debugging exercise
@@ -246,7 +246,7 @@ Since $\beta > 0$, this equals `((pcw - rcw) > (pcl - rcl)).float().mean()`, i.e
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Read:</strong> <a href="../../papers/index.md">DPO (Rafailov et al. 2023)</a>. Read Section 4 (the derivation above — the optimal policy, the reward reparameterization, the loss) and the gradient interpretation closely; skim the theoretical equivalence proofs on a first pass. This paper is the reason most open-weight models today are aligned with DPO rather than PPO.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> <a href="#/papers/index">DPO (Rafailov et al. 2023)</a>. Read Section 4 (the derivation above — the optimal policy, the reward reparameterization, the loss) and the gradient interpretation closely; skim the theoretical equivalence proofs on a first pass. This paper is the reason most open-weight models today are aligned with DPO rather than PPO.</p></div>
 
 ## Check yourself
 
@@ -284,4 +284,4 @@ $\beta$ is the same KL weight as the RLHF/PPO objective. Large $\beta$ keeps $\p
 
 We have three ways to shape behavior: SFT (imitate), RM+PPO (optimize a learned reward with RL), and DPO (optimize preferences directly). Next we compare all three head-to-head — what each optimizes, what infrastructure each demands, how each fails — and look at replacing human labels with AI feedback (Constitutional AI / RLAIF).
 
-Continue to [15.4 · SFT vs RM+PPO vs DPO](lesson-04.md).
+Continue to [15.4 · SFT vs RM+PPO vs DPO](lessons/module-15/lesson-04.md).

@@ -1,7 +1,7 @@
 # 19.2 · Experiment design & research writing
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> honest held-out evaluation, loss, and perplexity from <a href="../module-13/lesson-01.md">13.1 · Loss, perplexity, zero-/few-shot</a>; fitting a trend and reasoning about noise from <a href="../module-10/lesson-02.md">10.2 · Kaplan scaling laws</a>; mean/variance from <a href="../module-01/lesson-01.md">01.1 · Random variables, expectation, variance</a>. The ReAct loop from <a href="lesson-01.md">19.1</a> for context on the agent you might use to run sweeps.</p>
+<p><strong>Prerequisites:</strong> honest held-out evaluation, loss, and perplexity from <a href="#/lessons/module-13/lesson-01">13.1 · Loss, perplexity, zero-/few-shot</a>; fitting a trend and reasoning about noise from <a href="#/lessons/module-10/lesson-02">10.2 · Kaplan scaling laws</a>; mean/variance from <a href="#/lessons/module-01/lesson-01">01.1 · Random variables, expectation, variance</a>. The ReAct loop from <a href="#/lessons/module-19/lesson-01">19.1</a> for context on the agent you might use to run sweeps.</p>
 <p><strong>You will learn:</strong> how to turn a vague idea into a falsifiable experiment; hypotheses, baselines, controls, and ablations; why a single-seed result is untrustworthy and how to report <strong>mean ± std</strong> with a <strong>confidence interval</strong>; checkpoint selection, hyperparameter sweeps, and experiment tracking; failure analysis, paper reproduction, and the value of negative results; and the discipline of scientific writing via a fixed <strong>experiment-report template</strong>.</p>
 <p><strong>Why this matters for ML:</strong> this is the core of the job. A research engineer's output is not code or checkpoints — it is <em>trustworthy knowledge</em>: "does change X actually help, and by how much, and are we sure?" Most wrong conclusions in ML come not from bad models but from bad experimental hygiene — one seed, a moving baseline, a metric that drifted. Getting this right is what separates real progress from fooling yourself.</p>
 </div>
@@ -120,7 +120,7 @@ print(confidence_interval(B, 0.95))   # (70.028..., 73.972...)
 
 **Hyperparameter sweeps.** To find a good learning rate you run a **sweep** — the same config at several learning rates — and plot metric vs hyperparameter. Two rules: sweep on the *validation* set, and beware that the winner of a sweep is partly luck (you took the max over several noisy runs), so the sweep's best number is optimistically biased. Re-run the chosen setting with fresh seeds before believing it.
 
-**Experiment tracking.** Every run must be reproducible from its record: the exact config, the code commit hash, the data version, the seed, and the resulting metrics. A run you cannot reproduce is a run you cannot cite. This is why the report template below demands the commit and config, and why the paper-reading workflow files a summary per paper under `code/reports/` (see the <a href="../../papers/index.md">paper curriculum</a>).
+**Experiment tracking.** Every run must be reproducible from its record: the exact config, the code commit hash, the data version, the seed, and the resulting metrics. A run you cannot reproduce is a run you cannot cite. This is why the report template below demands the commit and config, and why the paper-reading workflow files a summary per paper under `code/reports/` (see the <a href="#/papers/index">paper curriculum</a>).
 
 ## 5. Failure analysis, reproduction, and negative results
 
@@ -244,4 +244,4 @@ Taking the maximum (or minimum-loss) over several noisy runs is optimistically b
 
 You now have the full research-engineer toolkit: from-scratch models and training (Modules 0–14), preference learning and reasoning (15–17), tools and agents (18–19), and — here — the experimental discipline to tell whether any change to all of that actually helps. The capstone puts it together: design, train, evaluate, and *write up* a mini frontier LLM end to end, with every claim backed by an experiment report.
 
-Continue to [20 · Mini frontier LLM](../module-20/lesson-01.md).
+Continue to [20 · Mini frontier LLM](lessons/module-20/lesson-01.md).

@@ -1,7 +1,7 @@
 # 17.1 · CoT, self-consistency, STaR
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the evaluation harness and how we score answers from <a href="../module-13/lesson-01.md">13.1 · Evaluation</a>; reasoning RL and verifiable rewards from <a href="../module-16/lesson-01.md">16.1 · Reasoning RL</a>; sampling from a language model (temperature, top-k) from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>.</p>
+<p><strong>Prerequisites:</strong> the evaluation harness and how we score answers from <a href="#/lessons/module-13/lesson-01">13.1 · Evaluation</a>; reasoning RL and verifiable rewards from <a href="#/lessons/module-16/lesson-01">16.1 · Reasoning RL</a>; sampling from a language model (temperature, top-k) from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>.</p>
 <p><strong>You will learn:</strong> what a <em>chain of thought</em> is and the two mechanical reasons it raises accuracy (more test-time compute, and problem decomposition); how <em>self-consistency</em> turns many sampled chains into one answer by majority vote — worked by hand and reproduced exactly with our <code>self_consistency</code> helper; and how <em>STaR</em> promotes chain-of-thought from a prompting trick into a self-improvement training loop.</p>
 <p><strong>Why this matters for ML:</strong> every modern reasoning model — including the DeepSeek-R1 pipeline you will rebuild in miniature in 17.3 — is built on these three ideas stacked. CoT is the behaviour, self-consistency is the cheapest way to cash it in at inference, and STaR is the first "let the model teach itself to reason" loop that RL later generalises.</p>
 </div>
@@ -152,7 +152,7 @@ There is a gap in the loop. A problem the model *never* gets right produces *no*
 
 Look at the STaR loop as a reward loop and the connection to Module 16 is exact. "Filter by correctness" is a **binary verifiable reward** (1 if the answer is right, else 0). "Fine-tune on the kept chains" is a crude policy-improvement step that up-weights high-reward trajectories. STaR is essentially the simplest possible policy-gradient method — keep the winners, imitate them — done as offline SFT rounds. Replace that with a proper on-policy RL update and a group-relative baseline and you have **GRPO** (17.2), the engine of DeepSeek-R1 (17.3).
 
-<div class="callout paper"><p><strong>Research connection.</strong> The two founding papers of this lesson: <em>Chain-of-Thought Prompting Elicits Reasoning in Large Language Models</em> (Wei et al. 2022) and <em>STaR: Bootstrapping Reasoning With Reasoning</em> (Zelikman et al. 2022). Self-consistency is <em>Self-Consistency Improves Chain of Thought Reasoning</em> (Wang et al. 2022). See the reading guides in <a href="../../papers/index.md">the paper curriculum</a> (entries 22 and 23), which place them in the dependency graph leading to R1. The overall module map is in <a href="../../curriculum/course-outline.md">the curriculum outline</a>.</p></div>
+<div class="callout paper"><p><strong>Research connection.</strong> The two founding papers of this lesson: <em>Chain-of-Thought Prompting Elicits Reasoning in Large Language Models</em> (Wei et al. 2022) and <em>STaR: Bootstrapping Reasoning With Reasoning</em> (Zelikman et al. 2022). Self-consistency is <em>Self-Consistency Improves Chain of Thought Reasoning</em> (Wang et al. 2022). See the reading guides in <a href="#/papers/index">the paper curriculum</a> (entries 22 and 23), which place them in the dependency graph leading to R1. The overall module map is in <a href="#/curriculum/course-outline">the curriculum outline</a>.</p></div>
 
 ## Common mistakes
 
@@ -211,4 +211,4 @@ It fixes the hard tail: problems the model never answers correctly generate no c
 
 You can now make a model reason out loud, cash in that reasoning cheaply with a majority vote, and bootstrap it into the weights with STaR. But "the final answer is correct" is a blunt signal — it says nothing about *where* a long chain went wrong. The next lesson sharpens the reward from the whole outcome down to individual steps, and recaps the GRPO algorithm that turns a verifiable reward into a policy update.
 
-Continue to [17.2 · Process reward & DeepSeekMath](lesson-02.md).
+Continue to [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md).

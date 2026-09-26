@@ -1,7 +1,7 @@
 # 07.3 · Checkpointing, resuming, seeds, reproducibility
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the training loop and its state — model, optimizer, step — from <a href="lesson-01.md">07.1 · The training loop</a>; the AdamW moment buffers <code>m</code>, <code>v</code> and step counter <code>t</code> from <a href="../module-03/lesson-02.md">03.2 · AdamW</a>; the data loader's use of an RNG to sample batches from <a href="../module-04/lesson-03.md">04.3</a>.</p>
+<p><strong>Prerequisites:</strong> the training loop and its state — model, optimizer, step — from <a href="#/lessons/module-07/lesson-01">07.1 · The training loop</a>; the AdamW moment buffers <code>m</code>, <code>v</code> and step counter <code>t</code> from <a href="#/lessons/module-03/lesson-02">03.2 · AdamW</a>; the data loader's use of an RNG to sample batches from <a href="#/lessons/module-04/lesson-03">04.3</a>.</p>
 <p><strong>You will learn:</strong> exactly what must be saved to resume a run <em>identically</em> — model <code>state_dict</code>, optimizer state, step number, and the torch/NumPy/Python RNG states; how to seed every RNG for determinism and the real caveats (nondeterministic CUDA kernels, <code>torch.use_deterministic_algorithms</code>); and how to implement <code>save_checkpoint</code> / <code>load_checkpoint</code> so a resumed run continues bit-for-bit.</p>
 <p><strong>Why this matters for ML:</strong> real pretraining runs last days to weeks on hardware that fails, gets pre-empted, or is deliberately paused. A checkpoint you cannot resume <em>exactly</em> from is a checkpoint you cannot trust — a resume that silently diverges wastes the compute since the last save and corrupts any experiment comparing "before" and "after". Reproducibility is also how you debug: if you cannot re-run and get the same numbers, you cannot bisect a regression.</p>
 </div>
@@ -216,4 +216,4 @@ So the checkpoint is device-independent: a file written on GPU can be reloaded o
 
 You can now train, size batches, and resume exactly. The last piece of infrastructure is knowing whether a run is *fast* — how many FLOPs it does, how many tokens/second it achieves, what fraction of the hardware it uses (MFU), and how much memory the parameters, gradients, optimizer state, and activations consume.
 
-Continue to [07.4 · Throughput, FLOPs, MFU, memory accounting](lesson-04.md).
+Continue to [07.4 · Throughput, FLOPs, MFU, memory accounting](lessons/module-07/lesson-04.md).

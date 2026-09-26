@@ -1,7 +1,7 @@
 # 15.4 · SFT vs RM+PPO vs DPO
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> SFT from <a href="../module-14/lesson-01.md">14.1</a>; the reward model from <a href="lesson-01.md">15.1</a>; PPO, the KL penalty, and reward hacking from <a href="lesson-02.md">15.2</a>; the DPO derivation and loss from <a href="lesson-03.md">15.3</a>.</p>
+<p><strong>Prerequisites:</strong> SFT from <a href="#/lessons/module-14/lesson-01">14.1</a>; the reward model from <a href="#/lessons/module-15/lesson-01">15.1</a>; PPO, the KL penalty, and reward hacking from <a href="#/lessons/module-15/lesson-02">15.2</a>; the DPO derivation and loss from <a href="#/lessons/module-15/lesson-03">15.3</a>.</p>
 <p><strong>You will learn:</strong> a side-by-side comparison of the three post-training pipelines — what each <em>optimizes</em>, what <em>infrastructure</em> each needs, and how each <em>fails</em> (reward hacking, over-optimization, distribution shift); a decision guide for when to reach for which; and a brief tour of replacing human labels with AI feedback — Constitutional AI and RLAIF.</p>
 <p><strong>Why this matters for ML:</strong> choosing the alignment method is one of the highest-leverage decisions in a post-training project. It sets your compute budget, your data-collection strategy, and your failure surface. This lesson turns the mechanics of 14.1–15.3 into an engineering decision.</p>
 </div>
@@ -78,7 +78,7 @@ The bottleneck in all of the above is **human preference labels** — slow, expe
 
 ### Constitutional AI (CAI)
 
-<div class="callout paper"><p><strong>Read:</strong> <a href="../../papers/index.md">Constitutional AI (Bai et al. 2022)</a> and <a href="../../papers/index.md">RLAIF (Lee et al. 2023)</a>.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> <a href="#/papers/index">Constitutional AI (Bai et al. 2022)</a> and <a href="#/papers/index">RLAIF (Lee et al. 2023)</a>.</p></div>
 
 Constitutional AI (Anthropic) trains harmlessness with minimal human harm labels, in two phases (**PUBLICLY DOCUMENTED**, from the paper):
 
@@ -151,4 +151,4 @@ It replaces large volumes of human harm labels with a written list of principles
 
 You can now pick and run a post-training method. Module 16 takes RL in a new direction: instead of a learned reward model of human preference, it uses **verifiable rewards** (does the math answer check out? does the code pass tests?) and the **GRPO** algorithm that grew out of PPO — the machinery behind modern reasoning models.
 
-Continue to [16.1 · From PPO to GRPO](../module-16/lesson-01.md).
+Continue to [16.1 · From PPO to GRPO](lessons/module-16/lesson-01.md).

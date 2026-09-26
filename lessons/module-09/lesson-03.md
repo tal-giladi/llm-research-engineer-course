@@ -1,7 +1,7 @@
 # 09.3 · Tensor / pipeline / expert parallelism
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> ZeRO/FSDP sharding of the model-state buckets and the all-gather / reduce-scatter collectives from <a href="lesson-02.md">09.2 · ZeRO &amp; FSDP</a>; all-reduce and the data-parallel picture from <a href="lesson-01.md">09.1 · Data parallelism, all-reduce, DDP</a>; the Transformer block — attention + MLP, the MLP's $C\to 4C$ and $4C\to C$ Linears — from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>.</p>
+<p><strong>Prerequisites:</strong> ZeRO/FSDP sharding of the model-state buckets and the all-gather / reduce-scatter collectives from <a href="#/lessons/module-09/lesson-02">09.2 · ZeRO &amp; FSDP</a>; all-reduce and the data-parallel picture from <a href="#/lessons/module-09/lesson-01">09.1 · Data parallelism, all-reduce, DDP</a>; the Transformer block — attention + MLP, the MLP's $C\to 4C$ and $4C\to C$ Linears — from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>.</p>
 <p><strong>You will learn:</strong> the parallelism you reach for when the model — or even a single layer — is too big to fit or compute on one device: <strong>tensor parallelism</strong> (split a matmul's weight across devices and all-reduce the partial results — the Megatron column-then-row split for an MLP, worked with exact numbers); <strong>pipeline parallelism</strong> (assign layer ranges to stages, feed micro-batches to fill the pipe, and the "bubble" that micro-batches shrink); and a shorter tour of <strong>sequence/context parallelism</strong> and <strong>expert parallelism</strong> for MoE. Plus which framework (Megatron-LM, DeepSpeed, FSDP) solves which problem, and what you'd implement yourself.</p>
 <p><strong>Why this matters for ML:</strong> data parallelism and ZeRO get you far, but frontier models are trained with all of these at once — a "3D parallelism" of data × tensor × pipeline, with expert parallelism on top for MoE. Knowing what each axis splits, and what it costs in communication, is how you read a large-model training report and how you'd plan one.</p>
 </div>
@@ -10,7 +10,7 @@
 
 ## 1. When data parallelism and ZeRO run out
 
-Data parallelism ([09.1](lesson-01.md)) replicates the model and splits the *data*. ZeRO/FSDP ([09.2](lesson-02.md)) shard the model's *memory* but still run each layer's full computation on one device (after gathering its weights). Both assume a single device can, at least momentarily, hold and compute one layer. When that assumption breaks — a layer's weight matrix or its activations are simply too large for one device — you must split the **model itself** across devices. There are three axes to split along, and real runs use them together:
+Data parallelism ([09.1](lessons/module-09/lesson-01.md)) replicates the model and splits the *data*. ZeRO/FSDP ([09.2](lessons/module-09/lesson-02.md)) shard the model's *memory* but still run each layer's full computation on one device (after gathering its weights). Both assume a single device can, at least momentarily, hold and compute one layer. When that assumption breaks — a layer's weight matrix or its activations are simply too large for one device — you must split the **model itself** across devices. There are three axes to split along, and real runs use them together:
 
 - **Tensor parallelism** — split an *individual operation* (a matmul) across devices. Each device holds part of a weight matrix and computes part of the output.
 - **Pipeline parallelism** — split the *layer stack* across devices. Each device holds a contiguous range of layers and passes activations to the next.
@@ -20,11 +20,11 @@ Data parallelism ([09.1](lesson-01.md)) replicates the model and splits the *dat
 
 ## 2. Tensor parallelism: split the matmul (Megatron style)
 
-The dominant compute in a Transformer is matmuls against weight matrices ([07.4](../module-07/lesson-04.md)). Tensor parallelism splits one such matmul across `W` devices so no device holds the whole weight. The elegant part, from **Megatron-LM**, is choosing *how* to split so that the two matmuls of an MLP need only **one** communication between them.
+The dominant compute in a Transformer is matmuls against weight matrices ([07.4](lessons/module-07/lesson-04.md)). Tensor parallelism splits one such matmul across `W` devices so no device holds the whole weight. The elegant part, from **Megatron-LM**, is choosing *how* to split so that the two matmuls of an MLP need only **one** communication between them.
 
 ### The column-then-row trick for an MLP
 
-A Transformer MLP is two matmuls with a nonlinearity between them ([06.1](../module-06/lesson-01.md)):
+A Transformer MLP is two matmuls with a nonlinearity between them ([06.1](lessons/module-06/lesson-01.md)):
 
 $$
 Y = \operatorname{ReLU}(X A)\, B,
@@ -34,7 +34,7 @@ where $A$ is the $C \to 4C$ "up" projection and $B$ is the $4C \to C$ "down" pro
 
 - **Column-parallel on $A$.** Split $A$ by its **columns** into $[A_0 \mid A_1 \mid \dots]$, one block of columns per device. Device $d$ computes $X A_d$, producing its own slice of the hidden activations. Because ReLU is applied **element-wise**, each device can apply it to its own slice *independently* — no communication needed. This is why the split is placed before the nonlinearity.
 - **Row-parallel on $B$.** Split $B$ by its **rows** into $\left[\begin{smallmatrix}B_0\\B_1\\\vdots\end{smallmatrix}\right]$, matching the hidden slices. Device $d$ computes $\operatorname{ReLU}(X A_d)\, B_d$, which is a **partial** output — it has the full output shape but contains only device $d$'s contribution.
-- **All-reduce to finish.** The full output is the *sum* of the partials: $Y = \sum_d \operatorname{ReLU}(X A_d)\, B_d$. One all-reduce ([09.1](lesson-01.md)) sums them across devices, and every device ends with the complete $Y$.
+- **All-reduce to finish.** The full output is the *sum* of the partials: $Y = \sum_d \operatorname{ReLU}(X A_d)\, B_d$. One all-reduce ([09.1](lessons/module-09/lesson-01.md)) sums them across devices, and every device ends with the complete $Y$.
 
 The reason this pairing is bandwidth-thrifty: the intermediate $4C$-wide hidden activations never have to be communicated (each device keeps its own slice through the ReLU); only the final $C$-wide output is all-reduced, once per MLP in the forward pass (and once in backward).
 
@@ -89,7 +89,7 @@ Tensor parallelism splits *within* a layer. **Pipeline parallelism** splits *acr
 
 The naive version is badly inefficient. If you push one batch through, then while stage 0 computes, stages 1–3 sit idle waiting for its output; when the batch reaches stage 3, stages 0–2 are idle. Most devices are idle most of the time — the wasted time is the **pipeline bubble**.
 
-The fix is to split the batch into `m` **micro-batches** and feed them in a staggered stream (this reuses the micro-batch idea of [07.2](../module-07/lesson-02.md)). As soon as stage 0 finishes micro-batch 1 and passes it to stage 1, it starts micro-batch 2 — so after a short fill, *all* stages are busy on different micro-batches at once, like an assembly line. The bubble is the fill + drain time at the ends of the pipe.
+The fix is to split the batch into `m` **micro-batches** and feed them in a staggered stream (this reuses the micro-batch idea of [07.2](lessons/module-07/lesson-02.md)). As soon as stage 0 finishes micro-batch 1 and passes it to stage 1, it starts micro-batch 2 — so after a short fill, *all* stages are busy on different micro-batches at once, like an assembly line. The bubble is the fill + drain time at the ends of the pipe.
 
 For `S` stages and `m` micro-batches, the bubble is the fraction of time lost to fill/drain:
 
@@ -126,7 +126,7 @@ Two more axes, in brief.
 
 **Sequence (context) parallelism** splits along the *sequence length* `T` rather than the batch or the width. Each device handles a slice of the token positions. This targets the parts of the Transformer whose memory grows with `T` — the attention scores and the per-token activations of LayerNorm/dropout — which tensor parallelism does not shard. It is what makes very long context lengths trainable, and it requires communicating across the sequence dimension inside attention (each position's query must still see all keys). It composes with tensor parallelism (Megatron combines the two).
 
-**Expert parallelism** is specific to **Mixture-of-Experts** models. An MoE layer replaces the single MLP with many expert MLPs and a router that sends each token to only one or a few experts (you will build this in [Module 12.4](../module-12/lesson-04.md)). Expert parallelism places different experts on different devices; the router then performs an **all-to-all** communication — every device sends each of its tokens to whichever device holds that token's chosen expert, and sends the results back. Because each token uses only a couple of experts, an MoE can have a huge total parameter count while each device stores and computes only its slice of the experts.
+**Expert parallelism** is specific to **Mixture-of-Experts** models. An MoE layer replaces the single MLP with many expert MLPs and a router that sends each token to only one or a few experts (you will build this in [Module 12.4](lessons/module-12/lesson-04.md)). Expert parallelism places different experts on different devices; the router then performs an **all-to-all** communication — every device sends each of its tokens to whichever device holds that token's chosen expert, and sends the results back. Because each token uses only a couple of experts, an MoE can have a huge total parameter count while each device stores and computes only its slice of the experts.
 
 <div class="callout key"><p><strong>Sequence parallelism</strong> splits the token axis <code>T</code> (for long context and to shard the activations tensor parallelism leaves whole). <strong>Expert parallelism</strong> splits an MoE's experts across devices and routes tokens to them with an all-to-all — huge total parameters, small per-device compute. Both stack on top of tensor / pipeline / data parallelism.</p></div>
 
@@ -146,7 +146,7 @@ What each framework gives you:
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism</strong> (Shoeybi et al., 2019) introduces the column-then-row tensor-parallel split of section 2 (for both the MLP and multi-head attention) and shows it scaling to billions of parameters. Together with <strong>ZeRO</strong> (09.2) it is one of the two foundational large-model systems papers, and both are cited by essentially every frontier-model report since. Read it after this module; guide and link in <a href="../../papers/index.md">the paper curriculum</a>.</p></div>
+<div class="callout paper"><p><strong>Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism</strong> (Shoeybi et al., 2019) introduces the column-then-row tensor-parallel split of section 2 (for both the MLP and multi-head attention) and shows it scaling to billions of parameters. Together with <strong>ZeRO</strong> (09.2) it is one of the two foundational large-model systems papers, and both are cited by essentially every frontier-model report since. Read it after this module; guide and link in <a href="#/papers/index">the paper curriculum</a>.</p></div>
 
 ## Exercise
 
@@ -197,7 +197,7 @@ An all-reduce with sum: $[5,2] + [5,9] = [10, 11]$, which matches the single-dev
 
 <details><summary>Why is expert parallelism able to give a model a very large total parameter count without a proportional increase in per-token compute?</summary>
 
-In an MoE, the router sends each token to only one or a few of the many experts, so a token's forward pass touches only those experts' parameters — not all of them. Placing different experts on different devices (with an all-to-all to route tokens) means total parameters scale with the number of experts while per-token compute (and per-device work) scales only with the few experts actually used. (Built in <a href="../module-12/lesson-04.md">Module 12.4</a>.)
+In an MoE, the router sends each token to only one or a few of the many experts, so a token's forward pass touches only those experts' parameters — not all of them. Placing different experts on different devices (with an all-to-all to route tokens) means total parameters scale with the number of experts while per-token compute (and per-device work) scales only with the few experts actually used. (Built in <a href="#/lessons/module-12/lesson-04">Module 12.4</a>.)
 
 </details>
 
@@ -210,4 +210,4 @@ In an MoE, the router sends each token to only one or a few of the many experts,
 
 You have now seen the full parallelism toolkit: data parallelism and ZeRO/FSDP (split the data and shard the memory, 09.1–09.2) and tensor / pipeline / expert parallelism (split the model itself, this lesson). Together these are how any model larger than one GPU is trained. The next module steps back from *how to train fast* to *how big to make the model and how much data to use in the first place* — the scaling laws that turn a compute budget into an optimal model size and token count.
 
-Continue to [Module 10 · Scaling laws](../module-10/lesson-01.md).
+Continue to [Module 10 · Scaling laws](lessons/module-10/lesson-01.md).

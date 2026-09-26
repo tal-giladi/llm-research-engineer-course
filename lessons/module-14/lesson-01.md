@@ -1,14 +1,14 @@
 # 14.1 · Instruction data & chat templates
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the assembled model from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a> and how it generates text; special/delimiter tokens and how a tokenizer treats them from <a href="../module-04/lesson-03.md">04.3 · Special tokens</a>; the byte-level BPE <code>encode</code>/<code>decode</code> from <a href="../module-04/lesson-02.md">04.2 · BPE</a>.</p>
+<p><strong>Prerequisites:</strong> the assembled model from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a> and how it generates text; special/delimiter tokens and how a tokenizer treats them from <a href="#/lessons/module-04/lesson-03">04.3 · Special tokens</a>; the byte-level BPE <code>encode</code>/<code>decode</code> from <a href="#/lessons/module-04/lesson-02">04.2 · BPE</a>.</p>
 <p><strong>You will learn:</strong> why a pretrained language model completes text but does not follow instructions; what an instruction dataset is (the <code>(instruction, [input], output)</code> triple); and what a <strong>chat template</strong> is — the exact, deterministic rule that flattens a list of role-tagged messages into one delimited token string, so the model can learn where the assistant turn starts and when to stop.</p>
 <p><strong>Why this matters for ML:</strong> everything after pretraining — SFT, reward modeling, RLHF, DPO — operates on chat-formatted data. The chat template is the interface between "a conversation" and "a sequence of token ids." Get it inconsistent between training and inference and the model silently degrades: it never sees the delimiter it was trained to stop on, so it rambles. This is the first lesson of <strong>post-training</strong>.</p>
 </div>
 
 ## The causal story so far
 
-In Modules 6–7 we built GPT-2 from scratch and pretrained it. The training objective was exactly one thing: **given the tokens so far, predict the next token** (the cross-entropy loss of [01.4](../module-01/lesson-04.md)). Trained on a large pile of internet text, the model becomes extremely good at *continuing* whatever text you give it.
+In Modules 6–7 we built GPT-2 from scratch and pretrained it. The training objective was exactly one thing: **given the tokens so far, predict the next token** (the cross-entropy loss of [01.4](lessons/module-01/lesson-04.md)). Trained on a large pile of internet text, the model becomes extremely good at *continuing* whatever text you give it.
 
 That is not the same as *following an instruction*. Watch what a pure pretrained model tends to do:
 
@@ -27,7 +27,7 @@ It saw many web pages that are *lists of writing prompts*, so the most probable 
 SFT does not change the model architecture or the loss function. It is the *same* next-token cross-entropy training from Module 7. Two things change:
 
 1. **The data.** Instead of raw documents, we train on demonstrations of the behavior we want: a user asks something, and a high-quality *response* follows. After enough of these, "the plausible continuation of a user request" becomes "a helpful answer to it," because that is what the fine-tuning corpus looks like.
-2. **Where we apply the loss.** We only score the *response* tokens, not the prompt — the topic of [14.2](lesson-02.md). This lesson sets up the data and formatting so 14.2 can do the masking.
+2. **Where we apply the loss.** We only score the *response* tokens, not the prompt — the topic of [14.2](lessons/module-14/lesson-02.md). This lesson sets up the data and formatting so 14.2 can do the masking.
 
 The whole post-training pipeline (SFT → reward model → RLHF/DPO, Modules 15) is about shaping *behavior* on top of the *knowledge* pretraining already installed. SFT is the first and cheapest step.
 
@@ -46,7 +46,7 @@ Two influential ways such datasets are built:
 - **FLAN** (Wei et al. 2021): take *existing* NLP datasets (translation, summarization, QA, sentiment...) and rewrite each as a natural-language instruction with many phrasing templates. Fine-tuning on this mixture of tasks makes the model generalize to *unseen* instructions zero-shot.
 - **Self-Instruct** (Wang et al. 2022): bootstrap instruction data from the model itself — seed a few human-written examples, have a strong LM generate many more `(instruction, input, output)` triples, filter for quality, and train on the result. This is how you get large instruction sets without hand-writing every one (Alpaca used this recipe).
 
-<div class="callout paper"><p><strong>Read:</strong> <a href="../../papers/index.md">FLAN</a> for "instructions as a training distribution" and <a href="../../papers/index.md">Self-Instruct</a> for generating that distribution cheaply. Both are core Module 14 readings. Skip the long per-task appendices on a first pass; read the data-construction sections closely.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> <a href="#/papers/index">FLAN</a> for "instructions as a training distribution" and <a href="#/papers/index">Self-Instruct</a> for generating that distribution cheaply. Both are core Module 14 readings. Skip the long per-task appendices on a first pass; read the data-construction sections closely.</p></div>
 
 A single-turn triple is really just a two-message chat: a **user** message (instruction + input) and an **assistant** message (output). Multi-turn data adds more user/assistant messages, and often a **system** message that sets persistent behavior ("You are a terse assistant."). So the general object we must format is a *list of role-tagged messages*.
 
@@ -78,7 +78,7 @@ The rule for one message is: emit its role header, a newline, the content, then 
 <|system|>\nYou are a terse assistant.<|end|>\n<|user|>\nCapital of France?<|end|>\n<|assistant|>\nParis.<|end|>\n
 ```
 
-<div class="callout warn"><p>These delimiters must be treated as <strong>atomic</strong> tokens by the tokenizer — one id each, never split into <code>&lt;</code>, <code>|</code>, <code>system</code>, … — and they must be <em>reserved</em> so no ordinary user text can forge them. That is exactly the special-token machinery of <a href="../module-04/lesson-03.md">04.3</a>. Our from-scratch <code>BPETokenizer</code> does not reserve them, so in code below we encode <em>segment by segment</em> to keep the boundaries exact; a production tokenizer adds each delimiter to the vocabulary as a single id.</p></div>
+<div class="callout warn"><p>These delimiters must be treated as <strong>atomic</strong> tokens by the tokenizer — one id each, never split into <code>&lt;</code>, <code>|</code>, <code>system</code>, … — and they must be <em>reserved</em> so no ordinary user text can forge them. That is exactly the special-token machinery of <a href="#/lessons/module-04/lesson-03">04.3</a>. Our from-scratch <code>BPETokenizer</code> does not reserve them, so in code below we encode <em>segment by segment</em> to keep the boundaries exact; a production tokenizer adds each delimiter to the vocabulary as a single id.</p></div>
 
 ### 3. Why a consistent template matters
 
@@ -87,7 +87,7 @@ The template is a *contract* the model learns during SFT. After fine-tuning, the
 - After `<|assistant|>\n`, my job is to produce a helpful response.
 - When I have finished, I emit `<|end|>` and stop.
 
-At inference we hand the model the same format but *stop before* the assistant content and let it generate — this is the **generation prompt**. We render the conversation up to and including a bare `<|assistant|>\n` and call `generate` (from [06.1](../module-06/lesson-01.md)); the model fills in the response and emits `<|end|>`, at which point we stop decoding:
+At inference we hand the model the same format but *stop before* the assistant content and let it generate — this is the **generation prompt**. We render the conversation up to and including a bare `<|assistant|>\n` and call `generate` (from [06.1](lessons/module-06/lesson-01.md)); the model fills in the response and emits `<|end|>`, at which point we stop decoding:
 
 ```text
 <|system|>\nYou are a terse assistant.<|end|>\n<|user|>\nCapital of France?<|end|>\n<|assistant|>\n
@@ -148,7 +148,7 @@ There are no tensors in this module. `messages` is a `list[dict[str, str]]`; `re
 - **Reusing the wrong template.** Formatting data for model A with model B's delimiters. The tokens exist in neither vocabulary as intended and the turn boundaries are gibberish.
 - **Forgetting `add_generation_prompt` at inference.** Without the trailing `<|assistant|>\n`, the model is not cued that it is its turn and may continue the *user* message.
 - **Not stopping on `<|end|>`.** The model dutifully emits the stop token; if your decode loop ignores it, you get a correct answer followed by hallucinated extra turns.
-- **Training on the prompt tokens.** Covered in [14.2](lesson-02.md) — you must mask them out, or you teach the model to generate user turns.
+- **Training on the prompt tokens.** Covered in [14.2](lessons/module-14/lesson-02.md) — you must mask them out, or you teach the model to generate user turns.
 
 ## Debugging exercise
 
@@ -182,7 +182,7 @@ It appends a trailing role header (`<|assistant|>\n`) with no content, cueing th
 
 <details><summary>Why must the delimiter tokens be atomic, reserved special tokens rather than ordinary text?</summary>
 
-If <code>&lt;|end|&gt;</code> were tokenized as ordinary characters, (a) it could be split inconsistently across contexts, blurring the boundary the model must learn, and (b) a user could type the literal string and forge a turn boundary — a prompt-injection vector. Reserving each delimiter as one fixed id makes the boundary unambiguous and unforgeable. (See <a href="../module-04/lesson-03.md">04.3</a>.)
+If <code>&lt;|end|&gt;</code> were tokenized as ordinary characters, (a) it could be split inconsistently across contexts, blurring the boundary the model must learn, and (b) a user could type the literal string and forge a turn boundary — a prompt-injection vector. Reserving each delimiter as one fixed id makes the boundary unambiguous and unforgeable. (See <a href="#/lessons/module-04/lesson-03">04.3</a>.)
 
 </details>
 
@@ -190,4 +190,4 @@ If <code>&lt;|end|&gt;</code> were tokenized as ordinary characters, (a) it coul
 
 We can now turn a conversation into a delimited token string and mark which tokens are the assistant's. Next we use that mask to train correctly: compute the loss on the response tokens **only**, and pack several short examples into one block without letting them leak into each other.
 
-Continue to [14.2 · Loss masking & packing](lesson-02.md).
+Continue to [14.2 · Loss masking & packing](lessons/module-14/lesson-02.md).

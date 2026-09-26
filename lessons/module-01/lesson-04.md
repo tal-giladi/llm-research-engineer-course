@@ -1,7 +1,7 @@
 # 01.4 · The language-modeling objective & perplexity
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-03.md">01.3 · Entropy, cross-entropy, KL divergence</a> — cross-entropy against a one-hot target reducing to $-\log q(t)$. From <a href="lesson-02.md">01.2</a>, the chain rule and maximum likelihood. From <a href="lesson-01.md">01.1</a>, the categorical distribution and softmax as the map from scores to a distribution.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-01/lesson-03">01.3 · Entropy, cross-entropy, KL divergence</a> — cross-entropy against a one-hot target reducing to $-\log q(t)$. From <a href="#/lessons/module-01/lesson-02">01.2</a>, the chain rule and maximum likelihood. From <a href="#/lessons/module-01/lesson-01">01.1</a>, the categorical distribution and softmax as the map from scores to a distribution.</p>
 <p><strong>You will learn:</strong> the exact objective a language model minimizes — the mean cross-entropy between the model's softmax distribution and the true next token — worked end to end on a 4-token vocabulary (logits → softmax → true-token probability → loss). Then <strong>perplexity</strong> $= \exp(\text{cross-entropy})$, why it reads as the "effective branching factor", and how to verify your by-hand loss against <code>torch.nn.functional.cross_entropy</code> and the from-scratch <code>llmre.evaluation.metrics</code> code.</p>
 <p><strong>Why this matters for ML:</strong> this is the loss. Every pretraining run in this course, and every frontier LLM, is trained by minimizing exactly this number, and progress is reported as perplexity. Once you can compute it by hand on four tokens, the training loop in Module 7 and the evaluation in Module 13 are just this same computation at scale.</p>
 </div>
@@ -172,11 +172,11 @@ At real vocabulary sizes the loss layer is not free. For logits of shape `(B, T,
 
 - **Memory.** The logits tensor holds $B \cdot T \cdot V$ floats. With $B = 8$, $T = 1024$, $V = 50257$ in float32 that is about $8 \cdot 1024 \cdot 50257 \cdot 4 \approx 1.6\ \text{GB}$ for a single tensor — often the largest activation in the whole forward pass. This is why the vocabulary projection and the loss are a real memory concern, addressed later with techniques like fused cross-entropy kernels.
 - **Compute.** Softmax and the log are $O(B \cdot T \cdot V)$ elementwise-ish work; the dominant cost is usually the preceding matrix multiply that produces the logits (the `(C → V)` output projection), which is $O(B \cdot T \cdot C \cdot V)$.
-- **Gradient.** The gradient of cross-entropy with respect to the logits has an elegant closed form, $\partial \mathcal{L} / \partial z_i = q_i - p_i$ — the predicted distribution minus the one-hot target. For our worked example the gradient on the true token 0 is $0.6439 - 1 = -0.3561$ (push that logit up) and on token 3 it is $0.0321 - 0 = +0.0321$ (push it down). We derive this backward pass by hand in [Module 2](../module-02/lesson-03.md); for now, note the loss and its gradient are both simple functions of the softmax output.
+- **Gradient.** The gradient of cross-entropy with respect to the logits has an elegant closed form, $\partial \mathcal{L} / \partial z_i = q_i - p_i$ — the predicted distribution minus the one-hot target. For our worked example the gradient on the true token 0 is $0.6439 - 1 = -0.3561$ (push that logit up) and on token 3 it is $0.0321 - 0 = +0.0321$ (push it down). We derive this backward pass by hand in [Module 2](lessons/module-02/lesson-03.md); for now, note the loss and its gradient are both simple functions of the softmax output.
 
 ## Research connection
 
-<div class="callout paper"><p>The entire GPT-2 result rests on this one objective. The paper's training signal is exactly the sum of log next-token probabilities you built here — see the reading guide for <a href="../../papers/index.md">GPT-2 ("Language Models are Unsupervised Multitask Learners", Radford et al. 2019)</a>, whose key equation is maximize $\sum_i \log p(x_i \mid x_{<i})$. Every later model in the <a href="../../papers/index.md">paper curriculum</a> — GPT-3, LLaMA, DeepSeek — pretrains on this same cross-entropy loss; what changes is scale, data, and architecture, not the objective.</p></div>
+<div class="callout paper"><p>The entire GPT-2 result rests on this one objective. The paper's training signal is exactly the sum of log next-token probabilities you built here — see the reading guide for <a href="#/papers/index">GPT-2 ("Language Models are Unsupervised Multitask Learners", Radford et al. 2019)</a>, whose key equation is maximize $\sum_i \log p(x_i \mid x_{<i})$. Every later model in the <a href="#/papers/index">paper curriculum</a> — GPT-3, LLaMA, DeepSeek — pretrains on this same cross-entropy loss; what changes is scale, data, and architecture, not the objective.</p></div>
 
 ## Debugging exercise
 
@@ -257,4 +257,4 @@ So the reported loss is a per-token quantity, comparable across sequences of dif
 
 You have now built the complete language-modeling objective — softmax over the vocabulary, cross-entropy against the true token, averaged over positions — verified it by hand and against PyTorch and the `llmre` code, and learned to read it as perplexity. This closes Module 1: you can state exactly what a language model computes and exactly how its predictions are scored. Module 2 opens the other half of training — how the gradient of this loss flows back through the network via backpropagation, starting with derivatives and the chain rule of calculus.
 
-Continue to [02.1 · Derivatives, partials, chain rule, gradients](../module-02/lesson-01.md).
+Continue to [02.1 · Derivatives, partials, chain rule, gradients](lessons/module-02/lesson-01.md).

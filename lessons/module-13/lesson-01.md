@@ -1,14 +1,14 @@
 # 13.1 · Loss, perplexity, zero-/few-shot
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the language-modeling objective and perplexity from <a href="../module-01/lesson-04.md">01.4 · The language-modeling objective &amp; perplexity</a>; cross-entropy from <a href="../module-01/lesson-03.md">01.3 · Entropy, cross-entropy, KL</a>; the assembled model and its <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>; softmax over a vocabulary from <a href="../module-05/lesson-02.md">05.2 · scaled dot-product attention</a>.</p>
+<p><strong>Prerequisites:</strong> the language-modeling objective and perplexity from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling objective &amp; perplexity</a>; cross-entropy from <a href="#/lessons/module-01/lesson-03">01.3 · Entropy, cross-entropy, KL</a>; the assembled model and its <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; softmax over a vocabulary from <a href="#/lessons/module-05/lesson-02">05.2 · scaled dot-product attention</a>.</p>
 <p><strong>You will learn:</strong> the difference between training and validation loss and what their gap tells you; why <strong>perplexity</strong> is the reportable number and how it relates to loss; what a held-out set is and how to build one honestly; the difference between <strong>zero-shot</strong> and <strong>few-shot</strong> (in-context) evaluation, and why few-shot is a prompting method rather than training; and how to grade a multiple-choice question by scoring each option's <strong>length-normalized log-likelihood</strong> — worked by hand on tiny numbers.</p>
 <p><strong>Why this matters for ML:</strong> you cannot improve what you cannot measure. Every architecture change, data change, and hyperparameter sweep in the rest of this course is judged by a number produced here. Getting evaluation right — an honest held-out set, the correct metric, a fair scoring rule — is the difference between real progress and fooling yourself.</p>
 </div>
 
 ## 1. Training loss vs validation loss
 
-You already know the training signal from <a href="../module-01/lesson-04.md">01.4</a>: the model outputs a probability distribution over the vocabulary at each position, and the loss is the **mean cross-entropy** between that distribution and the true next token, measured in nats. During training we compute this loss on the batches the optimizer is learning from — the **training loss**.
+You already know the training signal from <a href="#/lessons/module-01/lesson-04">01.4</a>: the model outputs a probability distribution over the vocabulary at each position, and the loss is the **mean cross-entropy** between that distribution and the true next token, measured in nats. During training we compute this loss on the batches the optimizer is learning from — the **training loss**.
 
 But the training loss alone cannot tell you whether the model is *learning the language* or merely *memorizing the training tokens*. A model with enough parameters can drive training loss arbitrarily low by memorizing, while getting no better at text it has not seen. To detect that, we hold out a second stream of text the optimizer never touches — the **validation set** — and periodically measure the loss on it. That is the **validation loss**.
 
@@ -22,7 +22,7 @@ For large-scale LM pretraining the story has a twist: models are trained on so m
 
 ## 2. Perplexity: the reportable metric
 
-Loss in nats is the right quantity to differentiate and optimize, but it is not intuitive to report. The convention is to exponentiate it into **perplexity**. You built this in <a href="../module-01/lesson-04.md">01.4</a>; here is the one-line recap.
+Loss in nats is the right quantity to differentiate and optimize, but it is not intuitive to report. The convention is to exponentiate it into **perplexity**. You built this in <a href="#/lessons/module-01/lesson-04">01.4</a>; here is the one-line recap.
 
 If the mean cross-entropy over a held-out set is $L$ nats, the perplexity is
 
@@ -50,14 +50,14 @@ The last row is the sanity check every practitioner runs: a freshly initialized 
 
 <div class="callout warn"><p>Perplexity is only comparable between models that share the <strong>same tokenizer and vocabulary</strong>. A model with a bigger vocabulary spreads probability over more tokens and needs fewer tokens per word, so its per-token perplexity is not comparable to a smaller-vocab model's. Never compare perplexities across tokenizers; compare loss/perplexity only within a fixed vocabulary, or switch to bits-per-byte if you must cross tokenizers.</p></div>
 
-We turn this recap into a reusable `evaluate_perplexity` function over a held-out stream in <a href="lesson-03.md">13.3</a>.
+We turn this recap into a reusable `evaluate_perplexity` function over a held-out stream in <a href="#/lessons/module-13/lesson-03">13.3</a>.
 
 ## 3. Held-out evaluation, done honestly
 
 A held-out set is only meaningful if the model genuinely never saw it. Three rules:
 
 1. **Split before you train.** Carve the validation (and test) stream off the corpus before the training run begins, and keep it fixed for the life of the project. A validation set that changes between experiments cannot be used to compare experiments.
-2. **No leakage.** If the same document, or a near-duplicate, appears in both training and validation, the validation loss is measuring memorization, not generalization. This is the deduplication problem of <a href="../module-11/lesson-02.md">11.2</a> applied across the split, and its evaluation cousin — benchmark contamination — is the subject of <a href="lesson-02.md">13.2</a>.
+2. **No leakage.** If the same document, or a near-duplicate, appears in both training and validation, the validation loss is measuring memorization, not generalization. This is the deduplication problem of <a href="#/lessons/module-11/lesson-02">11.2</a> applied across the split, and its evaluation cousin — benchmark contamination — is the subject of <a href="#/lessons/module-13/lesson-02">13.2</a>.
 3. **Validation vs test.** You tune hyperparameters against the *validation* set, so over many experiments you slowly fit to it too. Keep a separate **test** set that you look at rarely (ideally once, at the end) for an unbiased final number.
 
 ## 4. Zero-shot vs few-shot: evaluating without fine-tuning
@@ -80,7 +80,7 @@ There are two ways to prompt:
 
 Why does putting examples in the prompt help? Pretraining on a huge, varied corpus has taught the model to recognize and continue patterns; a few demonstrations pin down *which* pattern (which task, which format) you mean, sharpening the distribution over the next tokens. More shots generally help up to a point, and — a central result of GPT-3 — the *benefit* of few-shot examples grows with model scale: larger models make far better use of the same in-context examples.
 
-<div class="callout paper"><p>This behavior is the subject of GPT-3, "Language Models are Few-Shot Learners" (Brown et al., 2020) — see the <a href="../../papers/index.md">paper curriculum</a>. Look at their figure showing few-shot accuracy rising with parameter count, and the curve of accuracy vs number of in-context examples.</p></div>
+<div class="callout paper"><p>This behavior is the subject of GPT-3, "Language Models are Few-Shot Learners" (Brown et al., 2020) — see the <a href="#/papers/index">paper curriculum</a>. Look at their figure showing few-shot accuracy rising with parameter count, and the curve of accuracy vs number of in-context examples.</p></div>
 
 Both zero- and few-shot evaluation change only the prompt. The scoring machinery below is identical for both — the number of shots is just how much text sits in front of the question.
 
@@ -100,7 +100,7 @@ $$
 \ell_o = \sum_{t \in \text{option}} \ln q\bigl(x_t \mid x_{<t}\bigr).
 $$
 
-We include only the option tokens in the sum. The context is shared by every option, so its log-probability is the same constant for all of them and would not change which option wins — but summing it in would drown the signal, so we leave it out. (This is exactly what `sequence_loglikelihood` computes for a whole sequence; the multiple-choice scorer restricts the sum to the continuation. Both are in <a href="lesson-03.md">13.3</a>.)
+We include only the option tokens in the sum. The context is shared by every option, so its log-probability is the same constant for all of them and would not change which option wins — but summing it in would drown the signal, so we leave it out. (This is exactly what `sequence_loglikelihood` computes for a whole sequence; the multiple-choice scorer restricts the sum to the continuation. Both are in <a href="#/lessons/module-13/lesson-03">13.3</a>.)
 
 ### 5.2 Length-normalize
 
@@ -136,7 +136,7 @@ The two rules **disagree**. The summed rule crowns A only because A is shorter �
 
 ## 6. In code
 
-The `multiple_choice_score` function in `llmre.evaluation.harness` implements exactly section 5: build `[context; option]`, run the model once per option, sum the option tokens' log-probabilities from the numerically stable `log_softmax` of <a href="../module-01/lesson-04.md">module 1</a>, optionally divide by the option length, and return the argmax index.
+The `multiple_choice_score` function in `llmre.evaluation.harness` implements exactly section 5: build `[context; option]`, run the model once per option, sum the option tokens' log-probabilities from the numerically stable `log_softmax` of <a href="#/lessons/module-01/lesson-04">module 1</a>, optionally divide by the option length, and return the argmax index.
 
 ```python
 import torch
@@ -154,7 +154,7 @@ multiple_choice_score(model, context, [option_a, option_b], length_normalize=Fal
 multiple_choice_score(model, context, [option_a, option_b], length_normalize=True)   # -> 1
 ```
 
-The function is deliberately model-agnostic: it calls `model(seq) -> (logits, loss)`, the same interface `GPT.forward` exposes, so it works on your from-scratch GPT and on any object that returns logits of shape $(B, T, V)$. Shapes, dtypes, and the exact index arithmetic (the logits at position $p$ predict token $p+1$, so the option's tokens are predicted by positions $L_c-1 \dots L_c+L_o-2$) are documented on the function and reused in <a href="lesson-03.md">13.3</a>.
+The function is deliberately model-agnostic: it calls `model(seq) -> (logits, loss)`, the same interface `GPT.forward` exposes, so it works on your from-scratch GPT and on any object that returns logits of shape $(B, T, V)$. Shapes, dtypes, and the exact index arithmetic (the logits at position $p$ predict token $p+1$, so the option's tokens are predicted by positions $L_c-1 \dots L_c+L_o-2$) are documented on the function and reused in <a href="#/lessons/module-13/lesson-03">13.3</a>.
 
 ## Exercise
 
@@ -248,4 +248,4 @@ Summed: $-2.0$ vs $-1.5$; the 3-token option wins ($-1.5 > -2.0$). Normalized: $
 
 You can now measure held-out loss, report perplexity, and grade zero-/few-shot multiple-choice tasks by length-normalized log-likelihood. But a high benchmark score can be a lie — if the test questions leaked into training, or if the model's confidence does not match its accuracy. The next lesson confronts what these numbers do and do not mean: contamination, calibration, and the families of task evaluation.
 
-Continue to [13.2 · Contamination, calibration, task eval](lesson-02.md).
+Continue to [13.2 · Contamination, calibration, task eval](lessons/module-13/lesson-02.md).

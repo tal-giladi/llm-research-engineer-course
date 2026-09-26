@@ -1,7 +1,7 @@
 # 12.2 · RMSNorm &amp; SwiGLU
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-05/lesson-04.md">05.4 · MLP, residual, LayerNorm, the block</a> (LayerNorm's mean/variance normalization and the $C\to 4C\to C$ GELU MLP); the $(B, T, C)$ activation shape; the GELU nonlinearity.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-05/lesson-04">05.4 · MLP, residual, LayerNorm, the block</a> (LayerNorm's mean/variance normalization and the $C\to 4C\to C$ GELU MLP); the $(B, T, C)$ activation shape; the GELU nonlinearity.</p>
 <p><strong>You will learn:</strong> how <strong>RMSNorm</strong> drops LayerNorm's mean-subtraction and bias, normalizing by the root-mean-square alone; a worked contrast of RMSNorm vs LayerNorm on the same vector; how the <strong>SwiGLU</strong> gated feed-forward network replaces the GELU MLP, and why LLaMA shrinks its hidden width to $\tfrac{8}{3}C$ to keep the parameter count equal.</p>
 <p><strong>Why this matters for ML:</strong> RMSNorm + SwiGLU are, with RoPE, the three changes that define the LLaMA-family architecture. Every serious open model since 2023 uses them. They cost fewer FLOPs than the GPT-2 originals and train at least as well.</p>
 </div>
@@ -236,7 +236,7 @@ SwiGLU applies the nonlinearity to the gate path *before* the elementwise produc
 
 ## Research connection
 
-<div class="callout paper"><p><strong>LLaMA: Open and Efficient Foundation Language Models</strong> (Touvron et al. 2023) bundles RMSNorm, SwiGLU, and RoPE into one reference architecture; see <a href="../../papers/index.md">the paper curriculum</a> (#9). SwiGLU traces to Shazeer's "GLU Variants Improve Transformer" (2020) and RMSNorm to Zhang &amp; Sennrich (2019). LLaMA's hyperparameter table lists the $\tfrac{8}{3}$-derived FFN widths directly.</p></div>
+<div class="callout paper"><p><strong>LLaMA: Open and Efficient Foundation Language Models</strong> (Touvron et al. 2023) bundles RMSNorm, SwiGLU, and RoPE into one reference architecture; see <a href="#/papers/index">the paper curriculum</a> (#9). SwiGLU traces to Shazeer's "GLU Variants Improve Transformer" (2020) and RMSNorm to Zhang &amp; Sennrich (2019). LLaMA's hyperparameter table lists the $\tfrac{8}{3}$-derived FFN widths directly.</p></div>
 
 ## Check yourself
 
@@ -266,4 +266,4 @@ $\operatorname{Swish}(0) = 0\cdot\sigma(0) = 0$. For small negative $z$, ReLU is
 
 ## Next
 
-Position, normalization, and the FFN are now modern. The last structural change is to attention itself — shrinking the key/value heads to cut the inference KV cache. Continue to [12.3 · MQA / GQA](lesson-03.md).
+Position, normalization, and the FFN are now modern. The last structural change is to attention itself — shrinking the key/value heads to cut the inference KV cache. Continue to [12.3 · MQA / GQA](lessons/module-12/lesson-03.md).

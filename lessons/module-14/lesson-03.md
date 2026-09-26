@@ -1,7 +1,7 @@
 # 14.3 · LoRA & QLoRA from scratch
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> loss masking from <a href="lesson-02.md">14.2</a>; <code>nn.Linear</code> and the weight matrix shape <code>(out, in)</code> from <a href="../module-05/lesson-04.md">05.4 · Linear layers</a>; the AdamW optimizer state (two moment tensors per parameter) from <a href="../module-03/lesson-03.md">Module 3</a>.</p>
+<p><strong>Prerequisites:</strong> loss masking from <a href="#/lessons/module-14/lesson-02">14.2</a>; <code>nn.Linear</code> and the weight matrix shape <code>(out, in)</code> from <a href="#/lessons/module-05/lesson-04">05.4 · Linear layers</a>; the AdamW optimizer state (two moment tensors per parameter) from <a href="#/lessons/module-03/lesson-03">Module 3</a>.</p>
 <p><strong>You will learn:</strong> why full fine-tuning is expensive (optimizer state for every weight); what <strong>LoRA</strong> does — freeze the pretrained $W$ and train a low-rank update $\Delta W = \frac{\alpha}{r} B A$; why low-rank works and what the $\alpha$ scaling is for; the parameter/memory savings worked in numbers; how to implement <code>LoRALinear</code> from scratch and <code>merge()</code> it back into a plain layer; and what <strong>QLoRA</strong> adds (a 4-bit frozen base).</p>
 <p><strong>Why this matters for ML:</strong> LoRA is how fine-tuning became something you can do on one GPU instead of a cluster. It cuts trainable parameters (and the optimizer memory that dominates fine-tuning) by one to two orders of magnitude, lets you keep dozens of task-specific adapters over one shared base, and — via <code>merge()</code> — costs nothing extra at inference. Every practical fine-tuning workflow today (PEFT, QLoRA) is built on it.</p>
 </div>
@@ -228,4 +228,4 @@ Store the *frozen* base weights in 4-bit precision (NF4), dequantizing on the fl
 
 You can now fine-tune a pretrained model to follow instructions — format the data (14.1), mask the loss to the response (14.2), and train cheaply with LoRA (14.3). But SFT only imitates demonstrations; it cannot learn from *preferences* ("response A is better than B"). Module 15 adds that: reward modeling, RLHF/PPO, and DPO.
 
-Continue to [15.1 · Bradley-Terry & the reward model](../module-15/lesson-01.md).
+Continue to [15.1 · Bradley-Terry & the reward model](lessons/module-15/lesson-01.md).

@@ -164,7 +164,7 @@ for step in range(max_steps):
 
 Order is fixed: `zero_grad -> backward -> (clip) -> step`. `set_to_none=True` is slightly faster
 and the modern default. Call `model.eval()` + `torch.no_grad()` for validation. See
-[Module 0](../lessons/module-00/lesson-04.md) and [Module 7](../lessons/module-07/lesson-01.md).
+[Module 0](lessons/module-00/lesson-04.md) and [Module 7](lessons/module-07/lesson-01.md).
 
 ## nn.Module, Linear, Embedding, LayerNorm
 
@@ -188,7 +188,7 @@ model.state_dict()                 # {name: tensor} for saving
 
 `nn.Linear` stores its weight transposed, shape `(out, in)`. `nn.Embedding` is a *lookup table*,
 not a matmul: it indexes rows by integer id. `LayerNorm(C)` normalizes across the width dimension,
-independently per (batch, position). See [Module 5](../lessons/module-05/lesson-04.md).
+independently per (batch, position). See [Module 5](lessons/module-05/lesson-04.md).
 
 ## F.cross_entropy and the (B,T,C) convention
 
@@ -208,7 +208,7 @@ loss = F.cross_entropy(
 `cross_entropy` = `log_softmax` + `nll_loss` fused (numerically stable — do NOT softmax first).
 The `(B, T, C)` convention runs through the whole course: batch, then time/position, then channels/
 width. Attention mixes along `T`; Linear/LayerNorm act along the last axis `C`. See
-[Module 1](../lessons/module-01/lesson-04.md).
+[Module 1](lessons/module-01/lesson-04.md).
 
 ## Mixed precision: autocast, bf16 vs fp16, GradScaler
 
@@ -231,7 +231,7 @@ scaler.update()
 `bf16` has the *same exponent range* as fp32 (no overflow, no scaler) but fewer mantissa bits;
 `fp16` has more precision but a narrow range, so it needs loss scaling. Master weights and the
 optimizer state stay fp32; only the forward/backward compute runs in low precision. See
-[Module 8](../lessons/module-08/lesson-03.md).
+[Module 8](lessons/module-08/lesson-03.md).
 
 ## Gradient accumulation
 
@@ -253,7 +253,7 @@ opt.step()                           # ONE step per `accum` micro-batches
 ```
 
 global_batch = micro_batch x accum x data_parallel_world_size. See
-[Module 7](../lessons/module-07/lesson-02.md).
+[Module 7](lessons/module-07/lesson-02.md).
 
 ## Checkpointing: save/load model + optim + step + rng
 
@@ -278,7 +278,7 @@ torch.set_rng_state(ckpt["rng"])
 
 Saving only the model weights loses the optimizer's momentum/variance and the RNG position — a
 resume then diverges from an uninterrupted run. Save `step` to resume the LR schedule. See
-[Module 7](../lessons/module-07/lesson-03.md).
+[Module 7](lessons/module-07/lesson-03.md).
 
 ## DDP / FSDP conceptual one-liners
 
@@ -294,7 +294,7 @@ model = FSDP(model)                            # trades communication for memory
 
 DDP fits when the model fits on one GPU (scales *throughput*). FSDP / ZeRO shard state to fit
 models that do *not* fit on one GPU (scales *capacity*). See
-[Module 9](../lessons/module-09/lesson-01.md) and [ZeRO/FSDP](../lessons/module-09/lesson-02.md).
+[Module 9](lessons/module-09/lesson-01.md) and [ZeRO/FSDP](lessons/module-09/lesson-02.md).
 
 ## torch.profiler basics
 
@@ -314,7 +314,7 @@ torch.cuda.synchronize(); dt = time.time() - t0
 
 CUDA kernels launch asynchronously, so a bare `time.time()` around a GPU call measures only the
 launch, not the work. Always `torch.cuda.synchronize()` before reading the clock. See
-[Module 8](../lessons/module-08/lesson-03.md).
+[Module 8](lessons/module-08/lesson-03.md).
 
 ## F.scaled_dot_product_attention
 
@@ -332,7 +332,7 @@ y = att @ v
 `scaled_dot_product_attention` dispatches to a FlashAttention-style fused kernel when available:
 it never materializes the full `(B,nh,T,T)` score matrix in HBM, saving memory and bandwidth.
 Prefer `is_causal=True` over building your own mask. See
-[Module 5](../lessons/module-05/lesson-02.md) and [FlashAttention](../lessons/module-08/lesson-04.md).
+[Module 5](lessons/module-05/lesson-02.md) and [FlashAttention](lessons/module-08/lesson-04.md).
 
 ## A generation loop
 
@@ -356,7 +356,7 @@ def generate(model, idx, max_new_tokens, temperature=1.0, top_k=None):
 
 Only the *last* position's logits predict the next token. `temperature < 1` sharpens, `> 1`
 flattens; `temperature -> 0` is greedy `argmax`. Crop to `block_size` or positional embeddings run
-out of range. See [Module 6](../lessons/module-06/lesson-03.md).
+out of range. See [Module 6](lessons/module-06/lesson-03.md).
 
 ## Common shape-bug checklist
 
@@ -376,5 +376,5 @@ out of range. See [Module 6](../lessons/module-06/lesson-03.md).
 
 ---
 
-See also: the [Math & ML cheat sheet](math-cheatsheet.md) for the equations behind these ops, and
-the [Glossary](glossary.md) for term definitions.
+See also: the [Math & ML cheat sheet](assets/math-cheatsheet.md) for the equations behind these ops, and
+the [Glossary](assets/glossary.md) for term definitions.

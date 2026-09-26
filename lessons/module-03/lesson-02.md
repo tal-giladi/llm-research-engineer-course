@@ -1,7 +1,7 @@
 # 03.2 · RMSProp, Adam, AdamW, weight decay
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the update rule $\theta \leftarrow \theta - \eta g$, minibatch gradients, and momentum as an EMA of gradients from <a href="lesson-01.md">03.1 · Gradient descent, SGD, momentum</a>. The gradient $\nabla L$ and <code>.grad</code> from <a href="../module-02/lesson-01.md">02.1</a>. Elementwise tensor ops and in-place updates from <a href="../module-00/lesson-01.md">00.1</a>.</p>
+<p><strong>Prerequisites:</strong> the update rule $\theta \leftarrow \theta - \eta g$, minibatch gradients, and momentum as an EMA of gradients from <a href="#/lessons/module-03/lesson-01">03.1 · Gradient descent, SGD, momentum</a>. The gradient $\nabla L$ and <code>.grad</code> from <a href="#/lessons/module-02/lesson-01">02.1</a>. Elementwise tensor ops and in-place updates from <a href="#/lessons/module-00/lesson-01">00.1</a>.</p>
 <p><strong>You will learn:</strong> <strong>RMSProp</strong> — per-parameter step scaling by an EMA of squared gradients; <strong>Adam</strong> = momentum + RMSProp + bias correction, with one full Adam step worked <em>by hand</em> on a 1-D parameter and matched to <code>torch.optim.Adam</code>; and <strong>AdamW</strong> — decoupled weight decay ($\theta \leftarrow \theta - \eta\lambda\theta$ applied separately) versus classic L2-in-the-gradient, why the decoupling matters, and a numeric contrast on one step.</p>
 <p><strong>Why this matters for ML:</strong> AdamW is the default optimizer for essentially every large language model trained today — GPT, LLaMA, OLMo, and the GPT you build in Module 7 all use it. Its adaptive per-parameter scaling is what lets a single learning rate work across the wildly different gradient magnitudes of an embedding table, an attention projection, and a LayerNorm gain. Understanding Adam is understanding how modern models are actually optimized.</p>
 </div>
@@ -257,4 +257,4 @@ By about $\eta = 3\times10^{-4}$ (in the $-\operatorname{sign}(g)$ direction), *
 
 You now have AdamW, the optimizer that will train your GPT. But a fixed learning rate is not what real runs use: they *ramp $\eta$ up* over the first few thousand steps (warmup) and then *decay it down* along a cosine curve, and they *clip* the gradient's global norm to survive the occasional huge minibatch. The next lesson covers those three schedule-and-stability tricks — the ones on essentially every production LLM training run.
 
-Continue to [03.3 · Warmup, cosine decay, gradient clipping](lesson-03.md).
+Continue to [03.3 · Warmup, cosine decay, gradient clipping](lessons/module-03/lesson-03.md).

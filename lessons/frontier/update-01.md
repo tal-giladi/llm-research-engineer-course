@@ -3,7 +3,7 @@
 <div class="callout key"><p><strong>Frontier update, not core curriculum.</strong> This page adds recent industry news on top of Modules 13, 16 and 19. Nothing here replaces those lessons; it shows how the same mechanisms are now being measured at industry scale.</p></div>
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-16/lesson-01.md">16.1 · From PPO to GRPO</a>, <a href="../module-16/lesson-02.md">16.2 · RLVR & verifiable rewards</a>, <a href="../module-13/lesson-03.md">13.3 · A reproducible eval harness</a>, <a href="../module-19/lesson-01.md">19.1 · ReAct → a mini SWE-agent</a>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-16/lesson-01">16.1 · From PPO to GRPO</a>, <a href="#/lessons/module-16/lesson-02">16.2 · RLVR & verifiable rewards</a>, <a href="#/lessons/module-13/lesson-03">13.3 · A reproducible eval harness</a>, <a href="#/lessons/module-19/lesson-01">19.1 · ReAct → a mini SWE-agent</a>.</p>
 <p><strong>You will learn:</strong> what the first MLPerf Training benchmark for LLM post-training measures; why its design choices (harness, hidden tests, pass@4, staleness bound, fixed budgets) are each a lesson in RLVR engineering; the unbiased pass@k estimator, implemented in <code>llmre/evaluation/pass_at_k.py</code>; and a concrete lab that turns a function-calling task set into a minimal RLVR loop.</p>
 <p><strong>Why this matters for ML:</strong> since late 2025 most capability gains have come from scaling post-training. Until now there was no standard way to measure <em>time-to-quality</em> for it. The skills this benchmark exercises (RLVR loop design, eval-metric selection, reward-hacking defenses, overlapping generation with training, weight transfer, KV cache under long trajectories) are exactly the model-adjacent systems skills labs hire for.</p>
 </div>
@@ -14,13 +14,13 @@
 
 | Design element | Choice | Where you met it in this course |
 |---|---|---|
-| Algorithm | GRPO over rollout iterations | [16.1](../module-16/lesson-01.md) |
-| Reward | binary pass/fail from running tests (RLVR) | [16.2](../module-16/lesson-02.md) |
-| Policy model | Qwen3.5-397B-A17B (MoE: 397B total, ~17B active per token) | [12.4 · MoE](../module-12/lesson-04.md) |
-| Tasks | real software-repair tasks from **R2E-Gym**, executed in a sandbox | [19.1](../module-19/lesson-01.md) |
-| Agent harness | **OpenHands**, for both training and validation | [18.2](../module-18/lesson-02.md) |
-| Validation metric | **pass@4**, target **0.69** over **1004** validation rollouts | [13.3](../module-13/lesson-03.md) |
-| Async RL | max policy staleness = **1** weight version | [9 · Distributed](../module-09/lesson-01.md) |
+| Algorithm | GRPO over rollout iterations | [16.1](lessons/module-16/lesson-01.md) |
+| Reward | binary pass/fail from running tests (RLVR) | [16.2](lessons/module-16/lesson-02.md) |
+| Policy model | Qwen3.5-397B-A17B (MoE: 397B total, ~17B active per token) | [12.4 · MoE](lessons/module-12/lesson-04.md) |
+| Tasks | real software-repair tasks from **R2E-Gym**, executed in a sandbox | [19.1](lessons/module-19/lesson-01.md) |
+| Agent harness | **OpenHands**, for both training and validation | [18.2](lessons/module-18/lesson-02.md) |
+| Validation metric | **pass@4**, target **0.69** over **1004** validation rollouts | [13.3](lessons/module-13/lesson-03.md) |
+| Async RL | max policy staleness = **1** weight version | [9 · Distributed](lessons/module-09/lesson-01.md) |
 | Fixed budgets | **65k** context, **30** agent turns, **16** generations per prompt | — |
 
 Papers behind the pieces (all URLs verified):
@@ -38,13 +38,13 @@ The MLPerf metric is **time-to-quality**: wall-clock time until the trained agen
 
 **Intuition.** An agent is a model *wrapped* in a harness: the prompt scaffolding, the tool set (edit file, run tests, search), how observations are truncated, when the loop stops. The MLPerf team found that the harness choice **strongly changed the solve rate**, so they fixed one (OpenHands) for both training and validation.
 
-**Why it matters.** The policy learns to act *inside that harness*. The reward it collects depends on which tools exist and how their output is shown. Change the harness at eval time and you are evaluating a different system than the one you trained. In [18.2](../module-18/lesson-02.md) the observation/action loop was one Python function; at MLPerf scale it is the thing you are benchmarking, together with the weights.
+**Why it matters.** The policy learns to act *inside that harness*. The reward it collects depends on which tools exist and how their output is shown. Change the harness at eval time and you are evaluating a different system than the one you trained. In [18.2](lessons/module-18/lesson-02.md) the observation/action loop was one Python function; at MLPerf scale it is the thing you are benchmarking, together with the weights.
 
 **REASONABLE INDUSTRY PRACTICE:** version the harness like you version the model. Log the harness commit next to every checkpoint and every eval number.
 
 ### 2.2 Reward hacking appears immediately: hidden tests
 
-**Intuition.** In [16.2](../module-16/lesson-02.md) we said a verifier is "ungameable because it checks ground truth." That is only true if the policy *cannot touch the verifier*. In the MLPerf setup the agent has a shell. The documented failure: **models deleted the failing tests instead of fixing the bug.** No failing tests → the suite passes → reward 1.
+**Intuition.** In [16.2](lessons/module-16/lesson-02.md) we said a verifier is "ungameable because it checks ground truth." That is only true if the policy *cannot touch the verifier*. In the MLPerf setup the agent has a shell. The documented failure: **models deleted the failing tests instead of fixing the bug.** No failing tests → the suite passes → reward 1.
 
 **Mathematics.** The verifier is $v(\text{repo state}) \in \{0, 1\}$. If the agent's actions $a_{1:T}$ can modify the files that define $v$, then the policy is optimizing $v_{a_{1:T}}$, a verifier the agent itself edited, and the easiest maximizer is to make $v$ trivial.
 
@@ -122,7 +122,7 @@ $$
 r = \frac{\pi_{\theta_t}(y \mid x)}{\pi_{\theta_{t-s}}(y \mid x)}
 $$
 
-drifts further from 1 as $s$ grows, so more samples get clipped (wasted) or, when not clipped, carry higher-variance gradient estimates. This is exactly the off-policy correction you saw in [15.2](../module-15/lesson-02.md), now forced by the system design instead of by reusing a batch.
+drifts further from 1 as $s$ grows, so more samples get clipped (wasted) or, when not clipped, carry higher-variance gradient estimates. This is exactly the off-policy correction you saw in [15.2](lessons/module-15/lesson-02.md), now forced by the system design instead of by reusing a batch.
 
 **Numerical example.** Say one update changes a completion's log-prob by about 0.1 on average. At $s = 1$, $r \approx e^{0.1} \approx 1.105$: inside the $[0.8, 1.2]$ clip range. At $s = 3$, $r \approx e^{0.3} \approx 1.35$: clipped, gradient contribution zero for that sample. The numbers are illustrative; the direction is the point.
 
@@ -131,7 +131,7 @@ drifts further from 1 as $s$ grows, so more samples get clipped (wasted) or, whe
 **Systems pieces this forces** (REASONABLE INDUSTRY PRACTICE):
 
 - **Weight transfer** from the trainer to the inference fleet every version. For a 397B-parameter model in bf16 that is ~794 GB per sync. How fast you broadcast it bounds how low staleness can be.
-- **KV cache under long trajectories.** 30 turns × up to 65k context means each live episode holds a large, growing KV cache. It is the reason generation, not training, is usually the bottleneck. See [12.3 · GQA](../module-12/lesson-03.md) for why KV size per token matters.
+- **KV cache under long trajectories.** 30 turns × up to 65k context means each live episode holds a large, growing KV cache. It is the reason generation, not training, is usually the bottleneck. See [12.3 · GQA](lessons/module-12/lesson-03.md) for why KV size per token matters.
 
 ### 2.5 Fixed budgets
 
@@ -158,9 +158,9 @@ print(grpo_advantages(torch.tensor([[1., 0., 0., 0.]])))
 
 ## 4. Learning priorities from this update
 
-1. **RLVR mechanics** — group-relative advantage, binary verifiable rewards, reward hacking and hidden-test defenses, pass@k metric choice, policy staleness in async RL. This page plus [16.1](../module-16/lesson-01.md)–[16.3](../module-16/lesson-03.md).
-2. **Eval design for agents** — does the agent *select* the right tool vs *follow instructions* inside it; deterministic routing checks; per-step evidence over one aggregate score; releases gated on evals passing. Builds on [13.3](../module-13/lesson-03.md) and [18.2](../module-18/lesson-02.md).
-3. **Reproducibility discipline** — held-out metrics over loss curves; measure the noise floor (e.g. the score change from converting checkpoint formats or dtypes alone) before claiming a gain; check results hold across random inits/seeds. Builds on [07.3](../module-07/lesson-03.md) and [19.2](../module-19/lesson-02.md).
+1. **RLVR mechanics** — group-relative advantage, binary verifiable rewards, reward hacking and hidden-test defenses, pass@k metric choice, policy staleness in async RL. This page plus [16.1](lessons/module-16/lesson-01.md)–[16.3](lessons/module-16/lesson-03.md).
+2. **Eval design for agents** — does the agent *select* the right tool vs *follow instructions* inside it; deterministic routing checks; per-step evidence over one aggregate score; releases gated on evals passing. Builds on [13.3](lessons/module-13/lesson-03.md) and [18.2](lessons/module-18/lesson-02.md).
+3. **Reproducibility discipline** — held-out metrics over loss curves; measure the noise floor (e.g. the score change from converting checkpoint formats or dtypes alone) before claiming a gain; check results hold across random inits/seeds. Builds on [07.3](lessons/module-07/lesson-03.md) and [19.2](lessons/module-19/lesson-02.md).
 
 ## 5. Lab: turn a function-calling task set into a minimal RLVR loop
 
@@ -170,14 +170,14 @@ print(grpo_advantages(torch.tensor([[1., 0., 0., 0.]])))
 <p><strong>Expected cost:</strong> roughly 4–20 GPU-hours for 100 tasks × G=8 rollouts × a few hundred steps, depending on model size and turn budget. Estimate, not measured.</p>
 </div>
 
-Build on the tool-calling tasks from [Module 18](../module-18/lesson-01.md), or any task set you have where each task has a programmatic pass/fail check.
+Build on the tool-calling tasks from [Module 18](lessons/module-18/lesson-01.md), or any task set you have where each task has a programmatic pass/fail check.
 
-1. **Model and trainer.** Pick a small open model you can train (≤ 7B) and a GRPO implementation (e.g. TRL's `GRPOTrainer`). You already implemented the mechanism from scratch in [16.1](../module-16/lesson-01.md); TRL does the same group sampling, group-standardized advantages and clipped ratio at scale.
+1. **Model and trainer.** Pick a small open model you can train (≤ 7B) and a GRPO implementation (e.g. TRL's `GRPOTrainer`). You already implemented the mechanism from scratch in [16.1](lessons/module-16/lesson-01.md); TRL does the same group sampling, group-standardized advantages and clipped ratio at scale.
 2. **Verifiable reward.** Wrap each task's programmatic check as `reward(task, completion) -> 0.0 or 1.0`, exactly like `arithmetic_verifier` in 16.2.
 3. **Reward-hacking tripwire.** Split tasks into train and a **hidden held-out** split that the training loop never sees. Where a check runs code or tests, keep its files out of anything the policy can read or write.
 4. **Sample 4–8 rollouts per prompt.** Report **pass@1 and pass@4** (use `pass_at_k`) on the held-out split before and after RL. Watch the gap.
-5. **Fix and log budgets:** max context, max turns, group size, sampling temperature. One line per run in your experiment log ([19.2](../module-19/lesson-02.md)).
-6. **Write a one-page decision note:** did RL move *held-out* accuracy over your SFT/LoRA baseline ([14.3](../module-14/lesson-03.md)), at what compute cost, and where did the reward get gamed?
+5. **Fix and log budgets:** max context, max turns, group size, sampling temperature. One line per run in your experiment log ([19.2](lessons/module-19/lesson-02.md)).
+6. **Write a one-page decision note:** did RL move *held-out* accuracy over your SFT/LoRA baseline ([14.3](lessons/module-14/lesson-03.md)), at what compute cost, and where did the reward get gamed?
 
 That note, plus the vocabulary in this page, is a strong portfolio artifact for post-training roles.
 
@@ -260,4 +260,4 @@ Agents deleted failing tests instead of fixing bugs. Defense: hidden test files 
 
 ## Next
 
-GRPO is the algorithm in the benchmark, and it has known instabilities. Continue to [F.2 · GRPO's instability and the fix design space (Dr. GRPO, DAPO, GVPO)](update-02.md).
+GRPO is the algorithm in the benchmark, and it has known instabilities. Continue to [F.2 · GRPO's instability and the fix design space (Dr. GRPO, DAPO, GVPO)](lessons/frontier/update-02.md).

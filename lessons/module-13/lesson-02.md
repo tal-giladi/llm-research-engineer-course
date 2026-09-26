@@ -1,14 +1,14 @@
 # 13.2 · Contamination, calibration, task eval
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> loss, perplexity, and log-likelihood multiple-choice scoring from <a href="lesson-01.md">13.1 · Loss, perplexity, zero-/few-shot</a>; benchmark contamination and near-duplicate detection from <a href="../module-11/lesson-03.md">11.3 · Contamination, mixing, curriculum</a> and <a href="../module-11/lesson-02.md">11.2 · Deduplication &amp; MinHash</a>; softmax confidence from <a href="../module-01/lesson-04.md">01.4</a>.</p>
+<p><strong>Prerequisites:</strong> loss, perplexity, and log-likelihood multiple-choice scoring from <a href="#/lessons/module-13/lesson-01">13.1 · Loss, perplexity, zero-/few-shot</a>; benchmark contamination and near-duplicate detection from <a href="#/lessons/module-11/lesson-03">11.3 · Contamination, mixing, curriculum</a> and <a href="#/lessons/module-11/lesson-02">11.2 · Deduplication &amp; MinHash</a>; softmax confidence from <a href="#/lessons/module-01/lesson-04">01.4</a>.</p>
 <p><strong>You will learn:</strong> how benchmark <strong>contamination</strong> silently inflates scores and how to reason about it; what <strong>calibration</strong> is — whether a model's confidence matches its accuracy — and how to compute the <strong>Expected Calibration Error (ECE)</strong> on a small bucketed example by hand; a map of the task-evaluation families you will meet later in the course (instruction-following, reasoning, tool-use, human/preference); and <strong>pass@k</strong> for code and reasoning, including the unbiased estimator and why the naive one is biased.</p>
 <p><strong>Why this matters for ML:</strong> a single accuracy number hides more than it shows. A contaminated benchmark makes a mediocre model look brilliant; a miscalibrated model gives confident wrong answers that are dangerous to trust; and the wrong metric can reward the wrong behavior. Knowing what each number does and does <em>not</em> measure is the core skill of an evaluation engineer.</p>
 </div>
 
 ## 1. Contamination: when the test leaks into training
 
-The premise of every benchmark is that the model has never seen the test questions. Web-scraped pretraining corpora quietly break that premise. Benchmarks are published on the web — on GitHub, in papers, on leaderboards, in blog posts discussing them — and Common Crawl scoops all of that up. So the exact questions, and often their answers, end up in the training data. This is **benchmark contamination**, and it is the evaluation-side twin of the training-set deduplication problem from <a href="../module-11/lesson-02.md">11.2</a>.
+The premise of every benchmark is that the model has never seen the test questions. Web-scraped pretraining corpora quietly break that premise. Benchmarks are published on the web — on GitHub, in papers, on leaderboards, in blog posts discussing them — and Common Crawl scoops all of that up. So the exact questions, and often their answers, end up in the training data. This is **benchmark contamination**, and it is the evaluation-side twin of the training-set deduplication problem from <a href="#/lessons/module-11/lesson-02">11.2</a>.
 
 A contaminated benchmark does not measure task ability; it measures **memorization of the test set**. The model can score high on MMLU or GSM8K not because it reasons, but because it saw those exact items during pretraining and is recalling them. The inflated score transfers to nothing.
 
@@ -17,13 +17,13 @@ A contaminated benchmark does not measure task ability; it measures **memorizati
 How practitioners detect and limit it (all of these are imperfect):
 
 - **N-gram / substring overlap.** Flag any test item whose text appears (as a long enough n-gram) in the training corpus, and either remove those items from the benchmark or remove the documents from training. This is the standard decontamination pass; GPT-3, Llama, and others report doing it.
-- **Near-duplicate detection.** Exact-match misses paraphrases and reformattings. The MinHash / Jaccard machinery from <a href="../module-11/lesson-02.md">11.2</a> catches items that are close but not identical.
+- **Near-duplicate detection.** Exact-match misses paraphrases and reformattings. The MinHash / Jaccard machinery from <a href="#/lessons/module-11/lesson-02">11.2</a> catches items that are close but not identical.
 - **Canary strings.** Benchmark authors embed a unique random string ("canary GUID") in the released files so that anyone can grep their corpus for it and know the benchmark leaked in.
 - **Held-out / freshly-collected test sets.** The most robust defense is a test set created *after* the training cutoff, or kept entirely private, so it cannot have been seen. This is why leaderboards increasingly rotate to new, time-stamped question sets.
 
 <div class="callout warn"><p>Decontamination is best-effort, not a guarantee. Paraphrases, translations, reordered multiple-choice options, and reformatted problems slip past n-gram filters. Treat a headline benchmark number from a web-trained model as an <em>upper bound</em> on true ability, and trust a private or post-cutoff evaluation far more than a public one.</p></div>
 
-<div class="callout paper"><p>The Llama and GPT-3 papers (see the <a href="../../papers/index.md">paper curriculum</a>) both document their decontamination procedures and report how much scores move once contaminated items are removed — worth reading for how seriously frontier labs treat this, and how much a "clean" number can differ from the raw one.</p></div>
+<div class="callout paper"><p>The Llama and GPT-3 papers (see the <a href="#/papers/index">paper curriculum</a>) both document their decontamination procedures and report how much scores move once contaminated items are removed — worth reading for how seriously frontier labs treat this, and how much a "clean" number can differ from the raw one.</p></div>
 
 ## 2. Calibration: does confidence match accuracy?
 
@@ -95,10 +95,10 @@ expected_calibration_error(confidences, correct, n_bins=10)   # -> 0.125
 
 Perplexity and multiple-choice log-likelihood are only the start. As the course moves from a pretrained base model into fine-tuning and beyond, each stage has its own evaluation discipline. Here is the map, with forward links to where each is developed.
 
-- **Instruction-following evaluation.** After supervised fine-tuning, you ask whether the model does what an instruction says. This is judged by held-out instruction sets and increasingly by a strong model acting as a judge (LLM-as-judge), which is fast but inherits the judge's biases. Developed in [Module 14](../module-14/lesson-01.md).
-- **Reasoning evaluation.** For math and logic with a single verifiable answer (GSM8K, MATH), you grade by **exact match** on the final answer — extract the model's answer and compare it to the gold answer. Objective and cheap, but blind to *how* the model got there (a right answer from wrong reasoning still scores). Developed in [Module 16](../module-16/lesson-01.md).
-- **Tool-use evaluation.** When the model calls tools/functions, you check whether it selected the right tool, formed valid arguments, and used the results correctly — often via task success in a sandboxed environment rather than a text match. Developed in [Module 18](../module-18/lesson-01.md).
-- **Human / preference evaluation.** For open-ended quality (helpfulness, style, safety) there is no single correct string. You collect **pairwise human preferences** — which of two responses is better — and aggregate them (e.g. win rates, Elo). This is the data that trains reward models and drives RLHF. Developed in [Module 15](../module-15/lesson-01.md).
+- **Instruction-following evaluation.** After supervised fine-tuning, you ask whether the model does what an instruction says. This is judged by held-out instruction sets and increasingly by a strong model acting as a judge (LLM-as-judge), which is fast but inherits the judge's biases. Developed in [Module 14](lessons/module-14/lesson-01.md).
+- **Reasoning evaluation.** For math and logic with a single verifiable answer (GSM8K, MATH), you grade by **exact match** on the final answer — extract the model's answer and compare it to the gold answer. Objective and cheap, but blind to *how* the model got there (a right answer from wrong reasoning still scores). Developed in [Module 16](lessons/module-16/lesson-01.md).
+- **Tool-use evaluation.** When the model calls tools/functions, you check whether it selected the right tool, formed valid arguments, and used the results correctly — often via task success in a sandboxed environment rather than a text match. Developed in [Module 18](lessons/module-18/lesson-01.md).
+- **Human / preference evaluation.** For open-ended quality (helpfulness, style, safety) there is no single correct string. You collect **pairwise human preferences** — which of two responses is better — and aggregate them (e.g. win rates, Elo). This is the data that trains reward models and drives RLHF. Developed in [Module 15](lessons/module-15/lesson-01.md).
 
 <div class="callout key"><p>The metric encodes what you reward. Exact-match rewards the final answer and ignores the reasoning; LLM-as-judge rewards whatever the judge prefers; preference win-rate rewards whatever annotators like. Choosing a metric is choosing an objective — pick the one that matches the behavior you actually want, and stay honest about what it leaves out.</p></div>
 
@@ -128,7 +128,7 @@ Reading it: of the $\binom{5}{3}=10$ ways to pick 3 of the 5 samples, only $\bin
 
 <div class="callout warn"><p>pass@k needs a <strong>reliable verifier</strong>. It measures "can the model produce a passing answer within k tries", not "is the answer good" — a solution that passes weak unit tests but is wrong in an untested case still counts as a pass. A high pass@k with a leaky or incomplete checker overstates real capability, and comparisons are only meaningful when everyone uses the same n, the same k, and the same verifier.</p></div>
 
-<div class="callout paper"><p>pass@k and its unbiased estimator come from the Codex paper, "Evaluating Large Language Models Trained on Code" (Chen et al., 2021). We return to verifiable rewards for reasoning in <a href="../module-16/lesson-02.md">16.2 · RLVR &amp; verifiable rewards</a>, which reuses this same idea of a checkable answer.</p></div>
+<div class="callout paper"><p>pass@k and its unbiased estimator come from the Codex paper, "Evaluating Large Language Models Trained on Code" (Chen et al., 2021). We return to verifiable rewards for reasoning in <a href="#/lessons/module-16/lesson-02">16.2 · RLVR &amp; verifiable rewards</a>, which reuses this same idea of a checkable answer.</p></div>
 
 ## 5. Staying honest about what a metric measures
 
@@ -231,4 +231,4 @@ It scores only the final answer string, so it is blind to the reasoning path: a 
 
 You now know what benchmark numbers hide — contamination, miscalibration, and the blind spots of each metric family — and you can compute ECE and pass@k by hand. The final lesson of the module turns all of this into engineering: a small, reproducible evaluation harness with fixed seeds, a fixed eval set, and regression tests, so that every experiment produces numbers you can trust and compare.
 
-Continue to [13.3 · A reproducible eval harness](lesson-03.md).
+Continue to [13.3 · A reproducible eval harness](lessons/module-13/lesson-03.md).

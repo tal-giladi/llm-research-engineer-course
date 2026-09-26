@@ -1,14 +1,14 @@
 # 19.1 · ReAct → a mini SWE-agent
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> tool use and function calling from <a href="../module-18/lesson-01.md">18.1 · Tool schemas &amp; function calling</a> and the observation/action loop from <a href="../module-18/lesson-02.md">18.2 · The observation/action loop</a>; generation (how a model produces text token by token) from <a href="../module-06/lesson-03.md">06.3 · Generation</a>. Comfort reading plain Python control flow — this lesson has no tensors.</p>
+<p><strong>Prerequisites:</strong> tool use and function calling from <a href="#/lessons/module-18/lesson-01">18.1 · Tool schemas &amp; function calling</a> and the observation/action loop from <a href="#/lessons/module-18/lesson-02">18.2 · The observation/action loop</a>; generation (how a model produces text token by token) from <a href="#/lessons/module-06/lesson-03">06.3 · Generation</a>. Comfort reading plain Python control flow — this lesson has no tensors.</p>
 <p><strong>You will learn:</strong> the ladder from a plain LLM to a tool-calling model to a <strong>ReAct</strong> agent (interleaved Thought → Action → Observation) to a planning, iterating agent; how to build a small, <em>deterministic</em>, tool-registry-agnostic ReAct loop you can unit-test without a model; and how the same loop, given file-oriented tools, becomes a <strong>mini SWE-agent</strong> that inspects code, edits it, runs tests, and retries.</p>
 <p><strong>Why this matters for ML:</strong> agents are how the models you have spent this course training get <em>used</em> to do real work — and, increasingly, how they generate their own training data, run their own experiments, and fix their own code. As a research engineer you will both build agent scaffolds and be the human policy debugging them. The loop is simple; getting the interface and the feedback right is the craft.</p>
 </div>
 
 ## 1. The causal story: one tool call is not enough
 
-In <a href="../module-18/lesson-01.md">Module 18</a> you gave a model a tool — a calculator, a search function, a `get_weather(city)` — and let it emit one call, splice the result back into the context, and continue. That answers *one* self-contained question: "what is 47 × 89?", "what is the weather in Oslo?".
+In <a href="#/lessons/module-18/lesson-01">Module 18</a> you gave a model a tool — a calculator, a search function, a `get_weather(city)` — and let it emit one call, splice the result back into the context, and continue. That answers *one* self-contained question: "what is 47 × 89?", "what is the weather in Oslo?".
 
 Real tasks are not one question. "Fix the failing test in this repo" is a chain: look at the failure, find the file, read the relevant function, form a guess, edit it, rerun the tests, see a *new* failure, revise. Each step depends on what the previous step revealed. You cannot plan the whole thing up front because you do not yet know what you will see.
 
@@ -140,7 +140,7 @@ The agent loop is then: `read_file` (inspect) → `write_file` (edit) → `run_t
 
 <div class="callout warn"><p>Be honest about what this is. Our <code>policy</code> is scripted, so <code>solve</code> only fixes the specific bug the script was written to fix. A <em>real</em> SWE-agent's policy is a capable LLM that decides, unprompted, which file to open and what edit to make. The scaffold teaches the interface and the loop; it does not teach the model the loop needs. Everything hard about SWE-agent lives in that missing policy.</p></div>
 
-<div class="callout paper"><p><strong>Papers.</strong> <a href="../../papers/index.md">ReAct (Yao et al. 2022)</a> introduces the Thought/Action/Observation loop; <a href="../../papers/index.md">SWE-agent (Yang et al. 2024)</a> shows that the agent-computer interface — not just the model — determines how well a coding agent performs on real GitHub issues (SWE-bench). Read them together after this lesson; the code above is a miniature of both.</p></div>
+<div class="callout paper"><p><strong>Papers.</strong> <a href="#/papers/index">ReAct (Yao et al. 2022)</a> introduces the Thought/Action/Observation loop; <a href="#/papers/index">SWE-agent (Yang et al. 2024)</a> shows that the agent-computer interface — not just the model — determines how well a coding agent performs on real GitHub issues (SWE-bench). Read them together after this lesson; the code above is a miniature of both.</p></div>
 
 <div class="hw">
 <p><strong>Hardware track.</strong> None. Everything in this lesson runs on CPU in well under a second — there are no tensors, no model forward passes, no GPU. The only "compute" is Python control flow. A real agent's cost is entirely in the LLM policy calls (API latency or GPU inference), which this scaffold deliberately factors out.</p>
@@ -248,4 +248,4 @@ Because the policy is scripted: it only makes the edits the script encodes, so i
 
 You can now build the loop that turns a model into an agent, and you understand why the interface and the feedback — not just the model — decide whether it works. The final piece of the research-engineer toolkit is not code at all: it is knowing how to design an experiment, measure it honestly across seeds, and write up what you found so it is trustworthy and reproducible.
 
-Continue to [19.2 · Experiment design & research writing](lesson-02.md).
+Continue to [19.2 · Experiment design & research writing](lessons/module-19/lesson-02.md).

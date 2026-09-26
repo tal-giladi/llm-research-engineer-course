@@ -1,7 +1,7 @@
 # 20 · Capstone: a mini frontier LLM
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the whole course. Concretely, you should be comfortable with the pieces you are about to wire together: <a href="../module-04/lesson-02.md">byte-level BPE (04.2)</a>, <a href="../module-06/lesson-01.md">assembling GPT-2 (06.1)</a>, <a href="../module-07/lesson-01.md">the pretraining loop (07.1)</a>, <a href="../module-14/lesson-02.md">SFT loss masking (14.2)</a>, <a href="../module-16/lesson-02.md">RLVR (16.2)</a>, and <a href="../module-19/lesson-02.md">experiment design (19.2)</a>. See the <a href="../../curriculum/course-outline.md">curriculum map</a> for the full dependency graph.</p>
+<p><strong>Prerequisites:</strong> the whole course. Concretely, you should be comfortable with the pieces you are about to wire together: <a href="#/lessons/module-04/lesson-02">byte-level BPE (04.2)</a>, <a href="#/lessons/module-06/lesson-01">assembling GPT-2 (06.1)</a>, <a href="#/lessons/module-07/lesson-01">the pretraining loop (07.1)</a>, <a href="#/lessons/module-14/lesson-02">SFT loss masking (14.2)</a>, <a href="#/lessons/module-16/lesson-02">RLVR (16.2)</a>, and <a href="#/lessons/module-19/lesson-02">experiment design (19.2)</a>. See the <a href="#/curriculum/course-outline">curriculum map</a> for the full dependency graph.</p>
 <p><strong>You will learn:</strong> how every module you built snaps together into <em>one</em> project — the "Mini Frontier LLM" — that goes from raw text to a tokenizer, a GPT, a pretrained model, an evaluation number, an instruction-tuned model, a preference-aligned model, and a reasoning policy trained with verifiable rewards. You will run a tiny end-to-end version on your CPU, watch the loss fall and the correct-rate climb, and see exactly how to scale each stage up.</p>
 <p><strong>Why this matters for ML:</strong> a research engineer is not judged on any single component but on the ability to make the <em>whole pipeline</em> run, produce a number, and be reproduced. This capstone is that pipeline, in miniature, on hardware you already own.</p>
 </div>
@@ -42,119 +42,119 @@ For each stage: what it does, the `llmre` entry point, and what to read.
 Turn raw text into a bounded vocabulary of subword ids, starting from the 256 raw byte values and merging the most frequent adjacent pair repeatedly. Nothing is ever out-of-vocabulary, and `decode(encode(s)) == s` for any string.
 
 - **Entry point:** `llmre.tokenizer.bpe.BPETokenizer` — `.train(text, vocab_size)`, `.encode`, `.decode`, `.vocab_size`.
-- **Look at:** how `merges` (an ordered dict of `(a, b) -> new_id`) is applied *in learned order* inside `encode`. That ordering is the whole subtlety. See [04.2 · Byte-level BPE](../module-04/lesson-02.md).
+- **Look at:** how `merges` (an ordered dict of `(a, b) -> new_id`) is applied *in learned order* inside `encode`. That ordering is the whole subtlety. See [04.2 · Byte-level BPE](lessons/module-04/lesson-02.md).
 
 ### (2) Build a GPT
 
 A decoder-only transformer: token + positional embeddings, a stack of pre-norm blocks (causal multi-head attention + MLP), a final norm, and a tied `lm_head`. The `GPTConfig` dataclass fixes every tensor shape.
 
 - **Entry point:** `llmre.model.gpt.GPT`, `llmre.model.config.GPTConfig`. `forward(idx, targets)` returns `(logits, loss)`; `generate(...)` samples.
-- **Look at:** weight tying (`transformer.wte.weight is lm_head.weight`) and the scaled residual init `0.02 / sqrt(2 * n_layer)`. See [06.1 · Assembling GPT-2](../module-06/lesson-01.md).
+- **Look at:** weight tying (`transformer.wte.weight is lm_head.weight`) and the scaled residual init `0.02 / sqrt(2 * n_layer)`. See [06.1 · Assembling GPT-2](lessons/module-06/lesson-01.md).
 
 ### (3) Pretrain on a toy corpus
 
 Next-token prediction: for each position, minimize the cross-entropy of the true next token. The loop writes the learning rate from a cosine-warmup schedule, runs forward/backward, clips the global gradient norm, and takes an AdamW step.
 
 - **Entry point:** `llmre.training.loop.train` / `TrainConfig`, built on `llmre.optim.adamw.AdamW`, `llmre.optim.schedule.cosine_warmup_lr`, `llmre.optim.clip.clip_grad_norm_`.
-- **Look at:** the six-line inner step in `train` and how gradient accumulation makes a large effective batch fit in small memory. See [07.1 · The pretraining loop](../module-07/lesson-01.md).
+- **Look at:** the six-line inner step in `train` and how gradient accumulation makes a large effective batch fit in small memory. See [07.1 · The pretraining loop](lessons/module-07/lesson-01.md).
 
 ### (4) The data pipeline
 
 Encode every document once, concatenate into a single id stream separated by an end-of-text id, then cut random fixed-length `(x, y)` windows where `y` is `x` shifted by one. At real scale this is also where you *filter, deduplicate, and decontaminate* the corpus.
 
 - **Entry point:** `llmre.data.loader.pack_documents`, `llmre.data.loader.get_batch`. Data-quality tooling: `llmre.data.quality`, `llmre.data.minhash`, `llmre.data.contamination`.
-- **Look at:** why the target is just the input shifted left by one — that single shift is the entire supervision signal. See [04.3 · The data pipeline](../module-04/lesson-03.md) and [Module 11 · Data engineering](../module-11/lesson-01.md).
+- **Look at:** why the target is just the input shifted left by one — that single shift is the entire supervision signal. See [04.3 · The data pipeline](lessons/module-04/lesson-03.md) and [Module 11 · Data engineering](lessons/module-11/lesson-01.md).
 
 ### (5) GPU and profiling notes
 
 On a CPU the toy run is instant, but on a GPU you must reason about *where the time and memory go*. Attention materializes a $T \times T$ matrix per head (memory grows as $T^2$); FlashAttention computes the same result without ever storing it. Throughput is tracked with the 6N FLOPs rule and MFU.
 
 - **Entry point:** `llmre.training.metrics` — `model_flops_per_token`, `tokens_per_step`, `mfu`. Tiled attention: `llmre.attention.flash.flash_attention_reference`. Benchmark: `code/scripts/bench_attention.py`.
-- **Look at:** the roofline / memory-hierarchy story and mixed precision. See [Module 08 · GPU performance](../module-08/lesson-01.md).
+- **Look at:** the roofline / memory-hierarchy story and mixed precision. See [Module 08 · GPU performance](lessons/module-08/lesson-01.md).
 
 ### (6) A scaling mini-experiment
 
 Scaling laws say loss falls predictably with model size, data, and compute. You can see the *shape* of that curve even on CPU by sweeping `n_embd` over a few sizes and plotting final loss.
 
 - **Entry point:** `code/experiments/scaling_sweep.py` (`train_one`, `main`).
-- **Look at:** the power-law fit and the 6ND compute bookkeeping — a bigger model reaches a lower loss for the same steps, but costs more per step. See [Module 10 · Scaling laws](../module-10/lesson-01.md).
+- **Look at:** the power-law fit and the 6ND compute bookkeeping — a bigger model reaches a lower loss for the same steps, but costs more per step. See [Module 10 · Scaling laws](lessons/module-10/lesson-01.md).
 
 ### (7) Evaluation
 
 Every experiment must produce a reproducible number. Perplexity — `exp(mean cross-entropy)` on held-out text — is the pretraining metric; likelihood scoring grades multiple-choice benchmarks with no weight updates.
 
 - **Entry point:** `llmre.evaluation.harness.evaluate_perplexity`, `sequence_loglikelihood`, `multiple_choice_score`; `llmre.evaluation.metrics.perplexity`.
-- **Look at:** the token-weighted mean cross-entropy in `evaluate_perplexity`, and length-normalized log-likelihood in `multiple_choice_score`. See [Module 13 · Evaluation](../module-13/lesson-01.md).
+- **Look at:** the token-weighted mean cross-entropy in `evaluate_perplexity`, and length-normalized log-likelihood in `multiple_choice_score`. See [Module 13 · Evaluation](lessons/module-13/lesson-01.md).
 
 ### (8) SFT (supervised fine-tuning)
 
 Teach the model to *answer* by fine-tuning on conversations, but compute the loss on the **assistant response only**. A chat template flattens role-tagged messages into one string with delimiters; a response mask marks which tokens to train on; `build_labels` writes `ignore_index` (`-100`) into the prompt positions so cross-entropy skips them.
 
 - **Entry point:** `llmre.sft.chat_template.render_with_response_mask`, `llmre.sft.masking.build_labels` / `masked_cross_entropy`.
-- **Look at:** why the assistant's `<|end|>` closer *is* a response token (so the model learns to stop). See [14.2 · Loss masking for SFT](../module-14/lesson-02.md).
+- **Look at:** why the assistant's `<|end|>` closer *is* a response token (so the model learns to stop). See [14.2 · Loss masking for SFT](lessons/module-14/lesson-02.md).
 
 ### (9) LoRA
 
 Full fine-tuning updates every weight and keeps two AdamW moments per parameter. LoRA freezes the pretrained weight and learns a tiny low-rank update `y = Wx + (alpha/r)·B(Ax)`, with `B = 0` at init so the wrapped layer starts identical to the base.
 
 - **Entry point:** `llmre.sft.lora.LoRALinear`, `mark_only_lora_trainable`, `LoRALinear.merge`.
-- **Look at:** how the trainable-parameter count collapses to `r·(in + out)`. See [14.3 · LoRA](../module-14/lesson-03.md).
+- **Look at:** how the trainable-parameter count collapses to `r·(in + out)`. See [14.3 · LoRA](lessons/module-14/lesson-03.md).
 
 ### (10) Preference data + DPO
 
 Alignment starts from *pairs*: for a prompt, a chosen response `y_w` and a rejected one `y_l`. DPO optimizes the policy against these pairs directly — no reward model, no sampling — using the closed form that links reward to the policy/reference log-ratio.
 
 - **Entry point:** `llmre.preference.dpo.dpo_loss`, `sequence_logprob`, `dpo_reward_margin`.
-- **Look at:** how the prompt-only `beta·log Z(x)` term cancels in the difference, leaving a loss with only the policy and a frozen reference. See [15.3 · DPO](../module-15/lesson-03.md).
+- **Look at:** how the prompt-only `beta·log Z(x)` term cancels in the difference, leaving a loss with only the policy and a frozen reference. See [15.3 · DPO](lessons/module-15/lesson-03.md).
 
 ### (11) A reward model and PPO
 
 The classic RLHF path DPO short-circuits: train a **reward model** on preference pairs with the Bradley-Terry loss, then optimize the policy against it with PPO's clipped objective and a KL penalty to the reference.
 
 - **Entry point:** `llmre.preference.reward_model.RewardModel` / `bradley_terry_loss`; `llmre.rl.ppo.compute_advantages`, `ppo_clip_objective`, `kl_penalty`.
-- **Look at:** the Bradley-Terry link $P(y_w \succ y_l) = \sigma(r(x,y_w) - r(x,y_l))$ and where the KL penalty enters the reward. See [15.1–15.2 · RLHF](../module-15/lesson-01.md).
+- **Look at:** the Bradley-Terry link $P(y_w \succ y_l) = \sigma(r(x,y_w) - r(x,y_l))$ and where the KL penalty enters the reward. See [15.1–15.2 · RLHF](lessons/module-15/lesson-01.md).
 
 ### (12) GRPO + RLVR on a verifiable task
 
 GRPO drops PPO's critic: sample a **group** of completions per prompt and use the group's own mean reward as the baseline, with advantage $A_i = (r_i - \text{mean}(r))/\text{std}(r)$. RLVR feeds it a **verifiable** reward — a rule that checks the answer (exact-match on arithmetic here), which cannot be hacked like a learned proxy.
 
 - **Entry point:** `llmre.rl.grpo.grpo_advantages` / `grpo_objective`; `llmre.reasoning.rlvr.run_rlvr`; `llmre.reasoning.verifiers.arithmetic_verifier`.
-- **Look at:** the correct-rate rising in `run_rlvr`'s history. See [16.1 · GRPO](../module-16/lesson-01.md) and [16.2 · RLVR](../module-16/lesson-02.md).
+- **Look at:** the correct-rate rising in `run_rlvr`'s history. See [16.1 · GRPO](lessons/module-16/lesson-01.md) and [16.2 · RLVR](lessons/module-16/lesson-02.md).
 
 ### (13) A reasoning task
 
 Reasoning is elicited by making the model *show its steps* before the answer (chain-of-thought), sampling several chains and taking a majority vote (self-consistency), and — in the R1 recipe — training that behavior in with verifiable-reward RL.
 
 - **Entry point:** `llmre.reasoning.cot.cot_prompt`, `extract_answer`, `self_consistency`; `llmre.reasoning.r1_pipeline.mini_r1`.
-- **Look at:** the deterministic majority-vote tie-break, and `mini_r1`'s SFT-then-RL two-stage loop. See [Module 17 · Reasoning models](../module-17/lesson-01.md).
+- **Look at:** the deterministic majority-vote tie-break, and `mini_r1`'s SFT-then-RL two-stage loop. See [Module 17 · Reasoning models](lessons/module-17/lesson-01.md).
 
 ### (14) Tool use
 
 A model that wants to compute or look something up emits a *structured call*; a runtime executes the real function and feeds the result back. The registry advertises JSON schemas, runs the call, and turns any exception into a structured error instead of crashing.
 
 - **Entry point:** `llmre.tools.registry.ToolRegistry`, `llmre.tools.builtins.register_builtins`, `llmre.tools.parser.parse_tool_call`, `llmre.tools.loop.run_tool_loop`.
-- **Look at:** the AST-vetted `calculator` (an allow-list, not a block-list). See [18.1 · Tool schemas](../module-18/lesson-01.md).
+- **Look at:** the AST-vetted `calculator` (an allow-list, not a block-list). See [18.1 · Tool schemas](lessons/module-18/lesson-01.md).
 
 ### (15) A simple agent
 
 An agent interleaves **Thought → Action → Observation** until it emits a final answer or exhausts a step budget (ReAct). Wrap that loop with a small file view/edit/run interface and it becomes a mini SWE-agent.
 
 - **Entry point:** `llmre.agents.react.run_react`, `format_trace`; `llmre.agents.swe_agent.solve`.
-- **Look at:** how `run_react` is tool-registry-agnostic — tools are *injected*, never imported. See [19.1 · ReAct → a mini SWE-agent](../module-19/lesson-01.md).
+- **Look at:** how `run_react` is tool-registry-agnostic — tools are *injected*, never imported. See [19.1 · ReAct → a mini SWE-agent](lessons/module-19/lesson-01.md).
 
 ### (16) Ablations
 
 To claim a change *caused* an improvement, vary **one** thing and hold everything else fixed. The scaling sweep is a template: same corpus, same steps, same seed, only `n_embd` changes.
 
 - **Entry point:** `code/experiments/scaling_sweep.py` as the pattern; the config in `code/configs/capstone.yaml` as the reproducible knobs.
-- **Look at:** the VARIABLES section of the report — "one independent variable, everything else a control." See [19.2 · Experiment design](../module-19/lesson-02.md).
+- **Look at:** the VARIABLES section of the report — "one independent variable, everything else a control." See [19.2 · Experiment design](lessons/module-19/lesson-02.md).
 
 ### (17) A research report
 
 The deliverable is not the model — it is a report a colleague can reproduce: QUESTION / HYPOTHESIS / METHOD / BASELINE / VARIABLES / RESULTS / ANALYSIS / LIMITATIONS / CONCLUSION / NEXT.
 
 - **Entry point:** `code/reports/EXPERIMENT_TEMPLATE.md`; the driver writes a filled-in one to `code/reports/capstone_report.md`.
-- **Look at:** the [paper-reading and report note](../../papers/index.md) for the nine-question reading method and how to file each summary.
+- **Look at:** the [paper-reading and report note](papers/index.md) for the nine-question reading method and how to file each summary.
 
 ## 3. Run it yourself
 
@@ -202,9 +202,9 @@ To grow each stage from the toy driver: raise `tokenizer.vocab_size` toward 32k�
 
 ## 5. Where you are now
 
-You have built, from scratch and then connected, every stage of a modern LLM pipeline. Rate yourself honestly against the [Readiness matrix](../../curriculum/readiness-matrix.md): a skill is *Advanced* only when you can **explain → derive → implement → test → benchmark → debug → relate-to-a-paper** it from memory. The capstone touches nearly every row.
+You have built, from scratch and then connected, every stage of a modern LLM pipeline. Rate yourself honestly against the [Readiness matrix](curriculum/readiness-matrix.md): a skill is *Advanced* only when you can **explain → derive → implement → test → benchmark → debug → relate-to-a-paper** it from memory. The capstone touches nearly every row.
 
-When you run your own experiments, write them up with the [experiment report template](../../papers/index.md) note — one report, one falsifiable question, real numbers with a baseline and stated limitations, exactly like `code/reports/capstone_report.md`.
+When you run your own experiments, write them up with the [experiment report template](papers/index.md) note — one report, one falsifiable question, real numbers with a baseline and stated limitations, exactly like `code/reports/capstone_report.md`.
 
 ## Check yourself
 
@@ -240,4 +240,4 @@ Exactly one thing changes — the norm — and everything else (corpus, tokens, 
 
 ## Next: keep going
 
-You have finished the course, but a research engineer never stops reading. Pick a paper you have *not* read from the [paper reading curriculum](../../papers/index.md) — a strong first choice is [OLMo 2](https://arxiv.org/abs/2501.00656), because its data, code, and checkpoints are fully open, so you can reproduce and ablate it against everything you built here. Read it with the nine-question method (what problem → key idea → which equations → what to implement → how it influenced later LLMs), then implement the one thing it changes inside `llmre`, wire it into `code/scripts/capstone.py`, and write the result up with the [experiment report template](../../papers/index.md). That loop — read, implement, test, measure, write — is the job. You are ready to do it.
+You have finished the course, but a research engineer never stops reading. Pick a paper you have *not* read from the [paper reading curriculum](papers/index.md) — a strong first choice is [OLMo 2](https://arxiv.org/abs/2501.00656), because its data, code, and checkpoints are fully open, so you can reproduce and ablate it against everything you built here. Read it with the nine-question method (what problem → key idea → which equations → what to implement → how it influenced later LLMs), then implement the one thing it changes inside `llmre`, wire it into `code/scripts/capstone.py`, and write the result up with the [experiment report template](papers/index.md). That loop — read, implement, test, measure, write — is the job. You are ready to do it.

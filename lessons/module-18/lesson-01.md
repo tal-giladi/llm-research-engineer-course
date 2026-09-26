@@ -1,7 +1,7 @@
 # 18.1 · Tool schemas & function calling
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> chat templates and the assistant/user role structure from <a href="../module-14/lesson-01.md">14.1 · Instruction data & chat templates</a>; the idea of constraining a model's output to a fixed format (structured outputs / JSON mode), which we build here from first principles. Comfort reading JSON and Python dataclasses.</p>
+<p><strong>Prerequisites:</strong> chat templates and the assistant/user role structure from <a href="#/lessons/module-14/lesson-01">14.1 · Instruction data & chat templates</a>; the idea of constraining a model's output to a fixed format (structured outputs / JSON mode), which we build here from first principles. Comfort reading JSON and Python dataclasses.</p>
 <p><strong>You will learn:</strong> what a <strong>tool schema</strong> is (name, description, JSON-schema parameters) and why a model needs one; what <strong>function calling</strong> means — the model emitting a structured call instead of prose, which a runtime parses and executes; how to build a tool registry and a couple of deterministic, <em>safe</em> tools (a calculator, a restricted Python evaluator, a mock search); and how to generate the schemas the model is shown.</p>
 <p><strong>Why this matters for ML:</strong> the aligned model you built through Modules 14–17 can answer from its weights, but it cannot do arithmetic reliably, look anything up, or run code. Those abilities do not come from more parameters — they come from letting the model <em>call external tools</em>. Function calling is the interface that makes a frozen language model useful as the brain of a system that acts. It is the foundation for agents (Module 19).</p>
 </div>
@@ -340,7 +340,7 @@ The schema advertises a parameter named **`location`**, but the function's param
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Toolformer</strong> (Schick et al., 2023) trains a model to <em>teach itself</em> when and how to call APIs (calculator, search, translation) by inserting candidate API calls into training text and keeping only those that reduce the loss on the following tokens — so tool use is learned self-supervised, not hand-annotated. <strong>Gorilla</strong> (Patil et al., 2023) fine-tunes a model to emit correct API calls against a large, changing catalog of real ML APIs, showing that a schema-aware model can pick the right call from thousands of options and adapt as APIs change. Both are in the <a href="../../papers/index.md">paper curriculum</a> (#27, #28), to read after this module.</p></div>
+<div class="callout paper"><p><strong>Toolformer</strong> (Schick et al., 2023) trains a model to <em>teach itself</em> when and how to call APIs (calculator, search, translation) by inserting candidate API calls into training text and keeping only those that reduce the loss on the following tokens — so tool use is learned self-supervised, not hand-annotated. <strong>Gorilla</strong> (Patil et al., 2023) fine-tunes a model to emit correct API calls against a large, changing catalog of real ML APIs, showing that a schema-aware model can pick the right call from thousands of options and adapt as APIs change. Both are in the <a href="#/papers/index">paper curriculum</a> (#27, #28), to read after this module.</p></div>
 
 ## Check yourself
 
@@ -372,4 +372,4 @@ Constrained decoding (JSON mode) forces the generated tokens to form JSON matchi
 
 You can now describe tools to a model, let it emit a structured call, and parse and execute that call safely. But one call is rarely enough: real tasks need the model to see the result, decide what to do next, maybe call another tool, and recover from errors. That repetition is the **observation/action loop**.
 
-Continue to [18.2 · The observation/action loop](lesson-02.md).
+Continue to [18.2 · The observation/action loop](lessons/module-18/lesson-02.md).

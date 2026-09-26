@@ -1,7 +1,7 @@
 # 05.1 · Embeddings & positional encoding
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the tokenizer output — a sequence of integer token ids — from <a href="../module-04/lesson-03.md">04.3 · Special tokens, packing, data loading</a>; tensor shape, dtype and device from <a href="../module-00/lesson-01.md">00.1 · Tensors: shape, dtype, device</a>; matrix indexing and the $(B, T)$ / $(B, T, C)$ conventions.</p>
+<p><strong>Prerequisites:</strong> the tokenizer output — a sequence of integer token ids — from <a href="#/lessons/module-04/lesson-03">04.3 · Special tokens, packing, data loading</a>; tensor shape, dtype and device from <a href="#/lessons/module-00/lesson-01">00.1 · Tensors: shape, dtype, device</a>; matrix indexing and the $(B, T)$ / $(B, T, C)$ conventions.</p>
 <p><strong>You will learn:</strong> how a token <em>id</em> (a bare integer) becomes a learned vector through the embedding table <code>wte</code>; why you cannot feed raw ids into a network; how a second table <code>wpe</code> injects <em>position</em> so the model knows word order; and how the two are added to form the input to the first transformer block. You will trace one concrete id through both lookups with tiny numbers.</p>
 <p><strong>Why this matters for ML:</strong> embeddings are the model's entire interface to language — every downstream layer only ever sees these vectors, never the original text. Positional embeddings are what turn a permutation-blind bag of vectors into a model of ordered sequences. Get this layer right and the rest of GPT is arithmetic on top of it.</p>
 </div>
@@ -214,7 +214,7 @@ GPT-2 uses *learned* absolute positions. The original Transformer paper instead 
 
 Modern models mostly abandon both in favor of **relative** schemes, above all **RoPE** (Rotary Position Embedding), which encodes position by *rotating* the query and key vectors inside attention so that the attention score depends only on the *distance* between two positions, not their absolute indices. That extrapolates to longer contexts far better than a fixed-size `wpe` table. We build RoPE from scratch in Module 12.
 
-<div class="callout paper"><p>RoPE is paper #8 in the <a href="../../papers/index.md">paper curriculum</a> (Su et al., 2021), read after Module 12. When you get there, the contrast to keep in mind is exactly this lesson's <code>wpe</code>: a learned lookup added once at the input, versus a rotation applied to Q and K at every layer.</p></div>
+<div class="callout paper"><p>RoPE is paper #8 in the <a href="#/papers/index">paper curriculum</a> (Su et al., 2021), read after Module 12. When you get there, the contrast to keep in mind is exactly this lesson's <code>wpe</code>: a learned lookup added once at the input, versus a rotation applied to Q and K at every layer.</p></div>
 
 ## Exercise
 
@@ -289,4 +289,4 @@ The context length is hard-capped at `block_size`: `wpe` has exactly that many r
 
 You can now turn a sequence of token ids into the position-aware vector grid $h$ of shape $(B, T, C)$ that a transformer block consumes. The next lesson takes that $h$ and builds the operation at the heart of the block — scaled dot-product attention — the mechanism by which each position gathers information from the others.
 
-Continue to [05.2 · Q/K/V & scaled dot-product attention](lesson-02.md).
+Continue to [05.2 · Q/K/V & scaled dot-product attention](lessons/module-05/lesson-02.md).

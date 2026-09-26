@@ -1,7 +1,7 @@
 # 02.1 · Derivatives, partials, chain rule, gradients
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-00/lesson-01.md">00.1 · Tensors: shape, dtype, device</a> — you should be comfortable with scalar (rank-0) tensors and with reading a tensor's <code>.shape</code>. A first look at <a href="../module-00/lesson-03.md">00.3 · Autograd: backward and grad</a> helps but is not required; this lesson supplies the calculus that lesson used.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-00/lesson-01">00.1 · Tensors: shape, dtype, device</a> — you should be comfortable with scalar (rank-0) tensors and with reading a tensor's <code>.shape</code>. A first look at <a href="#/lessons/module-00/lesson-03">00.3 · Autograd: backward and grad</a> helps but is not required; this lesson supplies the calculus that lesson used.</p>
 <p><strong>You will learn:</strong> the <strong>derivative</strong> as a slope, i.e. a measure of sensitivity ("if I nudge the input, how much does the output move?"); the <strong>partial derivative</strong> (the same idea for one input while all others are held fixed); the <strong>gradient</strong> $\nabla f$ as the vector of all partials, which points in the direction of steepest increase; and the <strong>scalar chain rule</strong> $\frac{dz}{dx} = \frac{dz}{dy}\cdot\frac{dy}{dx}$, worked by hand on $y = 3x+1,\; z = y^2$ at $x = 2$ and verified in PyTorch.</p>
 <p><strong>Why this matters for ML:</strong> training a language model is nothing but repeatedly asking "which way, and how hard, should I nudge each of these millions of parameters to make the loss smaller?" The answer is the gradient. Every optimizer step in this course is a step downhill along $-\nabla(\text{loss})$. This lesson is the calculus those steps rest on; the next two lessons turn it into backpropagation, and Module 3 turns it into an optimizer.</p>
 </div>
@@ -116,11 +116,11 @@ $$
 \nabla f(2, 3) = \begin{bmatrix} 2\cdot2\cdot3 \\ 2^2 + 3\cdot3^2 \end{bmatrix} = \begin{bmatrix} 12 \\ 31 \end{bmatrix}.
 $$
 
-The single most important geometric fact about the gradient: **it points in the direction of steepest increase of $f$**, and its length is how steep that increase is. So $-\nabla f$ points in the direction of steepest *decrease*. That is why gradient descent steps against the gradient — it is walking directly downhill on the loss surface. We will use this constantly starting in [Module 3](../module-03/lesson-01.md).
+The single most important geometric fact about the gradient: **it points in the direction of steepest increase of $f$**, and its length is how steep that increase is. So $-\nabla f$ points in the direction of steepest *decrease*. That is why gradient descent steps against the gradient — it is walking directly downhill on the loss surface. We will use this constantly starting in [Module 3](lessons/module-03/lesson-01.md).
 
 ## 7. From-scratch PyTorch: verifying $dz/dx = 42$
 
-PyTorch computes these derivatives for you with autograd (which you met in [00.3](../module-00/lesson-03.md)). We mark the input with `requires_grad=True`, build the expression (this records a graph), call `.backward()` to run the chain rule, and read the result off `.grad`:
+PyTorch computes these derivatives for you with autograd (which you met in [00.3](lessons/module-00/lesson-03.md)). We mark the input with `requires_grad=True`, build the expression (this records a graph), call `.backward()` to run the chain rule, and read the result off `.grad`:
 
 ```python
 import torch
@@ -223,4 +223,4 @@ Because it applies the chain rule *once*, sweeping backward from the single scal
 
 You can now read a derivative as a sensitivity, take partials one knob at a time, stack them into a gradient that points uphill, and chain sensitivities through a pipeline. Next we lift the chain rule from scalars to vectors and matrices — Jacobians — and see the specific, memory-saving way reverse-mode autodiff actually applies it: the vector–Jacobian product.
 
-Continue to [02.2 · Jacobians, VJPs, computational graphs](lesson-02.md).
+Continue to [02.2 · Jacobians, VJPs, computational graphs](lessons/module-02/lesson-02.md).

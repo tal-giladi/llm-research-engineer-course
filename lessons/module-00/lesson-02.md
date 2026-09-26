@@ -1,7 +1,7 @@
 # 00.2 · Ops, broadcasting, views vs copies
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">00.1 · Tensors: shape, dtype, device</a> — you should be able to create a tensor and read its <code>.shape</code>, <code>.dtype</code>, and <code>.device</code>, and you should have met contiguous memory and strides.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-00/lesson-01">00.1 · Tensors: shape, dtype, device</a> — you should be able to create a tensor and read its <code>.shape</code>, <code>.dtype</code>, and <code>.device</code>, and you should have met contiguous memory and strides.</p>
 <p><strong>You will learn:</strong> elementwise operations and reductions (<code>sum</code>/<code>mean</code> over a chosen axis, with <code>keepdim</code>); matrix multiplication with <code>@</code>, worked by hand on tiny integers; the <strong>broadcasting</strong> rules that let differently-shaped tensors combine, shown number-by-number; and the difference between a <strong>view</strong> (a second label on the same memory) and a <strong>copy</strong>, including the classic <code>reshape</code>-after-<code>transpose</code> mistake.</p>
 <p><strong>Why this matters for ML:</strong> a forward pass through a language model is a chain of exactly these operations — add a bias (broadcast), multiply by a weight matrix (<code>@</code>), average over a dimension (reduction), reshape activations into heads (views). Reading model code means reading these ops and tracking how each one changes the shape. Broadcasting and view/copy confusion cause a large fraction of real bugs, so we make both explicit.</p>
 </div>
@@ -199,7 +199,7 @@ mt.contiguous().view(6)          # works: .contiguous() first copies into flat o
 # tensor([0, 3, 1, 4, 2, 5])
 ```
 
-`.contiguous()` allocates a fresh buffer with the numbers laid out in the current logical order, giving you a contiguous tensor that `view` will happily reshape. You will see the pattern `x.transpose(1, 2).contiguous().view(B, T, C)` in the multi-head attention code of [module 5](../module-05/lesson-03.md) for exactly this reason: after transposing the head axis back, the tensor is non-contiguous, so you make it contiguous before collapsing the heads back into the channel dimension.
+`.contiguous()` allocates a fresh buffer with the numbers laid out in the current logical order, giving you a contiguous tensor that `view` will happily reshape. You will see the pattern `x.transpose(1, 2).contiguous().view(B, T, C)` in the multi-head attention code of [module 5](lessons/module-05/lesson-03.md) for exactly this reason: after transposing the head axis back, the tensor is non-contiguous, so you make it contiguous before collapsing the heads back into the channel dimension.
 
 <div class="callout warn"><p>If a <code>.view(...)</code> raises "view size is not compatible with input tensor's size and stride", the input is non-contiguous — almost always because you just <code>transpose</code>d or <code>permute</code>d it. Either call <code>.contiguous()</code> before <code>.view(...)</code>, or use <code>.reshape(...)</code> which copies when needed. Do not reach for <code>.reshape</code> blindly everywhere, though: if you rely on a view aliasing the original and <code>reshape</code> quietly hands you a copy, your in-place mutation will silently fail to propagate.</p></div>
 
@@ -264,4 +264,4 @@ x_centered = x - x.mean(dim=-1, keepdim=True)
 
 You can now do the arithmetic, reductions, matmuls, broadcasts, and reshapes that make up a forward pass, and you know when two tensors secretly share memory. What we have not touched is how a network *learns*: how PyTorch automatically computes the derivative of a loss with respect to every parameter. That is **autograd**, and it is the reason PyTorch exists.
 
-Continue to [00.3 · Autograd: backward and grad](lesson-03.md).
+Continue to [00.3 · Autograd: backward and grad](lessons/module-00/lesson-03.md).

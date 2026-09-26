@@ -1,6 +1,6 @@
 # Paper reading curriculum
 
-This is the paper reading list for the LLM Research Engineer course: roughly 30 papers in dependency order, each introduced right after the module that gives you the machinery to read it. You never read a paper before you have the background — the ordering is the point. See the [Curriculum map](../curriculum/course-outline.md) for how the modules line up.
+This is the paper reading list for the LLM Research Engineer course: roughly 30 papers in dependency order, each introduced right after the module that gives you the machinery to read it. You never read a paper before you have the background — the ordering is the point. See the [Curriculum map](curriculum/course-outline.md) for how the modules line up.
 
 ## How to read a paper in this course
 

@@ -1,7 +1,7 @@
 # 16.1 · From PPO to GRPO
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-15/lesson-02.md">15.2 · Policy gradient, advantage, PPO</a> (the clipped surrogate objective, the ratio, the advantage, the KL penalty), the <a href="../module-15/lesson-01.md">15.1 · reward model</a> it builds on, and softmax / log-softmax from <a href="../module-05/lesson-02.md">the attention lessons</a>. You should be comfortable with a tensor of shape $(B, T)$ and with <code>log_softmax</code>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-15/lesson-02">15.2 · Policy gradient, advantage, PPO</a> (the clipped surrogate objective, the ratio, the advantage, the KL penalty), the <a href="#/lessons/module-15/lesson-01">15.1 · reward model</a> it builds on, and softmax / log-softmax from <a href="#/lessons/module-05/lesson-02">the attention lessons</a>. You should be comfortable with a tensor of shape $(B, T)$ and with <code>log_softmax</code>.</p>
 <p><strong>You will learn:</strong> why PPO's learned value network (the critic) is the expensive, fragile part of RLHF for LLMs; how <strong>GRPO</strong> (Group Relative Policy Optimization) deletes the critic and replaces its baseline with the statistics of a <em>group</em> of sampled completions; the group-relative advantage $\hat A_i = (r_i - \mathrm{mean}(r)) / \mathrm{std}(r)$ worked by hand on a group of four; and the GRPO clipped objective with a KL-to-reference term. You will map every piece onto the code in <code>llmre/rl/grpo.py</code>.</p>
 <p><strong>Why this matters for ML:</strong> SFT and preference tuning (Modules 14–15) make a model <em>helpful</em> — it answers in the right format and tone — but they teach it to <em>imitate</em>, and imitation does not teach a model to search for a correct multi-step chain of reasoning. To get reliable reasoning we reward the model for <em>getting the answer right</em> and let RL find the chains that do. GRPO is the algorithm that made that cheap enough to run at scale (DeepSeekMath, DeepSeek-R1), because it drops the second large network PPO needs.</p>
 </div>
@@ -18,7 +18,7 @@ So we return to reinforcement learning — but the specific RL algorithm matters
 
 ## 2. What PPO needs, and why the critic hurts
 
-Recall PPO from [15.2](../module-15/lesson-02.md). For each generated completion you compute an **advantage** $A$ — "how much better than expected was this?" — and push the policy toward high-advantage actions with the clipped surrogate objective. "Better than expected" needs a definition of *expected*: a **baseline**. PPO learns that baseline with a separate network, the **value function** or **critic** $V(s)$, and defines the advantage as roughly
+Recall PPO from [15.2](lessons/module-15/lesson-02.md). For each generated completion you compute an **advantage** $A$ — "how much better than expected was this?" — and push the policy toward high-advantage actions with the clipped surrogate objective. "Better than expected" needs a definition of *expected*: a **baseline**. PPO learns that baseline with a separate network, the **value function** or **critic** $V(s)$, and defines the advantage as roughly
 
 $$
 A = R - V(s),
@@ -59,7 +59,7 @@ $$
 \hat A_i = \frac{r_i - \mu}{\sigma + \varepsilon}.
 $$
 
-- $r_i$ — the scalar reward of completion $i$ (for us, 1 if the answer is correct, 0 if not; that is lesson [16.2](lesson-02.md)).
+- $r_i$ — the scalar reward of completion $i$ (for us, 1 if the answer is correct, 0 if not; that is lesson [16.2](lessons/module-16/lesson-02.md)).
 - $\mu$ — the group **mean**, the baseline. This is the fraction of the group that was correct.
 - $\sigma$ — the group **population** standard deviation (divide by $G$, not $G-1$). It rescales the advantage so groups of different difficulty contribute comparably.
 - $\varepsilon$ — a tiny constant (default `1e-8`) guarding the division when $\sigma = 0$.
@@ -131,7 +131,7 @@ The printed numbers match section 3.2 to four decimals. (The $+1$ entries are ac
 
 ## 4. The GRPO objective: PPO's clip, fed the group advantage
 
-The advantage is only the baseline half of the story. The *update* uses PPO's clipped surrogate — unchanged in form from [15.2](../module-15/lesson-02.md). Only the advantage fed into it is different (group-relative, not $R - V$).
+The advantage is only the baseline half of the story. The *update* uses PPO's clipped surrogate — unchanged in form from [15.2](lessons/module-15/lesson-02.md). Only the advantage fed into it is different (group-relative, not $R - V$).
 
 Let $\pi_\theta$ be the current policy and $\pi_{\text{old}}$ the policy that generated the group. For each completion define the **probability ratio**
 
@@ -152,7 +152,7 @@ J_i^{\text{GRPO}} = \min\big(\rho_i \hat A_i,\ \operatorname{clip}(\rho_i, 1-\ep
 $$
 
 - $\epsilon$ — clip half-width, typically $0.2$. The `min` caps how far one update can move the ratio outside $[1-\epsilon, 1+\epsilon]$, so a group can be reused for several gradient steps without the policy running away.
-- $\beta$ — KL penalty weight (the `kl_penalty` from [15.2](../module-15/lesson-02.md), reused). $\pi_{\text{ref}}$ is the frozen starting model.
+- $\beta$ — KL penalty weight (the `kl_penalty` from [15.2](lessons/module-15/lesson-02.md), reused). $\pi_{\text{ref}}$ is the frozen starting model.
 - On the **first on-policy step**, $\pi_\theta = \pi_{\text{old}}$, so $\rho_i = 1$ and $J_i$ collapses to $\hat A_i \cdot \log \pi_\theta(o_i \mid q)$ — the plain, group-baselined policy gradient. The clip only starts to matter once you take multiple steps on the same group and the ratio drifts from 1.
 
 ### 4.1 The objective in code
@@ -202,7 +202,7 @@ The trade you are making, stated honestly:
 - **Reasonable industry practice:** using a group size $G$ in the range of 8–64, and reusing each group for a small number of inner update steps (where the clip earns its keep).
 - **Inference / your mileage:** exact $G$, $\epsilon$, $\beta$, and whether to normalize by $\sigma$ at all are tuning choices; some later work drops or modifies the std-normalization. Treat the specific hyperparameters as things to sweep, not laws.
 
-<div class="callout paper"><p><strong>Read:</strong> DeepSeekMath (Shao et al. 2024) introduces GRPO — see paper #25 in the <a href="../../papers/index.md">paper curriculum</a>. Inspect the figure contrasting PPO (with critic) against GRPO (group baseline), and the GRPO objective; both map directly onto <code>llmre/rl/grpo.py</code>.</p></div>
+<div class="callout paper"><p><strong>Read:</strong> DeepSeekMath (Shao et al. 2024) introduces GRPO — see paper #25 in the <a href="#/papers/index">paper curriculum</a>. Inspect the figure contrasting PPO (with critic) against GRPO (group baseline), and the GRPO objective; both map directly onto <code>llmre/rl/grpo.py</code>.</p></div>
 
 ## Exercise
 
@@ -278,4 +278,4 @@ The clip caps the ratio at $1.2$, giving a clipped value $1.2 \times 2 = 2.4$; t
 
 You now have the GRPO machinery: a group-relative advantage with no critic, and PPO's clip to apply it. But we glossed over *where the reward comes from*. For reasoning we do not want a learned reward model that can be gamed — we want an automatic checker that knows the right answer. That is **RLVR**, and it is what makes the whole toy loop in `llmre/reasoning/rlvr.py` actually learn to add.
 
-Continue to [16.2 · RLVR & verifiable rewards](lesson-02.md).
+Continue to [16.2 · RLVR & verifiable rewards](lessons/module-16/lesson-02.md).

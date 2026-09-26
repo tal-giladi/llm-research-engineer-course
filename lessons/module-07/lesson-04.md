@@ -1,9 +1,9 @@
 # 07.4 · Throughput, FLOPs, MFU, memory accounting
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the training loop from <a href="lesson-01.md">07.1 · The training loop</a>; the parameter count and where compute/memory go from <a href="../module-06/lesson-02.md">06.2 · Init, forward pass, parameter count</a>; tokens per step from <a href="lesson-02.md">07.2</a>; AdamW's two moment buffers from <a href="../module-03/lesson-02.md">03.2</a>.</p>
+<p><strong>Prerequisites:</strong> the training loop from <a href="#/lessons/module-07/lesson-01">07.1 · The training loop</a>; the parameter count and where compute/memory go from <a href="#/lessons/module-06/lesson-02">06.2 · Init, forward pass, parameter count</a>; tokens per step from <a href="#/lessons/module-07/lesson-02">07.2</a>; AdamW's two moment buffers from <a href="#/lessons/module-03/lesson-02">03.2</a>.</p>
 <p><strong>You will learn:</strong> the <strong>6N rule</strong> — a forward+backward costs ≈ $6N$ FLOPs per token, and why the 6 splits as 2 (forward) + 4 (backward); how to turn seconds-per-step into <strong>tokens/second</strong> and into <strong>MFU</strong> (achieved FLOPs/s ÷ hardware peak); and how to account for training memory in four buckets — parameters, gradients, Adam optimizer state ($2\times$ params), and activations — with a worked estimate for GPT-2 small.</p>
-<p><strong>Why this matters for ML:</strong> these four numbers are how engineers reason about cost. FLOPs and tokens/sec tell you how long a run takes and what it will cost; MFU tells you whether you are wasting the hardware; the memory buckets tell you whether the model even fits, and are the reason the entire next stretch of the course exists — the memory hierarchy of <a href="../module-08/lesson-01.md">Module 8</a> and the scaling laws of <a href="../module-10/lesson-01.md">Module 10</a> both start here.</p>
+<p><strong>Why this matters for ML:</strong> these four numbers are how engineers reason about cost. FLOPs and tokens/sec tell you how long a run takes and what it will cost; MFU tells you whether you are wasting the hardware; the memory buckets tell you whether the model even fits, and are the reason the entire next stretch of the course exists — the memory hierarchy of <a href="#/lessons/module-08/lesson-01">Module 8</a> and the scaling laws of <a href="#/lessons/module-10/lesson-01">Module 10</a> both start here.</p>
 </div>
 
 ## 1. Intuition: two questions about every run
@@ -38,7 +38,7 @@ with $D$ the total number of training tokens. This is the "$6ND$" you will see i
 
 We take $N$ as the **non-embedding** parameter count, estimated by `non_embedding_params(cfg) = 12 · n_layer · n_embd²`. Per layer, attention's four $C\times C$ projections give $4C^2$ and the MLP's $C\to 4C$ and $4C\to C$ Linears give $8C^2$, totaling $12C^2$. Embeddings are excluded because they are a lookup (no matmul) and contribute negligible FLOPs.
 
-The 6N rule ignores the attention **score** computation ($QK^\top$ and the weighted sum over values), which costs ≈ $6\cdot n_{\text{layer}}\cdot T$ per token for context length $T$. That term is small when $T \ll 12C$ but grows with context — for very long sequences it stops being negligible, which is one reason long-context training needs the efficient attention of [Module 8](../module-08/lesson-01.md).
+The 6N rule ignores the attention **score** computation ($QK^\top$ and the weighted sum over values), which costs ≈ $6\cdot n_{\text{layer}}\cdot T$ per token for context length $T$. That term is small when $T \ll 12C$ but grows with context — for very long sequences it stops being negligible, which is one reason long-context training needs the efficient attention of [Module 8](lessons/module-08/lesson-01.md).
 
 ## 3. Numerical example: GPT-2 small
 
@@ -48,7 +48,7 @@ $$
 N = 12 \cdot 12 \cdot 768^2 = 84{,}934{,}656 \approx 84.9\text{M}.
 $$
 
-(The *total* parameter count including the tied embeddings is 124,439,808 ≈ 124.4M, from [06.2](../module-06/lesson-02.md); the true non-embedding count is 85,056,000, so the $12C^2$ estimate is within 0.15%.)
+(The *total* parameter count including the tied embeddings is 124,439,808 ≈ 124.4M, from [06.2](lessons/module-06/lesson-02.md); the true non-embedding count is 85,056,000, so the $12C^2$ estimate is within 0.15%.)
 
 FLOPs per token:
 
@@ -117,7 +117,7 @@ $$
 \end{aligned}
 $$
 
-So ~2 GB is spoken for before a single activation. Now activations, for a batch $B = 8$, context $T = 1024$: the logits tensor alone is $B\cdot T\cdot V = 8\cdot 1024\cdot 50257 \approx 4.1\times 10^8$ floats $\approx 1.65$ GB in fp32 — nearly as much as all the fixed state combined, and that is just one tensor. Add the per-layer residual/attention activations (each $(B,T,C)$ tensor is ~25 MB, and there are dozens across 12 layers) and activations become the dominant, batch-scaling cost. This is the concrete reason a 124M model does not train in a batch of 8×1024 on a small GPU without help — and the motivation for everything in [Module 8](../module-08/lesson-01.md).
+So ~2 GB is spoken for before a single activation. Now activations, for a batch $B = 8$, context $T = 1024$: the logits tensor alone is $B\cdot T\cdot V = 8\cdot 1024\cdot 50257 \approx 4.1\times 10^8$ floats $\approx 1.65$ GB in fp32 — nearly as much as all the fixed state combined, and that is just one tensor. Add the per-layer residual/attention activations (each $(B,T,C)$ tensor is ~25 MB, and there are dozens across 12 layers) and activations become the dominant, batch-scaling cost. This is the concrete reason a 124M model does not train in a batch of 8×1024 on a small GPU without help — and the motivation for everything in [Module 8](lessons/module-08/lesson-01.md).
 
 <div class="callout pt"><p>Two standard savings, previewed: <strong>mixed precision</strong> stores activations (and often a weight copy) in bf16/fp16 at 2 bytes, roughly halving the activation and parameter-copy memory; and <strong>activation checkpointing</strong> discards most activations during forward and recomputes them during backward, trading extra FLOPs for much lower activation memory. Both are Module 8. Neither changes the $4P$ fixed cost, which is attacked instead by optimizer-state sharding (ZeRO/FSDP, Module 9).</p></div>
 
@@ -191,4 +191,4 @@ Parameters, gradients, and optimizer state have exactly one number per parameter
 
 You now have the full pretraining picture: the loop (07.1), how to size and split batches (07.2), how to save and resume exactly (07.3), and how to reason about speed, cost, and memory (07.4). The memory accounting here — activations dominating, the $4P$ fixed floor — is precisely the pressure that the **memory hierarchy and efficient attention** of the next module relieve, and the $6ND$ compute rule is the foundation the **scaling laws** of Module 10 build on.
 
-Continue to [08.1 · The GPU memory hierarchy](../module-08/lesson-01.md), and see the scaling-law payoff in [10.1](../module-10/lesson-01.md).
+Continue to [08.1 · The GPU memory hierarchy](lessons/module-08/lesson-01.md), and see the scaling-law payoff in [10.1](lessons/module-10/lesson-01.md).

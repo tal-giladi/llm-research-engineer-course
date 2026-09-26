@@ -1,7 +1,7 @@
 # 08.1 · GPU architecture & memory hierarchy
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the memory buckets and throughput reasoning from <a href="../module-07/lesson-04.md">07.4 · Throughput, FLOPs, MFU, memory accounting</a>; the idea that the logits and activation tensors dominate memory (also 07.4); tensor shape/dtype/device intuition from <a href="../module-01/lesson-01.md">Module 1</a>.</p>
+<p><strong>Prerequisites:</strong> the memory buckets and throughput reasoning from <a href="#/lessons/module-07/lesson-04">07.4 · Throughput, FLOPs, MFU, memory accounting</a>; the idea that the logits and activation tensors dominate memory (also 07.4); tensor shape/dtype/device intuition from <a href="#/lessons/module-01/lesson-01">Module 1</a>.</p>
 <p><strong>You will learn:</strong> what a GPU actually is — streaming multiprocessors (SMs), threads grouped into <strong>warps</strong>, and the memory hierarchy that runs from tiny-but-instant registers, through on-chip <strong>SRAM / shared memory</strong>, an <strong>L2</strong> cache, out to large-but-slow <strong>HBM</strong>, and finally host RAM across the PCIe/NVLink bus. You will get rough, representative bandwidth and size numbers for an A100/H100-class GPU, and the one fact that governs everything in this module: <strong>arithmetic is cheap, moving data is expensive</strong>, so most LLM kernels are <em>memory-bound</em>.</p>
 <p><strong>Why this matters for ML:</strong> in 07.4 you learned to count FLOPs and to fear the activation memory bucket. But FLOPs alone do not predict runtime — a kernel that does few FLOPs can still be slow if it drags a lot of data across the chip. Understanding where data lives and how fast it moves is what lets you read a profiler trace (08.3), reason about the roofline (08.2), and understand <em>why</em> FlashAttention (08.4) is faster without doing less math. This is the mental model underneath every performance decision in the rest of the course.</p>
 </div>
@@ -147,4 +147,4 @@ It is memory-bound: it must read the whole tensor from HBM and write the whole r
 
 You now have the machine: SMs and warps for compute, and a memory hierarchy whose bottleneck is HBM bandwidth. You also have the one governing fact — arithmetic is far cheaper than data movement, so most non-matmul kernels are memory-bound. The next lesson turns "memory-bound vs compute-bound" from a slogan into a quantitative tool: **arithmetic intensity** and the **roofline model**, and the first optimization that falls out of them — **kernel fusion**.
 
-Continue to [08.2 · Arithmetic intensity, roofline, fusion](lesson-02.md).
+Continue to [08.2 · Arithmetic intensity, roofline, fusion](lessons/module-08/lesson-02.md).

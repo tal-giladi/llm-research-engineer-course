@@ -1,7 +1,7 @@
 # 04.2 · Byte-Pair Encoding from scratch
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">04.1 · Characters, bytes, Unicode, the vocabulary problem</a> — that UTF-8 turns any string into a sequence of byte ids in $0..255$, that this base alphabet of 256 symbols has no out-of-vocabulary problem, and that we want a <em>subword</em> unit sitting between long byte sequences and an unbounded word vocabulary.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-04/lesson-01">04.1 · Characters, bytes, Unicode, the vocabulary problem</a> — that UTF-8 turns any string into a sequence of byte ids in $0..255$, that this base alphabet of 256 symbols has no out-of-vocabulary problem, and that we want a <em>subword</em> unit sitting between long byte sequences and an unbounded word vocabulary.</p>
 <p><strong>You will learn:</strong> the Byte-Pair Encoding <strong>training</strong> algorithm — start from bytes, repeatedly count adjacent symbol pairs, merge the most frequent pair into a new symbol, record the merge, repeat — worked by hand on a tiny corpus with the first three merges shown explicitly. Then <strong>encode</strong> (apply the learned merges in order) and <strong>decode</strong> (expand ids back to bytes), why the two invert each other exactly, and how the token count shrinks as merges grow. Finally how GPT-2's byte-level BPE adds a regex pre-tokenization split.</p>
 <p><strong>Why this matters for ML:</strong> this is the actual tokenizer that sits in front of GPT-2 and, in the same family, most models since. You will implement it in <code>llmre.tokenizer.bpe</code> and reuse it for every training run in the course. Understanding it removes the last piece of "magic" between raw text and the integer tensors the model consumes, and it explains concrete production facts — why a token is "about ¾ of a word", why leading spaces matter, why numbers tokenize oddly.</p>
 </div>
@@ -26,7 +26,7 @@ We will train on a deliberately tiny corpus so we can do the arithmetic by hand 
 newest newest widest widest lowest
 ```
 
-Every character here is ASCII, so — from [04.1](lesson-01.md) — each character is a single byte equal to its code point (`e` is 101, `s` is 115, `t` is 116, the space is 32, and so on). That is a convenience for reading the example: the initial symbol sequence is just the characters, one byte each. (On non-ASCII text the exact same algorithm runs, but the starting symbols would be multi-byte, as `é → [195, 169]` was last lesson.)
+Every character here is ASCII, so — from [04.1](lessons/module-04/lesson-01.md) — each character is a single byte equal to its code point (`e` is 101, `s` is 115, `t` is 116, the space is 32, and so on). That is a convenience for reading the example: the initial symbol sequence is just the characters, one byte each. (On non-ASCII text the exact same algorithm runs, but the starting symbols would be multi-byte, as `é → [195, 169]` was last lesson.)
 
 The corpus is **34 bytes** long (32 letters plus 2 spaces). That 34 is our starting sequence length; watch it fall as we merge.
 
@@ -103,7 +103,7 @@ Decoding is the easy direction and needs no merge logic at all. Each id maps to 
 [110, 101, 119, 257] -> b"n" + b"e" + b"w" + b"est" = b"newest" -> "newest"
 ```
 
-Because `encode` only ever emits ids whose byte expansions concatenate back to the original UTF-8 stream, decoding inverts encoding **exactly**, for any string — the round-trip guarantee we demanded in [04.1](lesson-01.md). Even a never-seen emoji survives: no merge applies, so it stays as its raw bytes and decodes right back.
+Because `encode` only ever emits ids whose byte expansions concatenate back to the original UTF-8 stream, decoding inverts encoding **exactly**, for any string — the round-trip guarantee we demanded in [04.1](lessons/module-04/lesson-01.md). Even a never-seen emoji survives: no merge applies, so it stays as its raw bytes and decodes right back.
 
 <div class="callout key"><p><strong>Encode</strong> = bytes, then greedily replay learned merges in training order. <strong>Decode</strong> = map each id to its stored bytes, concatenate, UTF-8-decode. Decode needs only the id→bytes vocabulary; encode needs the ordered merge list. They compose to the identity on every string.</p></div>
 
@@ -163,7 +163,7 @@ def encode(self, text: str) -> list[int]:
 
 Two implementation notes worth internalizing. In `train`, `self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]]` concatenates the *byte strings* of the two children, so every id — byte or merged — always knows the exact bytes it stands for; that is what makes `decode` a pure lookup. In `encode`, `min(..., key=lambda p: self.merges.get(p, float("inf")))` gives any pair that was never learned an effectively infinite rank, so it is chosen only when nothing mergeable remains — at which point the guard `if pair not in self.merges` breaks the loop.
 
-These are plain-Python `int`s and `bytes`: no tensors, no dtype, no device. The output is a `list[int]`; only the data loader ([04.3](lesson-03.md)) turns lists of ids into a `torch.long` tensor for the model.
+These are plain-Python `int`s and `bytes`: no tensors, no dtype, no device. The output is a `list[int]`; only the data loader ([04.3](lessons/module-04/lesson-03.md)) turns lists of ids into a `torch.long` tensor for the model.
 
 <div class="callout pt"><p>This from-scratch loop is $O(n)$ work <em>per merge</em> because it re-scans the whole sequence each time — fine for the lessons' tiny corpora, far too slow for gigabytes. Production tokenizers (<code>tiktoken</code>, HuggingFace <code>tokenizers</code>) run the identical algorithm with a Rust core, incremental pair counts, and the regex split of section 8. Same math, engineered for throughput. We implement the mechanism first, exactly as the course rule demands, and only then reach for the fast library.</p></div>
 
@@ -180,7 +180,7 @@ The whole point of the merges is to trade a bigger vocabulary for shorter sequen
 | 5 | 261 | 16 |
 | 9 | 265 | 8 |
 
-Zero merges is exactly the byte-level tokenizer — 34 bytes, 34 tokens. Each merge fuses a frequent pair and shortens the encoding; by 9 merges this toy corpus is 8 tokens. On real text the curve flattens (later merges are rarer and save less), which is why real vocabularies stop in the tens of thousands rather than chasing ever-shorter sequences. This table is the concrete face of the $V$-vs-$T$ trade-off from [04.1](lesson-01.md): moving *down* the rows buys shorter sequences with a wider embedding table.
+Zero merges is exactly the byte-level tokenizer — 34 bytes, 34 tokens. Each merge fuses a frequent pair and shortens the encoding; by 9 merges this toy corpus is 8 tokens. On real text the curve flattens (later merges are rarer and save less), which is why real vocabularies stop in the tens of thousands rather than chasing ever-shorter sequences. This table is the concrete face of the $V$-vs-$T$ trade-off from [04.1](lessons/module-04/lesson-01.md): moving *down* the rows buys shorter sequences with a wider embedding table.
 
 ## 8. GPT-2's byte-level BPE and the regex pre-split
 
@@ -193,7 +193,7 @@ Two honest caveats to keep straight (per the course's frontier-lab honesty rule)
 - The GPT-2 regex, the byte-level BPE design, and the vocabulary size 50,257 are **publicly documented** (the GPT-2 paper and OpenAI's released code).
 - The precise merge list of any *proprietary* newer model is generally **not** documented; do not assume a specific vocabulary for GPT-4-class models. What is safe to say is that they use the same byte-level-BPE-with-regex-presplit *family*.
 
-<div class="callout paper"><p><strong>Research connection.</strong> Byte-level BPE with a regex pre-tokenization split is introduced in the GPT-2 paper, "Language Models are Unsupervised Multitask Learners" (Radford et al., 2019). Section 2.2 explains why they went byte-level: it guarantees no out-of-vocabulary inputs while keeping the vocabulary modest. See the reading guide in <a href="../../papers/index.md">the paper curriculum</a> (paper #1), which points at the exact figure and the LM objective this tokenizer feeds. The tokenizer is the front door to everything that paper does.</p></div>
+<div class="callout paper"><p><strong>Research connection.</strong> Byte-level BPE with a regex pre-tokenization split is introduced in the GPT-2 paper, "Language Models are Unsupervised Multitask Learners" (Radford et al., 2019). Section 2.2 explains why they went byte-level: it guarantees no out-of-vocabulary inputs while keeping the vocabulary modest. See the reading guide in <a href="#/papers/index">the paper curriculum</a> (paper #1), which points at the exact figure and the LM objective this tokenizer feeds. The tokenizer is the front door to everything that paper does.</p></div>
 
 ## 9. A unit test that pins the behavior down
 
@@ -215,7 +215,7 @@ def test_training_creates_merges_and_compresses():
     assert len(tok.encode(corpus)) < raw_len       # and shortened the corpus
 ```
 
-The first is the guarantee from [04.1](lesson-01.md): decode inverts encode for arbitrary Unicode, including emoji and scripts never seen in training, thanks to the byte fallback. The second checks that training does real work — it learns at least one merge and the encoded corpus is strictly shorter than its raw byte count. There is also `test_vocab_size_is_256_plus_num_merges`, asserting `tok.vocab_size == 256 + len(tok.merges)`. Run them from `code/` with `py -m pytest -q`.
+The first is the guarantee from [04.1](lessons/module-04/lesson-01.md): decode inverts encode for arbitrary Unicode, including emoji and scripts never seen in training, thanks to the byte fallback. The second checks that training does real work — it learns at least one merge and the encoded corpus is strictly shorter than its raw byte count. There is also `test_vocab_size_is_256_plus_num_merges`, asserting `tok.vocab_size == 256 + len(tok.merges)`. Run them from `code/` with `py -m pytest -q`.
 
 ## Exercise
 
@@ -321,4 +321,4 @@ Early merges capture the most frequent pairs (very common letters and words), so
 
 You can now train, encode, and decode a byte-level BPE tokenizer, and you understand the trade-off its vocabulary size controls. But a tokenizer alone does not feed a model. The next lesson wires it into the data pipeline: special tokens like `<|endoftext|>` to separate documents, packing a whole corpus into one long id stream, and cutting that stream into the `(x, y)` next-token training windows the model actually trains on.
 
-Continue to [04.3 · Special tokens, packing & data loading](lesson-03.md).
+Continue to [04.3 · Special tokens, packing & data loading](lessons/module-04/lesson-03.md).

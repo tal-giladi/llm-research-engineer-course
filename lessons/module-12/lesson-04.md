@@ -1,7 +1,7 @@
 # 12.4 · Mixture of Experts (DeepSeek-style)
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-05/lesson-04.md">05.4 · MLP, residual, LayerNorm, the block</a> (the dense feed-forward network a MoE replaces); <a href="../module-09/lesson-03.md">09.3 · Tensor / pipeline / expert parallelism</a> (how experts are sharded across devices); SwiGLU from <a href="lesson-02.md">12.2</a> (each expert is a small FFN); softmax from <a href="../module-01/lesson-03.md">01.3</a>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-05/lesson-04">05.4 · MLP, residual, LayerNorm, the block</a> (the dense feed-forward network a MoE replaces); <a href="#/lessons/module-09/lesson-03">09.3 · Tensor / pipeline / expert parallelism</a> (how experts are sharded across devices); SwiGLU from <a href="#/lessons/module-12/lesson-02">12.2</a> (each expert is a small FFN); softmax from <a href="#/lessons/module-01/lesson-03">01.3</a>.</p>
 <p><strong>You will learn:</strong> how a Mixture of Experts replaces the one dense FFN with $N$ experts and a router that sends each token to its top-$k$ experts, decoupling parameter count from per-token compute; why routers collapse without <strong>load balancing</strong> and how the auxiliary loss (and DeepSeek-V3's aux-loss-free bias trick) prevent it; <strong>shared experts</strong>; a routing example worked by hand; and a small MoE layer implemented from scratch.</p>
 <p><strong>Why this matters for ML:</strong> MoE is how frontier models get very large parameter counts at manageable inference cost — DeepSeek-V3 has 671B parameters but activates only ~37B per token. Mixtral, DeepSeek, Qwen-MoE, and others are all sparse. Understanding routing and load balancing is core to modern architecture.</p>
 </div>
@@ -189,7 +189,7 @@ They forgot the **auxiliary load-balance loss** (or an equivalent balancing mech
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Switch Transformers</strong> (Fedus et al. 2021) introduced top-1 MoE routing with the load-balance aux loss; <strong>DeepSeekMoE</strong> (Dai et al. 2024) added fine-grained and shared experts; <strong>DeepSeek-V3</strong> (2024) added aux-loss-free bias balancing and scaled to 671B params / ~37B active. All three are in <a href="../../papers/index.md">the paper curriculum</a> (#12, #13, #14). Read them in that order — each refines the last.</p></div>
+<div class="callout paper"><p><strong>Switch Transformers</strong> (Fedus et al. 2021) introduced top-1 MoE routing with the load-balance aux loss; <strong>DeepSeekMoE</strong> (Dai et al. 2024) added fine-grained and shared experts; <strong>DeepSeek-V3</strong> (2024) added aux-loss-free bias balancing and scaled to 671B params / ~37B active. All three are in <a href="#/papers/index">the paper curriculum</a> (#12, #13, #14). Read them in that order — each refines the last.</p></div>
 
 ## Check yourself
 
@@ -225,4 +225,4 @@ Shared experts are always active for every token (not routed). They capture know
 
 ## Next
 
-You now have every piece that separates a GPT-2 from a LLaMA/DeepSeek-style model: RoPE positions, RMSNorm, SwiGLU, GQA, and MoE. Module 13 turns to measuring these models. Continue to [13.1 · Loss, perplexity, zero-/few-shot](../module-13/lesson-01.md).
+You now have every piece that separates a GPT-2 from a LLaMA/DeepSeek-style model: RoPE positions, RMSNorm, SwiGLU, GQA, and MoE. Module 13 turns to measuring these models. Continue to [13.1 · Loss, perplexity, zero-/few-shot](lessons/module-13/lesson-01.md).

@@ -1,7 +1,7 @@
 # 06.3 · Generation: greedy, temperature, top-k, top-p
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the <code>forward(idx)</code> pass and logits <code>(B, T, V)</code> from <a href="lesson-01.md">06.1 · Assembling GPT-2</a>; the categorical distribution and sampling with <code>torch.multinomial</code> from <a href="../module-01/lesson-01.md">01.1 · Random variables, expectation, variance</a>; softmax from <a href="../module-01/lesson-04.md">01.4</a>.</p>
+<p><strong>Prerequisites:</strong> the <code>forward(idx)</code> pass and logits <code>(B, T, V)</code> from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the categorical distribution and sampling with <code>torch.multinomial</code> from <a href="#/lessons/module-01/lesson-01">01.1 · Random variables, expectation, variance</a>; softmax from <a href="#/lessons/module-01/lesson-04">01.4</a>.</p>
 <p><strong>You will learn:</strong> the <strong>autoregressive loop</strong> — predict one token from the last position, append it, repeat, cropping the context to <code>block_size</code>; and the four decoding strategies that turn a logit vector into a next token: <strong>greedy</strong> (argmax), <strong>temperature</strong> scaling (sharpen or flatten), <strong>top-k</strong> (keep the $k$ best), and <strong>top-p / nucleus</strong> (keep the smallest set whose probability mass reaches $p$). Each is worked by hand on the same 5-logit vector and verified in Python.</p>
 <p><strong>Why this matters for ML:</strong> a trained model only ever outputs a distribution; <em>decoding</em> is the separate, tunable step that converts that distribution into actual text. The same model can sound robotic or unhinged purely from the decoding knobs. Every serving stack (and the sampling params in every chat API) is exactly these four operations, so this is the code you will reach for constantly.</p>
 </div>
@@ -170,7 +170,7 @@ The trick in the mask is `(csum - sp) < p`: `csum - sp` is the cumulative mass *
 
 <div class="callout key"><p>All four strategies are just ways to sculpt the logit vector before <code>multinomial</code>. <strong>Greedy</strong>: take the max. <strong>Temperature</strong>: divide logits by $T$ to sharpen ($T<1$) or flatten ($T>1$). <strong>Top-k</strong>: keep the $k$ best, mask the rest to $-\infty$. <strong>Top-p</strong>: keep the smallest set reaching cumulative mass $p$. Temperature reshapes; top-k and top-p truncate; they are routinely combined.</p></div>
 
-<div class="callout paper"><p>Top-p / nucleus sampling comes from "The Curious Case of Neural Text Degeneration" (Holtzman et al. 2020), which showed that maximization-based decoding (greedy/beam) produces bland, repetitive text and that truncating to the nucleus fixes it. See the reading guides in <a href="../../papers/index.md">the paper index</a>.</p></div>
+<div class="callout paper"><p>Top-p / nucleus sampling comes from "The Curious Case of Neural Text Degeneration" (Holtzman et al. 2020), which showed that maximization-based decoding (greedy/beam) produces bland, repetitive text and that truncating to the nucleus fixes it. See the reading guides in <a href="#/papers/index">the paper index</a>.</p></div>
 
 ## 6. Under the hood: what generation costs
 
@@ -226,6 +226,6 @@ Top-p keeps the smallest set whose cumulative probability reaches $p$, and how m
 
 ## Next
 
-You now have the complete GPT-2: assembled ([06.1](lesson-01.md)), initialized and sized ([06.2](lesson-02.md)), and able to generate text with four decoding strategies. What it *cannot* yet do is learn — its weights are still random. Module 7 builds the training loop: the data batches, the AdamW optimizer you wrote in Module 3, the learning-rate schedule, gradient clipping, and the metrics (loss curves, MFU) that tell you a run is healthy — and watches the init loss you predicted here fall from $\ln V$ toward something that produces real language.
+You now have the complete GPT-2: assembled ([06.1](lessons/module-06/lesson-01.md)), initialized and sized ([06.2](lessons/module-06/lesson-02.md)), and able to generate text with four decoding strategies. What it *cannot* yet do is learn — its weights are still random. Module 7 builds the training loop: the data batches, the AdamW optimizer you wrote in Module 3, the learning-rate schedule, gradient clipping, and the metrics (loss curves, MFU) that tell you a run is healthy — and watches the init loss you predicted here fall from $\ln V$ toward something that produces real language.
 
-Continue to [Module 7 · Training a language model](../module-07/lesson-01.md).
+Continue to [Module 7 · Training a language model](lessons/module-07/lesson-01.md).

@@ -1,7 +1,7 @@
 # 08.2 · Arithmetic intensity, roofline, fusion
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the memory hierarchy and the "arithmetic is cheap, data movement is expensive" fact from <a href="lesson-01.md">08.1 · GPU architecture & memory hierarchy</a> (especially HBM bandwidth vs peak FLOP/s); FLOP counting and the $6N$ rule from <a href="../module-07/lesson-04.md">07.4</a>; the matmul FLOP cost $2n^2k$ used there.</p>
+<p><strong>Prerequisites:</strong> the memory hierarchy and the "arithmetic is cheap, data movement is expensive" fact from <a href="#/lessons/module-08/lesson-01">08.1 · GPU architecture & memory hierarchy</a> (especially HBM bandwidth vs peak FLOP/s); FLOP counting and the $6N$ rule from <a href="#/lessons/module-07/lesson-04">07.4</a>; the matmul FLOP cost $2n^2k$ used there.</p>
 <p><strong>You will learn:</strong> <strong>arithmetic intensity</strong> (AI) — the ratio FLOPs ÷ bytes moved — as the single number that predicts whether a kernel is memory-bound or compute-bound; the <strong>roofline model</strong>, which bounds achievable performance by $\min(\text{peak FLOP/s},\ \text{bandwidth} \times \text{AI})$ and whose <strong>ridge point</strong> separates the two regimes; a worked AI for an elementwise add (very low → memory-bound) versus a large matmul (high → compute-bound); and <strong>kernel fusion</strong> — combining elementwise ops so intermediates never round-trip to HBM, which is precisely the idea FlashAttention takes to its limit.</p>
 <p><strong>Why this matters for ML:</strong> the roofline is the back-of-envelope tool engineers use to decide whether an optimization can possibly help. If a kernel is memory-bound, buying more FLOP/s (a faster GPU, lower-precision matmul) does nothing — you must move fewer bytes. If it is compute-bound, the opposite. Getting this diagnosis right is the difference between an optimization that doubles throughput and one that changes nothing. It is also the exact argument for why FlashAttention (08.4) wins.</p>
 </div>
@@ -201,4 +201,4 @@ Fusion keeps intermediate tensors in registers/SRAM instead of writing them to H
 
 You can now diagnose any kernel with one ratio and know which optimizations can possibly help — the roofline turns "the GPU feels slow" into "this kernel is at 4 FLOPs/byte, memory-bound, fuse it or shrink its dtype." The next lesson puts this into practice: the **PyTorch profiler** to *find* the hot, memory-bound kernels in a real training step, and **mixed precision** (bf16/fp16) — the single most effective way to halve the bytes every kernel moves.
 
-Continue to [08.3 · Profiling & mixed precision](lesson-03.md).
+Continue to [08.3 · Profiling & mixed precision](lessons/module-08/lesson-03.md).

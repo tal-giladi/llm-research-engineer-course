@@ -61,7 +61,7 @@ Gradient descent ─▶ SGD ─▶ Momentum ─▶ Adam ─▶ AdamW ─▶ sche
 
 Papers are introduced exactly where the machinery to understand them exists. The full ordered
 list with verified links, prerequisites, and "read this / skip that" guides is on the
-[**Paper curriculum**](../papers/index.md) page. Rough placement:
+[**Paper curriculum**](papers/index.md) page. Rough placement:
 
 - After **6 (GPT-2)**: GPT-2, GPT-3.
 - After **7–10 (systems/scaling)**: Scaling Laws, Chinchilla, Megatron-LM, ZeRO.
@@ -77,4 +77,4 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 A module is complete only when you can **explain** it, **derive** the key mathematics,
 **implement** it, **test** it, **benchmark** it, **debug** it, **relate** it to a paper, and
 say **why** modern LLM systems use it. Track your own level on the
-[Readiness matrix](readiness-matrix.md).
+[Readiness matrix](curriculum/readiness-matrix.md).

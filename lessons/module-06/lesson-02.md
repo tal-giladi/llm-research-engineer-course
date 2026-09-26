@@ -1,7 +1,7 @@
 # 06.2 · Init, forward pass, parameter count
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the assembled model from <a href="lesson-01.md">06.1 · Assembling GPT-2</a>; the per-block "$\approx 12C^2$ parameters" estimate from <a href="../module-05/lesson-04.md">05.4</a>; cross-entropy and its value on a uniform prediction from <a href="../module-01/lesson-04.md">01.4</a>.</p>
+<p><strong>Prerequisites:</strong> the assembled model from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the per-block "$\approx 12C^2$ parameters" estimate from <a href="#/lessons/module-05/lesson-04">05.4</a>; cross-entropy and its value on a uniform prediction from <a href="#/lessons/module-01/lesson-04">01.4</a>.</p>
 <p><strong>You will learn:</strong> GPT-2's weight <strong>initialization</strong> — why every weight starts as $\mathcal{N}(0, 0.02^2)$, and the special <strong>scaled residual init</strong> that shrinks the residual-writing projections by $1/\sqrt{2\,n_{\text{layer}}}$ so the residual stream's variance does not blow up with depth; how to <strong>count the parameters</strong> of GPT-2 small from a closed-form formula and verify it against <code>sum(p.numel())</code>, arriving at exactly $124{,}439{,}808$; and why an <em>untrained</em> model's loss is $\approx \ln(V)$, verified numerically.</p>
 <p><strong>Why this matters for ML:</strong> "the loss started at 10.8 and dropped" is the first sanity check of every training run — if step 0 is not near $\ln(V)$, your model or data pipeline is broken before you have wasted a single GPU-hour. And knowing the parameter count cold lets you predict memory, FLOPs, and cost without running anything.</p>
 </div>
@@ -74,7 +74,7 @@ $$
 
 ### One block
 
-From [05.4](../module-05/lesson-04.md), the weight matrices in a block are:
+From [05.4](lessons/module-05/lesson-04.md), the weight matrices in a block are:
 
 | tensor | shape | params |
 |---|---|---|
@@ -131,7 +131,7 @@ This prints exactly `124439808`, matching the formula. `model.parameters()` de-d
 
 ### Why
 
-At initialization the model knows nothing. Its logits at each position are near-zero, tiny random numbers, so after softmax the predicted distribution over the $V$ tokens is almost **uniform**: each token gets probability $\approx 1/V$. Cross-entropy against the true token $t$ is $-\log q(t)$ (from [01.4](../module-01/lesson-04.md)), and with $q(t) \approx 1/V$:
+At initialization the model knows nothing. Its logits at each position are near-zero, tiny random numbers, so after softmax the predicted distribution over the $V$ tokens is almost **uniform**: each token gets probability $\approx 1/V$. Cross-entropy against the true token $t$ is $-\log q(t)$ (from [01.4](lessons/module-01/lesson-04.md)), and with $q(t) \approx 1/V$:
 
 $$
 \mathcal{L}_{\text{init}} \approx -\log\!\frac{1}{V} = \log V.
@@ -221,4 +221,4 @@ Weight tying makes them the *same* Parameter object, and `model.parameters()` de
 
 The model is assembled, initialized, and its size understood. The last thing to do with a language model is the thing it was built for: produce text. The next lesson implements the autoregressive generation loop and the four decoding strategies — greedy, temperature, top-k, and top-p — each worked out on a tiny logit vector by hand.
 
-Continue to [06.3 · Generation: greedy, temperature, top-k, top-p](lesson-03.md).
+Continue to [06.3 · Generation: greedy, temperature, top-k, top-p](lessons/module-06/lesson-03.md).

@@ -1,7 +1,7 @@
 # 02.2 · Jacobians, VJPs, computational graphs
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">02.1 · Derivatives, partials, chain rule, gradients</a> — the scalar chain rule and the gradient as the vector of partials. Matrix–vector multiplication and transpose (from <a href="../module-00/lesson-01.md">Module 0</a>'s tensor work) are used freely.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-02/lesson-01">02.1 · Derivatives, partials, chain rule, gradients</a> — the scalar chain rule and the gradient as the vector of partials. Matrix–vector multiplication and transpose (from <a href="#/lessons/module-00/lesson-01">Module 0</a>'s tensor work) are used freely.</p>
 <p><strong>You will learn:</strong> the <strong>Jacobian</strong> of a vector→vector function (the matrix of all partial derivatives, and how to read its shape as (outputs, inputs)); the <strong>vector–Jacobian product</strong> (VJP) $\mathbf{v}^\top J$ that reverse-mode autodiff actually computes, and <em>why</em> it never forms the full Jacobian; and the <strong>computational graph</strong> as nodes (operations) and edges (tensors) that PyTorch records and then walks backward. A small VJP is worked by hand and checked in PyTorch.</p>
 <p><strong>Why this matters for ML:</strong> a neural network is a chain of vector→vector functions, and its loss is a single scalar at the end. Backpropagation is the chain rule applied to that chain — but done as a sequence of vector–Jacobian products, right to left, so it never has to build or store a giant Jacobian matrix. Understanding VJPs is understanding why <code>loss.backward()</code> is cheap enough to train billion-parameter models, and why the loss must be a scalar.</p>
 </div>
@@ -124,7 +124,7 @@ For the section 6 example, the forward graph for $L = a_1^2 + a_1a_2 + a_2^2$ lo
      └─► [square] ─► t3 ─────────────────┘
 ```
 
-Reverse mode starts at $L$ with gradient $1$, and each op node contributes its VJP to its inputs' gradients as the sweep moves left. Because $a_1$ feeds *three* ops, its gradient is the **sum** of the contributions arriving along all three edges ($2a_1$ from the square, $a_2$ from the product, $0$ from the third) — this fan-in summation is exactly why PyTorch *accumulates* into `.grad` rather than overwriting, and why you must zero gradients between steps (you saw this in [00.3](../module-00/lesson-03.md)).
+Reverse mode starts at $L$ with gradient $1$, and each op node contributes its VJP to its inputs' gradients as the sweep moves left. Because $a_1$ feeds *three* ops, its gradient is the **sum** of the contributions arriving along all three edges ($2a_1$ from the square, $a_2$ from the product, $0$ from the third) — this fan-in summation is exactly why PyTorch *accumulates* into `.grad` rather than overwriting, and why you must zero gradients between steps (you saw this in [00.3](lessons/module-00/lesson-03.md)).
 
 ## 8. From-scratch PyTorch: computing a VJP directly
 
@@ -253,4 +253,4 @@ Because $a_1$ feeds three operations (its square, the product, and — trivially
 
 You now know the shape of the object autodiff differentiates (a chain of Jacobians capped by a scalar) and the trick that makes it cheap (push a vector backward via VJPs, never form a Jacobian). Next we apply this to the exact computation at the output of every language model — linear layer, softmax, cross-entropy — and derive by hand the single most important gradient in the course: $\frac{\partial L}{\partial \mathbf{z}} = \mathbf{p} - \text{onehot}(\text{target})$.
 
-Continue to [02.3 · Backprop through linear + softmax + cross-entropy by hand](lesson-03.md).
+Continue to [02.3 · Backprop through linear + softmax + cross-entropy by hand](lessons/module-02/lesson-03.md).

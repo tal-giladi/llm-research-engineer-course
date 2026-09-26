@@ -1,7 +1,7 @@
 # 06.1 · Assembling GPT-2
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the pre-norm <code>Block</code> from <a href="../module-05/lesson-04.md">05.4 · MLP, residual, LayerNorm, the block</a>; token and positional embeddings from <a href="../module-05/lesson-01.md">05.1 · Embeddings &amp; positional encoding</a>; the language-modeling cross-entropy objective from <a href="../module-01/lesson-04.md">01.4 · The language-modeling objective &amp; perplexity</a>.</p>
+<p><strong>Prerequisites:</strong> the pre-norm <code>Block</code> from <a href="#/lessons/module-05/lesson-04">05.4 · MLP, residual, LayerNorm, the block</a>; token and positional embeddings from <a href="#/lessons/module-05/lesson-01">05.1 · Embeddings &amp; positional encoding</a>; the language-modeling cross-entropy objective from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling objective &amp; perplexity</a>.</p>
 <p><strong>You will learn:</strong> how the pieces you built in Module 5 snap together into the complete GPT-2 model — the two embedding tables (<code>wte</code>, <code>wpe</code>), the stack of <code>n_layer</code> blocks, the final <code>ln_f</code>, and the language-model head <code>lm_head</code>; the <strong>weight-tying</strong> trick that makes <code>wte</code> and <code>lm_head</code> the same tensor and why it makes sense; and the full <code>forward(idx, targets)</code> pass traced shape-by-shape from token ids <code>(B, T)</code> to logits <code>(B, T, V)</code> and a scalar loss.</p>
 <p><strong>Why this matters for ML:</strong> this is the moment the abstract "transformer" becomes a concrete object you can instantiate, count the parameters of, and call. Every model you train, fine-tune, or serve for the rest of the course is this class or a small variation of it. There is no more machinery hiding — a GPT really is an embedding, a stack of identical blocks, a norm, and a linear head.</p>
 </div>
@@ -18,7 +18,7 @@ positions ──▶ embed each position        (wpe)          ──┴─▶ ad
           ──▶ linear to vocabulary scores (lm_head)  ──▶ logits
 ```
 
-The stack of blocks is where all the thinking happens. The two ends are pure translation: the **front end** turns integer token ids into vectors the blocks can work with, and the **back end** turns the blocks' output vectors back into a score for every possible next token. That is the entire architecture. This lesson builds the front end, the back end, and the `forward` that runs them; [06.2](lesson-02.md) covers initialization and the parameter count; [06.3](lesson-03.md) covers using a trained model to generate text.
+The stack of blocks is where all the thinking happens. The two ends are pure translation: the **front end** turns integer token ids into vectors the blocks can work with, and the **back end** turns the blocks' output vectors back into a score for every possible next token. That is the entire architecture. This lesson builds the front end, the back end, and the `forward` that runs them; [06.2](lessons/module-06/lesson-02.md) covers initialization and the parameter count; [06.3](lessons/module-06/lesson-03.md) covers using a trained model to generate text.
 
 ## 2. The front end: two embedding tables
 
@@ -58,7 +58,7 @@ After the last block, `x` is still $(B, T, C)$: one refined vector per position.
 1. **`ln_f`** — a final LayerNorm over the $C$ channels. Because the blocks are pre-norm (Module 5.4), nothing normalizes the residual stream on its way out; `ln_f` gives the head a clean, unit-scale input.
 2. **`lm_head`** — a linear map $C \to V$ with **no bias**: `logits = x @ W_lm^T`. Row $i$ of $W_{\text{lm}}$ (shape $(V, C)$) is the "detector" for token $i$; the dot product of a position's vector with that row is how strongly the model thinks token $i$ comes next.
 
-The result is `logits` of shape $(B, T, V)$: for every position in every sequence, a raw score per vocabulary token. These are exactly the logits that [01.4](../module-01/lesson-04.md) fed into softmax and cross-entropy.
+The result is `logits` of shape $(B, T, V)$: for every position in every sequence, a raw score per vocabulary token. These are exactly the logits that [01.4](lessons/module-01/lesson-04.md) fed into softmax and cross-entropy.
 
 ## 4. Weight tying: `wte` and `lm_head` are the same tensor
 
@@ -76,7 +76,7 @@ Think about what each does. The embedding takes a token id and produces its $C$-
 
 ### What it buys
 
-- **Parameters.** In GPT-2 small the table is $50257 \times 768 \approx 38.6\text{M}$ parameters. Untied, we would pay for it twice; tied, we pay once — saving ~40M parameters (roughly a *third* of the model). We verify the full count in [06.2](lesson-02.md).
+- **Parameters.** In GPT-2 small the table is $50257 \times 768 \approx 38.6\text{M}$ parameters. Untied, we would pay for it twice; tied, we pay once — saving ~40M parameters (roughly a *third* of the model). We verify the full count in [06.2](lessons/module-06/lesson-02.md).
 - **Quality.** Tying was shown to improve language-model perplexity (Press & Wolf 2016; used in GPT-2). Intuitively, the input and output representations of a token stay consistent, and the rarer tokens' output vectors get gradient signal from their (more frequent) use as inputs too.
 
 <div class="callout warn"><p>Tying is an <em>aliasing</em> of two attributes to one tensor, not a copy. If you later reload weights or reset one of them, do the tie <em>again</em> afterward — assigning a fresh tensor to <code>lm_head.weight</code> silently breaks the link, and you will train two separate $38.6$M tables without noticing until your parameter count jumps.</p></div>
@@ -144,7 +144,7 @@ $$
 \mathcal{L} = \frac{1}{BT}\sum_{b,t} -\log \operatorname{softmax}(\text{logits}_{b,t})[\,\text{targets}_{b,t}\,].
 $$
 
-This is precisely the mean next-token cross-entropy of [01.4](../module-01/lesson-04.md), now computed for every position of every sequence at once. `ignore_index=-1` lets us mark padding positions with a target of $-1$ so they contribute nothing to the loss.
+This is precisely the mean next-token cross-entropy of [01.4](lessons/module-01/lesson-04.md), now computed for every position of every sequence at once. `ignore_index=-1` lets us mark padding positions with a target of $-1$ so they contribute nothing to the loss.
 
 <div class="callout pt"><p><code>logits.view(-1, logits.size(-1))</code> collapses <code>(B, T, V)</code> to <code>(B*T, V)</code> without copying data — <code>view</code> just reinterprets the strides. <code>F.cross_entropy</code> then fuses <code>log_softmax</code> and the negative-log-likelihood gather into one numerically stable kernel; it never materializes the softmax probabilities as a separate tensor.</p></div>
 
@@ -223,4 +223,4 @@ The blocks are *pre-norm*: each LayerNorm sits on the branch feeding a sub-layer
 
 You can now assemble and run a GPT: embed, stack, norm, project, and (with targets) get a loss. What we skipped is *how the weights start*: GPT-2 uses a specific initialization — including a subtle per-layer scaling of the residual projections — and it is worth being able to derive the parameter count and predict the loss of an untrained model. That is the next lesson.
 
-Continue to [06.2 · Init, forward pass, parameter count](lesson-02.md).
+Continue to [06.2 · Init, forward pass, parameter count](lessons/module-06/lesson-02.md).

@@ -1,7 +1,7 @@
 # 17.2 · Process reward & DeepSeekMath
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> chain-of-thought and self-consistency from <a href="lesson-01.md">17.1 · CoT, self-consistency, STaR</a>; reinforcement learning with verifiable rewards (RLVR) from <a href="../module-16/lesson-02.md">16.2 · RLVR</a>; the Bradley-Terry reward model and PPO from <a href="../module-15/lesson-01.md">15.1 · RLHF</a>.</p>
+<p><strong>Prerequisites:</strong> chain-of-thought and self-consistency from <a href="#/lessons/module-17/lesson-01">17.1 · CoT, self-consistency, STaR</a>; reinforcement learning with verifiable rewards (RLVR) from <a href="#/lessons/module-16/lesson-02">16.2 · RLVR</a>; the Bradley-Terry reward model and PPO from <a href="#/lessons/module-15/lesson-01">15.1 · RLHF</a>.</p>
 <p><strong>You will learn:</strong> the difference between an <em>outcome</em> reward (score only the final answer, ORM) and a <em>process</em> reward (score every reasoning step, PRM); why "Let's Verify Step by Step" found PRMs win on hard math and what they cost; how a PRM reranks best-of-$N$ samples — worked by hand; and how DeepSeekMath's GRPO recipe applies a <em>verifiable</em> reward to math with no learned reward model and no value network.</p>
 <p><strong>Why this matters for ML:</strong> the choice of reward granularity is the central design decision of a reasoning trainer. ORM is cheap and scalable but noisy on long chains; PRM is precise but expensive to label. DeepSeekMath's answer: skip the learned reward model entirely when the answer is checkable, and use GRPO — the exact engine DeepSeek-R1 (17.3) runs at scale.</p>
 </div>
@@ -119,7 +119,7 @@ The two correct solutions get advantage $+1$ (the update raises their probabilit
 
 Putting it together, DeepSeekMath's reasoning-RL loop is: start from a math-pretrained base model; for each problem sample a group of chain-of-thought solutions; score each with the **rule-based verifiable reward** (answer correct? format valid?); compute group-relative advantages; take a GRPO clipped update with a KL penalty to the reference policy; repeat. No ORM, no PRM, no critic — just a checker and a group baseline. It is cheap enough to run at scale, which is precisely why DeepSeek-R1 builds directly on it.
 
-<div class="callout paper"><p><strong>Research connection.</strong> This lesson rests on two papers: <em>Let's Verify Step by Step</em> (Lightman et al. 2023, the ORM-vs-PRM study and PRM800K) and <em>DeepSeekMath</em> (Shao et al. 2024, which introduces GRPO). See entries 24 and 25 in <a href="../../papers/index.md">the paper curriculum</a>; both are direct prerequisites for the DeepSeek-R1 reading (entry 26) in the next lesson.</p></div>
+<div class="callout paper"><p><strong>Research connection.</strong> This lesson rests on two papers: <em>Let's Verify Step by Step</em> (Lightman et al. 2023, the ORM-vs-PRM study and PRM800K) and <em>DeepSeekMath</em> (Shao et al. 2024, which introduces GRPO). See entries 24 and 25 in <a href="#/papers/index">the paper curriculum</a>; both are direct prerequisites for the DeepSeek-R1 reading (entry 26) in the next lesson.</p></div>
 
 ## Common mistakes
 
@@ -170,4 +170,4 @@ Because math answers are *machine-checkable*: a deterministic program can parse 
 
 You now have the two ingredients DeepSeek-R1 runs at scale: a verifiable reward (no reward model needed) and GRPO (no critic needed). The final lesson puts them together into the full R1 pipeline — pure-RL R1-Zero and the cold-start-plus-RL R1 — reconstructs the conceptual stages, and ties each one to the runnable `mini_r1` you can execute on a laptop.
 
-Continue to [17.3 · DeepSeek-R1 case study](lesson-03.md).
+Continue to [17.3 · DeepSeek-R1 case study](lessons/module-17/lesson-03.md).

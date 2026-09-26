@@ -1,7 +1,7 @@
 # 18.2 · The observation/action loop
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> tool schemas, the tool registry, and <code>parse_tool_call</code> from <a href="lesson-01.md">18.1 · Tool schemas & function calling</a>. The chat/role message structure from <a href="../module-14/lesson-01.md">14.1 · Instruction data & chat templates</a>.</p>
+<p><strong>Prerequisites:</strong> tool schemas, the tool registry, and <code>parse_tool_call</code> from <a href="#/lessons/module-18/lesson-01">18.1 · Tool schemas & function calling</a>. The chat/role message structure from <a href="#/lessons/module-14/lesson-01">14.1 · Instruction data & chat templates</a>.</p>
 <p><strong>You will learn:</strong> the core <strong>observation/action loop</strong> — model proposes an action (a tool call) → runtime executes it → returns an <strong>observation</strong> → the model continues with that observation in context → repeat until a final answer. How to handle <strong>tool errors and retries</strong> by catching failures and feeding them back so the model can correct. How to chain multiple tool calls. You will read a deterministic driver loop with a scripted policy that calls the calculator, then answers.</p>
 <p><strong>Why this matters for ML:</strong> a single tool call (18.1) rarely finishes a task. Real work is a sequence: look something up, compute on the result, check it, answer. The loop that alternates model thinking and tool acting — feeding each observation back into context — is the pattern behind every LLM agent. Getting it simple, deterministic, and error-tolerant here is what makes the SWE-agent of Module 19 tractable.</p>
 </div>
@@ -197,7 +197,7 @@ The `trace` would then have length 2, one entry per tool call, in order. The con
 
 In our tests the policy is a scripted Python function so runs are deterministic. In a real system, `policy(context)` does this:
 
-1. Render the `context` message list into a prompt string using the **chat template** from [14.1](../module-14/lesson-01.md) — the tool schemas go in the system message, and each `tool` observation is formatted as its own turn.
+1. Render the `context` message list into a prompt string using the **chat template** from [14.1](lessons/module-14/lesson-01.md) — the tool schemas go in the system message, and each `tool` observation is formatted as its own turn.
 2. Tokenize and run the model's forward pass (Module 6), decode a completion — ideally with **constrained decoding** (18.1 §4) so any tool call is valid JSON.
 3. Return the decoded text.
 
@@ -298,7 +298,7 @@ The policy returns a calculator **call on every turn**, unconditionally — it n
 
 ## Research connection
 
-<div class="callout paper"><p>The observation/action loop is the substrate for <strong>ReAct</strong> (Yao et al., 2022), which interleaves reasoning traces ("thought") with actions and observations so the model plans and acts in the same stream — the direct basis for the agents in <a href="../module-19/lesson-01.md">Module 19</a>. See ReAct (#29) and SWE-agent (#30) in the <a href="../../papers/index.md">paper curriculum</a>. The tool-training side — teaching the model which calls to emit — is <strong>Toolformer</strong> and <strong>Gorilla</strong> from <a href="lesson-01.md">18.1</a>.</p></div>
+<div class="callout paper"><p>The observation/action loop is the substrate for <strong>ReAct</strong> (Yao et al., 2022), which interleaves reasoning traces ("thought") with actions and observations so the model plans and acts in the same stream — the direct basis for the agents in <a href="#/lessons/module-19/lesson-01">Module 19</a>. See ReAct (#29) and SWE-agent (#30) in the <a href="#/papers/index">paper curriculum</a>. The tool-training side — teaching the model which calls to emit — is <strong>Toolformer</strong> and <strong>Gorilla</strong> from <a href="#/lessons/module-18/lesson-01">18.1</a>.</p></div>
 
 ## Check yourself
 
@@ -336,4 +336,4 @@ The loop's behavior depends only on the text the policy returns and the determin
 
 You now have the complete tool-use core: describe tools with schemas, let the model emit structured calls, parse and execute them safely, and drive the whole thing in an error-tolerant observation/action loop with a step budget. Module 19 replaces the scripted policy with a real reasoning model and adds planning, memory, and richer tools to build a ReAct-style agent and a mini SWE-agent.
 
-Continue to [19.1 · ReAct → a mini SWE-agent](../module-19/lesson-01.md).
+Continue to [19.1 · ReAct → a mini SWE-agent](lessons/module-19/lesson-01.md).

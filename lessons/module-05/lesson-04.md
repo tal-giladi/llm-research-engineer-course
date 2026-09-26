@@ -1,7 +1,7 @@
 # 05.4 · MLP, residual, LayerNorm, the block
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the complete <code>CausalSelfAttention</code> module from <a href="lesson-03.md">05.3 · Multi-head attention</a>; the <code>(B, T, C)</code> convention and broadcasting from <a href="../module-00/lesson-02.md">Module 0</a>; linear layers and the chain rule / gradient-highway intuition from <a href="../module-02/lesson-03.md">Module 2</a>.</p>
+<p><strong>Prerequisites:</strong> the complete <code>CausalSelfAttention</code> module from <a href="#/lessons/module-05/lesson-03">05.3 · Multi-head attention</a>; the <code>(B, T, C)</code> convention and broadcasting from <a href="#/lessons/module-00/lesson-02">Module 0</a>; linear layers and the chain rule / gradient-highway intuition from <a href="#/lessons/module-02/lesson-03">Module 2</a>.</p>
 <p><strong>You will learn:</strong> the three remaining pieces of a transformer block — the position-wise <strong>MLP</strong> (why the 4× hidden expansion and the GELU nonlinearity), the <strong>residual connection</strong> (why <code>x + sublayer(x)</code> is what makes deep stacks trainable), and <strong>LayerNorm</strong> (its formula, worked by hand and matched to PyTorch) — then how they assemble with attention into the <strong>pre-norm <code>Block</code></strong> that GPT stacks <code>n_layer</code> times.</p>
 <p><strong>Why this matters for ML:</strong> a GPT is <em>literally</em> an embedding, a stack of identical blocks, a final norm, and an output head. Once you can build one block, you have built the whole model up to bookkeeping. And the pre-norm + residual structure you learn here is the reason 100-layer transformers train at all — it is not a detail, it is the load-bearing wall.</p>
 </div>
@@ -58,7 +58,7 @@ For input `(B, T, C)`:
 
 The linear layers act on the **last axis only**; the `(B, T)` positions are all processed in
 parallel with the same weights. The hidden activation `(B, T, 4C)` is 4× the size of the input —
-worth remembering when we account for activation memory in [Module 7](../module-07/lesson-04.md).
+worth remembering when we account for activation memory in [Module 7](lessons/module-07/lesson-04.md).
 
 ### From scratch (the course codebase)
 
@@ -211,10 +211,10 @@ For hidden width $C$, one block's parameters are dominated by four weight matric
 So a block has $\approx 12C^2$ parameters (the two LayerNorms add only $\sim 4C$, negligible). For
 GPT-2 small, $C = 768$, that is about $12 \cdot 768^2 \approx 7.1$M parameters per block, times
 12 blocks ≈ 85M — the bulk of the model's ~124M (the rest is the embeddings). We will do the full
-parameter count in [06.2](../module-06/lesson-02.md). On compute: the MLP's $8C^2$ FLOPs-per-token
+parameter count in [06.2](lessons/module-06/lesson-02.md). On compute: the MLP's $8C^2$ FLOPs-per-token
 usually dominates a block until the sequence gets long enough that attention's $T^2$ term
-(from the score matrix of [05.2](../module-05/lesson-02.md)) takes over — the crossover that
-motivates FlashAttention in [Module 8](../module-08/lesson-04.md).
+(from the score matrix of [05.2](lessons/module-05/lesson-02.md)) takes over — the crossover that
+motivates FlashAttention in [Module 8](lessons/module-08/lesson-04.md).
 
 ## Exercise
 
@@ -273,10 +273,10 @@ Off it. The norm is applied only to the copy fed into the sublayer (`ln_1(x)` �
 
 ## Next
 
-You now have every component: token + positional embeddings ([05.1](lesson-01.md)), causal
-multi-head attention ([05.2](lesson-02.md)–[05.3](lesson-03.md)), and the pre-norm `Block` with
+You now have every component: token + positional embeddings ([05.1](lessons/module-05/lesson-01.md)), causal
+multi-head attention ([05.2](lessons/module-05/lesson-02.md)–[05.3](lessons/module-05/lesson-03.md)), and the pre-norm `Block` with
 its MLP, residuals, and LayerNorm. The next module assembles them into the full **GPT-2 model** —
 the embedding tables, a stack of `n_layer` blocks, a final LayerNorm, the language-model head,
 weight tying, and initialization — then runs a forward pass end to end.
 
-Continue to [06.1 · Assembling GPT-2](../module-06/lesson-01.md).
+Continue to [06.1 · Assembling GPT-2](lessons/module-06/lesson-01.md).

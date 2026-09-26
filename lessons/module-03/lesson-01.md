@@ -1,7 +1,7 @@
 # 03.1 · Gradient descent, SGD, momentum
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the gradient $\nabla L$ as the vector of partial derivatives from <a href="../module-02/lesson-01.md">02.1 · Derivatives, partials, chain rule, gradients</a>, and how <code>loss.backward()</code> fills in <code>.grad</code> from <a href="../module-02/lesson-03.md">02.3 · Backprop by hand</a>. Tensors, dtype, device, and in-place ops from <a href="../module-00/lesson-01.md">00.1</a>. The cross-entropy loss that these optimizers actually minimize from <a href="../module-01/lesson-04.md">01.4 · The language-modeling objective</a>.</p>
+<p><strong>Prerequisites:</strong> the gradient $\nabla L$ as the vector of partial derivatives from <a href="#/lessons/module-02/lesson-01">02.1 · Derivatives, partials, chain rule, gradients</a>, and how <code>loss.backward()</code> fills in <code>.grad</code> from <a href="#/lessons/module-02/lesson-03">02.3 · Backprop by hand</a>. Tensors, dtype, device, and in-place ops from <a href="#/lessons/module-00/lesson-01">00.1</a>. The cross-entropy loss that these optimizers actually minimize from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling objective</a>.</p>
 <p><strong>You will learn:</strong> the gradient-descent update $\theta \leftarrow \theta - \eta\nabla L$ and exactly what each symbol does; what the learning rate $\eta$ controls; why we use <em>stochastic</em> / minibatch gradients (cheap, noisy estimates of the true gradient) instead of the full-batch gradient; and <strong>momentum</strong> as an exponential moving average of gradients, $v \leftarrow \mu v + g;\ \theta \leftarrow \theta - \eta v$. Every rule is worked by hand on tiny numbers and checked against Python.</p>
 <p><strong>Why this matters for ML:</strong> training a language model <em>is</em> running one of these update rules millions of times. Everything later in the course — Adam (03.2), warmup and cosine schedules (03.3), the pretraining loop (Module 7) — is a refinement of the three ideas in this lesson. If you understand the plain update and momentum, the rest is bookkeeping on top.</p>
 </div>
@@ -340,4 +340,4 @@ The steep direction (curvature 100) sets the stability limit: plain gradient des
 
 You now have the core update rule, its cheap stochastic form, and momentum's memory trick. But momentum still uses a single global learning rate for every parameter — and a parameter whose gradients are consistently large needs a smaller effective step than one whose gradients are tiny. The next lesson adds **per-parameter adaptive scaling** (RMSProp), combines it with momentum and a bias correction to get **Adam**, and then fixes Adam's weight-decay bug to arrive at **AdamW**, the optimizer that trains essentially every modern LLM.
 
-Continue to [03.2 · RMSProp, Adam, AdamW, weight decay](lesson-02.md).
+Continue to [03.2 · RMSProp, Adam, AdamW, weight decay](lessons/module-03/lesson-02.md).

@@ -1,7 +1,7 @@
 # 03.3 · Warmup, cosine decay, gradient clipping
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> AdamW, bias correction, and the fact that Adam's first steps have size $\approx\eta$ from an unreliable early $\hat v$, from <a href="lesson-02.md">03.2 · RMSProp, Adam, AdamW, weight decay</a>. The learning rate $\eta$ and the update rule from <a href="lesson-01.md">03.1</a>. The gradient $\nabla L$ and <code>.grad</code> from <a href="../module-02/lesson-01.md">02.1</a>.</p>
+<p><strong>Prerequisites:</strong> AdamW, bias correction, and the fact that Adam's first steps have size $\approx\eta$ from an unreliable early $\hat v$, from <a href="#/lessons/module-03/lesson-02">03.2 · RMSProp, Adam, AdamW, weight decay</a>. The learning rate $\eta$ and the update rule from <a href="#/lessons/module-03/lesson-01">03.1</a>. The gradient $\nabla L$ and <code>.grad</code> from <a href="#/lessons/module-02/lesson-01">02.1</a>.</p>
 <p><strong>You will learn:</strong> the <strong>learning-rate schedule</strong> used by real LLM runs — linear <em>warmup</em> for the first $W$ steps, then <em>cosine decay</em> down to a floor — with the exact formula and a worked table of the learning rate at steps $0$, $W$, the midpoint, and the end; <em>why</em> warmup is needed (Adam's early variance estimates are unstable and a large early $\eta$ can diverge); and <strong>gradient clipping</strong> by global L2 norm, $g \leftarrow g\cdot\min(1, c/\lVert g\rVert)$, worked on a concrete gradient.</p>
 <p><strong>Why this matters for ML:</strong> these three techniques are on essentially every production LLM training run — GPT-3, LLaMA, OLMo, and the pretraining loop you build in Module 7. They are not optional polish; without warmup and clipping, large-batch Adam training routinely diverges in the first few hundred steps. This lesson is the difference between a run that trains and a run that explodes.</p>
 </div>
@@ -96,7 +96,7 @@ Put together: at the start, Adam takes large steps ($\approx\eta$) using an unre
 
 <div class="callout warn"><p>Skipping warmup on a large-batch Adam/AdamW run is one of the most common ways to make training diverge in the first few hundred steps. The symptom is a loss that decreases briefly then rockets to <code>inf</code> or <code>nan</code>. If you see that, the first two things to try are: add/lengthen warmup, and turn on gradient clipping (§4).</p></div>
 
-<div class="callout paper"><p>Warmup + cosine decay is documented in the <strong>GPT-3</strong> paper (Brown et al. 2020) and used by nearly every open LLM since (LLaMA, OLMo, ...). See the <a href="../../papers/index.md">paper curriculum</a>: GPT-3 warms the learning rate up over the first ~375M tokens and then cosine-decays it to 10% of the peak — exactly the $\eta_{\min} = \eta_{\max}/10$ shape of the worked table in §2.2.</p></div>
+<div class="callout paper"><p>Warmup + cosine decay is documented in the <strong>GPT-3</strong> paper (Brown et al. 2020) and used by nearly every open LLM since (LLaMA, OLMo, ...). See the <a href="#/papers/index">paper curriculum</a>: GPT-3 warms the learning rate up over the first ~375M tokens and then cosine-decays it to 10% of the peak — exactly the $\eta_{\min} = \eta_{\max}/10$ shape of the worked table in §2.2.</p></div>
 
 ## 4. Gradient clipping by global L2 norm
 
@@ -230,4 +230,4 @@ After `loss.backward()` (it needs the gradients to exist in `.grad`) and before 
 
 You now have the full optimization toolkit: the update rule and momentum (03.1), adaptive per-parameter scaling and decoupled weight decay in AdamW (03.2), and the warmup + cosine schedule with gradient clipping that keep a real run stable (03.3). Every training loop for the rest of the course uses exactly these pieces. The next module leaves optimization behind and turns to how text becomes numbers the model can consume — **tokenization**: characters, bytes, Unicode, and Byte-Pair Encoding from scratch.
 
-Continue to [04.1 · Characters, bytes, Unicode, the vocab problem](../module-04/lesson-01.md).
+Continue to [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md).

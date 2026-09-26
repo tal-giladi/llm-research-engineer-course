@@ -1,7 +1,7 @@
 # 14.2 · Loss masking & packing
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> chat templates and the response mask from <a href="lesson-01.md">14.1</a>; the next-token cross-entropy loss from <a href="../module-01/lesson-04.md">01.4 · The language-modeling loss</a>; how <code>GPT.forward</code> already ignores label <code>-1</code> from <a href="../module-06/lesson-01.md">06.1</a>.</p>
+<p><strong>Prerequisites:</strong> chat templates and the response mask from <a href="#/lessons/module-14/lesson-01">14.1</a>; the next-token cross-entropy loss from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling loss</a>; how <code>GPT.forward</code> already ignores label <code>-1</code> from <a href="#/lessons/module-06/lesson-01">06.1</a>.</p>
 <p><strong>You will learn:</strong> why in SFT we compute cross-entropy on the <strong>response tokens only</strong> and not the prompt; how the <code>ignore_index = -100</code> trick implements that; a tiny worked example proving the masked loss equals the loss over just the response positions; and how to <strong>pack</strong> several short examples into one fixed-length block while keeping each example's mask correct.</p>
 <p><strong>Why this matters for ML:</strong> masking the prompt is the difference between "learn to answer" and "learn to also parrot the question." Packing is how SFT stays GPU-efficient: instruction examples are short and wildly uneven in length, and padding each one to the block size would waste most of the compute. Every SFT trainer you will use (TRL's <code>SFTTrainer</code>, Axolotl) does exactly these two things under the hood.</p>
 </div>
@@ -113,7 +113,7 @@ def masked_cross_entropy(logits, labels, ignore_index=-100):
     return -logp[rows, kept_labels].mean()              # mean over kept rows
 ```
 
-`build_labels` starts from an all-`ignore_index` tensor and writes the true ids back only on response positions — the inverse framing of "mask out the prompt," and less error-prone. `masked_cross_entropy` uses the same numerically stable log-softmax as [`llmre.evaluation.metrics.cross_entropy`](../module-13/lesson-01.md) (subtract `logsumexp`, gather the true-token log-prob), just restricted to the kept rows.
+`build_labels` starts from an all-`ignore_index` tensor and writes the true ids back only on response positions — the inverse framing of "mask out the prompt," and less error-prone. `masked_cross_entropy` uses the same numerically stable log-softmax as [`llmre.evaluation.metrics.cross_entropy`](lessons/module-13/lesson-01.md) (subtract `logsumexp`, gather the true-token log-prob), just restricted to the kept rows.
 
 <div class="callout pt"><p><code>torch.nn.functional.cross_entropy(logits, labels, ignore_index=-100)</code> does exactly this masking natively — its default <code>ignore_index</code> is even <code>-100</code>. We implement it by hand so the mechanism is visible; the production one-liner behaves identically and fuses log-softmax, the gather, and the mask into a single kernel.</p></div>
 
@@ -203,4 +203,4 @@ Later examples in the block attend to earlier, unrelated examples (cross-example
 
 We can now train on the right tokens efficiently. But full fine-tuning still updates *every* weight and keeps optimizer state for all of them. The next lesson makes SFT cheap: **LoRA** freezes the pretrained weights and trains a tiny low-rank update instead.
 
-Continue to [14.3 · LoRA & QLoRA from scratch](lesson-03.md).
+Continue to [14.3 · LoRA & QLoRA from scratch](lessons/module-14/lesson-03.md).

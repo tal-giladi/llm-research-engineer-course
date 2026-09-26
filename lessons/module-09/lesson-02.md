@@ -1,7 +1,7 @@
 # 09.2 · ZeRO & FSDP
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> data parallelism, all-reduce, all-gather and reduce-scatter from <a href="lesson-01.md">09.1 · Data parallelism, all-reduce, DDP</a>; the four memory buckets — parameters, gradients, Adam optimizer state ($2\times$ params), activations — and the $16P$-bytes fixed cost from <a href="../module-07/lesson-04.md">07.4 · Throughput, FLOPs, MFU, memory accounting</a>.</p>
+<p><strong>Prerequisites:</strong> data parallelism, all-reduce, all-gather and reduce-scatter from <a href="#/lessons/module-09/lesson-01">09.1 · Data parallelism, all-reduce, DDP</a>; the four memory buckets — parameters, gradients, Adam optimizer state ($2\times$ params), activations — and the $16P$-bytes fixed cost from <a href="#/lessons/module-07/lesson-04">07.4 · Throughput, FLOPs, MFU, memory accounting</a>.</p>
 <p><strong>You will learn:</strong> exactly what a training step holds in memory and why plain data parallelism <strong>replicates all of it</strong> on every worker; how <strong>ZeRO</strong> removes that redundancy by <em>sharding</em> the optimizer state (stage 1), then the gradients (stage 2), then the parameters (stage 3) across the <code>W</code> data-parallel workers — with the per-worker memory formula for each stage, worked in bytes; and how PyTorch's <strong>FSDP</strong> realizes stage-3 by all-gathering each layer's parameters just in time for its forward/backward and freeing them immediately after, trading extra communication for a large memory saving.</p>
 <p><strong>Why this matters for ML:</strong> the $16P$-byte fixed cost is the wall that stops a billion-parameter model from training on a single GPU no matter how small you make the batch. ZeRO/FSDP is how the field trains models far larger than one device's memory while still using ordinary data parallelism — it is the default for large open-model training today.</p>
 </div>
@@ -10,7 +10,7 @@
 
 ## 1. Intuition: data parallelism wastes memory `W` times over
 
-Recall from [07.4](../module-07/lesson-04.md) what one training step must hold, per parameter, in fp32:
+Recall from [07.4](lessons/module-07/lesson-04.md) what one training step must hold, per parameter, in fp32:
 
 - the **parameter** itself — 4 bytes,
 - its **gradient** — 4 bytes,
@@ -18,7 +18,7 @@ Recall from [07.4](../module-07/lesson-04.md) what one training step must hold, 
 
 for a fixed $16$ bytes per parameter, or $16P$ bytes for a $P$-parameter model, before any activations. For $P = 124.4$M (GPT-2 small) that is $\approx 1.99$ GB; for $P = 7.5$B it is $120$ GB — already past any single GPU.
 
-Now here is the waste. In plain data parallelism ([09.1](lesson-01.md)), **every one of the `W` workers holds a complete copy of all $16P$ bytes.** The workers differ only in which *data* they process; their parameters, gradients (after the all-reduce), and optimizer state are identical. So across the cluster you are storing the same $16P$ bytes `W` times. If you have 64 GPUs, 63 of those copies are pure redundancy.
+Now here is the waste. In plain data parallelism ([09.1](lessons/module-09/lesson-01.md)), **every one of the `W` workers holds a complete copy of all $16P$ bytes.** The workers differ only in which *data* they process; their parameters, gradients (after the all-reduce), and optimizer state are identical. So across the cluster you are storing the same $16P$ bytes `W` times. If you have 64 GPUs, 63 of those copies are pure redundancy.
 
 **ZeRO** (Zero Redundancy Optimizer) is the observation that you don't need to replicate what you can *partition*. Split the $16P$ bytes into `W` disjoint pieces, give each worker one piece, and reconstruct the full tensor only for the brief moment a worker actually needs it. The catch is that reconstruction costs communication — so ZeRO is a spectrum, trading progressively more communication for progressively less memory.
 
@@ -26,13 +26,13 @@ Now here is the waste. In plain data parallelism ([09.1](lesson-01.md)), **every
 
 ## 2. The memory a step holds, in bytes
 
-Let $P$ be the parameter count and use the fp32 accounting of [07.4](../module-07/lesson-04.md). The three model-sized buckets are:
+Let $P$ be the parameter count and use the fp32 accounting of [07.4](lessons/module-07/lesson-04.md). The three model-sized buckets are:
 
 $$
 \underbrace{4P}_{\text{params}} \;+\; \underbrace{4P}_{\text{grads}} \;+\; \underbrace{8P}_{\text{Adam } m,\,v} \;=\; 16P \text{ bytes}.
 $$
 
-(Activations are the fourth bucket; they scale with batch × context, not with $P$, and are attacked separately by activation checkpointing in [Module 8](../module-08/lesson-01.md). ZeRO is about the three model-sized buckets.)
+(Activations are the fourth bucket; they scale with batch × context, not with $P$, and are attacked separately by activation checkpointing in [Module 8](lessons/module-08/lesson-01.md). ZeRO is about the three model-sized buckets.)
 
 Worked, for $P = 7.5\times 10^9$:
 
@@ -60,7 +60,7 @@ $$
 
 ### Stage 2 — also shard the gradients ($P_{os+g}$)
 
-Once worker `w` only *updates* its slice of parameters, it only *needs* the gradients for that slice. Every other gradient can be discarded after it has been reduced. So instead of an all-reduce (which leaves the full averaged gradient on everyone), ZeRO-2 uses a **reduce-scatter** ([09.1](lesson-01.md)): it averages the gradients and leaves each worker with only *its* $1/W$ slice. The other $(W-1)/W$ of the gradient never has to be stored.
+Once worker `w` only *updates* its slice of parameters, it only *needs* the gradients for that slice. Every other gradient can be discarded after it has been reduced. So instead of an all-reduce (which leaves the full averaged gradient on everyone), ZeRO-2 uses a **reduce-scatter** ([09.1](lessons/module-09/lesson-01.md)): it averages the gradients and leaves each worker with only *its* $1/W$ slice. The other $(W-1)/W$ of the gradient never has to be stored.
 
 Per worker: full params + sharded grads + sharded optimizer state.
 
@@ -116,14 +116,14 @@ Notice the diminishing floors: ZeRO-1 and ZeRO-2 can never go below $8P$ and $4P
 
 **FSDP** (Fully Sharded Data Parallel) is PyTorch's native implementation of ZeRO-3. "Fully sharded" means all three buckets are sharded, so each worker permanently stores only $1/W$ of the model. The mechanism is a just-in-time reconstruction, unit by unit (FSDP groups layers into "wrapping units"):
 
-1. **All-gather** the unit's parameters. Before a unit runs its forward, FSDP calls an all-gather ([09.1](lesson-01.md)) so every worker temporarily holds that unit's *full* weights.
+1. **All-gather** the unit's parameters. Before a unit runs its forward, FSDP calls an all-gather ([09.1](lessons/module-09/lesson-01.md)) so every worker temporarily holds that unit's *full* weights.
 2. **Compute** the unit's forward. The full weights exist only for this moment.
 3. **Free** the gathered weights. Immediately after the unit's forward, the non-owned $(W-1)/W$ of the weights is discarded, dropping back to the $1/W$ shard.
 4. **Repeat in backward.** The same all-gather → compute → free happens again for each unit during the backward pass, and gradients are combined with a **reduce-scatter** so each worker keeps only its gradient shard (stage 2's trick).
 
 At any instant, the *full* weights of at most one (or a few, if prefetching) units are materialized — not the whole model. That is why per-worker memory is $\approx 16P/W$ plus the transient cost of the largest unit's full parameters.
 
-The `all_gather` you built in [09.1](lesson-01.md) is exactly the primitive step 1 uses. Conceptually, reconstructing a sharded parameter is:
+The `all_gather` you built in [09.1](lessons/module-09/lesson-01.md) is exactly the primitive step 1 uses. Conceptually, reconstructing a sharded parameter is:
 
 ```python
 from llmre.distributed import all_gather
@@ -137,13 +137,13 @@ On real hardware every worker runs this simultaneously and ends up with an ident
 
 <div class="callout pt"><p>FSDP's cost is the extra communication: it all-gathers every unit's parameters <strong>twice per step</strong> (once in forward, once in backward), where plain DDP communicates gradients only <strong>once</strong>. To hide it, FSDP <em>prefetches</em> — it starts all-gathering unit <em>k+1</em>'s parameters while unit <em>k</em> is still computing, overlapping communication with compute just as DDP overlaps the gradient all-reduce with backward (09.1). Well-tuned FSDP therefore keeps throughput close to DDP while using a fraction of the memory.</p></div>
 
-<div class="callout warn"><p>ZeRO-3 / FSDP are not free lunches. The all-gather-per-layer traffic means they are most efficient when the interconnect is fast (NVLink within a node, high-bandwidth fabric across nodes); on a slow interconnect the communication stops hiding under compute and throughput drops. A common practical recipe is to use FSDP (or ZeRO-3) <em>within</em> a fast-linked group and plain data parallelism across groups — a hybrid you'll see again in <a href="lesson-03.md">09.3</a>.</p></div>
+<div class="callout warn"><p>ZeRO-3 / FSDP are not free lunches. The all-gather-per-layer traffic means they are most efficient when the interconnect is fast (NVLink within a node, high-bandwidth fabric across nodes); on a slow interconnect the communication stops hiding under compute and throughput drops. A common practical recipe is to use FSDP (or ZeRO-3) <em>within</em> a fast-linked group and plain data parallelism across groups — a hybrid you'll see again in <a href="#/lessons/module-09/lesson-03">09.3</a>.</p></div>
 
 ## 6. Which stage should you reach for?
 
 A practical ladder, in order of increasing memory savings and communication cost:
 
-- **Plain DDP** — the model + optimizer state fit comfortably on one GPU and you only want speed. No sharding. ([09.1](lesson-01.md).)
+- **Plain DDP** — the model + optimizer state fit comfortably on one GPU and you only want speed. No sharding. ([09.1](lessons/module-09/lesson-01.md).)
 - **ZeRO-1** — you're just over the memory limit; sharding the $8P$ optimizer state (the biggest bucket) is often enough, and it adds almost no communication (only the parameter all-gather after the step).
 - **ZeRO-2** — you need more room; reduce-scatter for gradients is a cheap extra step.
 - **ZeRO-3 / FSDP** — the model itself doesn't fit even with grads and optimizer state sharded, or you want to maximize batch size / model size per GPU. Highest communication, lowest memory.
@@ -152,7 +152,7 @@ A practical ladder, in order of increasing memory savings and communication cost
 
 ## Research connection
 
-<div class="callout paper"><p><strong>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</strong> (Rajbhandari et al., 2019) introduces the three stages and the "zero redundancy" framing you just learned — the per-stage memory formulas in section 3 are its central result. It is paired with <strong>Megatron-LM</strong> (next lesson) as the two foundational systems papers of large-model training. Read it after this module; the reading guide and links are in <a href="../../papers/index.md">the paper curriculum</a>. Its ideas ship today as Microsoft <strong>DeepSpeed</strong> (ZeRO) and PyTorch <strong>FSDP</strong>.</p></div>
+<div class="callout paper"><p><strong>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</strong> (Rajbhandari et al., 2019) introduces the three stages and the "zero redundancy" framing you just learned — the per-stage memory formulas in section 3 are its central result. It is paired with <strong>Megatron-LM</strong> (next lesson) as the two foundational systems papers of large-model training. Read it after this module; the reading guide and links are in <a href="#/papers/index">the paper curriculum</a>. Its ideas ship today as Microsoft <strong>DeepSpeed</strong> (ZeRO) and PyTorch <strong>FSDP</strong>.</p></div>
 
 ## Exercise
 
@@ -220,4 +220,4 @@ ZeRO-1 still keeps the <em>full</em> params ($4P$) and <em>full</em> grads ($4P$
 
 ZeRO/FSDP let a model *fit* by sharding its memory across data-parallel workers, but they still run every layer's full computation on each worker (after gathering its weights). When even a single layer's compute or activations are too big — or when you want to split the *math* itself across devices — you need model parallelism: splitting individual matmuls (tensor parallelism), assigning layer ranges to different devices (pipeline parallelism), and routing experts (expert parallelism).
 
-Continue to [09.3 · Tensor / pipeline / expert parallelism](lesson-03.md).
+Continue to [09.3 · Tensor / pipeline / expert parallelism](lessons/module-09/lesson-03.md).

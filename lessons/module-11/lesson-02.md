@@ -1,7 +1,7 @@
 # 11.2 · Deduplication & MinHash
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the data funnel and where dedup sits in it from <a href="lesson-01.md">11.1 · Common Crawl → clean text</a>; basic hashing (a hash function maps data to a fixed-size integer; equal inputs give equal hashes) and set operations (union, intersection). A little probability from <a href="../module-01/lesson-01.md">01.1 · Random variables, expectation, variance</a> helps but is not required.</p>
+<p><strong>Prerequisites:</strong> the data funnel and where dedup sits in it from <a href="#/lessons/module-11/lesson-01">11.1 · Common Crawl → clean text</a>; basic hashing (a hash function maps data to a fixed-size integer; equal inputs give equal hashes) and set operations (union, intersection). A little probability from <a href="#/lessons/module-01/lesson-01">01.1 · Random variables, expectation, variance</a> helps but is not required.</p>
 <p><strong>You will learn:</strong> why duplicated training data is actively harmful; <strong>exact</strong> deduplication by hashing whole documents; <strong>fuzzy / near-duplicate</strong> detection by representing a document as a set of k-shingles and measuring <strong>Jaccard similarity</strong>; how <strong>MinHash</strong> estimates Jaccard cheaply because, for a random hash, $P(\text{minhash}(A)=\text{minhash}(B)) = J(A,B)$; and how <strong>LSH banding</strong> finds near-duplicate pairs without comparing all $O(n^2)$ pairs. You will work a tiny MinHash example fully by hand and verify it.</p>
 <p><strong>Why this matters for ML:</strong> the web is enormously redundant — the same article is mirrored, quoted, and templated across thousands of pages. Training on duplicates wastes compute (you pay to learn the same tokens many times), worsens <em>memorization</em> (the model overfits repeated text and can regurgitate it), and inflates evaluation via contamination. Every serious pretraining corpus is deduplicated, and MinHash + LSH is the standard way to do it at scale.</p>
 </div>
@@ -424,7 +424,7 @@ deduplication (MinHash-LSH) to its Common-Crawl data, and it is standard in ever
 major open corpus since (C4, RefinedWeb, Dolma, FineWeb). The empirical case that
 dedup improves models and reduces memorization is made directly in
 "Deduplicating Training Data Makes Language Models Better" (Lee et al., 2021).
-See <a href="../../papers/index.md">the paper curriculum</a>; read GPT-3's data
+See <a href="#/papers/index">the paper curriculum</a>; read GPT-3's data
 section for the pipeline in context.</p></div>
 
 ## Check yourself
@@ -484,4 +484,4 @@ check to catch it, then turns to how you *mix* multiple data sources (web, code,
 books, math) with weights and token budgets, and how data ordering — the
 curriculum — is used late in training.
 
-Continue to [11.3 · Contamination, mixing, curriculum](lesson-03.md).
+Continue to [11.3 · Contamination, mixing, curriculum](lessons/module-11/lesson-03.md).

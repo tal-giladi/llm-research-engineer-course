@@ -1,7 +1,7 @@
 # 17.3 · DeepSeek-R1 case study
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> process vs outcome reward and the GRPO recap from <a href="lesson-02.md">17.2 · Process reward & DeepSeekMath</a>; CoT, self-consistency, and the STaR loop from <a href="lesson-01.md">17.1 · CoT, self-consistency, STaR</a>; RLVR from <a href="../module-16/lesson-02.md">16.2 · RLVR</a>.</p>
+<p><strong>Prerequisites:</strong> process vs outcome reward and the GRPO recap from <a href="#/lessons/module-17/lesson-02">17.2 · Process reward & DeepSeekMath</a>; CoT, self-consistency, and the STaR loop from <a href="#/lessons/module-17/lesson-01">17.1 · CoT, self-consistency, STaR</a>; RLVR from <a href="#/lessons/module-16/lesson-02">16.2 · RLVR</a>.</p>
 <p><strong>You will learn:</strong> the two DeepSeek-R1 training paths — <strong>R1-Zero</strong> (pure RL on a base model, no SFT) and <strong>R1</strong> (cold-start SFT → reasoning RL → rejection-sampling SFT → final RL); what "reasoning emerges from RL" means and its failure modes; how R1's traces are <em>distilled</em> into small dense models; and how the runnable <code>mini_r1</code> maps stage-for-stage onto this pipeline so you can execute the control flow on a laptop.</p>
 <p><strong>Why this matters for ML:</strong> R1 is the capstone of the whole reasoning track — it shows that large-scale RL with a <em>verifiable</em> reward, and nothing more, can grow long chain-of-thought and self-correction out of a base model. Understanding its stages (and which are documented vs inferred) is how you read any frontier reasoning report critically instead of taking the diagram on faith.</p>
 </div>
@@ -131,7 +131,7 @@ Frontier-lab honesty (a rule of this course): keep straight what the R1 report *
 - **Inference / not claimed:** the exact cold-start dataset, the precise reward weights, hyperparameters, and data mixtures are proprietary and *not* fully disclosed — our stage descriptions are the documented structure, not a recipe you could copy line-for-line. The interpretation of *why* distillation beats small-model RL (large-model patterns are easier to imitate than to rediscover) is our reasoning, not a proven claim.
 - **We do NOT claim** this is OpenAI's or Anthropic's reasoning-model pipeline. R1 is DeepSeek's *published* system; other labs' reasoning models (o-series, etc.) are not publicly documented at this level and may differ substantially. `mini_r1` is a teaching reconstruction of the R1 report's structure, nothing more.
 
-<div class="callout paper"><p><strong>Research connection.</strong> The paper for this lesson is <em>DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning</em> (DeepSeek-AI 2025), entry 26 in <a href="../../papers/index.md">the paper curriculum</a>. It pulls together everything in Modules 16–17: GRPO (DeepSeekMath, 17.2), verifiable rewards (16.2), the STaR generate-filter-imitate loop (17.1), and process-vs-outcome supervision (17.2). See <a href="../../curriculum/course-outline.md">the curriculum outline</a> for how the reasoning track connects to the tool-use and agents modules that follow.</p></div>
+<div class="callout paper"><p><strong>Research connection.</strong> The paper for this lesson is <em>DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning</em> (DeepSeek-AI 2025), entry 26 in <a href="#/papers/index">the paper curriculum</a>. It pulls together everything in Modules 16–17: GRPO (DeepSeekMath, 17.2), verifiable rewards (16.2), the STaR generate-filter-imitate loop (17.1), and process-vs-outcome supervision (17.2). See <a href="#/curriculum/course-outline">the curriculum outline</a> for how the reasoning track connects to the tool-use and agents modules that follow.</p></div>
 
 ## Common mistakes
 
@@ -189,4 +189,4 @@ Two things. First, even for R1, "no SFT" is only true of R1-*Zero*; the full R1 
 
 You have reconstructed the full DeepSeek-R1 pipeline, run its control flow in `mini_r1`, and learned to separate what a frontier report documents from what you infer. That completes the reasoning track (Modules 16–17): from CoT prompting, through verifiable-reward RL and GRPO, to a modern reasoning model end to end. The course now turns from *how a model reasons* to *how a model acts* — calling tools and running as an agent.
 
-Continue to [18.1 · Tool use](../module-18/lesson-01.md).
+Continue to [18.1 · Tool use](lessons/module-18/lesson-01.md).

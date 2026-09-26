@@ -1,7 +1,7 @@
 # 11.1 · Common Crawl → clean text
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the data pipeline that turns documents into training windows — packing, the <code>&lt;|endoftext|&gt;</code> separator, <code>get_batch</code> — from <a href="../module-04/lesson-03.md">04.3 · Special tokens, packing &amp; data loading</a>; a working BPE tokenizer from <a href="../module-04/lesson-02.md">04.2 · Byte-Pair Encoding from scratch</a>; comfort reading Python string code. No new math.</p>
+<p><strong>Prerequisites:</strong> the data pipeline that turns documents into training windows — packing, the <code>&lt;|endoftext|&gt;</code> separator, <code>get_batch</code> — from <a href="#/lessons/module-04/lesson-03">04.3 · Special tokens, packing &amp; data loading</a>; a working BPE tokenizer from <a href="#/lessons/module-04/lesson-02">04.2 · Byte-Pair Encoding from scratch</a>; comfort reading Python string code. No new math.</p>
 <p><strong>You will learn:</strong> what actually sits between "the web" and the id stream Module 4 packs — the real pretraining data pipeline: Common Crawl WARC/WET files → text extraction → language identification → <strong>quality filtering</strong> (Gopher/C4-style heuristics) → toxicity and <strong>PII</strong> handling. You will build a small <code>quality_filter(text) -&gt; bool</code> from a few cheap metrics and watch it keep clean prose while rejecting too-short, symbol-spam, and repetitive junk.</p>
 <p><strong>Why this matters for ML:</strong> at frontier scale, data quality moves the loss more than almost any architecture tweak. A one-line <code>load_dataset(...)</code> is <em>not</em> a data pipeline — it is the last step after someone else already did the filtering. If you want to train a real model, or understand why one model is better than another trained with the same FLOPs, you have to understand this stage. Most of the engineering effort in a pretraining project lives here, not in the model code.</p>
 </div>
@@ -57,7 +57,7 @@ extraction sets a ceiling on everything downstream.
 stream it, not load it: iterate record by record with a library like
 <code>warcio</code> and process each page as it goes past, because a single
 crawl shard is far larger than RAM. This is the same streaming discipline as the
-<code>memmap</code> note in <a href="../module-04/lesson-03.md">04.3</a> — at this
+<code>memmap</code> note in <a href="#/lessons/module-04/lesson-03">04.3</a> — at this
 scale nothing fits in memory, so everything is a stream.</p></div>
 
 ## 3. Stage one — text extraction (boilerplate removal)
@@ -358,7 +358,7 @@ privacy/legal harm), and use a vetted tool if you ever run a real pipeline.</p><
 
 Everything in this lesson runs *before* the code you already have. The output of
 this funnel — clean, right-language, quality-passing, decontaminated text — is
-exactly the "pile of documents" that <a href="../module-04/lesson-03.md">04.3</a>
+exactly the "pile of documents" that <a href="#/lessons/module-04/lesson-03">04.3</a>
 assumed as its input. The hand-off is literally:
 
 ```text
@@ -422,7 +422,7 @@ ending in a bullet/list marker" rule for exactly this pattern.)
 Common-Crawl pipeline used for a frontier model: a learned quality classifier to
 filter crawl toward high-quality reference text, plus fuzzy deduplication (next
 lesson). Read its data section as the canonical "this is what the funnel looks
-like at scale". See <a href="../../papers/index.md">the paper curriculum</a> (GPT-3,
+like at scale". See <a href="#/papers/index">the paper curriculum</a> (GPT-3,
 and Llama 3 / OLMo 2 for modern data-quality and annealing details).</p></div>
 
 ## Check yourself
@@ -485,4 +485,4 @@ templated onto thousands of pages. Duplicated data wastes compute and worsens
 memorization. The next lesson builds exact and fuzzy deduplication, and the
 MinHash trick that makes near-duplicate detection tractable at web scale.
 
-Continue to [11.2 · Deduplication & MinHash](lesson-02.md).
+Continue to [11.2 · Deduplication & MinHash](lessons/module-11/lesson-02.md).

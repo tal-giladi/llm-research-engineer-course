@@ -1,7 +1,7 @@
 # 07.1 · The training loop: batching & loss
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the assembled model and its <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>; the from-scratch <a href="../module-03/lesson-02.md">AdamW optimizer</a> and the <a href="../module-03/lesson-03.md">cosine-warmup schedule &amp; gradient clipping</a>; the <a href="../module-04/lesson-03.md">data loader</a> (<code>get_batch</code>, <code>pack_documents</code>); backprop / <code>loss.backward()</code> from <a href="../module-02/lesson-01.md">Module 2</a>.</p>
+<p><strong>Prerequisites:</strong> the assembled model and its <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the from-scratch <a href="#/lessons/module-03/lesson-02">AdamW optimizer</a> and the <a href="#/lessons/module-03/lesson-03">cosine-warmup schedule &amp; gradient clipping</a>; the <a href="#/lessons/module-04/lesson-03">data loader</a> (<code>get_batch</code>, <code>pack_documents</code>); backprop / <code>loss.backward()</code> from <a href="#/lessons/module-02/lesson-01">Module 2</a>.</p>
 <p><strong>You will learn:</strong> the one canonical training loop that trains every GPT, line by line — <code>get_batch → model(x, y) → zero_grad → backward → clip → step → set lr</code>; how the pieces you built across Modules 2–6 snap together into <code>llmre.training.loop.train</code>; and a fully runnable tiny example that trains a small GPT to <em>overfit</em> a short repeated sequence, with the real loss curve dropping from ≈<code>ln(vocab)</code> toward zero.</p>
 <p><strong>Why this matters for ML:</strong> this loop <em>is</em> pretraining. Everything else in the field — data, scale, parallelism, fine-tuning, RLHF — is a variation on, or a wrapper around, these six lines. Once you can write the loop from memory and watch a loss curve fall, "training a language model" stops being magic and becomes a program you own.</p>
 </div>
@@ -24,7 +24,7 @@ Then repeat, thousands to millions of times. For a language model the "answer" `
 
 ## 2. Mathematics: what one step minimizes
 
-The loss for a batch is the mean next-token cross-entropy you met in [01.4](../module-01/lesson-04.md) and [06.1](../module-06/lesson-01.md). For a batch of $B$ sequences of length $T$, with model parameters $\theta$,
+The loss for a batch is the mean next-token cross-entropy you met in [01.4](lessons/module-01/lesson-04.md) and [06.1](lessons/module-06/lesson-01.md). For a batch of $B$ sequences of length $T$, with model parameters $\theta$,
 
 $$
 \mathcal{L}(\theta) = \frac{1}{B T}\sum_{b=1}^{B}\sum_{t=1}^{T} -\log p_\theta\big(y_{b,t} \mid x_{b,1}, \dots, x_{b,t}\big),
@@ -36,7 +36,7 @@ $$
 \theta \leftarrow \theta - \eta_{\text{step}} \cdot \text{AdamW}\big(\nabla_\theta \mathcal{L}\big),
 $$
 
-with the learning rate $\eta_{\text{step}}$ set by the cosine-warmup schedule of [03.3](../module-03/lesson-03.md). Every symbol here is something you already built: the loss is `model.forward`, the gradient is `loss.backward`, the update is `AdamW.step`, and $\eta_{\text{step}}$ is `cosine_warmup_lr(step, ...)`.
+with the learning rate $\eta_{\text{step}}$ set by the cosine-warmup schedule of [03.3](lessons/module-03/lesson-03.md). Every symbol here is something you already built: the loss is `model.forward`, the gradient is `loss.backward`, the update is `AdamW.step`, and $\eta_{\text{step}}$ is `cosine_warmup_lr(step, ...)`.
 
 ### The one number to anchor on: the untrained loss
 
@@ -170,7 +170,7 @@ Line by line:
 - `optimizer.lr = cosine_warmup_lr(...)` — set the step's learning rate *before* stepping. Warmup ramps it up so the first, noisiest steps do not lurch; cosine decay eases it down so late steps fine-tune. (03.3.)
 - `optimizer.zero_grad()` — `.grad` tensors **accumulate** on every `backward()`. If we do not clear them, this step's gradient is added to last step's, which is wrong. (This "add, don't overwrite" behavior is exactly what we *exploit* in 07.2 for gradient accumulation.)
 - `x, y = get_batch("train")` — a fresh random batch from the loader.
-- `_, loss = model(x, y)` — the forward pass of [06.1](../module-06/lesson-01.md); we ignore the logits and keep the scalar loss.
+- `_, loss = model(x, y)` — the forward pass of [06.1](lessons/module-06/lesson-01.md); we ignore the logits and keep the scalar loss.
 - `loss.backward()` — backprop (Module 2) fills every `.grad`.
 - `clip_grad_norm_(params, cfg.grad_clip)` — rescale the whole gradient so its global L2 norm is at most `grad_clip`; this is the guard-rail against a single huge-gradient batch. (03.3.)
 - `optimizer.step()` — AdamW reads `.grad`, updates its moment estimates, and nudges every parameter. (03.2.)
@@ -179,8 +179,8 @@ Line by line:
 
 ## 6. Under the hood: what each step actually costs
 
-- **Forward** allocates and holds the activations of every layer, because backward needs them. For a batch $(B, T)$ the biggest single tensor is the logits, $(B, T, V)$ — for GPT-2 that $V = 50257$ makes the logits dwarf everything inside the stack (06.1). This is why activation memory, not parameter memory, usually limits how big a batch you can fit; we account for it in [07.4](lesson-04.md).
-- **Backward** does roughly twice the arithmetic of forward (it computes gradients w.r.t. both activations and weights), which is the source of the "6N FLOPs per token" rule of [07.4](lesson-04.md).
+- **Forward** allocates and holds the activations of every layer, because backward needs them. For a batch $(B, T)$ the biggest single tensor is the logits, $(B, T, V)$ — for GPT-2 that $V = 50257$ makes the logits dwarf everything inside the stack (06.1). This is why activation memory, not parameter memory, usually limits how big a batch you can fit; we account for it in [07.4](lessons/module-07/lesson-04.md).
+- **Backward** does roughly twice the arithmetic of forward (it computes gradients w.r.t. both activations and weights), which is the source of the "6N FLOPs per token" rule of [07.4](lessons/module-07/lesson-04.md).
 - **`optimizer.step()`** for AdamW touches every parameter three times (the parameter, and its two moment buffers `m` and `v`), so Adam's optimizer *state* is 2× the size of the model itself — a memory fact that shapes every large run (07.4).
 - **`loss.item()`** forces a GPU→CPU sync (it reads a scalar back to Python). Doing it every step is fine for study; in a real run you log it every $N$ steps to avoid stalling the GPU.
 
@@ -231,18 +231,18 @@ The training code (or model) is broken — a working setup can always overfit a 
 
 <details><summary>In the loop, why does <code>step_loss</code> use <code>loss.item()</code> divided by <code>grad_accum_steps</code>, while the backward call uses <code>(loss / grad_accum_steps).backward()</code>?</summary>
 
-Both keep the *reported* and *back-propagated* quantities on the same scale as a single full batch (details in [07.2](lesson-02.md)). `loss.item()` pulls the scalar to Python for logging; `(loss / G).backward()` scales the gradient so that summing $G$ micro-batches equals one full-batch gradient. With `grad_accum_steps = 1` (this lesson) both are just the plain loss.
+Both keep the *reported* and *back-propagated* quantities on the same scale as a single full batch (details in [07.2](lessons/module-07/lesson-02.md)). `loss.item()` pulls the scalar to Python for logging; `(loss / G).backward()` scales the gradient so that summing $G$ micro-batches equals one full-batch gradient. With `grad_accum_steps = 1` (this lesson) both are just the plain loss.
 
 </details>
 
 <div class="hw">
 <p><strong>Hardware track — the tiny overfit.</strong></p>
 <p><strong>Minimum:</strong> any laptop CPU. <strong>Recommended:</strong> same — no GPU needed. <strong>Runtime:</strong> ~1–2 seconds for all 200 steps. <strong>Memory:</strong> a few MB (26k params). <strong>GPU-hours:</strong> 0. <strong>CPU-only:</strong> yes, entirely.</p>
-<p><strong>What a real pretraining run needs (for contrast):</strong> GPT-2 small (124M params) on a few billion tokens is days on a single modern GPU, or hours on 8× data-parallel; GPT-2 has $V = 50257$ so step-0 loss ≈ 10.82, and a good run reaches ≈ 3.0. Frontier models are thousands of GPUs for weeks. The <em>loop is identical</em> — only the model size, token count, and number of workers change. We size those up in <a href="lesson-02.md">07.2</a> and <a href="lesson-04.md">07.4</a>.</p>
+<p><strong>What a real pretraining run needs (for contrast):</strong> GPT-2 small (124M params) on a few billion tokens is days on a single modern GPU, or hours on 8× data-parallel; GPT-2 has $V = 50257$ so step-0 loss ≈ 10.82, and a good run reaches ≈ 3.0. Frontier models are thousands of GPUs for weeks. The <em>loop is identical</em> — only the model size, token count, and number of workers change. We size those up in <a href="#/lessons/module-07/lesson-02">07.2</a> and <a href="#/lessons/module-07/lesson-04">07.4</a>.</p>
 </div>
 
 ## Next
 
 You can now write and run the canonical loop and watch a model overfit. But real runs need an **effective batch far larger than fits in memory** — hundreds of thousands of tokens per step. The trick is gradient accumulation, and it forces us to define micro-batch, global batch, and workers precisely.
 
-Continue to [07.2 · Micro-batch, global batch, gradient accumulation](lesson-02.md).
+Continue to [07.2 · Micro-batch, global batch, gradient accumulation](lessons/module-07/lesson-02.md).

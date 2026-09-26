@@ -1,7 +1,7 @@
 # 13.3 · A reproducible eval harness
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> loss/perplexity and log-likelihood scoring from <a href="lesson-01.md">13.1 · Loss, perplexity, zero-/few-shot</a>; contamination, calibration, and metric honesty from <a href="lesson-02.md">13.2 · Contamination, calibration, task eval</a>; the model's <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="../module-06/lesson-01.md">06.1 · Assembling GPT-2</a>; the from-scratch <code>log_softmax</code> and <code>cross_entropy</code> from <a href="../module-01/lesson-04.md">01.4</a>; seeds and reproducibility from <a href="../module-07/lesson-03.md">07.3 · Checkpointing, resuming, seeds, reproducibility</a>.</p>
+<p><strong>Prerequisites:</strong> loss/perplexity and log-likelihood scoring from <a href="#/lessons/module-13/lesson-01">13.1 · Loss, perplexity, zero-/few-shot</a>; contamination, calibration, and metric honesty from <a href="#/lessons/module-13/lesson-02">13.2 · Contamination, calibration, task eval</a>; the model's <code>forward(idx, targets) -&gt; (logits, loss)</code> from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the from-scratch <code>log_softmax</code> and <code>cross_entropy</code> from <a href="#/lessons/module-01/lesson-04">01.4</a>; seeds and reproducibility from <a href="#/lessons/module-07/lesson-03">07.3 · Checkpointing, resuming, seeds, reproducibility</a>.</p>
 <p><strong>You will learn:</strong> how to turn the metrics of this module into a small, reusable <strong>evaluation harness</strong> — <code>evaluate_perplexity</code>, <code>sequence_loglikelihood</code>, and <code>multiple_choice_score</code> — with documented shapes and no autograd overhead; how to make evaluation <strong>reproducible</strong> (fixed seeds, fixed eval set, versioned config); and how <strong>regression testing</strong> locks metrics in so a change that quietly hurts them is caught automatically. You will see the harness run end-to-end on a tiny GPT trained a few steps.</p>
 <p><strong>Why this matters for ML:</strong> research velocity is bounded by how quickly and reliably you can measure. An evaluation you cannot reproduce is worse than none — it produces numbers that drift between runs and lead you to false conclusions. A first-class harness is the instrument every experiment in the rest of the course reads from.</p>
 </div>
@@ -10,16 +10,16 @@
 
 In a software project you would never ship a change without a test suite. In an ML project the equivalent is the evaluation harness: the code that, given a model, produces the metrics you make decisions on. Treat it with the same seriousness as production code — documented interfaces, deterministic behavior, and its own tests.
 
-Everything below builds on pieces you already have. The forward pass returns `(logits, loss)` from <a href="../module-06/lesson-01.md">06.1</a>; the numerically stable `log_softmax` is from <a href="../module-01/lesson-04.md">01.4</a>. The harness just orchestrates them over held-out data and returns plain Python floats and indices you can log, compare, and assert on.
+Everything below builds on pieces you already have. The forward pass returns `(logits, loss)` from <a href="#/lessons/module-06/lesson-01">06.1</a>; the numerically stable `log_softmax` is from <a href="#/lessons/module-01/lesson-04">01.4</a>. The harness just orchestrates them over held-out data and returns plain Python floats and indices you can log, compare, and assert on.
 
 <div class="callout key"><p>Three properties make a harness trustworthy: it is <strong>deterministic</strong> (same inputs → same numbers, every run), <strong>documented</strong> (every function states tensor shape/dtype/device), and <strong>tested</strong> (its own metrics are checked against known-answer cases). Lose any one and the numbers become unreliable.</p></div>
 
 ## 2. `evaluate_perplexity` over a held-out stream
 
-The first tool is the held-out perplexity of <a href="lesson-01.md">13.1</a>, computed over a long token stream. The design:
+The first tool is the held-out perplexity of <a href="#/lessons/module-13/lesson-01">13.1</a>, computed over a long token stream. The design:
 
 - **Input.** A flat 1-D `torch.long` tensor `data` of held-out token ids, a `block_size` (the context length $T$ each window uses), a `batch_size`, and an optional `max_batches` to stop early on a huge stream.
-- **Windows.** Cut `data` into non-overlapping windows of length `block_size`. Window $i$ gives input `x = data[i·T : i·T + T]` and target `y = data[i·T + 1 : i·T + 1 + T]` — the same window shifted one token right, exactly the next-token setup from <a href="../module-07/lesson-01.md">07.1</a>.
+- **Windows.** Cut `data` into non-overlapping windows of length `block_size`. Window $i$ gives input `x = data[i·T : i·T + T]` and target `y = data[i·T + 1 : i·T + 1 + T]` — the same window shifted one token right, exactly the next-token setup from <a href="#/lessons/module-07/lesson-01">07.1</a>.
 - **Aggregation.** For each batch, `model(x, y)` returns the mean cross-entropy over that batch's $B \cdot T$ target tokens. We accumulate a **token-weighted** mean (multiply each batch's mean loss by its token count, sum, divide by total tokens) so the result does not depend on how the windows happen to divide into batches. The perplexity is `exp(mean_loss)`.
 - **No grad.** The whole thing runs under `torch.no_grad()` with the model in `eval()` mode: evaluation builds no autograd graph (saving memory and time) and disables dropout so the numbers are deterministic.
 
@@ -72,13 +72,13 @@ The index arithmetic is the whole trick: `logits[:-1]` drops the last position (
 
 ## 4. `multiple_choice_score`: grading tasks
 
-`multiple_choice_score` is the length-normalized log-likelihood scorer from <a href="lesson-01.md">13.1</a>. For each option it builds `[context; option]`, runs one forward pass, sums the log-probabilities of the **option** tokens only (using the same index arithmetic as §3, offset by the context length), optionally divides by the option length, and returns the argmax option index. The signature and shapes are documented on the function; the key line is that the option's tokens sit at absolute positions $L_c \dots L_c + L_o - 1$ and are predicted by logits at positions $L_c - 1 \dots L_c + L_o - 2$.
+`multiple_choice_score` is the length-normalized log-likelihood scorer from <a href="#/lessons/module-13/lesson-01">13.1</a>. For each option it builds `[context; option]`, runs one forward pass, sums the log-probabilities of the **option** tokens only (using the same index arithmetic as §3, offset by the context length), optionally divides by the option length, and returns the argmax option index. The signature and shapes are documented on the function; the key line is that the option's tokens sit at absolute positions $L_c \dots L_c + L_o - 1$ and are predicted by logits at positions $L_c - 1 \dots L_c + L_o - 2$.
 
 Because it takes any `model(seq) -> (logits, loss)`, the same scorer grades zero-shot and few-shot alike — the number of in-context examples just changes how many tokens are in `context_ids`.
 
 ## 5. Reproducibility: seeds, fixed eval set, versioned config
 
-A metric you cannot reproduce is not a measurement. Three habits make evaluation deterministic and comparable across experiments (the training-side versions are in <a href="../module-07/lesson-03.md">07.3</a>):
+A metric you cannot reproduce is not a measurement. Three habits make evaluation deterministic and comparable across experiments (the training-side versions are in <a href="#/lessons/module-07/lesson-03">07.3</a>):
 
 - **Fixed seeds.** Seed every source of randomness before an eval that uses any — `torch.manual_seed(...)`, and NumPy/Python if you sample. Perplexity and log-likelihood scoring are deterministic given `eval()` mode, but anything involving sampling (e.g. generating completions for pass@k) must be seeded to be reproducible.
 - **Fixed eval set.** The held-out stream and the benchmark question set must be frozen and versioned. Comparing run B against run A is only valid if both were measured on the *same* data. Changing the eval set silently turns a comparison into noise.
@@ -130,7 +130,7 @@ ctx = torch.tensor([0, 1, 2, 3, 4])
 assert multiple_choice_score(model, ctx, [torch.tensor([5]), torch.tensor([11])]) == 0
 ```
 
-Before training, the model is roughly uniform and `evaluate_perplexity` returns about $V = 16$ (the sanity check from <a href="lesson-01.md">13.1</a>). After a few dozen steps it has learned the deterministic pattern, perplexity drops well below $V$, and `multiple_choice_score` correctly prefers the true continuation (`5`) over a wrong one (`11`). The full test asserts perplexity is finite and positive and that the right option wins — a complete, reproducible evaluation on a real model in under a second on CPU.
+Before training, the model is roughly uniform and `evaluate_perplexity` returns about $V = 16$ (the sanity check from <a href="#/lessons/module-13/lesson-01">13.1</a>). After a few dozen steps it has learned the deterministic pattern, perplexity drops well below $V$, and `multiple_choice_score` correctly prefers the true continuation (`5`) over a wrong one (`11`). The full test asserts perplexity is finite and positive and that the right option wins — a complete, reproducible evaluation on a real model in under a second on CPU.
 
 <div class="hw">
 <p><strong>Hardware track.</strong></p>
@@ -231,6 +231,6 @@ Under a plain autoregressive LM, the score of a token is its conditional log-pro
 
 ## Next
 
-You have a reproducible evaluation harness — perplexity, sequence log-likelihood, and length-normalized multiple-choice scoring — with fixed seeds, a frozen eval set, versioned configs, and its own regression tests. This is the instrument every later experiment reads from. The next module takes the base model you have been measuring and begins to shape its behavior with supervised fine-tuning, where instruction-following evaluation (previewed in <a href="lesson-02.md">13.2</a>) becomes the metric that matters.
+You have a reproducible evaluation harness — perplexity, sequence log-likelihood, and length-normalized multiple-choice scoring — with fixed seeds, a frozen eval set, versioned configs, and its own regression tests. This is the instrument every later experiment reads from. The next module takes the base model you have been measuring and begins to shape its behavior with supervised fine-tuning, where instruction-following evaluation (previewed in <a href="#/lessons/module-13/lesson-02">13.2</a>) becomes the metric that matters.
 
-Continue to [14.1 · Instruction data &amp; chat templates](../module-14/lesson-01.md).
+Continue to [14.1 · Instruction data &amp; chat templates](lessons/module-14/lesson-01.md).

@@ -1,7 +1,7 @@
 # 01.3 · Entropy, cross-entropy, KL divergence
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-02.md">01.2 · Conditional probability, Bayes, likelihood</a> — the categorical distribution, log-probabilities, and the log-likelihood. From <a href="lesson-01.md">01.1</a>, expectation as a probability-weighted sum.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-01/lesson-02">01.2 · Conditional probability, Bayes, likelihood</a> — the categorical distribution, log-probabilities, and the log-likelihood. From <a href="#/lessons/module-01/lesson-01">01.1</a>, expectation as a probability-weighted sum.</p>
 <p><strong>You will learn:</strong> <strong>entropy</strong> $H(p)$ (the average surprise, or information content, of a distribution), <strong>cross-entropy</strong> $H(p, q)$ (the cost of using distribution $q$ to encode data that truly comes from $p$), and <strong>KL divergence</strong> $\mathrm{KL}(p \parallel q)$ (how far $q$ is from $p$). You will prove and verify the identity $H(p, q) = H(p) + \mathrm{KL}(p \parallel q)$, all on a worked 3-outcome example in nats, and see why minimizing cross-entropy against the one-hot true next token is precisely the training signal for a language model.</p>
 <p><strong>Why this matters for ML:</strong> the loss that trains every language model is cross-entropy between the model's predicted distribution $q$ and the true next token. This lesson defines that quantity exactly, shows it decomposes into an irreducible part (the data's own entropy) plus a part you can drive down (the KL gap between model and truth), and connects it back to the negative log-likelihood from lesson 01.2. Lesson 01.4 then applies it to the LM objective and perplexity.</p>
 </div>
@@ -242,4 +242,4 @@ Unit mismatch. $0.693 = 1.0 \times \ln 2$, so the textbook is in bits ($\log_2$)
 
 You now have entropy, cross-entropy, and KL divergence, the identity that binds them, and the key fact that cross-entropy against a one-hot true token is the negative log-likelihood — the language-model training signal. The final lesson of this module assembles these pieces into the concrete objective a language model minimizes, shows the per-token loss on a worked softmax example, and introduces perplexity as the human-readable version of the loss. It also connects to the `llmre` code you will use for the rest of the course.
 
-Continue to [01.4 · The language-modeling objective & perplexity](lesson-04.md).
+Continue to [01.4 · The language-modeling objective & perplexity](lessons/module-01/lesson-04.md).

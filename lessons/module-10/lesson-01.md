@@ -1,7 +1,7 @@
 # 10.1 · FLOPs & parameter counting
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the parameter count and where compute/memory go from <a href="../module-06/lesson-02.md">06.2 · Init, forward pass, parameter count</a>; the 6N rule, MFU, and the four memory buckets from <a href="../module-07/lesson-04.md">07.4 · Throughput, FLOPs, MFU, memory accounting</a>; AdamW's two moment buffers from <a href="../module-03/lesson-02.md">03.2 · RMSProp, Adam, AdamW</a>.</p>
+<p><strong>Prerequisites:</strong> the parameter count and where compute/memory go from <a href="#/lessons/module-06/lesson-02">06.2 · Init, forward pass, parameter count</a>; the 6N rule, MFU, and the four memory buckets from <a href="#/lessons/module-07/lesson-04">07.4 · Throughput, FLOPs, MFU, memory accounting</a>; AdamW's two moment buffers from <a href="#/lessons/module-03/lesson-02">03.2 · RMSProp, Adam, AdamW</a>.</p>
 <p><strong>You will learn:</strong> how to turn a model config into three back-of-the-envelope numbers before you launch anything — a <strong>closed-form parameter count</strong> $N$, the <strong>total training compute</strong> $C \approx 6ND$, and the <strong>memory footprint</strong> (params + grads + optimizer state + activations) — and how to convert $C$ into GPU-hours under a clearly stated throughput assumption. These are the inputs the scaling laws of the next two lessons consume.</p>
 <p><strong>Why this matters for ML:</strong> every real training run starts as a spreadsheet. Before a lab spends a million dollars of GPU time, someone estimates $N$, $D$, $C$, the wall-clock, and whether the model even fits in memory — all from the formulas here. Get these wrong and you either run out of memory at step 0 or discover three weeks in that the run will take a year. Scaling laws (10.2, 10.3) are the theory of <em>how to choose</em> $N$ and $D$; this lesson is the arithmetic they are written in.</p>
 </div>
@@ -20,18 +20,18 @@ Module 7 introduced the $6N$ rule and the four memory buckets in the context of 
 
 ## 2. Closed-form parameter count
 
-A GPT's parameters live in a few named places. Let $V$ be the vocabulary size, $C$ the embedding width (`n_embd`), $T_{\max}$ the maximum context (`block_size`), and $L$ the number of layers (`n_layer`). Walking the model of [06.1](../module-06/lesson-01.md) top to bottom:
+A GPT's parameters live in a few named places. Let $V$ be the vocabulary size, $C$ the embedding width (`n_embd`), $T_{\max}$ the maximum context (`block_size`), and $L$ the number of layers (`n_layer`). Walking the model of [06.1](lessons/module-06/lesson-01.md) top to bottom:
 
 **Embeddings.**
 - Token embedding `wte`: a $V \times C$ table — one $C$-vector per vocabulary entry. That is $VC$ parameters.
 - Positional embedding `wpe`: a $T_{\max} \times C$ table — one $C$-vector per position. That is $T_{\max}\,C$ parameters.
 
-**Each of the $L$ transformer blocks** (from [05.4](../module-05/lesson-04.md)):
+**Each of the $L$ transformer blocks** (from [05.4](lessons/module-05/lesson-04.md)):
 - Attention has four $C \times C$ projection matrices — $W_Q, W_K, W_V$ and the output projection $W_O$ — giving $4C^2$ weights.
 - The MLP has two Linears, $C \to 4C$ and $4C \to C$, giving $4C^2 + 4C^2 = 8C^2$ weights.
 - So each block is about $4C^2 + 8C^2 = 12C^2$ weights, plus small terms: the biases ($\sim 9C$ per block) and the two LayerNorm gain/bias pairs ($4C$ per block). Those linear-in-$C$ terms are tiny next to the $C^2$ terms and we drop them.
 
-**Final LayerNorm `ln_f`** ($2C$) and the **output head `lm_head`**, which is *tied* to `wte` (same tensor — [06.1](../module-06/lesson-01.md)), so it adds **zero** new parameters.
+**Final LayerNorm `ln_f`** ($2C$) and the **output head `lm_head`**, which is *tied* to `wte` (same tensor — [06.1](lessons/module-06/lesson-01.md)), so it adds **zero** new parameters.
 
 Summing the dominant terms:
 
@@ -63,7 +63,7 @@ The *exact* count from actually building the model, `GPT(GPTConfig()).num_params
 
 ## 3. Training compute: the 6ND rule
 
-From [07.4](../module-07/lesson-04.md): one forward+backward pass costs about $6N$ FLOPs **per token** — $2N$ forward (one multiply-add per weight, counted as 2 FLOPs) and $4N$ backward (two matmuls per weight: gradient-w.r.t.-input and gradient-w.r.t.-weight). Multiply by the total tokens $D$ the run processes:
+From [07.4](lessons/module-07/lesson-04.md): one forward+backward pass costs about $6N$ FLOPs **per token** — $2N$ forward (one multiply-add per weight, counted as 2 FLOPs) and $4N$ backward (two matmuls per weight: gradient-w.r.t.-input and gradient-w.r.t.-weight). Multiply by the total tokens $D$ the run processes:
 
 $$
 C \;\approx\; 6 N D \quad\text{FLOPs (total training compute)}.
@@ -96,7 +96,7 @@ If the pipeline is poorly tuned and achieves only $2\times 10^{13}$ FLOP/s (6.4%
 
 ## 4. Memory: the four buckets, in one number
 
-Also from [07.4](../module-07/lesson-04.md), training memory is four contributions. With $P$ the total parameter count, in fp32 (4 bytes each):
+Also from [07.4](lessons/module-07/lesson-04.md), training memory is four contributions. With $P$ the total parameter count, in fp32 (4 bytes each):
 
 1. **Parameters** — $4P$ bytes.
 2. **Gradients** — one `.grad` per parameter, another $4P$ bytes.
@@ -119,7 +119,7 @@ $$
 16P = 16 \cdot 1.244\times 10^8 \approx 1.99\times 10^9 \text{ bytes} \approx 1.99\ \text{GB}.
 $$
 
-So ~2 GB is gone before activations. And activations are not small: the logits tensor alone, at batch $B = 8$ and context $T = 1024$, is $B\cdot T\cdot V = 8\cdot 1024\cdot 50257 \approx 4.12\times 10^8$ floats $\approx 1.65$ GB in fp32 — comparable to the entire fixed cost, from one tensor. This is why even a "small" 124M model needs care to fit, and the motivation for [Module 8](../module-08/lesson-01.md) (mixed precision, checkpointing) and [Module 9](../module-09/lesson-02.md) (optimizer-state sharding).
+So ~2 GB is gone before activations. And activations are not small: the logits tensor alone, at batch $B = 8$ and context $T = 1024$, is $B\cdot T\cdot V = 8\cdot 1024\cdot 50257 \approx 4.12\times 10^8$ floats $\approx 1.65$ GB in fp32 — comparable to the entire fixed cost, from one tensor. This is why even a "small" 124M model needs care to fit, and the motivation for [Module 8](lessons/module-08/lesson-01.md) (mixed precision, checkpointing) and [Module 9](lessons/module-09/lesson-02.md) (optimizer-state sharding).
 
 ## 5. Under the hood: why the estimates are trustworthy
 
@@ -213,4 +213,4 @@ $24$ h $= 86{,}400$ s. Required rate $= 5\times 10^{20} / 8.64\times 10^{4} \app
 
 You can now size a model, estimate its training compute, and check it fits in memory — all from a config. The obvious next question is the one every lab asks: for a fixed compute budget, does the loss get lower faster by making the model bigger or by training on more tokens? The answer is empirical — loss follows a **power law** in $N$, $D$, and $C$ — and the next lesson has you *fit one yourself* from a tiny sweep.
 
-Continue to [10.2 · Kaplan scaling laws; fit a curve](lesson-02.md).
+Continue to [10.2 · Kaplan scaling laws; fit a curve](lessons/module-10/lesson-02.md).

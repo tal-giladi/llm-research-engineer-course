@@ -1,7 +1,7 @@
 # 04.1 · Characters, bytes, Unicode, the vocabulary problem
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the language-modeling objective from <a href="../module-01/lesson-04.md">01.4 · The language-modeling objective &amp; perplexity</a> — a model puts a softmax distribution over a fixed set of next-token choices and is scored by the cross-entropy of the true token. The size of that "set of choices" is the vocabulary, and this lesson is about where it comes from.</p>
+<p><strong>Prerequisites:</strong> the language-modeling objective from <a href="#/lessons/module-01/lesson-04">01.4 · The language-modeling objective &amp; perplexity</a> — a model puts a softmax distribution over a fixed set of next-token choices and is scored by the cross-entropy of the true token. The size of that "set of choices" is the vocabulary, and this lesson is about where it comes from.</p>
 <p><strong>You will learn:</strong> why a language model cannot just use words as its units (out-of-vocabulary words, an enormous sparse vocabulary, no sharing between related word forms), why it cannot use raw characters either (sequences become far too long, wasting compute), and how <strong>UTF-8 bytes</strong> give a universal 256-symbol alphabet that can spell any text on Earth. That sets up the <em>subword</em> compromise — Byte-Pair Encoding — which the next lesson builds from scratch.</p>
 <p><strong>Why this matters for ML:</strong> the tokenizer decides what a "token" is, and everything downstream is counted in tokens: context length, training-set size, the cost of a forward pass, the price of an API call. The <code>vocab_size</code> field of <code>GPTConfig</code> is the width of the model's input and output layers. Choose the units badly and you either blow up sequence length or cripple the model on unseen text. This is the first design decision in the whole pipeline.</p>
 </div>
@@ -14,7 +14,7 @@ $$
 \text{"hello"} \;\xrightarrow{\text{encode}}\; [\,15496,\ 220,\ \dots\,] \;\xrightarrow{\text{decode}}\; \text{"hello"}.
 $$
 
-Each integer is an index into a **vocabulary**: a numbered list of the atomic units the model knows. The model's input embedding table has one row per vocabulary entry, and its final output layer produces one logit per vocabulary entry — so if the vocabulary has $V$ entries, the model predicts a probability distribution over exactly those $V$ choices at every position (that distribution is the softmax you met in [01.4](../module-01/lesson-04.md)).
+Each integer is an index into a **vocabulary**: a numbered list of the atomic units the model knows. The model's input embedding table has one row per vocabulary entry, and its final output layer produces one logit per vocabulary entry — so if the vocabulary has $V$ entries, the model predicts a probability distribution over exactly those $V$ choices at every position (that distribution is the softmax you met in [01.4](lessons/module-01/lesson-04.md)).
 
 Two numbers are in tension the moment we pick our units, and the whole lesson is about their trade-off:
 
@@ -89,7 +89,7 @@ So a five-character string with one accent is more than five bytes:
 
 Four characters, **five** bytes: `c`, `a`, `f` are one byte each, and `é` is the two bytes `195, 169`. This length inflation is the one downside of bytes, and it is exactly what BPE will claw back next lesson.
 
-<div class="callout pt"><p><code>"café".encode("utf-8")</code> returns a Python <code>bytes</code> object; wrapping it in <code>list(...)</code> gives the integers. These are ordinary Python <code>int</code>s in <code>0..255</code> — no tensors yet, no dtype, no device. Token ids only become a <code>torch.long</code> tensor much later, when the data loader (<a href="lesson-03.md">04.3</a>) hands batches to the model.</p></div>
+<div class="callout pt"><p><code>"café".encode("utf-8")</code> returns a Python <code>bytes</code> object; wrapping it in <code>list(...)</code> gives the integers. These are ordinary Python <code>int</code>s in <code>0..255</code> — no tensors yet, no dtype, no device. Token ids only become a <code>torch.long</code> tensor much later, when the data loader (<a href="#/lessons/module-04/lesson-03">04.3</a>) hands batches to the model.</p></div>
 
 ### 4.1 Bytes as our safety net
 
@@ -160,4 +160,4 @@ Better: sequences get shorter (more frequent words and word-pieces become single
 
 You now know why the units are neither words nor characters, and that UTF-8 gives a universal 256-byte floor with no OOV. The next lesson turns the "learn merges from frequent pairs" idea into a concrete algorithm — training, encoding, and decoding a byte-level BPE tokenizer from scratch, worked by hand on a tiny corpus and implemented in `llmre.tokenizer.bpe`.
 
-Continue to [04.2 · Byte-Pair Encoding from scratch](lesson-02.md).
+Continue to [04.2 · Byte-Pair Encoding from scratch](lessons/module-04/lesson-02.md).

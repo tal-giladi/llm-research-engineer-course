@@ -1,7 +1,7 @@
 # 00.3 · Autograd: backward and grad
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-01.md">00.1 · Tensors: shape, dtype, device</a> and <a href="lesson-02.md">00.2 · Ops, broadcasting, views vs copies</a> — you should be comfortable with elementwise ops and with scalar (rank-0) tensors.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-00/lesson-01">00.1 · Tensors: shape, dtype, device</a> and <a href="#/lessons/module-00/lesson-02">00.2 · Ops, broadcasting, views vs copies</a> — you should be comfortable with elementwise ops and with scalar (rank-0) tensors.</p>
 <p><strong>You will learn:</strong> how PyTorch automatically computes derivatives. Specifically: <code>requires_grad=True</code>, the dynamic computational graph PyTorch records as you compute, calling <code>.backward()</code> to run the chain rule, and reading the result off <code>.grad</code>. You will differentiate two examples by hand and confirm PyTorch prints the same numbers. Then <code>torch.no_grad()</code>, <code>.detach()</code>, and why gradients <strong>accumulate</strong> (so you must zero them each step).</p>
 <p><strong>Why this matters for ML:</strong> training a neural network <em>is</em> repeatedly computing the gradient of a loss with respect to millions of parameters and stepping each one downhill. Doing that by hand is impossible; autograd does it for you, exactly and automatically. Every training loop in this course — up to and including GPT-2 — rests on the three lines <code>loss.backward()</code>, read <code>.grad</code>, then step and zero. This lesson is where those lines start to make sense.</p>
 </div>
@@ -132,7 +132,7 @@ p.grad          # tensor(2.)     d(2p)/dp = 2
 p.grad          # tensor(4.)     2 got ADDED to the existing 2, not replaced
 ```
 
-The second `backward()` computed the same gradient, $2$, and **added** it to the $2$ already sitting in `p.grad`, giving $4$. PyTorch does this on purpose — accumulation is what makes it easy to sum gradients from several pieces of a batch (you will use this deliberately for "gradient accumulation" in [module 7](../module-07/lesson-02.md)). But it means that in an ordinary training loop, if you do not clear the gradients between steps, step 2's gradient is polluted by step 1's leftover, step 3's by both, and training silently goes wrong.
+The second `backward()` computed the same gradient, $2$, and **added** it to the $2$ already sitting in `p.grad`, giving $4$. PyTorch does this on purpose — accumulation is what makes it easy to sum gradients from several pieces of a batch (you will use this deliberately for "gradient accumulation" in [module 7](lessons/module-07/lesson-02.md)). But it means that in an ordinary training loop, if you do not clear the gradients between steps, step 2's gradient is polluted by step 1's leftover, step 3's by both, and training silently goes wrong.
 
 The fix is to **zero the gradients** before each `backward()`. In a real loop the optimizer does it for you with `optimizer.zero_grad()` (next lesson); manually it is `p.grad.zero_()` or `p.grad = None`.
 
@@ -193,4 +193,4 @@ Because we are not going to call `.backward()` there, so building the computatio
 
 You can now let PyTorch compute exact gradients of any scalar with respect to your parameters, and you know the two rules that bite newcomers: gradients accumulate, and a stray detach kills them. The last piece is to package parameters into a model and put gradients to work: `nn.Module`, `nn.Linear`, an optimizer, and the canonical five-line training loop you will reuse for the entire course — culminating in fitting a real line to noisy data and watching the loss fall.
 
-Continue to [00.4 · nn.Module and a minimal training loop](lesson-04.md).
+Continue to [00.4 · nn.Module and a minimal training loop](lessons/module-00/lesson-04.md).

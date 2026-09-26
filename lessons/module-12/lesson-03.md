@@ -1,7 +1,7 @@
 # 12.3 · MQA / GQA
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="../module-05/lesson-03.md">05.3 · Multi-head attention</a> (the $n_h$ query/key/value heads, the $(B, n_h, T, d_h)$ layout, the output projection); scaled dot-product attention from <a href="../module-05/lesson-02.md">05.2</a>; the KV-cache idea from generation in <a href="../module-06/lesson-03.md">06.3 · Generation</a>.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-05/lesson-03">05.3 · Multi-head attention</a> (the $n_h$ query/key/value heads, the $(B, n_h, T, d_h)$ layout, the output projection); scaled dot-product attention from <a href="#/lessons/module-05/lesson-02">05.2</a>; the KV-cache idea from generation in <a href="#/lessons/module-06/lesson-03">06.3 · Generation</a>.</p>
 <p><strong>You will learn:</strong> why standard multi-head attention makes the inference KV cache large; how <strong>MQA</strong> (one shared key/value head) and <strong>GQA</strong> ($g$ key/value heads shared by groups of query heads) shrink it; the KV-cache memory arithmetic that motivates the change; and how to implement GQA so that it reduces exactly to MHA when $g = n_h$ and to MQA when $g = 1$.</p>
 <p><strong>Why this matters for ML:</strong> GQA is the attention variant in Llama&nbsp;2-70B, Llama&nbsp;3, Mistral, and most current models. It is a pure inference-efficiency win — smaller KV cache means longer contexts and larger batches on the same GPU — at almost no quality cost. Knowing the KV-cache math is essential for serving.</p>
 </div>
@@ -168,7 +168,7 @@ Someone implements GQA but repeats the KV heads with `k.repeat(1, self.n_rep, 1,
 
 ## Research connection
 
-<div class="callout paper"><p><strong>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</strong> (Ainslie et al. 2023) introduced GQA and the mean-pool-and-uptrain conversion; MQA is from Shazeer's "Fast Transformer Decoding" (2019). <strong>Llama&nbsp;3</strong> (<a href="../../papers/index.md">paper curriculum</a> #10) uses GQA with 8 KV heads. The next step in this line is DeepSeek-V3's Multi-head Latent Attention (MLA), which compresses the KV cache differently — see #14.</p></div>
+<div class="callout paper"><p><strong>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</strong> (Ainslie et al. 2023) introduced GQA and the mean-pool-and-uptrain conversion; MQA is from Shazeer's "Fast Transformer Decoding" (2019). <strong>Llama&nbsp;3</strong> (<a href="#/papers/index">paper curriculum</a> #10) uses GQA with 8 KV heads. The next step in this line is DeepSeek-V3's Multi-head Latent Attention (MLA), which compresses the KV cache differently — see #14.</p></div>
 
 ## Check yourself
 
@@ -198,4 +198,4 @@ The savings (smaller KV cache, less memory-bandwidth per decode step) only appea
 
 ## Next
 
-The last modern change scales *parameters* without scaling per-token compute: replacing the dense FFN with a mixture of experts. Continue to [12.4 · Mixture of Experts (DeepSeek-style)](lesson-04.md).
+The last modern change scales *parameters* without scaling per-token compute: replacing the dense FFN with a mixture of experts. Continue to [12.4 · Mixture of Experts (DeepSeek-style)](lessons/module-12/lesson-04.md).

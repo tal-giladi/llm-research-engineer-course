@@ -49,7 +49,7 @@ $$H(p,q) = -\sum_i p_i\log q_i = H(p) + \mathrm{KL}(p\,\|\,q)$$
 sequence probability into next-token conditionals.
 $$p_\theta(y_{1:T}) = \prod_{t=1}^{T} p_\theta(y_t \mid y_{<t})$$
 $y_{<t}=(y_1,\dots,y_{t-1})$ the prefix. Taking $\log$ turns the product into the sum that CE
-averages. See [Module 1](../lessons/module-01/lesson-04.md).
+averages. See [Module 1](lessons/module-01/lesson-04.md).
 
 ---
 
@@ -60,7 +60,7 @@ query–key similarity.
 $$\mathrm{Attention}(Q,K,V) = \mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_h}} + M\right)V$$
 $Q,K,V$ shape $(B,n_h,T,d_h)$; $QK^\top$ shape $(B,n_h,T,T)$ raw scores; $\sqrt{d_h}$ keeps score
 variance $\approx 1$ so softmax stays soft; $M$ causal mask. Output $(B,n_h,T,d_h)$. See
-[Module 5](../lessons/module-05/lesson-02.md).
+[Module 5](lessons/module-05/lesson-02.md).
 
 **Causal mask** — forbids attending to the future; added before softmax so masked weights are
 exactly zero (since $e^{-\infty}=0$).
@@ -70,12 +70,12 @@ $$M_{ij} = \begin{cases} 0 & j \le i \\ -\infty & j > i \end{cases}$$
 head, then concatenate and project.
 $$\mathrm{MHA}(x) = \mathrm{Concat}(\text{head}_1,\dots,\text{head}_{n_h})\,W_O, \qquad d_h = C/n_h$$
 $x$ shape $(B,T,C)$ reshaped to $(B,n_h,T,d_h)$; $W_O$ shape $(C,C)$ output projection. See
-[Module 5](../lessons/module-05/lesson-03.md).
+[Module 5](lessons/module-05/lesson-03.md).
 
 **GQA / MQA** — share K/V heads across query heads to shrink the KV cache. $n_{kv}$ key/value
 heads with $1 \le n_{kv} \le n_h$: MQA is $n_{kv}=1$, GQA is $1<n_{kv}<n_h$, full MHA is
 $n_{kv}=n_h$. Each K/V head is reused by $n_h/n_{kv}$ query heads. See
-[Module 12](../lessons/module-12/lesson-03.md).
+[Module 12](lessons/module-12/lesson-03.md).
 
 ---
 
@@ -91,7 +91,7 @@ over the feature axis.
 **RMSNorm** — LayerNorm without the mean subtraction; rescales by root-mean-square only (cheaper,
 used in Llama/most modern LMs).
 $$\mathrm{RMSNorm}(x) = \frac{x}{\sqrt{\frac{1}{C}\sum_i x_i^2 + \epsilon}}\odot\gamma$$
-No re-centering ($\mu$) and no bias $\beta$. See [Module 12](../lessons/module-12/lesson-02.md).
+No re-centering ($\mu$) and no bias $\beta$. See [Module 12](lessons/module-12/lesson-02.md).
 
 **GELU** — smooth ("soft") ReLU used in GPT-2; gates the input by its Gaussian CDF $\Phi$.
 $$\mathrm{GELU}(x) = x\,\Phi(x) \approx 0.5x\left(1 + \tanh\!\left[\sqrt{\tfrac{2}{\pi}}(x + 0.044715x^3)\right]\right)$$
@@ -100,7 +100,7 @@ $$\mathrm{GELU}(x) = x\,\Phi(x) \approx 0.5x\left(1 + \tanh\!\left[\sqrt{\tfrac{
 $$\mathrm{SwiGLU}(x) = \big(\mathrm{SiLU}(xW_1)\odot xW_3\big)W_2, \qquad \mathrm{SiLU}(z)=z\,\sigma(z)$$
 $W_1,W_3$ project up, $W_2$ projects down; the two up-projections make it "gated". Hidden size is
 scaled by $2/3$ to match a plain MLP's parameter count. See
-[Module 12](../lessons/module-12/lesson-02.md).
+[Module 12](lessons/module-12/lesson-02.md).
 
 ---
 
@@ -117,7 +117,7 @@ frequency (high $i$ = slow rotation).
 **RoPE relative-position property** — after rotation the dot product depends only on the *offset*
 $m-n$, so attention becomes relative-position aware for free.
 $$(R_{\Theta,m}q)^\top (R_{\Theta,n}k) = q^\top R_{\Theta,\,n-m}\,k$$
-See [Module 12](../lessons/module-12/lesson-01.md).
+See [Module 12](lessons/module-12/lesson-01.md).
 
 ---
 
@@ -127,18 +127,18 @@ See [Module 12](../lessons/module-12/lesson-01.md).
 undiminished, enabling deep stacks.
 $$y = x + f(x) \qquad\Rightarrow\qquad \frac{\partial y}{\partial x} = I + \frac{\partial f}{\partial x}$$
 The identity term guarantees a gradient highway even when $\partial f/\partial x$ is tiny. See
-[Module 5](../lessons/module-05/lesson-04.md).
+[Module 5](lessons/module-05/lesson-04.md).
 
 **Chain rule / VJP** — backprop propagates the upstream gradient through each op by its transposed
 Jacobian (vector–Jacobian product), never forming the full Jacobian.
 $$\bar{x} = J^\top \bar{y}, \qquad J = \frac{\partial y}{\partial x}$$
 $\bar{y}=\partial\mathcal{L}/\partial y$ upstream grad; $\bar{x}$ downstream grad. See
-[Module 2](../lessons/module-02/lesson-02.md).
+[Module 2](lessons/module-02/lesson-02.md).
 
 **Softmax+CE gradient** — the reason the LM backward pass is so clean: gradient at the logits is
 just (prediction − target).
 $$\frac{\partial \mathcal{L}_{\text{CE}}}{\partial z} = \mathrm{softmax}(z) - \mathbf{1}_{c}$$
-$\mathbf{1}_c$ one-hot true class. See [Module 2](../lessons/module-02/lesson-03.md).
+$\mathbf{1}_c$ one-hot true class. See [Module 2](lessons/module-02/lesson-03.md).
 
 ---
 
@@ -147,7 +147,7 @@ $\mathbf{1}_c$ one-hot true class. See [Module 2](../lessons/module-02/lesson-03
 **SGD with momentum** — accumulate a velocity of past gradients to smooth and accelerate descent.
 $$v_t = \mu v_{t-1} + g_t, \qquad \theta_t = \theta_{t-1} - \eta\, v_t$$
 $g_t$ gradient; $\mu$ momentum ($\approx 0.9$); $\eta$ learning rate. See
-[Module 3](../lessons/module-03/lesson-01.md).
+[Module 3](lessons/module-03/lesson-01.md).
 
 **AdamW update** — per-parameter adaptive step (Adam) with *decoupled* weight decay applied
 directly to the weights, not the gradient.
@@ -163,7 +163,7 @@ $$
 $m_t$ first moment (mean grad), $v_t$ second moment (mean sq grad); $\hat{m},\hat{v}$
 bias-corrected (undo the zero-init bias, big early on); $\beta_1{=}0.9,\beta_2{=}0.95$ typical for
 LMs; $\lambda$ weight decay; $\epsilon\approx 10^{-8}$. The $\lambda\theta$ term is *decoupled*
-decay — the "W" in AdamW. See [Module 3](../lessons/module-03/lesson-02.md).
+decay — the "W" in AdamW. See [Module 3](lessons/module-03/lesson-02.md).
 
 **Cosine schedule with linear warmup** — ramp the LR up over warmup steps, then decay it along a
 half-cosine to a floor.
@@ -174,14 +174,14 @@ $$
 \end{cases}
 $$
 $T_w$ warmup steps; $T_{\max}$ total steps; $\eta_{\max}$ peak, $\eta_{\min}$ floor. See
-[Module 3](../lessons/module-03/lesson-03.md).
+[Module 3](lessons/module-03/lesson-03.md).
 
 **Gradient clipping (by global norm)** — cap the total gradient norm to stop loss spikes from
 blowing up a step.
 $$g \leftarrow g\cdot\min\!\left(1, \frac{c}{\lVert g\rVert_2}\right), \qquad
 \lVert g\rVert_2 = \sqrt{\textstyle\sum_i g_i^2}$$
 $c$ the max-norm threshold (commonly $1.0$); the norm is over *all* parameters concatenated. See
-[Module 3](../lessons/module-03/lesson-03.md).
+[Module 3](lessons/module-03/lesson-03.md).
 
 ---
 
@@ -191,25 +191,25 @@ $c$ the max-norm threshold (commonly $1.0$); the norm is over *all* parameters c
 $$C \approx 6\,N\,D$$
 $C$ FLOPs; $N$ non-embedding parameters; $D$ training tokens. The 6 is $\approx 2$ (forward
 multiply-add) $+\,4$ (backward); one forward pass alone is $\approx 2ND$. See
-[Module 10](../lessons/module-10/lesson-01.md).
+[Module 10](lessons/module-10/lesson-01.md).
 
 **Parameter count of a transformer** — dominated by the per-block attention + MLP matrices.
 $$N \approx 12\,L\,C^2$$
 $L$ layers, $C$ width. Per block: $4C^2$ attention (Q,K,V,O) $+\,8C^2$ MLP ($4C$ hidden) $=12C^2$;
-excludes embeddings $VC$. See [Module 10](../lessons/module-10/lesson-01.md).
+excludes embeddings $VC$. See [Module 10](lessons/module-10/lesson-01.md).
 
 **Kaplan power law** — loss falls as a power law in each of $N$, $D$, $C$ (compute), over many
 orders of magnitude.
 $$L(N) \approx \left(\frac{N_c}{N}\right)^{\alpha_N}$$
 $L$ loss; $N_c,\alpha_N$ fitted constants ($\alpha_N\approx 0.076$ in the original fit). See
-[Module 10](../lessons/module-10/lesson-02.md).
+[Module 10](lessons/module-10/lesson-02.md).
 
 **Chinchilla loss surface** — joint law with an irreducible floor plus separate model-size and
 data terms.
 $$L(N,D) = E + \frac{A}{N^{\alpha}} + \frac{B}{D^{\beta}}$$
 $E$ irreducible loss (entropy of text); $A,B,\alpha,\beta$ fitted ($\alpha,\beta\approx 0.34$).
 Compute-optimal training scales $N$ and $D$ together, giving the **$\approx 20$ tokens per
-parameter** rule ($D \approx 20N$). See [Module 10](../lessons/module-10/lesson-03.md).
+parameter** rule ($D \approx 20N$). See [Module 10](lessons/module-10/lesson-03.md).
 
 ---
 
@@ -219,18 +219,18 @@ parameter** rule ($D \approx 20N$). See [Module 10](../lessons/module-10/lesson-
 reward gap.
 $$P(y_w \succ y_l \mid x) = \sigma\big(r(x,y_w) - r(x,y_l)\big)$$
 $x$ prompt; $y_w$ chosen (winner), $y_l$ rejected (loser); $r$ scalar reward. See
-[Module 15](../lessons/module-15/lesson-01.md).
+[Module 15](lessons/module-15/lesson-01.md).
 
 **Reward-model loss** — train $r_\phi$ by maximizing the Bradley-Terry likelihood of the human
 preferences.
 $$\mathcal{L}_{\text{RM}} = -\,\mathbb{E}_{(x,y_w,y_l)}\big[\log\sigma\big(r_\phi(x,y_w) - r_\phi(x,y_l)\big)\big]$$
 $r_\phi$ the learned reward (LM + scalar head). See
-[Module 15](../lessons/module-15/lesson-01.md).
+[Module 15](lessons/module-15/lesson-01.md).
 
 **KL-constrained RLHF objective** — maximize reward while staying near the reference policy.
 $$\max_\pi\; \mathbb{E}_{x,\,y\sim\pi}\big[r(x,y)\big] - \beta\,\mathrm{KL}\big(\pi(\cdot\mid x)\,\|\,\pi_{\text{ref}}(\cdot\mid x)\big)$$
 $\pi$ trainable policy; $\pi_{\text{ref}}$ frozen reference (the SFT model); $\beta$ KL weight. See
-[Module 15](../lessons/module-15/lesson-02.md).
+[Module 15](lessons/module-15/lesson-02.md).
 
 **PPO clipped objective** — take the largest reward-improving step whose probability ratio stays
 inside $[1-\epsilon, 1+\epsilon]$.
@@ -238,7 +238,7 @@ $$\mathcal{L}_{\text{PPO}} = \mathbb{E}_t\Big[\min\big(\rho_t A_t,\; \mathrm{cli
 \qquad \rho_t = \frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\text{old}}}(a_t\mid s_t)}$$
 $\rho_t$ new/old probability ratio; $A_t$ advantage (how much better action $a_t$ was than the
 baseline); $\epsilon$ clip range ($\approx 0.2$). The $\min$+clip removes the incentive to move
-$\rho_t$ far from 1. See [Module 15](../lessons/module-15/lesson-02.md).
+$\rho_t$ far from 1. See [Module 15](lessons/module-15/lesson-02.md).
 
 **Per-token KL penalty** — the reward actually optimized in RLHF: task reward minus per-token drift
 from the reference.
@@ -249,7 +249,7 @@ the reward model and partition function cancel.
 $$\mathcal{L}_{\text{DPO}} = -\,\mathbb{E}_{(x,y_w,y_l)}\!\left[\log\sigma\!\left(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\text{ref}}(y_w\mid x)} - \beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\text{ref}}(y_l\mid x)}\right)\right]$$
 $\pi_\theta$ policy, $\pi_{\text{ref}}$ frozen reference; the bracket is the *implicit reward
 margin*; $\beta$ plays the RLHF KL role. No reward model, no sampling. See
-[Module 15](../lessons/module-15/lesson-03.md).
+[Module 15](lessons/module-15/lesson-03.md).
 
 **Optimal RLHF policy (DPO's starting point)** — the closed form the DPO derivation inverts.
 $$\pi^{*}(y\mid x) = \frac{1}{Z(x)}\,\pi_{\text{ref}}(y\mid x)\exp\!\Big(\tfrac{1}{\beta}r(x,y)\Big)$$
@@ -265,13 +265,13 @@ cancels in the DPO margin.
 $$\hat{A}_i = \frac{r_i - \mathrm{mean}(\{r_1,\dots,r_G\})}{\mathrm{std}(\{r_1,\dots,r_G\})}$$
 $G$ completions sampled per prompt; $r_i$ reward of completion $i$; the group mean is the
 baseline, the group std normalizes scale. Same advantage is broadcast to every token of
-completion $i$. No critic model. See [Module 16](../lessons/module-16/lesson-01.md).
+completion $i$. No critic model. See [Module 16](lessons/module-16/lesson-01.md).
 
 **RLVR reward** — reinforcement learning from *verifiable* rewards: the reward is a programmatic
 check, not a learned model.
 $$r(x,y) = \mathbb{1}[\,\text{verify}(x,y)\,]$$
 $1$ if the answer passes (unit tests green, final answer matches), else $0$. Removes reward-model
-hacking. See [Module 16](../lessons/module-16/lesson-02.md).
+hacking. See [Module 16](lessons/module-16/lesson-02.md).
 
 ---
 
@@ -283,4 +283,4 @@ $$W' = W + \Delta W, \qquad \Delta W = \frac{\alpha}{r}\,BA$$
 $W$ frozen $(d_{\text{out}}\times d_{\text{in}})$; $A$ is $(r\times d_{\text{in}})$, $B$ is
 $(d_{\text{out}}\times r)$ with $r \ll \min(d_{\text{in}},d_{\text{out}})$; $\alpha$ scaling.
 $A$ is randomly initialized, $B$ starts at zero so $\Delta W = 0$ at step 0. QLoRA adds a
-4-bit-quantized frozen $W$. See [Module 14](../lessons/module-14/lesson-03.md).
+4-bit-quantized frozen $W$. See [Module 14](lessons/module-14/lesson-03.md).

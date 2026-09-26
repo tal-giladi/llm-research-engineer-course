@@ -1,7 +1,7 @@
 # 02.3 · Backprop through linear + softmax + cross-entropy by hand
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> <a href="lesson-02.md">02.2 · Jacobians, VJPs, computational graphs</a> — the VJP view of backprop and the fan-in summation of gradients. <a href="../module-01/lesson-03.md">01.3 · Entropy, cross-entropy, KL divergence</a> — cross-entropy against a one-hot target reducing to $-\log p_{\text{target}}$, and softmax as the map from scores to a distribution.</p>
+<p><strong>Prerequisites:</strong> <a href="#/lessons/module-02/lesson-02">02.2 · Jacobians, VJPs, computational graphs</a> — the VJP view of backprop and the fan-in summation of gradients. <a href="#/lessons/module-01/lesson-03">01.3 · Entropy, cross-entropy, KL divergence</a> — cross-entropy against a one-hot target reducing to $-\log p_{\text{target}}$, and softmax as the map from scores to a distribution.</p>
 <p><strong>You will learn:</strong> to derive, by hand and step by step, the gradient of cross-entropy loss through a softmax and a linear layer — the exact computation at the output of every language model. The centerpiece is the famous result <strong>$\frac{\partial L}{\partial \mathbf{z}} = \mathbf{p} - \text{onehot}(\text{target})$</strong>. From it we get $\frac{\partial L}{\partial W} = \frac{\partial L}{\partial \mathbf{z}}\,\mathbf{x}^\top$, $\frac{\partial L}{\partial \mathbf{b}} = \frac{\partial L}{\partial \mathbf{z}}$, and $\frac{\partial L}{\partial \mathbf{x}} = W^\top \frac{\partial L}{\partial \mathbf{z}}$. A full 3-class, 2-dim example is computed by hand and matched to <code>loss.backward()</code> to $10^{-6}$.</p>
 <p><strong>Why this matters for ML:</strong> this <em>is</em> the gradient a language model computes at its output on every single training step. The final layer of a GPT produces logits, softmax turns them into a next-token distribution, cross-entropy against the true next token is the loss, and the gradient that starts the entire backward pass through the network is $\mathbf{p} - \text{onehot}(\text{target})$ — "predicted distribution minus the truth." If you understand one derivation in this course, make it this one.</p>
 </div>
@@ -23,7 +23,7 @@ We compute a loss in four stages. Sizes: $C$ classes (the vocabulary size in a r
 1. **Linear layer.** $\mathbf{z} = W\mathbf{x} + \mathbf{b}$, where $\mathbf{x}$ is the input vector (shape $(d,)$), $W$ is the weight matrix (shape $(C, d)$), $\mathbf{b}$ is the bias (shape $(C,)$), and $\mathbf{z}$ is the vector of **logits** (shape $(C,)$). Componentwise, $z_i = \sum_{j} W_{ij} x_j + b_i$.
 2. **Softmax.** $p_i = \dfrac{e^{z_i}}{\sum_{k} e^{z_k}}$, turning logits into a probability distribution $\mathbf{p}$ (shape $(C,)$, entries positive, summing to $1$).
 3. **Pick the true class.** Let $t$ be the index of the correct class. Write $\mathbf{y} = \text{onehot}(t)$, the vector with $y_t = 1$ and $y_i = 0$ otherwise.
-4. **Cross-entropy loss.** $L = -\sum_i y_i \log p_i = -\log p_t$ (from [01.3](../module-01/lesson-03.md): against a one-hot target, cross-entropy collapses to the negative log-probability of the true class).
+4. **Cross-entropy loss.** $L = -\sum_i y_i \log p_i = -\log p_t$ (from [01.3](lessons/module-01/lesson-03.md): against a one-hot target, cross-entropy collapses to the negative log-probability of the true class).
 
 So the pipeline is $\mathbf{x} \xrightarrow{W,\mathbf{b}} \mathbf{z} \xrightarrow{\text{softmax}} \mathbf{p} \xrightarrow{-\log p_t} L$. We backpropagate right to left, exactly the VJP sweep of lesson 02.2, computing $\frac{\partial L}{\partial \mathbf{p}}$, then $\frac{\partial L}{\partial \mathbf{z}}$, then the gradients for the parameters $W, \mathbf{b}$ and the input $\mathbf{x}$.
 
@@ -240,7 +240,7 @@ If you compute softmax naively as `exp(z)/sum(exp(z))`, a large logit overflows 
 
 ## 10. Research connection
 
-<div class="callout paper"><p>This exact output gradient is what trains GPT-2: the final linear layer projects the last hidden state to <code>vocab_size</code> logits, softmax + cross-entropy against the true next token gives the loss, and $\mathbf{p} - \text{onehot}(t)$ is the gradient that launches the backward pass through all 12 (or 48) layers. See the <a href="../../papers/index.md">paper curriculum</a> — GPT-2 ("Language Models are Unsupervised Multitask Learners", Radford et al. 2019), which you assemble from scratch in Module 6.</p></div>
+<div class="callout paper"><p>This exact output gradient is what trains GPT-2: the final linear layer projects the last hidden state to <code>vocab_size</code> logits, softmax + cross-entropy against the true next token gives the loss, and $\mathbf{p} - \text{onehot}(t)$ is the gradient that launches the backward pass through all 12 (or 48) layers. See the <a href="#/papers/index">paper curriculum</a> — GPT-2 ("Language Models are Unsupervised Multitask Learners", Radford et al. 2019), which you assemble from scratch in Module 6.</p></div>
 
 ## Exercise
 
@@ -301,4 +301,4 @@ Shape $(C, d) = (50257, 768)$ — the same as $W$ — and it does **not** depend
 
 You have derived and verified the gradient that every language model computes at its output, and the linear-layer VJPs ($W$ on the way forward, $W^\top$ on the way back) that carry it into the rest of the network. The last lesson of this module opens the box completely: how PyTorch builds the computational graph as you compute, and how `.backward()` walks it — which we prove by writing a tiny autograd engine from scratch and checking it against PyTorch.
 
-Continue to [02.4 · Autograd internals](lesson-04.md).
+Continue to [02.4 · Autograd internals](lessons/module-02/lesson-04.md).

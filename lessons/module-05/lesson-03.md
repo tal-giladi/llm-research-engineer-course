@@ -1,7 +1,7 @@
 # 05.3 · Multi-head attention
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> single-head scaled dot-product attention — scores, scale, causal mask, softmax, weighted value sum — from <a href="lesson-02.md">05.2 · Q/K/V &amp; scaled dot-product attention</a>; the reshape / view / transpose machinery and the $(B, T, C)$ convention from Module 0.</p>
+<p><strong>Prerequisites:</strong> single-head scaled dot-product attention — scores, scale, causal mask, softmax, weighted value sum — from <a href="#/lessons/module-05/lesson-02">05.2 · Q/K/V &amp; scaled dot-product attention</a>; the reshape / view / transpose machinery and the $(B, T, C)$ convention from Module 0.</p>
 <p><strong>You will learn:</strong> why one attention is not enough; how to split the channel width $C$ into $n_h$ heads of size $d_h = C/n_h$; the exact reshape/transpose that turns $(B, T, C)$ into $(B, n_h, T, d_h)$ so all heads run in one batched matmul; how to merge the heads back and apply the output projection $W_O$; and every intermediate shape.</p>
 <p><strong>Why this matters for ML:</strong> multi-head attention is the form used in every real transformer. Understanding the split-and-merge is what lets you read any GPT attention module, reason about its memory, and later modify it (GQA, MQA, MLA in Module 12 all change exactly this head structure).</p>
 </div>
@@ -194,4 +194,4 @@ No. The heads partition the same $C$ channels ($n_h \cdot d_h = C$), and $Q, K, 
 
 You can now split attention into heads, run them in parallel, and merge them — the complete `CausalSelfAttention` module. But attention is only half of a transformer block. The next lesson adds the position-wise MLP, the residual connections that make deep stacks trainable, and LayerNorm, then assembles all of it into the pre-norm `Block` that GPT stacks $n_{\text{layer}}$ times.
 
-Continue to [05.4 · MLP, residual, LayerNorm, the block](lesson-04.md).
+Continue to [05.4 · MLP, residual, LayerNorm, the block](lessons/module-05/lesson-04.md).

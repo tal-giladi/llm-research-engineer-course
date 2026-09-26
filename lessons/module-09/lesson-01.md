@@ -1,7 +1,7 @@
 # 09.1 · Data parallelism, all-reduce, DDP
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the canonical training loop <code>get_batch → model(x,y) → zero_grad → backward → clip → step</code> from <a href="../module-07/lesson-01.md">07.1 · The training loop</a>; micro-batch / global batch and gradient accumulation from <a href="../module-07/lesson-02.md">07.2 · Micro-batch, global batch, gradient accumulation</a>; that a language-model loss is a <em>mean</em> cross-entropy over tokens (<a href="../module-07/lesson-01.md">07.1</a>).</p>
+<p><strong>Prerequisites:</strong> the canonical training loop <code>get_batch → model(x,y) → zero_grad → backward → clip → step</code> from <a href="#/lessons/module-07/lesson-01">07.1 · The training loop</a>; micro-batch / global batch and gradient accumulation from <a href="#/lessons/module-07/lesson-02">07.2 · Micro-batch, global batch, gradient accumulation</a>; that a language-model loss is a <em>mean</em> cross-entropy over tokens (<a href="#/lessons/module-07/lesson-01">07.1</a>).</p>
 <p><strong>You will learn:</strong> how <strong>data parallelism</strong> puts a full copy of the model on each of <code>W</code> workers, splits every global batch into <code>W</code> shards, and averages the per-shard gradients with an <strong>all-reduce</strong> so every worker applies the identical update; the exact reason averaging per-shard gradients equals the full-batch gradient (a two-line proof, verified numerically); how <strong>ring all-reduce</strong> moves the data in <code>2(W-1)</code> steps carrying only <code>1/W</code> of the tensor per link; what NCCL is; and how PyTorch <strong>DDP</strong> overlaps the all-reduce with the backward pass.</p>
 <p><strong>Why this matters for ML:</strong> data parallelism is the first and most common way runs get faster — it is how you turn one GPU into eight, or eight into thousands, with almost no change to the training loop you already wrote. Every larger parallelism strategy in this module (ZeRO, FSDP, tensor/pipeline parallelism) is built on top of the collective you meet here.</p>
 </div>
@@ -182,9 +182,9 @@ def data_parallel_grads(grad_fn, params, batch, world_size):
     return ring_all_reduce(grads, op="mean")              # averaged == full-batch
 ```
 
-In a real run there is no `for` loop here — the `W` `grad_fn` calls happen *simultaneously* on `W` GPUs, and `ring_all_reduce` is a NCCL call across the interconnect. The returned gradient is what the optimizer consumes, exactly as in the single-GPU loop of [07.1](../module-07/lesson-01.md); every worker gets the same averaged gradient and takes the same step.
+In a real run there is no `for` loop here — the `W` `grad_fn` calls happen *simultaneously* on `W` GPUs, and `ring_all_reduce` is a NCCL call across the interconnect. The returned gradient is what the optimizer consumes, exactly as in the single-GPU loop of [07.1](lessons/module-07/lesson-01.md); every worker gets the same averaged gradient and takes the same step.
 
-Notice the relationship to **gradient accumulation** ([07.2](../module-07/lesson-02.md)): accumulation sums micro-batch gradients *sequentially on one device* to fake a big batch; data parallelism computes shard gradients *simultaneously on many devices* and averages. Real runs combine both — `global batch = micro_batch × grad_accum_steps × world_size` — which is the identity you will use in every scaling estimate.
+Notice the relationship to **gradient accumulation** ([07.2](lessons/module-07/lesson-02.md)): accumulation sums micro-batch gradients *sequentially on one device* to fake a big batch; data parallelism computes shard gradients *simultaneously on many devices* and averages. Real runs combine both — `global batch = micro_batch × grad_accum_steps × world_size` — which is the identity you will use in every scaling estimate.
 
 ## 6. NCCL: the collective library
 
@@ -192,7 +192,7 @@ On NVIDIA GPUs, the collectives themselves are implemented by **NCCL** (the NVID
 
 - picks a topology-aware algorithm (ring, tree, or a hybrid) based on how the GPUs are wired — NVLink within a node, InfiniBand across nodes;
 - runs the transfers on the GPU's copy engines so they overlap with compute;
-- handles the different collectives (`all_reduce`, `all_gather`, `reduce_scatter`, `broadcast`) that the higher-level strategies (DDP here, FSDP in [09.2](lesson-02.md), tensor parallel in [09.3](lesson-03.md)) are built from.
+- handles the different collectives (`all_reduce`, `all_gather`, `reduce_scatter`, `broadcast`) that the higher-level strategies (DDP here, FSDP in [09.2](lessons/module-09/lesson-02.md), tensor parallel in [09.3](lessons/module-09/lesson-03.md)) are built from.
 
 Our `collectives.py` is the *pedagogical* version of what NCCL does: same result, same algorithm structure, none of the hardware.
 
@@ -265,11 +265,11 @@ Backward produces gradients layer by layer from output to input, so later layers
 
 <div class="hw">
 <p><strong>Hardware track — data-parallel training.</strong></p>
-<p><strong>This lesson's code:</strong> pure single-CPU simulation — any laptop, instant, 0 GPU-hours, CPU-only entirely. <strong>A real data-parallel run</strong> needs <code>W</code> GPUs (e.g. 8×A100 in one node connected by NVLink, or many nodes over InfiniBand) and NCCL. Rule of thumb: DDP scales near-linearly in throughput while the all-reduce stays hidden under backward — typically until the gradient tensor is large relative to interconnect bandwidth or <code>W</code> spans many slow-linked nodes. Memory does <strong>not</strong> improve: every worker still holds a full copy of params + grads + optimizer state (the $16P$ bytes of <a href="../module-07/lesson-04.md">07.4</a>), which is the limitation <a href="lesson-02.md">09.2</a> attacks. <strong>GPU-hours:</strong> data parallelism cuts wall-clock roughly by <code>W</code> but the <em>total</em> GPU-hours are unchanged (you use <code>W</code> GPUs for $1/W$ the time).</p>
+<p><strong>This lesson's code:</strong> pure single-CPU simulation — any laptop, instant, 0 GPU-hours, CPU-only entirely. <strong>A real data-parallel run</strong> needs <code>W</code> GPUs (e.g. 8×A100 in one node connected by NVLink, or many nodes over InfiniBand) and NCCL. Rule of thumb: DDP scales near-linearly in throughput while the all-reduce stays hidden under backward — typically until the gradient tensor is large relative to interconnect bandwidth or <code>W</code> spans many slow-linked nodes. Memory does <strong>not</strong> improve: every worker still holds a full copy of params + grads + optimizer state (the $16P$ bytes of <a href="#/lessons/module-07/lesson-04">07.4</a>), which is the limitation <a href="#/lessons/module-09/lesson-02">09.2</a> attacks. <strong>GPU-hours:</strong> data parallelism cuts wall-clock roughly by <code>W</code> but the <em>total</em> GPU-hours are unchanged (you use <code>W</code> GPUs for $1/W$ the time).</p>
 </div>
 
 ## Next
 
 Data parallelism makes a run faster but not smaller — every worker still stores the full model, its gradients, and Adam's optimizer state, so a model that doesn't fit on one GPU still doesn't fit on eight. The next lesson attacks exactly that: **ZeRO and FSDP** shard the parameters, gradients, and optimizer state *across* the data-parallel workers, so per-worker memory falls with `W`.
 
-Continue to [09.2 · ZeRO & FSDP](lesson-02.md).
+Continue to [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md).

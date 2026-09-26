@@ -1,7 +1,7 @@
 # 01.1 · Random variables, expectation, variance
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> tensors — shape, dtype, device — from <a href="../module-00/lesson-01.md">00.1 · Tensors: shape, dtype, device</a>. No probability background is assumed; this lesson starts from zero.</p>
+<p><strong>Prerequisites:</strong> tensors — shape, dtype, device — from <a href="#/lessons/module-00/lesson-01">00.1 · Tensors: shape, dtype, device</a>. No probability background is assumed; this lesson starts from zero.</p>
 <p><strong>You will learn:</strong> what a discrete random variable is, why its probabilities must sum to 1, how to compute the expectation $E[X]$ and the variance $\mathrm{Var}(X)$ (both by hand on a fair die and in PyTorch), and then the one distribution that matters most for the rest of this course — the <strong>categorical distribution</strong> over a vocabulary, which is exactly what a language model outputs at every position — including how to sample from it with <code>torch.multinomial</code>.</p>
 <p><strong>Why this matters for ML:</strong> a language model is, at heart, a machine that reads some text and emits a categorical distribution over the next token. Everything in Module 1 — expectation, likelihood, entropy, cross-entropy, perplexity — is machinery for measuring how good that distribution is. If you understand this one object, the training loss in lesson 01.4 will read as an obvious consequence rather than a formula to memorize.</p>
 </div>
@@ -251,4 +251,4 @@ Smaller. The variance is $35/12 \approx 2.9167$, so the standard deviation is $\
 
 You can now describe a discrete random variable, verify its PMF sums to 1, compute its expectation and variance, and — most importantly — recognize the categorical distribution as the object a language model emits at every position and sample from it. Next we ask how the probabilities of *many* tokens combine into the probability of a whole sentence, which is where the language-modeling factorization comes from.
 
-Continue to [01.2 · Conditional probability, Bayes, likelihood](lesson-02.md).
+Continue to [01.2 · Conditional probability, Bayes, likelihood](lessons/module-01/lesson-02.md).

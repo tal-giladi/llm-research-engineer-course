@@ -1,7 +1,7 @@
 # 10.3 · Chinchilla compute-optimality
 
 <div class="prereq">
-<p><strong>Prerequisites:</strong> the $6ND$ compute rule from <a href="lesson-01.md">10.1 · FLOPs & parameter counting</a>; power laws, the irreducible loss, and <code>fit_power_law</code> from <a href="lesson-02.md">10.2 · Kaplan scaling laws</a>; the chain rule / setting a derivative to zero from <a href="../module-02/lesson-01.md">02.1</a>.</p>
+<p><strong>Prerequisites:</strong> the $6ND$ compute rule from <a href="#/lessons/module-10/lesson-01">10.1 · FLOPs & parameter counting</a>; power laws, the irreducible loss, and <code>fit_power_law</code> from <a href="#/lessons/module-10/lesson-02">10.2 · Kaplan scaling laws</a>; the chain rule / setting a derivative to zero from <a href="#/lessons/module-02/lesson-01">02.1</a>.</p>
 <p><strong>You will learn:</strong> the Chinchilla parametric loss $L(N,D) = E + A/N^\alpha + B/D^\beta$ and what each term means; how to <strong>derive the compute-optimal allocation</strong> — given a fixed budget $C = 6ND$, minimise $L$ to get the best model size $N^\*$ and token count $D^\*$; the headline result that $N$ and $D$ should scale <strong>together</strong> (~20 tokens per parameter), so GPT-3-era models were badly <strong>undertrained</strong>; and how this honestly contrasts with Kaplan's earlier conclusion.</p>
 <p><strong>Why this matters for ML:</strong> this single result changed how every lab spends its compute. Before Chinchilla, the field over-invested in parameters and under-fed them data; after it, "train a smaller model on far more tokens" became the default. Being able to solve the allocation yourself — turning a dollar budget into a concrete $(N^\*, D^\*)$ — is the practical payoff of the entire module.</p>
 </div>
@@ -142,7 +142,7 @@ The core technical disagreement is the learning-rate-schedule methodology, which
 
 ## Research connection
 
-<div class="callout paper"><p><strong>Training Compute-Optimal Large Language Models</strong> (Hoffmann et al., 2022) — <a href="../../papers/index.md">paper #4 in the reading list</a>, "Chinchilla". <strong>Read:</strong> the abstract, the IsoFLOP figure (loss-vs-model-size curves at fixed compute, whose minima trace the optimal frontier), and the parametric fit $L(N,D)=E+A/N^\alpha+B/D^\beta$. <strong>Understand:</strong> for fixed compute, $N$ and $D$ scale together (~20 tokens/param); prior models were oversized and underfed; three independent estimation approaches converge. <strong>Skip on a first pass:</strong> the per-approach uncertainty analysis and the downstream eval tables. Pair it with Kaplan (paper #3) and read them as a debate, not a contradiction.</p></div>
+<div class="callout paper"><p><strong>Training Compute-Optimal Large Language Models</strong> (Hoffmann et al., 2022) — <a href="#/papers/index">paper #4 in the reading list</a>, "Chinchilla". <strong>Read:</strong> the abstract, the IsoFLOP figure (loss-vs-model-size curves at fixed compute, whose minima trace the optimal frontier), and the parametric fit $L(N,D)=E+A/N^\alpha+B/D^\beta$. <strong>Understand:</strong> for fixed compute, $N$ and $D$ scale together (~20 tokens/param); prior models were oversized and underfed; three independent estimation approaches converge. <strong>Skip on a first pass:</strong> the per-approach uncertainty analysis and the downstream eval tables. Pair it with Kaplan (paper #3) and read them as a debate, not a contradiction.</p></div>
 
 ## Exercise
 
@@ -212,4 +212,4 @@ $N^\* \propto C^{a} \approx C^{0.5}$ and $D^\* \propto C^{b} \approx C^{0.5}$, s
 
 You have completed the scaling-laws module: you can count parameters and FLOPs (10.1), fit a power law to a loss sweep (10.2), and allocate a compute budget compute-optimally (10.3). The Chinchilla optimum assumes an *abundant, clean* token supply — but where do trillions of high-quality tokens come from? The next module is data engineering: turning Common Crawl into training text, deduplicating it, and guarding against contamination — the other half of making the $D$ in $6ND$ real.
 
-Continue to [11.1 · Common Crawl → clean text](../module-11/lesson-01.md).
+Continue to [11.1 · Common Crawl → clean text](lessons/module-11/lesson-01.md).
