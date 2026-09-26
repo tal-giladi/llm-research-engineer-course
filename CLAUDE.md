@@ -48,3 +48,10 @@ Run code: `cd code && pip install -e . && pytest`.
 ## Status / handoff
 Progress and any gaps are tracked in `TODO_FOR_TAL.md`. Commit + push after each module so
 partial work is always preserved.
+
+## Modernization (research/)
+The course is kept current by a daily-research → weekly-review pipeline in `research/`
+(read `research/README.md`). New material is only added through the weekly review
+(`research/PROTOCOL-weekly.md`): additions extend existing lessons and code, never replace
+them, and every change leaves an audit trail (candidate → weekly report → topic file →
+CHANGELOG). Helper: `python research/tools/research.py check|index|lookup|new-day|scope`.

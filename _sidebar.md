@@ -101,3 +101,5 @@
   - [PyTorch / systems cheat sheet](assets/pytorch-cheatsheet.md)
   - [Glossary](assets/glossary.md)
   - [Readiness matrix](curriculum/readiness-matrix.md)
+  - [Course changelog](research/CHANGELOG.md)
+  - [Topic registry (research)](research/REGISTRY.md)
