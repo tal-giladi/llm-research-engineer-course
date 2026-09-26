@@ -91,6 +91,9 @@
   - [19.2 · Experiment design & research writing](lessons/module-19/lesson-02.md)
 - **20 · Capstone**
   - [20 · Mini frontier LLM](lessons/module-20/lesson-01.md)
+- **Frontier updates (bonus)**
+  - [F.1 · MLPerf post-training: RLVR as a benchmark](lessons/frontier/update-01.md)
+  - [F.2 · GRPO fixes: Dr. GRPO, DAPO, GVPO](lessons/frontier/update-02.md)
 
 - **Reference**
   - [Paper curriculum](papers/index.md)

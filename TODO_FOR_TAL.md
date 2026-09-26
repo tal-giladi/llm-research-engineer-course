@@ -42,3 +42,10 @@ GitHub → repo Settings → Pages → Source: "Deploy from a branch", branch `m
 ## Notes
 - All paper links verified to resolve (Sep 2026). GPT-2 → the OpenAI PDF, not an arXiv lookalike.
 - `code/` is CPU-first; GPU-only tasks are marked with a hardware track in the lesson.
+
+## Frontier updates (added 2026-09-26)
+- New bonus section `lessons/frontier/` (sidebar: "Frontier updates (bonus)"). Existing lessons untouched.
+  - F.1 — MLPerf Training v6.1 post-training (agentic RLVR) benchmark: design signals, pass@k, async staleness, learning priorities, and the function-calling → RLVR lab.
+  - F.2 — GRPO instability and fixes: Dr. GRPO, DAPO, GVPO (+ GVPO++ arXiv 2609.21432).
+- New code: `llmre/evaluation/pass_at_k.py`, `llmre/rl/gvpo.py`; tests in `code/tests/test_frontier_updates.py`.
+- The MLCommons announcement itself is cited without a link (no verified URL); all arXiv links verified.
