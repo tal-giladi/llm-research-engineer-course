@@ -58,6 +58,24 @@
       count: { countable: true },
       plugins: [
         function (hook) {
+          // Shield math from the markdown parser: otherwise it eats "\\", "\,",
+          // "\;" and turns "_{...}" into emphasis before KaTeX ever sees it.
+          // Code spans/fences are matched first and left untouched.
+          var stash = [];
+          var TOKEN = /(```[\s\S]*?```|~~~[\s\S]*?~~~)|(`[^`\n]*`)|(\$\$[\s\S]+?\$\$)|(\$(?!\s)[^$\n]+?(?<![\s\\])\$)/g;
+          hook.beforeEach(function (content) {
+            stash = [];
+            return content.replace(TOKEN, function (m, fence, code, display, inline) {
+              if (fence || code) return m;
+              stash.push(m);
+              return 'KATEXSTASH' + (stash.length - 1) + 'END';
+            });
+          });
+          hook.afterEach(function (html) {
+            return html.replace(/KATEXSTASH(\d+)END/g, function (_, i) {
+              return stash[+i].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            });
+          });
           // Render math with KaTeX auto-render AFTER docsify writes the DOM,
           // so $...$ inside raw-HTML blocks (prereq / callout divs) also renders.
           hook.doneEach(function () {
