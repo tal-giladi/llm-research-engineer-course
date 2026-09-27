@@ -637,8 +637,54 @@ print(perplexity(logits, torch.tensor([0])).item())  # 1.5530017927759188
 At real vocabulary sizes the loss layer is not free. For logits of shape `(B, T, V)`:
 
 - **Memory.** The logits tensor holds $B \cdot T \cdot V$ floats. With $B = 8$, $T = 1024$, $V = 50257$ in float32 that is about $8 \cdot 1024 \cdot 50257 \cdot 4 \approx 1.6\ \text{GB}$ for a single tensor — often the largest activation in the whole forward pass. This is why the vocabulary projection and the loss are a real memory concern, addressed later with techniques like fused cross-entropy kernels.
-- **Compute.** Softmax and the log are $O(B \cdot T \cdot V)$ elementwise-ish work; the dominant cost is usually the preceding matrix multiply that produces the logits (the `(C → V)` output projection), which is $O(B \cdot T \cdot C \cdot V)$.
+- **Compute.** Softmax and the log are $O(B \cdot T \cdot V)$ elementwise-ish work; the dominant cost is usually the preceding matrix multiply that produces the logits (the `(C → V)` output projection), which is $O(B \cdot T \cdot C \cdot V)$. Details below.
 - **Gradient.** The gradient of cross-entropy with respect to the logits has an elegant closed form, $\partial \mathcal{L} / \partial z_i = q_i - p_i$ — the predicted distribution minus the one-hot target. For our worked example the gradient on the true token 0 is $0.6439 - 1 = -0.3561$ (push that logit up) and on token 3 it is $0.0321 - 0 = +0.0321$ (push it down). We derive this backward pass by hand in [Module 2](lessons/module-02/lesson-03.md); for now, note the loss and its gradient are both simple functions of the softmax output.
+
+### 8.1 Compute, step by step
+
+Until now the logits were given to us. In a real model they are produced by the last layer, and that layer is where most of the loss-side compute goes. Two pieces of work happen at every position:
+
+**(1) The output projection (makes the logits).** The network ends each position with a *hidden vector* $h$ of $C$ numbers (its summary of the context so far; $C$ is the model width, 768 for GPT-2 small). A weight matrix $W$ of shape `(C, V)` turns it into $V$ logits: $z = hW$, i.e. $z_j = \sum_{k=1}^{C} h_k W_{kj}$. Each logit is a dot product of length $C$: $C$ multiplications and about $C$ additions, which we count as $2C$ FLOPs (floating-point operations). There are $V$ logits per position, so $2CV$ FLOPs per position, and for the whole batch:
+
+$$
+\text{FLOPs}_{\text{projection}} = 2 \cdot B \cdot T \cdot C \cdot V.
+$$
+
+**(2) Softmax + loss (scores the logits).** Per logit: subtract the max, one `exp`, add into the sum, subtract `lse` — a handful of operations, independent of $C$. Call it about 5 FLOPs per logit (the exact constant does not matter; what matters is that there is no factor of $C$):
+
+$$
+\text{FLOPs}_{\text{softmax+loss}} \approx 5 \cdot B \cdot T \cdot V.
+$$
+
+The ratio between them is $\frac{2BTCV}{5BTV} = \frac{2C}{5}$. The projection costs about $0.4\,C$ times more than the softmax, so the wider the model, the more the matmul dominates.
+
+**Toy example: one position, $C = 2$, $V = 3$.** Take hidden vector $h = [1, 2]$ and
+
+$$
+W = \begin{bmatrix} 0 & -1 & 2 \\ 1 & 1 & -1 \end{bmatrix} \quad (C \times V = 2 \times 3).
+$$
+
+Each logit is $h$ dotted with one column of $W$:
+
+$$
+z_0 = 1\cdot 0 + 2\cdot 1 = 2, \qquad z_1 = 1\cdot(-1) + 2\cdot 1 = 1, \qquad z_2 = 1\cdot 2 + 2\cdot(-1) = 0.
+$$
+
+That is $z = [2, 1, 0]$, the row used throughout this lesson. Count the work: each logit took 2 multiplications + 1 addition; by the $2C$ convention that is $2 \cdot 2 \cdot 3 = 12$ FLOPs for the projection. Then softmax + loss on 3 logits: $\approx 5 \cdot 3 = 15$ FLOPs. At this toy size the two costs are about equal, because $C = 2$ is tiny ($2C/5 = 0.8$).
+
+**Same count at GPT-2 small scale.** $B = 8$, $T = 1024$, $C = 768$, $V = 50257$, so $B \cdot T = 8192$ positions.
+
+$$
+\text{projection: } 2 \cdot 8192 \cdot 768 \cdot 50257 \approx 6.3 \times 10^{11}\ \text{FLOPs}
+$$
+
+$$
+\text{softmax+loss: } 5 \cdot 8192 \cdot 50257 \approx 2.1 \times 10^{9}\ \text{FLOPs}
+$$
+
+The ratio is $2 \cdot 768 / 5 \approx 307$: the projection does about 300× more arithmetic than the softmax and loss combined. For scale, a common rule of thumb (REASONABLE INDUSTRY PRACTICE, derived in Module 7) puts a whole forward pass at about $2 \times (\text{parameters}) \times (\text{tokens})$ FLOPs, which for GPT-2 small's 124M parameters is $2 \cdot 124\text{M} \cdot 8192 \approx 2.0 \times 10^{12}$. The output projection alone is about $6.3 / 20 \approx 30\%$ of that, because $V = 50257$ is so large.
+
+**So why worry about the softmax at all, if it is 300× cheaper?** Because its cost is not arithmetic but memory traffic. The softmax reads and writes the whole $B \cdot T \cdot V$ logits tensor (1.6 GB in the memory bullet above) several times (find the max, exponentiate and sum, subtract), doing only a few FLOPs per number it moves. A GPU can do far more arithmetic per second than it can move bytes, so this step is *memory-bound*: its runtime is set by bytes moved, not FLOPs. The matmul does hundreds of FLOPs per number it loads, so it is *compute-bound*. That distinction — compute-bound vs memory-bound — is the central idea behind the fused cross-entropy kernels mentioned above and behind FlashAttention (Module 8).
 
 ## Research connection
 
