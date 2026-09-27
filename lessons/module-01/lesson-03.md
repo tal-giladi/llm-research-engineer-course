@@ -194,7 +194,50 @@ The cross-entropy collapses to the **negative log-probability the model assigned
 - **Mixing bits and nats.** An entropy quoted "in bits" is $\ln 2 \approx 0.6931$ times smaller than the same quantity in nats. If your hand number is off by a factor of $0.6931$ from PyTorch, this is why. We use nats to match PyTorch.
 - **Weighting cross-entropy by $q$ instead of $p$.** In $H(p, q) = -\sum p(x)\log q(x)$ the *weights* are the true $p(x)$ and the *logs* are the model $q(x)$. Swapping them computes something else entirely.
 - **Treating KL as symmetric.** $\mathrm{KL}(p\parallel q) \ne \mathrm{KL}(q\parallel p)$. It is not a distance and the argument order encodes which distribution supplies the weights. (This asymmetry matters later in RLHF/DPO, Module 15.)
-- **Forgetting $0\log 0 = 0$.** Outcomes with zero true probability drop out of entropy and cross-entropy. But note: if the *model* assigns $q(x) = 0$ to a token that actually occurs ($p(x) > 0$), then $-\log q(x) = +\infty$ — an infinite loss. This is why models must never assign exactly zero probability, which softmax guarantees.
+- **Forgetting $0\log 0 = 0$.** Outcomes with zero true probability drop out of entropy and cross-entropy. But note: if the *model* assigns $q(x) = 0$ to a token that actually occurs ($p(x) > 0$), then $-\log q(x) = +\infty$ — an infinite loss. This is why models must never assign exactly zero probability, which softmax guarantees. (Details below.)
+
+### "Forgetting $0\log 0 = 0$", in detail
+
+There are two different zeros here, and they behave in opposite ways. Which slot the zero sits in — the weight $p(x)$ or the log's argument $q(x)$ — decides everything.
+
+**Zero #1: the *true* probability is zero, $p(x) = 0$. Harmless.**
+
+Every term of $H(p) = -\sum_x p(x)\log p(x)$ has the form $p \log p$. When $p = 0$ that term is $0 \times \log 0 = 0 \times (-\infty)$, which is undefined as written. We *define* it as $0$, for two reasons:
+
+- *Math:* the limit exists and is 0. Take $p$ smaller and smaller: $0.1 \ln 0.1 = -0.230$, $0.01 \ln 0.01 = -0.046$, $0.001 \ln 0.001 = -0.0069$, $10^{-6}\ln 10^{-6} = -0.0000138$. The $p$ in front shrinks faster than $\ln p$ grows, so the product goes to 0.
+- *Meaning:* an outcome that never happens contributes no surprise on average, because you never have to pay for it. The weight is zero, so its term vanishes.
+
+Worked example: $p = (0.5, 0.5, 0)$. Then $H(p) = -[0.5\ln 0.5 + 0.5\ln 0.5 + 0] = 0.693$ nats — exactly the entropy of a fair coin, as it should be: the third outcome is impossible and adds nothing. The same holds in cross-entropy: a token with $p(x) = 0$ gets weight 0, so it does not matter what $q(x)$ is there.
+
+**The code trap.** On paper we write "$0\log 0 = 0$", but the computer does not know that convention. It evaluates $\log 0 = -\infty$ first, then $0 \times (-\infty)$, which in IEEE floating point is `nan`. One `nan` in the sum makes the whole entropy `nan`, and a `nan` loss poisons every gradient.
+
+```python
+import torch
+p = torch.tensor([0.5, 0.5, 0.0])
+print(-(p * p.log()).sum())          # tensor(nan)      <- the bug
+print(-torch.xlogy(p, p).sum())      # tensor(0.6931)   <- xlogy(x, y) = x*log(y), and 0 when x == 0
+print(-(p[p > 0] * p[p > 0].log()).sum())   # tensor(0.6931)  <- or drop the zero entries yourself
+```
+
+This is the exact bug you hit when a one-hot target (section 6) is written as a probability vector and you compute `-(target * target.log()).sum()` by hand: every non-target entry is $0 \times \log 0$.
+
+**Zero #2: the *model* probability is zero where the truth is not, $q(x) = 0$ but $p(x) > 0$. Catastrophic.**
+
+Now the zero sits inside the log, and the weight in front is *not* zero. The term is $-p(x)\log 0 = -p(x) \times (-\infty) = +\infty$. No convention rescues this — it is a genuinely infinite loss. Meaning: the model said "this token is impossible", then the token occurred. Infinite surprise.
+
+Worked example: true next token is `cat` ($p = $ one-hot on `cat`), model gives $q(\text{cat}) = 0$. Loss $= -\ln 0 = +\infty$. Compare $q(\text{cat}) = 0.001$: loss $= -\ln 0.001 = 6.9$ — large, but finite, and the gradient can pull it up.
+
+**Why softmax "guarantees" $q > 0$, and when it stops guaranteeing it.** Softmax is $q_i = e^{z_i} / \sum_j e^{z_j}$, and $e^{z}$ is strictly positive for every real $z$, so *mathematically* $q_i > 0$ always. But floating point has a smallest representable number. In float32, $e^{-200} \approx 10^{-87}$ is below that limit and rounds to exactly 0:
+
+```python
+logits = torch.tensor([0.0, -200.0])
+q = torch.softmax(logits, dim=0)
+print(q)                              # tensor([1., 0.])      <- underflowed to exactly 0
+print(q.log())                        # tensor([0., -inf])    <- -log q = +inf for token 1
+print(torch.log_softmax(logits, 0))   # tensor([0., -200.])   <- correct, finite
+```
+
+The fix is to never compute `softmax` and then `log` as two steps. Compute $\log q_i = z_i - \log\sum_j e^{z_j}$ directly (`torch.log_softmax`), which never forms the tiny $q_i$ and so never underflows. `torch.nn.functional.cross_entropy` takes raw logits and does exactly this internally — on the logits above with target 1 it returns `200.0`, not `inf`. That is why the loss takes logits, not probabilities, and why lesson 01.4 builds the loss the same way.
 
 ## Exercise
 
