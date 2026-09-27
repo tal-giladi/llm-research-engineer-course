@@ -208,6 +208,60 @@ loss = F.cross_entropy(logits.reshape(-1, 3), targets.reshape(-1))
 print(loss)                                            # tensor(1.0804)
 ```
 
+### 5.2 What that one line does, step by step
+
+`F.cross_entropy(logits.reshape(-1, 3), targets.reshape(-1))` receives logits of shape `(4, 3)` and targets of shape `(4,)`. **Each of the 4 rows is one prediction for one next token**: 3 scores, one per vocabulary token, and one target index saying which of the 3 actually came next. Behind the scenes it does four things, and each is something from this module.
+
+**Step 1 — pairing.** `reshape` flattens both tensors in the same order: (seq 0, pos 0), (seq 0, pos 1), (seq 1, pos 0), (seq 1, pos 1). So logits row `r` and `targets[r]` still describe the same slot. `F.cross_entropy` always treats the second axis of the logits (size 3 = `V`) as the vocabulary, and the target as an index into it.
+
+```text
+z = [[2, 1, 0],        t = [0,      <- row 0: true token is 0
+     [0, 0, 0],             2,      <- row 1: true token is 2
+     [1, 2, 0],             1,      <- row 2: true token is 1
+     [0, 1, 2]]             0]      <- row 3: true token is 0
+    shape (4, 3)           shape (4,)
+```
+
+**Step 2 — logits → log-probabilities, per row** (section 2 + the underflow lesson in 01.3). For each row it computes
+
+$$
+\log q_j = z_j - \log\big(e^{z_0} + e^{z_1} + e^{z_2}\big),
+$$
+
+which is softmax followed by log, done in one step so a tiny $q$ never rounds to 0. The logits are *scores*, not probabilities; this step is where they become (log-)probabilities. Row 0: $\log(e^2 + e^1 + e^0) = \log(7.389 + 2.718 + 1) = 2.4076$, so $\log q = (2 - 2.4076,\ 1 - 2.4076,\ 0 - 2.4076) = (-0.4076,\ -1.4076,\ -2.4076)$. All four rows:
+
+```text
+log q = [[-0.4076, -1.4076, -2.4076],
+         [-1.0986, -1.0986, -1.0986],
+         [-1.4076, -0.4076, -2.4076],
+         [-2.4076, -1.4076, -0.4076]]     shape (4, 3)
+```
+
+**Step 3 — pick the true token and negate** (01.3 section 6 + section 3 here). The full cross-entropy is $-\sum_x p(x)\log q(x)$ over all 3 tokens. The target is one index, which means $p$ is one-hot. For row 0 the target is 0, so $p = (1, 0, 0)$:
+
+$$
+\ell_0 = -\big(1 \cdot \log q_0 + 0 \cdot \log q_1 + 0 \cdot \log q_2\big) = -1 \cdot \log q_0 = -(-0.4076) = 0.4076.
+$$
+
+The 1 is a *multiplication* by the one-hot weight, and the two other tokens are multiplied by 0 and vanish. That is why PyTorch takes an integer index instead of a one-hot vector: it just reads the one entry that survives, `log_q[r, t[r]]`, and negates it. For the four rows that gives `[0.4076, 1.0986, 0.4076, 2.4076]` — the last column of the table above. Shape `(4, 3)` → `(4,)`: the vocabulary axis is gone.
+
+**Step 4 — average** (section 4). The mean of the 4 numbers is $4.3214 / 4 = 1.0804$, a scalar (shape `()`). The sum before dividing, $4.3214$, is the negative log-likelihood of all four predictions together (01.2: log of a product = sum of logs); dividing by 4 makes it "per token".
+
+So the one line is the whole chain of this module: logits → softmax (in log form) → cross-entropy against a one-hot target, which collapses to $-\log q(\text{true token})$ → mean over every position → the maximum-likelihood objective.
+
+The same four steps written out by hand reproduce PyTorch exactly:
+
+```python
+z = logits.reshape(-1, 3)                              # (4, 3)  step 1
+t = targets.reshape(-1)                                # (4,)    step 1
+log_q = z - torch.logsumexp(z, dim=1, keepdim=True)    # (4, 3)  step 2: log-softmax per row
+losses = -log_q[torch.arange(4), t]                    # (4,)    step 3: pick true token, negate
+print(losses)                                          # tensor([0.4076, 1.0986, 0.4076, 2.4076])
+print(losses.mean())                                   # tensor(1.0804)  step 4 == F.cross_entropy
+```
+
+`log_q[torch.arange(4), t]` is "row 0 column t[0], row 1 column t[1], ..." — one entry per row. Written with an explicit one-hot it is `-(F.one_hot(t, 3) * log_q).sum(dim=1)`, which gives the same four numbers, only wastefully multiplying by zeros.
+
 ## 6. From-scratch: the loss in `llmre.evaluation.metrics`
 
 This module owns the evaluation code at `code/src/llmre/evaluation/metrics.py`. It implements cross-entropy from scratch — via a numerically stable log-softmax — rather than calling the framework, so you can see every step. The core is:
