@@ -124,6 +124,47 @@ $$
 \theta^\star = \arg\max_\theta \; p(\text{training data} \mid \theta) = \arg\max_\theta \; \prod_{i} p(x_i \mid x_{<i}; \theta).
 $$
 
+### 4.1 Reading the equation piece by piece
+
+The equation packs four ideas into one line. Take them one at a time.
+
+**The symbols.**
+
+- $\theta$ ("theta") — all the model's parameters (every weight in the network) bundled into one name. A different $\theta$ is a different model.
+- $\theta^\star$ ("theta star") — the *best* setting of those parameters, the one we are looking for.
+- $x_i$ — the actual token at position $i$ of the training text. $x_{<i}$ — all the actual tokens before it.
+- $p(x_i \mid x_{<i}; \theta)$ — "the probability that the model with parameters $\theta$ gives to the true next token $x_i$, after reading $x_{<i}$". The semicolon just says *which model* is computing the probability; read "$;\theta$" as "using model $\theta$".
+- $\prod_i$ — multiply that number over every position $i$ in the training text.
+
+**Step 1 — score one model.** Fix some $\theta$. Walk through the training text token by token; at each position look up how much probability the model put on the token that *actually* came next. Multiply all those numbers together. The result, $\prod_i p(x_i \mid x_{<i}; \theta)$, is one number: how probable this model thinks the training text is. That number is the **likelihood of $\theta$**.
+
+**Step 2 — why the two sides are equal.** The middle expression $p(\text{training data} \mid \theta)$ is "probability of the whole text under model $\theta$". The chain rule from section 3 says the probability of a whole sequence *is* the product of its next-token probabilities. So the right-hand side is just the middle expression written out in pieces the model can compute. Nothing new — only an expansion.
+
+**Step 3 — $\arg\max$, not $\max$.** $\max_\theta$ would return the highest score. $\arg\max_\theta$ returns *the $\theta$ that achieves* the highest score — the argument, not the value. We want the model, not the score.
+
+So the whole line reads: *"$\theta^\star$ is the parameter setting whose model gives the training text the highest probability."*
+
+### 4.2 Worked example: comparing two models
+
+Training text: `the cat sat` (three tokens). Two candidate models, $\theta_A$ and $\theta_B$, assign these probabilities to the true tokens:
+
+| position $i$ | true token $x_i$ | context $x_{<i}$ | $p(x_i \mid x_{<i}; \theta_A)$ | $p(x_i \mid x_{<i}; \theta_B)$ |
+|---|---|---|---|---|
+| 1 | `the` | (empty) | 0.2 | 0.2 |
+| 2 | `cat` | `the` | 0.1 | 0.5 |
+| 3 | `sat` | `the cat` | 0.3 | 0.6 |
+
+Step 1, score each model by multiplying down its column:
+
+$$
+\text{likelihood}(\theta_A) = 0.2 \times 0.1 \times 0.3 = 0.006, \qquad
+\text{likelihood}(\theta_B) = 0.2 \times 0.5 \times 0.6 = 0.06.
+$$
+
+Step 3, pick the winner: $\max$ over the two is $0.06$; $\arg\max$ is $\theta_B$. So among these two candidates, $\theta^\star = \theta_B$ — the model that was less surprised by the text that actually occurred.
+
+Real training does the same thing, except $\theta$ has billions of numbers and there are infinitely many candidates, so we cannot list them in a table. Instead gradient descent starts from one $\theta$ and repeatedly nudges it in the direction that raises this product (in practice, its log — section 5).
+
 The likelihood of the whole corpus is, by the chain rule, the product of every next-token probability the model assigns to the true tokens. MLE turns "learn a language model" into "adjust $\theta$ so the model assigns high probability to the text that actually occurred". Lesson 01.4 turns this maximization into the loss we minimize.
 
 ## 5. Why we sum log-probabilities instead of multiplying
