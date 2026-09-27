@@ -83,6 +83,28 @@ $$
 
 This is the mean negative log-likelihood — and by the chain rule of lesson 01.2, $\sum_i \log q_i(t_i)$ is the log-probability of the entire sequence. So minimizing $\mathcal{L}$ is maximizing the likelihood of the training text, averaged per token. We average (rather than sum) so the loss is comparable across sequences of different lengths and batch sizes; it is a per-token quantity in nats.
 
+### 4.1 Worked example: the loss of `the cat sat`
+
+Reuse the sentence and model $\theta_B$ from lesson 01.2. The model makes three predictions, one per position; at each one we look up the probability it gave the true token and take $-\ln$ of it (exactly the section 3 recipe, repeated):
+
+| position $i$ | context | true token $t_i$ | $q_i(t_i)$ | $-\ln q_i(t_i)$ |
+|---|---|---|---|---|
+| 1 | (empty) | `the` | 0.2 | 1.6094 |
+| 2 | `the` | `cat` | 0.5 | 0.6931 |
+| 3 | `the cat` | `sat` | 0.6 | 0.5108 |
+
+Sum the last column, then divide by $N = 3$:
+
+$$
+\mathcal{L} = \frac{1.6094 + 0.6931 + 0.5108}{3} = \frac{2.8133}{3} = 0.9378 \text{ nats per token}.
+$$
+
+**Check the link to likelihood.** In lesson 01.2 the likelihood of this sentence under $\theta_B$ was $0.2 \times 0.5 \times 0.6 = 0.06$. Its log is $\ln 0.06 = -2.8134$ — the negative of the sum above (up to rounding). So the sum of per-token losses *is* the negative log-likelihood of the whole sentence, and $\mathcal{L}$ is that divided by the number of tokens.
+
+**Why the mean and not the sum.** Suppose the text were twice as long, `the cat sat the cat sat`, and the model were equally good at every position (same three losses, repeated). The sum doubles to $5.6266$, but the mean stays $5.6266 / 6 = 0.9378$. The sum would say "the model got worse" just because the text got longer; the mean correctly says "same quality per token". The same applies across a batch: 8 sequences or 512, the mean is on the same scale.
+
+**Compare with the worse model.** Model $\theta_A$ from lesson 01.2 gave $0.2, 0.1, 0.3$: losses $1.6094 + 2.3026 + 1.2040 = 5.1160$, mean $1.7053$ nats. Higher loss, lower likelihood ($0.006$) — the same ranking MLE gave, now expressed as a number to minimize.
+
 <div class="callout key"><p>The language-modeling loss is the mean, over all predicted positions, of $-\log q_i(t_i)$: the negative log-probability the model assigned to each true next token. Minimizing it = maximum likelihood = pushing the model's softmax distribution toward the observed tokens. This one formula is what every pretraining run optimizes.</p></div>
 
 ## 5. Tensor shapes: what this looks like in a real model
