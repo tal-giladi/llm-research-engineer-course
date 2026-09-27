@@ -167,6 +167,17 @@ Depth as needed for the concept — not a news summary, not artificially long.
   Install only via the whitelist in the security rules. If the tests still cannot run, do not commit changes under `code/`: add the lesson
   without new code, record the implementation as pending in the topic file, and say so in the
   weekly report.
+- **Baseline first (overrides the rule above when the breakage is not yours).** Before writing
+  any code, run the test suite on the unchanged checkout and save the list of failing/erroring
+  test files. If the baseline is already red, the new code **still ships** when (a) its own tests
+  pass and (b) after your change the failing set is exactly the baseline set — no new failures.
+  Do not fix unrelated shared infrastructure yourself; record the pre-existing breakage under
+  `## Repository health` in the weekly report, with the failing files and the one-line cause.
+- **Never ship a lesson that points to missing material.** Every code/file path a new lesson
+  links must exist in the same commit. If code really cannot ship, the lesson must not reference
+  its path as if it existed.
+- **Final message:** if anything needs Tal's action, start it with `ACTION NEEDED:` followed by
+  what he should do, in one plain sentence (no file names or stack traces).
 
 ## Step 6 — Weekly report, changelog, reset
 
