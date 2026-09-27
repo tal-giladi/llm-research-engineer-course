@@ -52,7 +52,26 @@ $$
 
 That single scalar is the loss for this position. Read it as a penalty: the model gave the correct token probability $0.6439$, and it is charged $-\ln(0.6439) = 0.44$ nats for not being fully confident. If it had put probability 1 on token 0, the loss would be $-\ln(1) = 0$; if it had put nearly 0, the loss would rocket toward $+\infty$. Lower loss ⇔ more probability on the right token.
 
-Had the true token instead been token 3 (the one the model disliked), the loss would be $-\ln(0.0321) = 3.44$ nats — far higher, correctly punishing the model for putting little mass on what actually occurred.
+**Same prediction, different reality.** The loss depends on two things: what the model predicted ($q$) and which token actually came next ($t$). Keep the model's prediction exactly the same — $q = (0.6439,\ 0.2369,\ 0.0871,\ 0.0321)$ — and imagine a different training example where the text continues with **token 3** instead of token 0. The model has not changed; only the answer key has.
+
+The recipe is identical: look up the probability the model gave to *whichever token actually occurred*, and take $-\ln$ of it. Now that token is 3, so
+
+$$
+\ell = -\ln q(3) = -\ln(0.0321) = 3.44 \text{ nats}.
+$$
+
+Why so much bigger? The model bet 64% on token 0 and only 3% on token 3. It was confidently wrong, so it pays about 8× more (3.44 vs 0.44). Here is the same prediction scored against each of the four possible true tokens:
+
+| true next token $t$ | $q(t)$ | loss $-\ln q(t)$ | verdict |
+|---|---|---|---|
+| 0 | 0.6439 | 0.44 | model's top guess — small penalty |
+| 1 | 0.2369 | 1.44 | second guess — moderate |
+| 2 | 0.0871 | 2.44 | unlikely — large |
+| 3 | 0.0321 | 3.44 | model's *least* likely — largest |
+
+(The losses step by exactly 1 because the logits step by exactly 1: $-\ln q(t) = \log\sum_j e^{z_j} - z_t$, so each 1-unit drop in logit adds 1 nat of loss.)
+
+The takeaway: the loss only ever looks at one entry of $q$ — the one for the token that really happened. The other three entries do not appear in the formula at all. What pushes them down during training is softmax: raising $q(t)$ forces the others to shrink, because they must sum to 1.
 
 ## 4. The full objective: mean cross-entropy over all positions
 
