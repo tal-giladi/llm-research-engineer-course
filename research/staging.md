@@ -47,3 +47,45 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** none yet — too early; would be a "what production serving stacks do beyond FlashAttention" sidebar if adopted.
 - **Confidence:** low
 - **Recommendation:** monitor only — classic single-paper efficiency claim, needs independent reproduction or stack adoption before it's teachable as more than "here's an idea in the literature."
+
+### C-20260927-01 · Superposition Linearity Hypothesis: LLMs can generate two coherent continuations from one forward pass
+
+- **Class:** B
+- **Date discovered:** 2026-09-27
+- **Date published:** 2026-09-24
+- **Source:** https://arxiv.org/abs/2609.29845 "Your Transformer Can Hold Two Thoughts at Once: Evidence of Linear Superposition in LLMs"
+- **Organization/researchers:** Pavel Tikhonov, Anton Korznikov, Matvey Mikhalchuk, Nikita Dragunov, Temurbek Rahmatullaev, Polina Druzhinina, Anton Razzhigaev, Ivan Oseledets, Elena Tutubalina (academic; affiliations not stated in abstract, group includes AIRI/Skoltech-associated authors per prior publications)
+- **Category:** interpretability
+- **What changed:** Proposes and tests a "Superposition Linearity Hypothesis": when inputs from two distinct text streams are linearly combined (averaged) at the input, the model's output logits are approximately a superposition (linear combination) of the two streams' individual next-token distributions. They argue this is an intrinsic architectural property of transformers rather than a training artifact, show it weakens over the course of pretraining, show it can be restored by lightweight fine-tuning, and build a guided-decoding procedure that generates two coherent continuations simultaneously from a single forward pass.
+- **Technical summary:** Directly relevant to how the course could teach the residual stream / linear representation hypothesis (superposition of features, à la Anthropic's toy-models-of-superposition line of interpretability work) — but here the claim is about superposition of *outputs/tasks* under literal input averaging, not the usual polysemanticity-of-features claim. If it holds up, it's a clean numerical demonstration of transformer (near-)linearity that could motivate a from-scratch interpretability exercise (feed two prompts' embeddings averaged, show the logit distribution decomposes).
+- **Why it might matter:** A single crisp, testable structural claim about how transformers process information, with a from-scratch demo an instructor could reproduce cheaply (small model, few forward passes) — good "check yourself" exercise material if reproduced.
+- **Evidence of adoption:** none — single paper, no independent reproduction, not company-affiliated.
+- **Major organizations using it:** none.
+- **Open-source implementation:** not stated in abstract; not verified beyond arXiv listing.
+- **Paper:** https://arxiv.org/abs/2609.29845
+- **Code:** none confirmed
+- **Relationship to existing course material:** new — course has no dedicated interpretability module/lesson yet (grep of `curriculum/course-outline.md` and `lessons/` finds no "interpretability" hits); closest existing material is the attention/residual-stream mechanics in module-05/06.
+- **Potential course lesson:** if reproduced independently, candidate seed for a first interpretability lesson (e.g. new module or module-06 extension) on linear structure in the residual stream, using this as a hands-on reproducible demo.
+- **Confidence:** low
+- **Recommendation:** monitor — wait for independent reproduction or citation uptake before considering; interesting but a single unreplicated claim, and the course has no interpretability module to hang it on yet (that's a bigger prerequisite decision for the weekly/curriculum review, not this candidate alone).
+
+### C-20260927-02 · Encoded but Not Decoded: three-level gap between what LLMs represent and what they output on syntax
+
+- **Class:** B
+- **Date discovered:** 2026-09-27
+- **Date published:** 2026-09-24
+- **Source:** https://arxiv.org/abs/2609.29848 "Encoded but Not Decoded: Layer-Localized Evidence for a Three-Level Gap in LLM Syntax"
+- **Organization/researchers:** Zhenyan Lu, He Wang, Xiaohui Huang (academic); accepted at AACL-IJCNLP 2026
+- **Category:** interpretability | evaluation
+- **What changed:** Introduces a three-level evaluation framework (probe recoverability → LM-head readout → behavioral deployment) applied to a trilingual (English/Chinese/German) control-dependency syntax benchmark across 7 models. Finds a consistent ordering probe > LM-head > behavior — i.e. probing classifiers systematically overstate what a model actually deploys in its outputs, while raw behavioral testing understates what's linearly encoded internally. Activation patching localizes the gap to specific layers, with instruction-tuned models showing ~10-layer shifts between where a probe recovers the answer and where the LM head reads it out.
+- **Technical summary:** A direct, sharply stated methodological warning for anyone using probing classifiers to claim a model "knows" or "understands" something: probe accuracy is not a proxy for behavior, and the size of that gap is itself measurable and layer-localized. Complements the superposition paper above (C-20260927-01) as another data point on linear structure vs. actual model behavior.
+- **Why it might matter:** If this probe-vs-behavior gap generalizes beyond syntax (the authors only test control-dependency structures), it's a caution any interpretability teaching material should carry: "probing shows what's encoded, not what's used." Useful methodological point even without a dedicated interpretability module yet.
+- **Evidence of adoption:** none — single paper, first venue acceptance (AACL-IJCNLP 2026), no independent reproduction.
+- **Major organizations using it:** none — academic only.
+- **Open-source implementation:** not confirmed in abstract.
+- **Paper:** https://arxiv.org/abs/2609.29848
+- **Code:** not confirmed
+- **Relationship to existing course material:** new — same gap as above (no interpretability module yet).
+- **Potential course lesson:** pairs with C-20260927-01 as supporting material for a future interpretability module's methodology section ("what probing can and can't tell you"), not a standalone lesson.
+- **Confidence:** low
+- **Recommendation:** monitor — single paper, narrow task domain (control-dependency syntax only); revisit if the three-level-gap finding is reproduced on other tasks or cited as a methodological standard.
