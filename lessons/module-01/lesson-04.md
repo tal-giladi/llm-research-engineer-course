@@ -146,6 +146,38 @@ logits = [[[2, 1, 0],    # seq 0, pos 0
            [0, 1, 2]]]   # seq 1, pos 1        shape (2, 2, 3) = (B, T, V)
 ```
 
+**Where the logits come from.** The model reads the inputs and, at every input position, outputs $V = 3$ numbers: one score per vocabulary token, meaning "how much I think this token comes next". In a real model a neural network computes them (embeddings + transformer, built later in the course). Here they are hand-picked so the arithmetic is clean. For now the model is a black box: inputs in, logits out.
+
+**Why the shape is `(2, 2, 3)`.** 2 sequences (`B`), each with 2 input positions (`T`), each position getting 3 scores (`V`). Every entry of `inputs` gets its own row of 3 logits, in the same (seq, pos) slot.
+
+**Reading each row.** Pair each row with the input the model saw and the target it should have predicted:
+
+- **seq 0, pos 0** — model has seen `[1]`. Logits `[2, 1, 0]`: it likes token 0 most, then 1, then 2. Truth is `0` → good guess.
+- **seq 0, pos 1** — model has seen `[1, 0]`. Logits `[0, 0, 0]`: all equal, no preference. Truth is `2` → the model shrugs.
+- **seq 1, pos 0** — model has seen `[2]`. Logits `[1, 2, 0]`: likes token 1 most. Truth is `1` → good guess.
+- **seq 1, pos 1** — model has seen `[2, 1]`. Logits `[0, 1, 2]`: likes token 2 most. Truth is `0` → confidently wrong.
+
+**Logits are not probabilities yet.** They can be negative, they do not sum to 1, and only their *differences* matter: `[2, 1, 0]` and `[12, 11, 10]` give the same result. Softmax (next step) turns them into probabilities.
+
+**At each position, the model never sees that position's own target.** The whole input row `[1, 0]` goes into the model at once, but each position may only look at itself and what is to its left:
+
+- At pos 0 the model may use only `[1]`. The `0` sitting next to it in the input is exactly the answer for pos 0, so it must not look at it.
+- At pos 1 the model may use `[1, 0]`. Here the `0` is fine: it is the past (it was pos 0's target, now it is context). The answer for pos 1 is `2`, which is not in the inputs at all.
+
+So every token except the first plays two roles: the *target* for the position before it, and *context* for the positions after it. The only token the model never sees anywhere is the last one (`2`), because nothing comes after it to use it as context. There is nothing special about any position: predicting the second token, the third token, or the thousandth is the same job — "given everything to my left, score what comes next" — and each one contributes one row to the loss.
+
+**What enforces this: the causal mask.** Inside the model, every position computes its output by mixing information from positions of the input. The causal mask is a rule on that mixing: position $i$ may only mix in positions $0 \dots i$, never anything to its right. For the input `[1, 0]`:
+
+```text
+          reads pos 0   reads pos 1
+pos 0        yes            no
+pos 1        yes            yes
+```
+
+It is a lower-triangular yes/no matrix. The "no" slots get their attention score set to $-\infty$ before softmax, so after softmax their weight is exactly 0 and no information flows from the future. Without the mask, pos 0 could simply copy the `0` to its right, get near-zero loss, and learn nothing.
+
+The payoff: one forward pass over a row of length `T` trains `T` predictions at once, each honestly using only its past. Without the mask you would have to run the model `T` separate times on growing prefixes to get the same thing. You implement the mask yourself in [05.2 · Q/K/V & scaled dot-product attention](lessons/module-05/lesson-02.md).
+
 **Reshape.** Flatten the first two axes: logits become `(4, 3)`, targets become `(4,)`. Now each row is one independent classification example. For each row: softmax over the 3 logits, pick the entry at the target index, take $-\ln$.
 
 | row | (seq, pos) | logits | softmax $q$ | target $t$ | $q(t)$ | $-\ln q(t)$ |
