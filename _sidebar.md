@@ -13,6 +13,7 @@
   - [01.2 · Conditional probability, Bayes, likelihood](lessons/module-01/lesson-02.md)
   - [01.3 · Entropy, cross-entropy, KL divergence](lessons/module-01/lesson-03.md)
   - [01.4 · The language-modeling objective & perplexity](lessons/module-01/lesson-04.md)
+  - [01.3–01.4 · Practice set](lessons/module-01/practice-03-04.md)
 - **2 · Gradients & backpropagation**
   - [02.1 · Derivatives, partials, chain rule, gradients](lessons/module-02/lesson-01.md)
   - [02.2 · Jacobians, VJPs, computational graphs](lessons/module-02/lesson-02.md)

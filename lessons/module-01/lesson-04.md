@@ -719,6 +719,10 @@ So the reported loss is a per-token quantity, comparable across sequences of dif
 
 </details>
 
+## Practice
+
+A separate page of practice problems for lessons 01.3 and 01.4 (math by hand, softmax and log-softmax, shapes, PyTorch, debugging), with full worked solutions at the bottom: [01.3–01.4 · Practice set](lessons/module-01/practice-03-04.md).
+
 ## Next
 
 You have now built the complete language-modeling objective — softmax over the vocabulary, cross-entropy against the true token, averaged over positions — verified it by hand and against PyTorch and the `llmre` code, and learned to read it as perplexity. This closes Module 1: you can state exactly what a language model computes and exactly how its predictions are scored. Module 2 opens the other half of training — how the gradient of this loss flows back through the network via backpropagation, starting with derivatives and the chain rule of calculus.

@@ -299,6 +299,10 @@ Unit mismatch. $0.693 = 1.0 \times \ln 2$, so the textbook is in bits ($\log_2$)
 
 </details>
 
+## Practice
+
+A separate page of practice problems for lessons 01.3 and 01.4 (math by hand, softmax and log-softmax, shapes, PyTorch, debugging), with full worked solutions at the bottom: [01.3–01.4 · Practice set](lessons/module-01/practice-03-04.md).
+
 ## Next
 
 You now have entropy, cross-entropy, and KL divergence, the identity that binds them, and the key fact that cross-entropy against a one-hot true token is the negative log-likelihood — the language-model training signal. The final lesson of this module assembles these pieces into the concrete objective a language model minimizes, shows the per-token loss on a worked softmax example, and introduces perplexity as the human-readable version of the loss. It also connects to the `llmre` code you will use for the rest of the course.
