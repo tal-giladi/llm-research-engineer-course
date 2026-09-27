@@ -6,5 +6,9 @@ Every topic the weekly review has decided on, so nothing is reconsidered without
 | Status | Topic | Next review | Course change | Last decision |
 |---|---|---|---|---|
 | ADD | [GRPO stability fixes: Dr. GRPO and DAPO](research/accepted/grpo-stability-fixes.md) | n/a | lessons/frontier/update-02.md (comparison table and discussion; no separate code) | 2026-09-26 |
+| ADD | [Hybrid linear attention: Gated DeltaNet + full attention (3:1)](research/accepted/hybrid-linear-attention-gated-deltanet.md) | n/a | lessons/module-12/lesson-05.md (new lesson 12.5); code/src/llmre/attention/gated_deltanet.py; code/tests/test_gated_deltanet.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-09-27 |
 | ADD | [MLPerf Training post-training benchmark (agentic RLVR)](research/accepted/mlperf-post-training-rlvr.md) | n/a | lessons/frontier/update-01.md; code/src/llmre/evaluation/pass_at_k.py; code/tests/test_frontier_updates.py | 2026-09-26 |
 | WAIT | [GVPO: Group Variance Policy Optimization](research/deferred/gvpo.md) | 2026-11-26 | taught only as directional design-space reading in lessons/frontier/update-02.md (code/src/llmre/rl/gvpo.py); not presented as standard practice | 2026-09-26 |
+| WAIT | [Superposition Linearity Hypothesis (two continuations from one forward pass)](research/deferred/superposition-linearity-hypothesis.md) | 2026-11-22 | none | 2026-09-27 |
+| WAIT | [Training-free sparse-attention decoding (FFD, "Faster Than Flash")](research/deferred/sparse-attention-decoding-ffd.md) | 2026-11-22 | none | 2026-09-27 |
+| REJECT | [Encoded but not decoded: probe vs LM-head vs behavior gap (syntax)](research/rejected/probe-behavior-gap-syntax.md) | on new evidence | none | 2026-09-27 |

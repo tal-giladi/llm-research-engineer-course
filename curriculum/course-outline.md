@@ -67,6 +67,7 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 - After **7–10 (systems/scaling)**: Scaling Laws, Chinchilla, Megatron-LM, ZeRO.
 - After **8 (GPU)**: FlashAttention.
 - After **12 (architectures)**: RoPE/RoFormer, LLaMA, Llama 3, OLMo 2, Switch Transformers, DeepSeekMoE, DeepSeek-V3.
+- After **12.5 (linear/hybrid attention, added 2026-09-27)**: Transformers are RNNs (linear attention), DeltaNet parallelization, Gated DeltaNet, Kimi Linear. Lesson [12.5](lessons/module-12/lesson-05.md) depends on 5.2 and 12.3; code `attention/gated_deltanet.py`.
 - After **14 (SFT)**: FLAN, Self-Instruct.
 - After **15 (RLHF/DPO)**: InstructGPT, Anthropic HH-RLHF, Constitutional AI, RLAIF, DPO.
 - After **16–17 (reasoning)**: Chain-of-Thought, STaR, Let's Verify Step by Step, DeepSeekMath, DeepSeek-R1.
