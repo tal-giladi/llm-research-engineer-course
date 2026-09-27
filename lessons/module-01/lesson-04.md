@@ -117,6 +117,65 @@ In code the logits are not a single vector but a batched tensor. Naming the axes
 
 The `V` axis is always the one softmax normalizes over and the one the true index selects from. The reshape from `(B, T, V)` to `(N, V)` with `N = B*T` is just "treat every (sequence, position) as an independent classification example"; the chain rule guarantees averaging them is the right thing.
 
+### 5.1 Worked example: `B = 2`, `T = 2`, `V = 3`
+
+A toy vocabulary of 3 tokens (ids 0, 1, 2) and a batch of 2 sequences, each 3 tokens long:
+
+```text
+tokens = [[1, 0, 2],     # sequence 0
+          [2, 1, 0]]     # sequence 1        shape (2, 3)
+```
+
+**Where the targets come from.** The model reads the first `T = 2` tokens of each sequence and, at each position, predicts the *next* one. So the inputs are the tokens without the last column, and the targets are the tokens shifted left by one:
+
+```text
+inputs  = tokens[:, :-1] = [[1, 0],
+                            [2, 1]]          shape (2, 2) = (B, T)
+targets = tokens[:, 1:]  = [[0, 2],
+                            [1, 0]]          shape (2, 2) = (B, T), int64
+```
+
+Read row 0: after seeing token `1` the true next token is `0`; after seeing `1, 0` the true next token is `2`.
+
+**The logits.** For each of the $B \times T = 4$ positions the model outputs $V = 3$ logits, so the logits tensor has shape `(2, 2, 3)`:
+
+```text
+logits = [[[2, 1, 0],    # seq 0, pos 0
+           [0, 0, 0]],   # seq 0, pos 1
+          [[1, 2, 0],    # seq 1, pos 0
+           [0, 1, 2]]]   # seq 1, pos 1        shape (2, 2, 3) = (B, T, V)
+```
+
+**Reshape.** Flatten the first two axes: logits become `(4, 3)`, targets become `(4,)`. Now each row is one independent classification example. For each row: softmax over the 3 logits, pick the entry at the target index, take $-\ln$.
+
+| row | (seq, pos) | logits | softmax $q$ | target $t$ | $q(t)$ | $-\ln q(t)$ |
+|---|---|---|---|---|---|---|
+| 0 | (0, 0) | $(2, 1, 0)$ | $(0.6652, 0.2447, 0.0900)$ | 0 | 0.6652 | 0.4076 |
+| 1 | (0, 1) | $(0, 0, 0)$ | $(0.3333, 0.3333, 0.3333)$ | 2 | 0.3333 | 1.0986 |
+| 2 | (1, 0) | $(1, 2, 0)$ | $(0.2447, 0.6652, 0.0900)$ | 1 | 0.6652 | 0.4076 |
+| 3 | (1, 1) | $(0, 1, 2)$ | $(0.0900, 0.2447, 0.6652)$ | 0 | 0.0900 | 2.4076 |
+
+Row 1 is a model with no opinion (all logits equal → uniform), paying $\ln 3 = 1.0986$. Row 3 put its highest logit on token 2 but the truth was token 0 — the expensive mistake.
+
+**Average to a scalar.**
+
+$$
+\mathcal{L} = \frac{0.4076 + 1.0986 + 0.4076 + 2.4076}{4} = \frac{4.3214}{4} = 1.0804 \text{ nats}.
+$$
+
+Shape trail: `(2, 2, 3)` logits → `(4, 3)` → softmax `(4, 3)` → pick target entry `(4,)` → mean `()`. The `V` axis disappears at the "pick" step (the target index selects one of its 3 entries); the `B*T` axis disappears at the mean.
+
+PyTorch agrees:
+
+```python
+import torch, torch.nn.functional as F
+logits  = torch.tensor([[[2., 1, 0], [0, 0, 0]],
+                        [[1., 2, 0], [0, 1, 2]]])      # (2, 2, 3) float32
+targets = torch.tensor([[0, 2], [1, 0]])               # (2, 2)    int64
+loss = F.cross_entropy(logits.reshape(-1, 3), targets.reshape(-1))
+print(loss)                                            # tensor(1.0804)
+```
+
 ## 6. From-scratch: the loss in `llmre.evaluation.metrics`
 
 This module owns the evaluation code at `code/src/llmre/evaluation/metrics.py`. It implements cross-entropy from scratch — via a numerically stable log-softmax — rather than calling the framework, so you can see every step. The core is:
