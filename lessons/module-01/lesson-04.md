@@ -283,6 +283,89 @@ def perplexity(logits, targets):
     return cross_entropy(logits, targets).exp()
 ```
 
+### 6.0 Tracing both functions with numbers
+
+Run the same 4-row example from section 5.1 through the code, one line at a time. Input: logits `(4, 3)`, targets `(4,)`.
+
+```text
+logits = [[2, 1, 0],        targets = [0, 2, 1, 0]
+          [0, 0, 0],
+          [1, 2, 0],
+          [0, 1, 2]]
+```
+
+**`log_softmax(logits)`**
+
+```python
+m = logits.max(dim=-1, keepdim=True).values
+# largest logit in each row, shape (4, 1):
+# [[2],
+#  [0],
+#  [2],
+#  [2]]
+
+shifted = logits - m
+# subtract each row's max from that row; the max entry becomes 0, the rest negative, (4, 3):
+# [[ 0, -1, -2],      row 0: [2,1,0] - 2
+#  [ 0,  0,  0],      row 1: [0,0,0] - 0
+#  [-1,  0, -2],      row 2: [1,2,0] - 2
+#  [-2, -1,  0]]      row 3: [0,1,2] - 2
+
+shifted.exp()
+# e^0 = 1, e^-1 = 0.3679, e^-2 = 0.1353; nothing is ever larger than 1, (4, 3):
+# [[1.0000, 0.3679, 0.1353],
+#  [1.0000, 1.0000, 1.0000],
+#  [0.3679, 1.0000, 0.1353],
+#  [0.1353, 0.3679, 1.0000]]
+
+.sum(dim=-1, keepdim=True)
+# add across each row, (4, 1):
+# [[1.5032],          1 + 0.3679 + 0.1353
+#  [3.0000],          1 + 1 + 1
+#  [1.5032],
+#  [1.5032]]
+
+lse = ... .log()
+# natural log of each row sum, (4, 1):
+# [[0.4076],          ln 1.5032
+#  [1.0986],          ln 3
+#  [0.4076],
+#  [0.4076]]
+
+return shifted - lse
+# subtract each row's lse from that row -> log-probabilities, (4, 3):
+# [[-0.4076, -1.4076, -2.4076],     row 0: [0,-1,-2] - 0.4076
+#  [-1.0986, -1.0986, -1.0986],     row 1: [0, 0, 0] - 1.0986
+#  [-1.4076, -0.4076, -2.4076],
+#  [-2.4076, -1.4076, -0.4076]]
+```
+
+Check row 0 against section 5.2: there we computed $\log q = z - \log(e^2 + e^1 + e^0) = [2,1,0] - 2.4076 = [-0.4076, -1.4076, -2.4076]$. Same answer. Here `lse` is only $0.4076$, not $2.4076$, because it was computed on the *shifted* logits — the missing 2 is exactly the max $m$ we subtracted first: $2 + 0.4076 = 2.4076$. The shift moves the 2 out of the exponent and back in by subtraction; the result is identical. Sanity check on the output: $e^{-0.4076} + e^{-1.4076} + e^{-2.4076} = 0.6652 + 0.2447 + 0.0900 = 1$ — each row is a valid distribution.
+
+**`cross_entropy(logits, targets)`**
+
+```python
+logp = log_softmax(logits)
+# the (4, 3) matrix just computed above
+
+rows = torch.arange(logits.shape[0], device=logits.device)
+# [0, 1, 2, 3]  -- one index per row, shape (4,)
+
+true_logp = logp[rows, targets]
+# pair rows with targets: (0,0), (1,2), (2,1), (3,0) -> pick one entry per row, (4,):
+#   logp[0, 0] = -0.4076      row 0, true token 0
+#   logp[1, 2] = -1.0986      row 1, true token 2
+#   logp[2, 1] = -0.4076      row 2, true token 1
+#   logp[3, 0] = -2.4076      row 3, true token 0
+# -> [-0.4076, -1.0986, -0.4076, -2.4076]
+
+return -true_logp.mean()
+# mean = (-0.4076 - 1.0986 - 0.4076 - 2.4076) / 4 = -4.3214 / 4 = -1.0804
+# negate -> 1.0804, shape ()   == F.cross_entropy on the same input
+```
+
+The indexing `logp[rows, targets]` is the "multiply by the one-hot and keep the one surviving term" step from section 5.2, done as a direct lookup. The shapes go `(4, 3)` → `(4,)` → `()`: the vocabulary axis disappears at the lookup, the position axis at the mean.
+
 Two implementation points that matter for correctness:
 
 **Why subtract the max.** Computing $\log \frac{\exp(z_i)}{\sum_j \exp(z_j)}$ naively exponentiates the logits, and a large logit like $z_i = 90$ makes $\exp(90) \approx 10^{39}$ overflow float32 to `inf`. Subtracting the per-row max $m$ before exponentiating means the largest value fed to `exp` is $\exp(0) = 1$, so nothing overflows. Because a constant shift cancels between the numerator and denominator of softmax, this changes nothing about the result — it is exact, not an approximation. This is the same stability trick you will see again in attention (Module 5) and FlashAttention (Module 8).
