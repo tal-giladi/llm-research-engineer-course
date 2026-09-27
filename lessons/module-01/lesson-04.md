@@ -283,7 +283,210 @@ def perplexity(logits, targets):
     return cross_entropy(logits, targets).exp()
 ```
 
-### 6.0 Tracing both functions with numbers
+### 6.1 Why these four lines compute *exactly* log-softmax
+
+The code for `log_softmax` never writes "divide by the sum", and it subtracts a max that appears nowhere in the definition of softmax. So why is it the same thing? This section derives it from the definition, one identity at a time, so that you could reconstruct the four lines yourself. The chain is always: **definition → algebra → transformed equation → code**.
+
+Everything happens one row at a time. Take one row of logits $z_1, \dots, z_V$ ($V$ = vocabulary size).
+
+#### Step 1 — the definition of softmax, and of log-softmax
+
+Softmax turns the row of scores into probabilities:
+
+$$
+q_i = \frac{e^{z_i}}{\sum_{j=1}^{V} e^{z_j}}.
+$$
+
+It does two things:
+
+1. **exponentiate** every logit ($e^{z_i}$ is always positive, so every score becomes a positive number);
+2. **normalize**: divide each exponential by the sum of all of them, so the results add up to 1.
+
+Log-softmax is nothing more than the logarithm of that probability:
+
+$$
+\log q_i = \log\left(\frac{e^{z_i}}{\sum_j e^{z_j}}\right).
+$$
+
+Now apply two identities.
+
+The log of a fraction is the log of the top minus the log of the bottom: $\log\frac{a}{b} = \log a - \log b$. With $a = e^{z_i}$ and $b = \sum_j e^{z_j}$:
+
+$$
+\log q_i = \log\big(e^{z_i}\big) - \log\Big(\sum_j e^{z_j}\Big).
+$$
+
+The log undoes the exponential: $\log(e^{x}) = x$. So $\log(e^{z_i}) = z_i$:
+
+$$
+\boxed{\ \log q_i = z_i - \log\Big(\sum_j e^{z_j}\Big)\ }
+$$
+
+This is the fundamental equation. The division in softmax has become a *subtraction* in log space. The subtracted term has a name: $\log\sum_j e^{z_j}$ is called **logsumexp** — literally "exponentiate, sum, take the log". So:
+
+$$
+\boxed{\ \log\operatorname{softmax}(z) = z - \operatorname{logsumexp}(z)\ }
+$$
+
+Read it as: "the log-probability of token $i$ is its score, minus one number shared by the whole row". That shared number is the log of the normalization denominator. Subtracting it is how you normalize in log space. This is why the code can end with `return <logits> - <logsumexp>` and never divide.
+
+Numbers, row $z = [2, 1, 0]$: $e^2 + e^1 + e^0 = 7.389 + 2.718 + 1 = 11.107$, and $\log 11.107 = 2.4076$. So $\log q = [2, 1, 0] - 2.4076 = [-0.4076,\ -1.4076,\ -2.4076]$.
+
+If that equation is already correct, why does the code subtract a max first? Because of floating point, not math — and Step 2 proves that doing so changes nothing.
+
+#### Step 2 — subtracting a constant does not change softmax (a proof, not a trick)
+
+**Claim.** For *any* constant $c$ (the same number subtracted from every logit in the row):
+
+$$
+\operatorname{softmax}(z - c) = \operatorname{softmax}(z).
+$$
+
+**Proof.** Write the softmax of the shifted row, entry $i$:
+
+$$
+\frac{e^{z_i - c}}{\sum_j e^{z_j - c}}.
+$$
+
+Use $e^{a-b} = e^{a}\,e^{-b}$ on the top and on every term of the bottom:
+
+$$
+= \frac{e^{z_i}\,e^{-c}}{\sum_j e^{z_j}\,e^{-c}}.
+$$
+
+$e^{-c}$ is the same in every term of the sum (it does not depend on $j$), so pull it out of the sum:
+
+$$
+= \frac{e^{z_i}\,e^{-c}}{e^{-c}\sum_j e^{z_j}}.
+$$
+
+Now $e^{-c}$ appears once on top and once on the bottom. It is a positive number, so it cancels:
+
+$$
+= \frac{e^{z_i}}{\sum_j e^{z_j}} = q_i. \qquad\blacksquare
+$$
+
+The probabilities are *identical*, digit for digit in exact arithmetic. Subtracting a constant does not make softmax more correct, and it does not approximate it. It changes the *representation* of the calculation — which numbers pass through `exp` — while leaving the mathematical result exactly unchanged. Intuitively: softmax only cares about the *differences* between scores. $[2, 1, 0]$ and $[12, 11, 10]$ and $[0, -1, -2]$ all have the same differences, so they give the same probabilities.
+
+**Why choose $c = m = \max_j z_j$ specifically?** Any $c$ is valid; the max is the one that makes the computation safe. If $m$ is the largest logit in the row, then for every $i$
+
+$$
+z_i \le m \;\;\Longrightarrow\;\; z_i - m \le 0 \;\;\Longrightarrow\;\; e^{z_i - m} \le e^0 = 1.
+$$
+
+So after the shift, the largest value is exactly $0$ (its exponential is exactly $1$) and all others are negative (their exponentials are between 0 and 1). `exp` never sees a large positive number. Without the shift, a logit of $z = 90$ gives $e^{90} \approx 1.2 \times 10^{39}$, which is larger than float32 can hold ($\approx 3.4 \times 10^{38}$) and becomes `inf`; then `inf / inf = nan` and training is ruined. With the shift, that same logit becomes $90 - 90 = 0$ and $e^0 = 1$. Also, the sum $\sum_j e^{z_j - m}$ always contains at least one term equal to 1, so it is $\ge 1$ and its log is never $-\infty$.
+
+In code: `m = logits.max(dim=-1, keepdim=True).values` is $m$, and `shifted = logits - m` is $z' = z - m$.
+
+#### Step 3 — the log-softmax formula still holds after the shift
+
+Step 2 was about softmax. The code works in log space, so derive the log version too. Define
+
+$$
+m = \max_j z_j, \qquad z'_i = z_i - m \quad\text{(the shifted logits)}.
+$$
+
+Start from the normalization term in the fundamental equation, $\sum_j e^{z_j}$. Every original logit is its shifted version plus $m$: $z_j = z'_j + m$. Substitute:
+
+$$
+\sum_j e^{z_j} = \sum_j e^{z'_j + m}.
+$$
+
+Use $e^{a+b} = e^{a}e^{b}$, and pull the common factor $e^{m}$ out of the sum:
+
+$$
+= \sum_j e^{z'_j}\,e^{m} = e^{m}\sum_j e^{z'_j}.
+$$
+
+Take the log of both sides, and use $\log(ab) = \log a + \log b$ and then $\log e^{m} = m$:
+
+$$
+\log\Big(\sum_j e^{z_j}\Big) = \log\Big(e^{m}\sum_j e^{z'_j}\Big) = m + \log\Big(\sum_j e^{z'_j}\Big).
+$$
+
+In words: the logsumexp of the original row equals the max plus the logsumexp of the shifted row. Now substitute this, and $z_i = z'_i + m$, into the fundamental equation $\log q_i = z_i - \log\sum_j e^{z_j}$:
+
+$$
+\log q_i = (z'_i + m) - \Big[m + \log\Big(\sum_j e^{z'_j}\Big)\Big].
+$$
+
+Remove the brackets: $+m$ and $-m$ cancel.
+
+$$
+\boxed{\ \log q_i = z'_i - \log\Big(\sum_j e^{z'_j}\Big)\ }
+$$
+
+This is the *same* log-softmax formula as in Step 1, with $z$ replaced by $z'$ everywhere. It is not a different formula or an approximation: it is the original one after algebraic rearrangement. Written in one line:
+
+$$
+\boxed{\ \log\operatorname{softmax}(z) = (z - m) - \log\Big(\sum_j e^{z_j - m}\Big)\ }
+$$
+
+and now every piece maps to one line of code:
+
+| math | code | shape |
+|---|---|---|
+| $m = \max_j z_j$ | `m = logits.max(dim=-1, keepdim=True).values` | `(N, 1)` |
+| $z'_i = z_i - m$ | `shifted = logits - m` | `(N, V)` |
+| $e^{z'_j}$ | `shifted.exp()` | `(N, V)` |
+| $\sum_j e^{z'_j}$ | `.sum(dim=-1, keepdim=True)` | `(N, 1)` |
+| $\log\sum_j e^{z'_j}$ | `.log()` → `lse` | `(N, 1)` |
+| $z'_i - \log\sum_j e^{z'_j}$ | `return shifted - lse` | `(N, V)` |
+
+`lse` is the log of the normalization denominator of the shifted row, so `shifted - lse` is exactly "normalize, in log space". `keepdim=True` keeps `m` and `lse` as columns of shape `(N, 1)` so that the subtraction broadcasts: each row's own `m` and `lse` are subtracted from every entry of that row.
+
+#### Step 4 — the full numerical example, both ways
+
+Row $z = [2, 1, 0]$.
+
+**Ordinary softmax, straight from the definition:**
+
+$$
+q = \frac{[e^2,\ e^1,\ e^0]}{e^2 + e^1 + e^0} = \frac{[7.389,\ 2.718,\ 1]}{11.107} = [0.6652,\ 0.2447,\ 0.0900].
+$$
+
+**What the code does.** The max is $m = 2$. Shift: $z' = [2-2,\ 1-2,\ 0-2] = [0,\ -1,\ -2]$. Exponentiate: $[e^0,\ e^{-1},\ e^{-2}] = [1,\ 0.3679,\ 0.1353]$. Normalize:
+
+$$
+\frac{[1,\ e^{-1},\ e^{-2}]}{1 + e^{-1} + e^{-2}} = \frac{[1,\ 0.3679,\ 0.1353]}{1.5032} = [0.6652,\ 0.2447,\ 0.0900].
+$$
+
+Same numbers. And algebraically it *must* be: multiply the top and the bottom of that fraction by $e^2$ (multiplying top and bottom by the same positive number leaves a fraction unchanged), using $e^2 \cdot e^{k} = e^{2+k}$:
+
+$$
+\frac{[1,\ e^{-1},\ e^{-2}] \cdot e^2}{(1 + e^{-1} + e^{-2}) \cdot e^2} = \frac{[e^2,\ e^1,\ e^0]}{e^2 + e^1 + e^0}.
+$$
+
+That is exactly the original softmax. Check with numbers: $1.5032 \times e^2 = 1.5032 \times 7.389 = 11.107$ — the original denominator.
+
+**The log values the code returns:**
+
+$$
+\text{shifted} - \text{lse} = [0,\ -1,\ -2] - \log(1 + e^{-1} + e^{-2}) = [0,\ -1,\ -2] - \log 1.5032 = [0,\ -1,\ -2] - 0.4076 = [-0.4076,\ -1.4076,\ -2.4076].
+$$
+
+This matches Step 1's un-shifted answer, $[2, 1, 0] - 2.4076$. The two routes differ only in where the 2 lives: Step 3 says $\log 11.107 = 2 + \log 1.5032$, i.e. $2.4076 = 2 + 0.4076$. The unshifted route subtracts $2.4076$ from $[2, 1, 0]$; the shifted route first subtracts the $2$ (the max), then the remaining $0.4076$ (the `lse`).
+
+And exponentiating the returned values gives back the exact softmax probabilities:
+
+$$
+[e^{-0.4076},\ e^{-1.4076},\ e^{-2.4076}] = [0.6652,\ 0.2447,\ 0.0900], \qquad 0.6652 + 0.2447 + 0.0900 = 1.
+$$
+
+#### Step 5 — why compute log-softmax directly instead of `log(softmax(z))`
+
+The loss needs $\log q$, not $q$. One could compute `softmax(z)` and then take `.log()`. The problem is the middle step: it builds the probabilities themselves, and a very small probability can round to exactly `0.0` in float32 (for example $e^{-200} \approx 10^{-87}$, below float32's smallest value). Then `log(0.0) = -inf` and the loss is infinite. The direct formula $z' - \operatorname{logsumexp}(z')$ never constructs $q$ at all: it only subtracts two ordinary-sized numbers. For that same token it returns about $-200$, a perfectly finite log-probability. Same math, but no tiny intermediate. (This is the log-space rule from 01.2 and the underflow case from 01.3, in code form. The same max-subtraction reappears in attention, Module 5, and FlashAttention, Module 8.)
+
+#### Mental model
+
+- **Softmax:** exponentiate the logits, then normalize them (divide by their sum).
+- **Log-softmax:** the same normalization, done in log space — divide becomes subtract: $\log q_i = z_i - \log\sum_j e^{z_j}$.
+- **Subtract the max:** shift every logit in the row by the same constant. Softmax is exactly invariant to this shift, because $e^{-c}$ cancels between top and bottom.
+- **Why the max, not another constant?** It makes the largest shifted value 0 and all others negative, so every exponential is at most 1 — no overflow — and the sum is at least 1 — no $\log 0$.
+- **Why `shifted - lse`?** Because, after the shift, $\log q_i = z'_i - \log\sum_j e^{z'_j}$, and `lse` is exactly $\log\sum_j e^{z'_j}$.
+- **Therefore** the four lines are softmax/log-softmax *exactly*, by algebra — not an approximation, and not a different formula.
+
+### 6.2 Tracing both functions with numbers
 
 Run the same 4-row example from section 5.1 through the code, one line at a time. Input: logits `(4, 3)`, targets `(4,)`.
 
@@ -366,13 +569,7 @@ return -true_logp.mean()
 
 The indexing `logp[rows, targets]` is the "multiply by the one-hot and keep the one surviving term" step from section 5.2, done as a direct lookup. The shapes go `(4, 3)` → `(4,)` → `()`: the vocabulary axis disappears at the lookup, the position axis at the mean.
 
-Two implementation points that matter for correctness:
-
-**Why subtract the max.** Computing $\log \frac{\exp(z_i)}{\sum_j \exp(z_j)}$ naively exponentiates the logits, and a large logit like $z_i = 90$ makes $\exp(90) \approx 10^{39}$ overflow float32 to `inf`. Subtracting the per-row max $m$ before exponentiating means the largest value fed to `exp` is $\exp(0) = 1$, so nothing overflows. Because a constant shift cancels between the numerator and denominator of softmax, this changes nothing about the result — it is exact, not an approximation. This is the same stability trick you will see again in attention (Module 5) and FlashAttention (Module 8).
-
-**Why log-softmax and not `log(softmax(x))`.** Taking softmax first can round a tiny probability to exactly `0.0`, and then `log(0) = -inf`. Folding the log into the computation (the `shifted - lse` form) never materializes that zero, so the log-probability stays finite. This is the code embodiment of the "sum log-probs, don't multiply probs" rule from lesson 01.2.
-
-### 6.1 Verify the by-hand loss against PyTorch
+### 6.3 Verify the by-hand loss against PyTorch
 
 Our worked loss was $0.4402$ nats. Confirm it three ways — by hand, via `llmre`, and via PyTorch's fused kernel:
 
