@@ -113,7 +113,25 @@ Positive, as it must be, and equal to the excess we spotted in section 3.1.
 
 ## 5. The identity $H(p, q) = H(p) + \mathrm{KL}(p \parallel q)$
 
-The three quantities are tied together by one identity, and it is worth deriving because it explains *what the loss is actually made of*. Start from cross-entropy and split the log using $\log q(x) = \log p(x) - \log \frac{p(x)}{q(x)}$:
+The three quantities are tied together by one identity, and it is worth deriving because it explains *what the loss is actually made of*. Start from cross-entropy and split the log using $\log q(x) = \log p(x) - \log \frac{p(x)}{q(x)}$.
+
+**Where that split comes from.** It is not a new fact — it is the rule $\log \frac{a}{b} = \log a - \log b$ applied to $\frac{p(x)}{q(x)}$:
+
+$$
+\log \frac{p(x)}{q(x)} = \log p(x) - \log q(x).
+$$
+
+Now just move terms across the equals sign to isolate $\log q(x)$ (add $\log q(x)$ to both sides, subtract $\log\frac{p(x)}{q(x)}$ from both sides):
+
+$$
+\log q(x) = \log p(x) - \log \frac{p(x)}{q(x)}.
+$$
+
+A plain-numbers sanity check with $p(x) = 0.5$, $q(x) = 0.25$ (natural log): left side $\ln 0.25 = -1.386$; right side $\ln 0.5 - \ln\frac{0.5}{0.25} = -0.693 - \ln 2 = -0.693 - 0.693 = -1.386$. Same number.
+
+**Why bother rewriting it this way?** Because the two pieces on the right are exactly the two things we want to separate. $\log p(x)$ involves only the true distribution — that becomes the entropy $H(p)$. $\log\frac{p(x)}{q(x)}$ measures how far the model $q$ is from $p$ at that $x$ (zero when $q(x) = p(x)$) — that becomes the KL divergence. We are splitting "the model's log-probability" into "the best possible log-probability" minus "the gap".
+
+Substitute it into the cross-entropy:
 
 $$
 H(p, q) = -\sum_x p(x)\log q(x) = -\sum_x p(x)\Big[\log p(x) - \log\tfrac{p(x)}{q(x)}\Big].
