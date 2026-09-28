@@ -215,7 +215,18 @@ Increase $w$. A negative partial means increasing $w$ decreases $L$. Gradient de
 
 <details><summary>Why does reverse-mode autodiff give the whole gradient for roughly the cost of one forward pass, rather than one forward pass per parameter?</summary>
 
-Because it applies the chain rule *once*, sweeping backward from the single scalar loss and reusing shared intermediate results across all parameters, instead of re-perturbing each parameter separately. The next lesson makes this precise via vector–Jacobian products.
+**The slow way.** Suppose the model has a million parameters and one scalar loss $L$. To learn how $L$ depends on each parameter by perturbation, you nudge parameter 1, rerun the whole forward pass, and see how $L$ moved; then nudge parameter 2 and rerun; and so on. That is one forward pass per parameter, about a million passes.
+
+**Reverse mode.** Run the forward pass once and remember every intermediate value. Then walk backward from $L$. At each step compute one quantity: how much $L$ changes per unit change in that intermediate value. Every parameter that sits upstream of that step reuses the same number, so nothing is recomputed per parameter.
+
+**Tiny example.** Let $L = (a+b)^2$ with $a = w_1 x$ and $b = w_2 x$. Take $x = 3$, $w_1 = 1$, $w_2 = 2$, so $a = 3$, $b = 6$, $a+b = 9$, $L = 81$.
+- Backward step 1: $\partial L/\partial (a+b) = 2(a+b) = 18$. This is computed once.
+- Backward step 2: both $a$ and $b$ feed into $a+b$ with coefficient $1$, so $\partial L/\partial a = \partial L/\partial b = 18$.
+- Backward step 3: $\partial L/\partial w_1 = 18 \cdot x = 54$ and $\partial L/\partial w_2 = 18 \cdot x = 54$.
+
+The number $18$ was computed once and shared by both parameters. With a million parameters behind the same node, it is still computed once.
+
+**Cost.** Each operation is visited once going backward, and its backward step costs about as much as its forward step. So the entire gradient costs roughly 2–3 forward passes, independent of the number of parameters. The next lesson makes this precise via vector–Jacobian products.
 
 </details>
 
