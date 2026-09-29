@@ -68,3 +68,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** not a new lesson — a candidate caveat/addendum to the existing module-12 lesson-05, to be judged by weekly review against the lesson's current claims.
 - **Confidence:** low-medium (rigorous diagnostic methodology; small-scale-only evaluation limits generality)
 - **Recommendation:** weekly review should check whether `lessons/module-12/lesson-05.md` states the "46.7%→4.8%" gated-attention result as settled fact anywhere, and if so, consider a caveat citing this failure-to-reproduce at smaller scale plus the training-objective-vs-architecture distinction.
+
+### C-20260929-01 · ToolSearcher: Optimizing Tool Selection at Scale via Reinforcement Learning
+
+- **Class:** B
+- **Date discovered:** 2026-09-29
+- **Date published:** 2026-09-25
+- **Source:** https://arxiv.org/abs/2609.30906 "ToolSearcher: Optimizing Tool Selection at Scale via Reinforcement Learning"
+- **Organization/researchers:** Zhenlong Dai, Xujie Song, Zitong Wang, Tong Niu, Jian Liu, Weiqiang Wang, Xiu Tang, Sai Wu, Chang Yao, Jingyuan Chen (affiliations not stated on the abstract page); accepted at NeurIPS 2026
+- **Category:** agents/tools
+- **What changed:** RL framework for large-scale tool *selection* (as distinct from tool *use*): category-constrained discrimination narrows the candidate pool before full scoring, event-level search modeling treats each search step as its own RL event, and trajectory-aligned credit allocation propagates reward across a full multi-step, composed tool-use trajectory rather than only the final answer.
+- **Technical summary:** Distinct from the course's Toolformer material (module 18): this targets the search/selection step over a large, ambiguous tool catalog, not deciding whether/how to insert a call. Peer-reviewed (NeurIPS 2026) but no released code found; abstract cites "strong baselines" without naming them or giving numbers.
+- **Why it might matter:** agentic systems with large tool/API catalogs need more than embedding top-k retrieval to pick the right tool; a peer-reviewed, purpose-built RL method for that step is a plausible module-18 extension if it holds up.
+- **Evidence of adoption:** none beyond peer review — no confirmed open-source implementation, no third-party reproduction, no adoption in an agent framework.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed.
+- **Paper:** https://arxiv.org/abs/2609.30906
+- **Code:** not confirmed
+- **Relationship to existing course material:** adjacent to module-18 (Toolformer, `papers/index.md`) and its tool-use lessons; new topic, no registry entry (`lookup "ToolSearcher tool selection"` → no match).
+- **Potential course lesson:** possible module-18 extension on RL-trained tool selection for large tool catalogs, contingent on a public implementation and concrete numbers.
+- **Confidence:** low-medium (peer-reviewed, but no adoption evidence and abstract omits concrete results)
+- **Recommendation:** monitor — good peer-review signal; wait for released code/results and any real agent-framework adoption before weekly review considers it.
+
+### C-20260929-02 · H2S (Highlight-Then-Summarize): trained evidence compression for long-context QA
+
+- **Class:** B
+- **Date discovered:** 2026-09-29
+- **Date published:** 2026-09-25
+- **Source:** https://arxiv.org/abs/2609.31382 "Highlight-Then-Summarize: Learning to Compress Evidence for Long-Context Understanding"
+- **Organization/researchers:** Zhaoyuan Xia, Qinghongbing Xie, Yung Xiang Hue, Jianguang Jiang, Gaofeng Lu, Zhenyu Jiao, Xing Yuan, Dai Dai, Tong Mo, Long Zeng — Peking University, Baidu Inc., Tsinghua University
+- **Category:** long-context | reasoning
+- **What changed:** Two-stage pipeline for long-document QA: (1) extract source-grounded, question-relevant evidence spans, (2) compress them into a compact, question-conditioned summary, then answer from that — rather than answering over the raw context or a generic summary. Trained on a new H2S-Dataset (6,647 examples, avg. 43.9K tokens) with an RL stage (H2S-RL). Reports their 14B model beating larger open-source models on 7 long-context benchmarks with shorter outputs.
+- **Technical summary:** A trained, verifiable evidence-selection step, distinct from both "extend the context window" (architectural) and generic retrieve-then-summarize pipelines. Code and dataset are public, which makes this easier to check than most B items.
+- **Why it might matter:** the course's long-context material (module 12) currently covers architectural context-extension, not this kind of trained evidence-compression step for the "context doesn't fit / isn't all relevant" problem.
+- **Evidence of adoption:** none — single paper, no independent reproduction, no adoption by a major lab or serving framework.
+- **Major organizations using it:** none (Baidu is a co-affiliation on the paper, not a deployment).
+- **Open-source implementation:** https://github.com/X-Luffy/Highlight-Then-Summarize
+- **Paper:** https://arxiv.org/abs/2609.31382
+- **Code:** https://github.com/X-Luffy/Highlight-Then-Summarize
+- **Relationship to existing course material:** new — module-12 covers long-context architecture, not trained evidence-compression pipelines; no registry entry.
+- **Potential course lesson:** possible module-12/13 extension or exercise on trained evidence compression for long-context QA, since code+dataset are actually runnable.
+- **Confidence:** low-medium (reproducible artifact is a plus; still single paper, no third-party validation)
+- **Recommendation:** monitor — released code+dataset make this worth a quick reproduction check if module-12/13 extensions come up at weekly review.
+
+### C-20260929-03 · Self-play pretraining with zero natural data (generator/learner over a universal Turing machine)
+
+- **Class:** B
+- **Date discovered:** 2026-09-29
+- **Date published:** 2026-09-24
+- **Source:** https://arxiv.org/abs/2609.30063 "Self-Play Pretraining with Zero Data"
+- **Organization/researchers:** Aditya Cowsik, Kfir Dolev, Michael Y. Li, G. Bruno De Luca, Nourya Cohen, Noah D. Goodman, Yoav Levine (Noah Goodman: Stanford)
+- **Category:** training | other (pretraining paradigm)
+- **What changed:** Pretrains an autoregressive "learner" with no natural data at all. A "generator" proposes programs for a universal Turing machine that emit byte sequences; the generator is RL-trained to stay at the frontier of the learner's current ability (an automatic curriculum), and the learner predicts those bytes. Claims zero-shot performance on natural-language datasets improves predictably with more compute, that the learner shows in-context learning, and that it transfers to natural data despite never training on any.
+- **Technical summary:** Structurally different from ordinary synthetic-data pretraining (which still generates natural-language-like text via an LLM): here neither model ever sees natural data; the loop resembles AlphaZero-style curriculum self-play applied to next-byte prediction. If the transfer claims hold, they bear on why pretraining works at all (is exposure to natural-language structure necessary, or just to sufficiently complex/compressible sequences?).
+- **Why it might matter:** touches the course's pretraining-fundamentals framing directly, from a team including a well-known researcher (Noah Goodman); a genuinely different angle rather than an incremental data-pipeline tweak.
+- **Evidence of adoption:** none — single paper, extraordinary claim, no code released, no independent reproduction. Needs real scrutiny of the transfer-to-natural-data evaluation before taking at face value.
+- **Major organizations using it:** none.
+- **Open-source implementation:** not confirmed.
+- **Paper:** https://arxiv.org/abs/2609.30063
+- **Code:** not confirmed
+- **Relationship to existing course material:** new — touches "why pretraining works" framing in early modules; no registry entry.
+- **Potential course lesson:** none yet — far too early/unreplicated; at most a research-connection pointer in an existing pretraining lesson if it survives scrutiny.
+- **Confidence:** low (striking claim, single paper, no code, no reproduction — treat skeptically)
+- **Recommendation:** monitor closely, do not act on; classic single-extraordinary-claim paper. Revisit if code is released or the claim is independently reproduced/scrutinized.
