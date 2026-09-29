@@ -60,43 +60,56 @@ $$
 
 where $\delta_{ti} = 1$ if $i = t$ and $0$ otherwise. Here is where that comes from, slowly.
 
-**4.1 The full softmax Jacobian.** Softmax maps $\mathbf{z} \in \mathbb{R}^C$ to $\mathbf{p} \in \mathbb{R}^C$, so its Jacobian is a $C \times C$ matrix $J$ with entry $J_{ki} = \frac{\partial p_k}{\partial z_i}$ (row $k$ = which output, column $i$ = which input). Write $S = \sum_m e^{z_m}$ so $p_k = e^{z_k}/S$. The quotient rule needs two ingredients. First, a piece of notation: $\delta_{ki}$ is the **Kronecker delta**, a switch that equals $1$ when the two indices are the same and $0$ when they differ:
+**4.1 The full softmax Jacobian, built from a concrete case.** *The order of this derivation (start with concrete entries of a 3-dimensional example, get the diagonal and off-diagonal cases, then compress with the Kronecker delta) follows the article ["Mastering the Softmax Function: Understanding Its Derivative with a Step-by-Step Example"](https://readmedium.com/mastering-the-softmax-function-understanding-its-derivative-with-a-step-by-step-example-a5106a31581c) by Irene Markelic (section 0.3, The Derivative of the Softmax Function); the algebra and numbers below are written out for this course. See the article for its figures.*
 
-$$
-\delta_{ki} = \begin{cases} 1 & k = i \\ 0 & k \ne i \end{cases}
-$$
-
-For example $\delta_{22} = 1$ and $\delta_{23} = 0$. It is the entry $(k, i)$ of the identity matrix, and it lets us write "only the diagonal" in one symbol. (It is the same $\delta$ used above in $\delta_{ti}$, which is $1$ only at the true class, i.e. the $i$-th entry of the one-hot vector $\mathbf{y}$.)
-
-- The numerator's derivative: $\frac{\partial e^{z_k}}{\partial z_i} = e^{z_k}\,\delta_{ki}$ (it is $e^{z_k}$ when $i = k$, and $0$ otherwise, because $z_i$ does not appear in $e^{z_k}$ for $i \ne k$).
-- The denominator's derivative: $\frac{\partial S}{\partial z_i} = e^{z_i}$ (every $z_i$ appears in the sum exactly once).
-
-Quotient rule, $\frac{\partial}{\partial z_i}\frac{u}{S} = \frac{u'\,S - u\,S'}{S^2}$ with $u = e^{z_k}$:
-
-$$
-\frac{\partial p_k}{\partial z_i} = \frac{e^{z_k}\delta_{ki}\,S - e^{z_k}\,e^{z_i}}{S^2}
-= \frac{e^{z_k}}{S}\,\delta_{ki} - \frac{e^{z_k}}{S}\,\frac{e^{z_i}}{S}
-= p_k\,\delta_{ki} - p_k\,p_i = p_k(\delta_{ki} - p_i).
-$$
-
-Splitting on whether $i = k$:
-
-- **Diagonal** ($i = k$): $\delta_{kk} = 1$, so $J_{kk} = p_k(1 - p_k)$.
-- **Off-diagonal** ($i \ne k$): $\delta_{ki} = 0$, so $J_{ki} = -\,p_k\,p_i$.
-
-Laid out as the full matrix (row $k$, column $i$):
+Softmax maps a vector $\mathbf{z}$ to a vector $\mathbf{p}$, so its derivative is a Jacobian: a $C \times C$ matrix $J$ with $J_{ki} = \frac{\partial p_k}{\partial z_i}$ (row $k$ = which output, column $i$ = which input). Take $C = 3$ to keep it concrete, with $S = e^{z_1} + e^{z_2} + e^{z_3}$ and $p_k = e^{z_k}/S$. The matrix has $9$ entries:
 
 $$
 J = \begin{pmatrix}
-p_1(1-p_1) & -p_1 p_2 & \cdots & -p_1 p_C \\
--p_2 p_1 & p_2(1-p_2) & \cdots & -p_2 p_C \\
-\vdots & \vdots & \ddots & \vdots \\
--p_C p_1 & -p_C p_2 & \cdots & p_C(1-p_C)
-\end{pmatrix}
-= \operatorname{diag}(\mathbf{p}) - \mathbf{p}\mathbf{p}^\top .
+\frac{\partial p_1}{\partial z_1} & \frac{\partial p_1}{\partial z_2} & \frac{\partial p_1}{\partial z_3} \
+\frac{\partial p_2}{\partial z_1} & \frac{\partial p_2}{\partial z_2} & \frac{\partial p_2}{\partial z_3} \
+\frac{\partial p_3}{\partial z_1} & \frac{\partial p_3}{\partial z_2} & \frac{\partial p_3}{\partial z_3}
+\end{pmatrix}.
 $$
 
-It is symmetric ($J_{ki} = J_{ik}$), and every row sums to $0$: $p_k(1-p_k) - \sum_{i \ne k} p_k p_i = p_k(1 - \sum_i p_i) = 0$. That makes sense: adding the same constant to every logit changes no probability.
+We compute two representative entries with the quotient rule $\frac{\partial}{\partial z}\frac{u}{S} = \frac{u' S - u S'}{S^2}$. Note that $\frac{\partial S}{\partial z_i} = e^{z_i}$ for every $i$, since each $z_i$ appears once in the sum.
+
+**Entry $(1,1)$, an input and output with the same index (diagonal).** Here $u = e^{z_1}$ and $u' = e^{z_1}$:
+
+$$
+\frac{\partial p_1}{\partial z_1} = \frac{e^{z_1} S - e^{z_1} e^{z_1}}{S^2} = \frac{e^{z_1}}{S} - \left(\frac{e^{z_1}}{S}\right)^2 = p_1 - p_1^2 = p_1(1 - p_1).
+$$
+
+**Entry $(1,2)$, different indices (off-diagonal).** Now $u = e^{z_1}$ does not contain $z_2$, so $u' = 0$, and $S' = e^{z_2}$:
+
+$$
+\frac{\partial p_1}{\partial z_2} = \frac{0 \cdot S - e^{z_1} e^{z_2}}{S^2} = -\frac{e^{z_1}}{S}\cdot\frac{e^{z_2}}{S} = -p_1 p_2.
+$$
+
+**The general pattern.** Nothing in these two computations depended on which indices we picked, only on whether the output index $k$ equals the input index $i$:
+
+- **Diagonal** ($i = k$): $J_{kk} = p_k(1 - p_k)$.
+- **Off-diagonal** ($i \ne k$): $J_{ki} = -\,p_k\,p_i$.
+
+Filling in all nine entries for $C = 3$:
+
+$$
+J = \begin{pmatrix}
+p_1(1-p_1) & -p_1 p_2 & -p_1 p_3 \
+-p_2 p_1 & p_2(1-p_2) & -p_2 p_3 \
+-p_3 p_1 & -p_3 p_2 & p_3(1-p_3)
+\end{pmatrix},
+$$
+
+and for general $C$ the same pattern continues: $p_k(1-p_k)$ down the diagonal, $-p_k p_i$ everywhere else. In matrix form, $J = \operatorname{diag}(\mathbf{p}) - \mathbf{p}\mathbf{p}^\top$. It is symmetric, and every row sums to $0$ (for row $k$: $p_k(1-p_k) - \sum_{i \ne k} p_k p_i = p_k(1 - \sum_i p_i) = 0$), which matches the fact that adding the same constant to every logit changes no probability.
+
+**One formula for both cases: the Kronecker delta.** $\delta_{ki}$ is a switch that equals $1$ when the indices are the same and $0$ when they differ ($\delta_{22} = 1$, $\delta_{23} = 0$); it is entry $(k,i)$ of the identity matrix. Then both cases collapse into
+
+$$
+\frac{\partial p_k}{\partial z_i} = p_k(\delta_{ki} - p_i).
+$$
+
+Check: $k = i$ gives $p_k(1 - p_k)$, and $k \ne i$ gives $-p_k p_i$. (This is the same $\delta$ used above in $\delta_{ti}$, which is $1$ only at the true class: the $i$-th entry of the one-hot vector $\mathbf{y}$.)
 
 **4.2 Numeric example.** Take $C = 3$ and $\mathbf{p} = (0.2,\ 0.5,\ 0.3)$. Then
 
