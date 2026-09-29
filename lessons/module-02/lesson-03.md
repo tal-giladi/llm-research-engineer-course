@@ -130,8 +130,7 @@ Check: row 1 is $0.16 - 0.10 - 0.06 = 0$, row 2 is $-0.10 + 0.25 - 0.15 = 0$, ro
 
 <details><summary>Extra (optional): why does every row sum to 0?</summary>
 
-Row $k$ says how $p_k$ changes as you nudge each logit. Nudging *all* logits by the same amount changes no probability (the shift cancels in the ratio), so the row must add up to zero. Algebraically, the off-diagonal entries of row $k$ sum to $-p_k\sum_{i
-e k}p_i = -p_k(1-p_k)$, which exactly cancels the diagonal $p_k(1-p_k)$. Row 1 above: $0.2\cdot0.8 - 0.2\cdot(0.5+0.3) = 0.16 - 0.16 = 0$.
+Row $k$ says how $p_k$ changes as you nudge each logit. Nudging *all* logits by the same amount changes no probability (the shift cancels in the ratio), so the row must add up to zero. Algebraically, the off-diagonal entries of row $k$ sum to $-p_k\sum_{i \ne k}p_i = -p_k(1-p_k)$, which exactly cancels the diagonal $p_k(1-p_k)$. Row 1 above: $0.2\cdot0.8 - 0.2\cdot(0.5+0.3) = 0.16 - 0.16 = 0$.
 
 </details>
 
