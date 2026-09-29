@@ -363,6 +363,8 @@ $\mathbf{g} = [0.136532,\ 0.453303 - 1,\ 0.410165] = [0.136532,\ -0.546697,\ 0.4
 - **Outer product in the wrong order.** $\frac{\partial L}{\partial W} = \mathbf{g}\mathbf{x}^\top$ has shape $(C, d)$. Writing $\mathbf{x}\mathbf{g}^\top$ gives $(d, C)$ — the transpose of what you want.
 - **Forgetting the batch mean.** With a batch, the loss is averaged over $N$, so every parameter gradient carries a $1/N$. Compare against `reduction='mean'` (the default) not `'sum'`.
 - **Building $\mathbf{p}$ then taking `log`.** Numerically worse than `log_softmax`/`cross_entropy`. Fine for a hand check; do not ship it.
+  - *What goes wrong.* Two separate steps: first `p = softmax(z)`, then `-log(p[t])`. The first step can overflow or underflow, and the second step then takes the log of the damaged result. Example in float32 with logits $\mathbf{z} = [0,\ 100]$ and true class $t = 0$: the true loss is $-\log p_0 = \log(1 + e^{100}) \approx 100$. But $e^{100}$ is larger than the biggest float32 number (about $e^{88}$), so `exp` returns `inf`, then $p_0 = 1/\infty = 0$, then `log(0)` is `-inf`, and the loss comes out as `inf` (and the gradient as `nan`). Even when nothing overflows, a tiny $p_t$ (say $10^{-40}$) is rounded to almost nothing before the log sees it, so the loss loses digits.
+  - *The fix.* Never form $p_t$ at all. Compute $\log p_t = z_t - \max_k z_k - \log\sum_k e^{z_k - \max_k z_k}$ directly (this is `log_softmax`, derived in [01.4](lessons/module-01/lesson-04.md)). Same example: shifted logits are $[-100,\ 0]$, the exponentials are $\approx 0$ and $1$, the sum is $\approx 1$, so $\log p_0 = -100 - \log(1) = -100$ and the loss is a finite $100$. The max-subtraction keeps every exponent $\le 0$, so nothing can overflow.
 
 ## Check yourself
 
