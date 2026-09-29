@@ -58,7 +58,73 @@ $$
 \qquad\text{compactly}\qquad \frac{\partial p_t}{\partial z_i} = p_t(\delta_{ti} - p_i),
 $$
 
-where $\delta_{ti} = 1$ if $i = t$ and $0$ otherwise. (A short derivation: for $i = t$, differentiating $e^{z_t}/S$ with $S = \sum_k e^{z_k}$ gives $\frac{e^{z_t}S - e^{z_t}e^{z_t}}{S^2} = p_t - p_t^2 = p_t(1-p_t)$. For $i \ne t$, the numerator $e^{z_t}$ has no $z_i$, so we get $\frac{-e^{z_t}e^{z_i}}{S^2} = -p_t p_i$.)
+where $\delta_{ti} = 1$ if $i = t$ and $0$ otherwise. Here is where that comes from, slowly.
+
+**4.1 The full softmax Jacobian.** Softmax maps $\mathbf{z} \in \mathbb{R}^C$ to $\mathbf{p} \in \mathbb{R}^C$, so its Jacobian is a $C \times C$ matrix $J$ with entry $J_{ki} = \frac{\partial p_k}{\partial z_i}$ (row $k$ = which output, column $i$ = which input). Write $S = \sum_m e^{z_m}$ so $p_k = e^{z_k}/S$. The quotient rule needs two ingredients:
+
+- The numerator's derivative: $\frac{\partial e^{z_k}}{\partial z_i} = e^{z_k}\,\delta_{ki}$ (it is $e^{z_k}$ when $i = k$, and $0$ otherwise, because $z_i$ does not appear in $e^{z_k}$ for $i \ne k$).
+- The denominator's derivative: $\frac{\partial S}{\partial z_i} = e^{z_i}$ (every $z_i$ appears in the sum exactly once).
+
+Quotient rule, $\frac{\partial}{\partial z_i}\frac{u}{S} = \frac{u'\,S - u\,S'}{S^2}$ with $u = e^{z_k}$:
+
+$$
+\frac{\partial p_k}{\partial z_i} = \frac{e^{z_k}\delta_{ki}\,S - e^{z_k}\,e^{z_i}}{S^2}
+= \frac{e^{z_k}}{S}\,\delta_{ki} - \frac{e^{z_k}}{S}\,\frac{e^{z_i}}{S}
+= p_k\,\delta_{ki} - p_k\,p_i = p_k(\delta_{ki} - p_i).
+$$
+
+Splitting on whether $i = k$:
+
+- **Diagonal** ($i = k$): $\delta_{kk} = 1$, so $J_{kk} = p_k(1 - p_k)$.
+- **Off-diagonal** ($i \ne k$): $\delta_{ki} = 0$, so $J_{ki} = -\,p_k\,p_i$.
+
+Laid out as the full matrix (row $k$, column $i$):
+
+$$
+J = \begin{pmatrix}
+p_1(1-p_1) & -p_1 p_2 & \cdots & -p_1 p_C \\
+-p_2 p_1 & p_2(1-p_2) & \cdots & -p_2 p_C \\
+\vdots & \vdots & \ddots & \vdots \\
+-p_C p_1 & -p_C p_2 & \cdots & p_C(1-p_C)
+\end{pmatrix}
+= \operatorname{diag}(\mathbf{p}) - \mathbf{p}\mathbf{p}^\top .
+$$
+
+It is symmetric ($J_{ki} = J_{ik}$), and every row sums to $0$: $p_k(1-p_k) - \sum_{i \ne k} p_k p_i = p_k(1 - \sum_i p_i) = 0$. That makes sense: adding the same constant to every logit changes no probability.
+
+**4.2 Numeric example.** Take $C = 3$ and $\mathbf{p} = (0.2,\ 0.5,\ 0.3)$. Then
+
+$$
+J = \begin{pmatrix}
+0.2\cdot0.8 & -0.2\cdot0.5 & -0.2\cdot0.3 \\
+-0.5\cdot0.2 & 0.5\cdot0.5 & -0.5\cdot0.3 \\
+-0.3\cdot0.2 & -0.3\cdot0.5 & 0.3\cdot0.7
+\end{pmatrix}
+= \begin{pmatrix}
+0.16 & -0.10 & -0.06 \\
+-0.10 & 0.25 & -0.15 \\
+-0.06 & -0.15 & 0.21
+\end{pmatrix}.
+$$
+
+Check: row 1 is $0.16 - 0.10 - 0.06 = 0$, row 2 is $-0.10 + 0.25 - 0.15 = 0$, row 3 is $-0.06 - 0.15 + 0.21 = 0$.
+
+**4.3 Why we only need one row.** The backward step is a VJP: $\frac{\partial L}{\partial \mathbf{z}}^\top = \left(\frac{\partial L}{\partial \mathbf{p}}\right)^\top J$. From step one, $\frac{\partial L}{\partial \mathbf{p}}$ is zero everywhere except entry $t$, where it is $-1/p_t$. A row vector with a single nonzero entry multiplied by $J$ picks out row $t$ of $J$, scaled by that entry:
+
+$$
+\underbrace{\begin{pmatrix} 0 & \cdots & -\tfrac{1}{p_t} & \cdots & 0 \end{pmatrix}}_{\partial L/\partial \mathbf{p}}
+\; J \;=\; -\frac{1}{p_t}\,\bigl(\text{row } t \text{ of } J\bigr).
+$$
+
+Row $t$ of $J$ has entries $J_{ti} = \frac{\partial p_t}{\partial z_i}$, which is exactly the formula $\frac{\partial p_t}{\partial z_i}$ we needed above: $p_t(1-p_t)$ at $i = t$, and $-p_t p_i$ elsewhere. The other $C-1$ rows of $J$ are multiplied by zero and never matter, which is why the lesson only writes down $\frac{\partial p_t}{\partial z_i}$.
+
+Numeric check with the example above, true class $t = 2$ (so $p_t = 0.5$ and $-1/p_t = -2$):
+
+$$
+(0,\ -2,\ 0)\,J = -2\cdot(-0.10,\ 0.25,\ -0.15) = (0.2,\ -0.5,\ 0.3) = \mathbf{p} - \mathbf{y},
+$$
+
+since $\mathbf{p} - \mathbf{y} = (0.2,\ 0.5 - 1,\ 0.3)$. The two routes agree.
 
 Substitute this into the chain-rule expression. The $-\frac{1}{p_t}$ cancels the leading $p_t$:
 

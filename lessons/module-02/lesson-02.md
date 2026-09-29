@@ -160,7 +160,9 @@ This matches the hand-derived $J$ from section 3. Notice `jacobian` had to call 
 
 ## 9. Under the hood: cost, memory, and the forward-vs-reverse choice
 
-**Time.** One backward pass costs a small constant (~2×) times one forward pass, *independent of the number of parameters*, because each op does a fixed amount of extra work (its VJP) and the sweep visits each node once.
+**Time.** One backward pass costs a small constant (~2×) times one forward pass, because each op does a fixed amount of extra work (its VJP) and the sweep visits each node once.
+
+<div class="callout key"><p><strong>What "independent of the number of parameters" does <em>not</em> mean.</strong> It does not mean backward takes the same wall-clock time for a 1-million-parameter model and a 1-billion-parameter model. The 1B model is ~1000× more expensive, in the forward pass <em>and</em> in the backward pass. The claim is about the <em>ratio</em>: backward $\approx 2\times$ forward whether the model has $10^6$ or $10^9$ parameters. Contrast with the slow way (perturb each parameter and re-run the forward pass), whose cost relative to one forward pass grows with the parameter count: $P$ parameters means $P$ extra forward passes. Reverse mode gets <em>all</em> $P$ gradients for ~2 forward passes, so the ratio stays fixed while the absolute cost still scales with model size.</p></div>
 
 **Memory.** The forward pass must **cache the intermediate tensors** each op needs for its VJP (a `mul` needs both inputs; a `matmul` needs the input activation; `tanh` needs its output). This cache — the saved activations — is why training memory grows with network depth and batch size, and it is the single biggest consumable in large-model training. Techniques like gradient (activation) checkpointing, which we meet in the systems modules, trade recomputation for smaller caches.
 

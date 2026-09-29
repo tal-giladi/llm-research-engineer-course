@@ -33,9 +33,139 @@
           "score": "5/5"
         }
       ]
+    },
+    "00.3": {
+      "status": "completed",
+      "quiz": [
+        {
+          "date": "2026-09-26",
+          "score": "5/5"
+        }
+      ],
+      "history": [
+        {
+          "date": "2026-09-26",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-26"
+    },
+    "00.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-26",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-26"
+    },
+    "01.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-26",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-26"
+    },
+    "01.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-26",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-09-27",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-09-26",
+      "completed": "2026-09-27"
+    },
+    "01.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-27",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-27"
+    },
+    "01.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-28",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-09-28"
+    },
+    "02.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-28",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-09-28",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-09-28",
+      "completed": "2026-09-28"
+    },
+    "02.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-28",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-09-29",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-09-28",
+      "completed": "2026-09-29",
+      "notes": [
+        {
+          "date": "2026-09-29",
+          "note": "Redo the exercise"
+        }
+      ]
+    },
+    "02.3": {
+      "status": "in-progress",
+      "history": [
+        {
+          "date": "2026-09-29",
+          "status": "in-progress"
+        }
+      ],
+      "started": "2026-09-29"
     }
   },
-  "struggles": [],
+  "struggles": [
+    {
+      "id": "01.3",
+      "note": "needs to repeat: understood it, but too much math to remember (H(p,q)=H(p)+KL split, 0 log 0 cases)",
+      "date": "2026-09-27",
+      "resolved": null
+    },
+    {
+      "id": "01.4",
+      "note": "needs to repeat: understood it, but too much math to remember (cross-entropy steps, log-softmax max-shift derivation)",
+      "date": "2026-09-27",
+      "resolved": null
+    }
+  ],
   "log": [
     {
       "date": "2026-09-26",
@@ -52,6 +182,70 @@
     {
       "date": "2026-09-26",
       "event": "quiz 00.2 5/5"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "quiz 00.3 5/5"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "completed 00.3"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "completed 00.4"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "completed 01.1"
+    },
+    {
+      "date": "2026-09-26",
+      "event": "in-progress 01.2"
+    },
+    {
+      "date": "2026-09-27",
+      "event": "completed 01.2"
+    },
+    {
+      "date": "2026-09-27",
+      "event": "completed 01.3"
+    },
+    {
+      "date": "2026-09-27",
+      "event": "struggle 01.3: needs to repeat: understood it, but too much math to remember (H(p,q)=H(p)+KL split, 0 log 0 cases)"
+    },
+    {
+      "date": "2026-09-27",
+      "event": "struggle 01.4: needs to repeat: understood it, but too much math to remember (cross-entropy steps, log-softmax max-shift derivation)"
+    },
+    {
+      "date": "2026-09-28",
+      "event": "completed 01.4"
+    },
+    {
+      "date": "2026-09-28",
+      "event": "in-progress 02.1"
+    },
+    {
+      "date": "2026-09-28",
+      "event": "completed 02.1"
+    },
+    {
+      "date": "2026-09-28",
+      "event": "in-progress 02.2"
+    },
+    {
+      "date": "2026-09-29",
+      "event": "in-progress 02.3"
+    },
+    {
+      "date": "2026-09-29",
+      "event": "completed 02.2"
+    },
+    {
+      "date": "2026-09-29",
+      "event": "note 02.2"
     }
   ]
 }
