@@ -128,6 +128,13 @@ $$
 
 Check: row 1 is $0.16 - 0.10 - 0.06 = 0$, row 2 is $-0.10 + 0.25 - 0.15 = 0$, row 3 is $-0.06 - 0.15 + 0.21 = 0$.
 
+<details><summary>Extra (optional): why does every row sum to 0?</summary>
+
+Row $k$ says how $p_k$ changes as you nudge each logit. Nudging *all* logits by the same amount changes no probability (the shift cancels in the ratio), so the row must add up to zero. Algebraically, the off-diagonal entries of row $k$ sum to $-p_k\sum_{i
+e k}p_i = -p_k(1-p_k)$, which exactly cancels the diagonal $p_k(1-p_k)$. Row 1 above: $0.2\cdot0.8 - 0.2\cdot(0.5+0.3) = 0.16 - 0.16 = 0$.
+
+</details>
+
 **4.3 Why we only need one row.** The backward step is a VJP: $\frac{\partial L}{\partial \mathbf{z}}^\top = \left(\frac{\partial L}{\partial \mathbf{p}}\right)^\top J$. From step one, $\frac{\partial L}{\partial \mathbf{p}}$ is zero everywhere except entry $t$, where it is $-1/p_t$. A row vector with a single nonzero entry multiplied by $J$ picks out row $t$ of $J$, scaled by that entry:
 
 $$
