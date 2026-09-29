@@ -60,7 +60,13 @@ $$
 
 where $\delta_{ti} = 1$ if $i = t$ and $0$ otherwise. Here is where that comes from, slowly.
 
-**4.1 The full softmax Jacobian.** Softmax maps $\mathbf{z} \in \mathbb{R}^C$ to $\mathbf{p} \in \mathbb{R}^C$, so its Jacobian is a $C \times C$ matrix $J$ with entry $J_{ki} = \frac{\partial p_k}{\partial z_i}$ (row $k$ = which output, column $i$ = which input). Write $S = \sum_m e^{z_m}$ so $p_k = e^{z_k}/S$. The quotient rule needs two ingredients:
+**4.1 The full softmax Jacobian.** Softmax maps $\mathbf{z} \in \mathbb{R}^C$ to $\mathbf{p} \in \mathbb{R}^C$, so its Jacobian is a $C \times C$ matrix $J$ with entry $J_{ki} = \frac{\partial p_k}{\partial z_i}$ (row $k$ = which output, column $i$ = which input). Write $S = \sum_m e^{z_m}$ so $p_k = e^{z_k}/S$. The quotient rule needs two ingredients. First, a piece of notation: $\delta_{ki}$ is the **Kronecker delta**, a switch that equals $1$ when the two indices are the same and $0$ when they differ:
+
+$$
+\delta_{ki} = \begin{cases} 1 & k = i \\ 0 & k \ne i \end{cases}
+$$
+
+For example $\delta_{22} = 1$ and $\delta_{23} = 0$. It is the entry $(k, i)$ of the identity matrix, and it lets us write "only the diagonal" in one symbol. (It is the same $\delta$ used above in $\delta_{ti}$, which is $1$ only at the true class, i.e. the $i$-th entry of the one-hot vector $\mathbf{y}$.)
 
 - The numerator's derivative: $\frac{\partial e^{z_k}}{\partial z_i} = e^{z_k}\,\delta_{ki}$ (it is $e^{z_k}$ when $i = k$, and $0$ otherwise, because $z_i$ does not appear in $e^{z_k}$ for $i \ne k$).
 - The denominator's derivative: $\frac{\partial S}{\partial z_i} = e^{z_i}$ (every $z_i$ appears in the sum exactly once).
