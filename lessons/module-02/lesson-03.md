@@ -193,7 +193,7 @@ $$
 
 The $W^\top$ (shape $(d, C)$) times $\mathbf{g}$ (shape $(C,)$) gives shape $(d,)$ — matching $\mathbf{x}$. This $\frac{\partial L}{\partial \mathbf{x}}$ is what gets handed to the *previous* layer as its incoming gradient; it is how the backward sweep continues down into the rest of the network.
 
-*Note on the first layer:* if $\mathbf{x}$ is the raw user input (data, not a parameter), nobody needs $rac{\partial L}{\partial \mathbf{x}}$, because there is no earlier layer to hand it to and the input cannot be changed. Autograd skips it (the input has `requires_grad=False`) and computes only $rac{\partial L}{\partial W}$ and $rac{\partial L}{\partial \mathbf{b}}$. We derive it here because in every deeper layer $\mathbf{x}$ is the previous layer's output, and that layer needs it.
+*Note on the first layer:* if $\mathbf{x}$ is the raw user input (data, not a parameter), nobody needs $\frac{\partial L}{\partial \mathbf{x}}$, because there is no earlier layer to hand it to and the input cannot be changed. Autograd skips it (the input has `requires_grad=False`) and computes only $\frac{\partial L}{\partial W}$ and $\frac{\partial L}{\partial \mathbf{b}}$. We derive it here because in every deeper layer $\mathbf{x}$ is the previous layer's output, and that layer needs it.
 
 <div class="callout key"><p>The three linear-layer gradients — memorize their shapes, they recur in every layer of the course:</p>
 <p>$$\frac{\partial L}{\partial W} = \mathbf{g}\,\mathbf{x}^\top\ (C{\times}d), \qquad \frac{\partial L}{\partial \mathbf{b}} = \mathbf{g}\ (C), \qquad \frac{\partial L}{\partial \mathbf{x}} = W^\top\mathbf{g}\ (d),$$</p>
