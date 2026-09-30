@@ -210,6 +210,10 @@ The steep $y$-direction (curvature $100$) forces a small learning rate: plain gr
 
 Momentum reaches the target about $4.7\times$ faster with the *same* learning rate. The reason is precisely §4.1: the slow $x$-direction has a small, consistent gradient that momentum accumulates into real speed, while the fast oscillating $y$-direction gets damped. Both start identically (step 1 loss $= 48.50$ for each, since $v = g$ on the first step); by step 20 the momentum run is already at loss $0.07$ while plain SGD is still at $22.5$.
 
+![Loss versus step on a log scale for plain SGD and SGD with momentum on the same quadratic and learning rate: SGD falls along a slow straight line and crosses 1e-3 at step 269; momentum drops much faster with a wavy, bouncing curve and crosses 1e-3 at step 57](../../assets/img/momentum-vs-sgd-loss.svg)
+
+*Loss per step, log scale, both runs from the table.* Plain SGD (orange) is a straight line on a log plot: every step multiplies the loss by the same factor, set by the slow $x$-direction ($x$ shrinks by $1 - 0.0198 = 0.9802$ per step). Momentum (blue) falls far more steeply. Its curve is wavy because the velocity carries the point *past* the valley floor and back — the "ball rolling downhill" overshoots a little, then settles — but even the peaks of those waves stay well below the plain-SGD line. Momentum is not monotone; it is faster on average.
+
 ```python
 import torch
 
