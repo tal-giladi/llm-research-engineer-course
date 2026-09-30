@@ -131,3 +131,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** none yet — far too early/unreplicated; at most a research-connection pointer in an existing pretraining lesson if it survives scrutiny.
 - **Confidence:** low (striking claim, single paper, no code, no reproduction — treat skeptically)
 - **Recommendation:** monitor closely, do not act on; classic single-extraordinary-claim paper. Revisit if code is released or the claim is independently reproduced/scrutinized.
+
+### C-20260930-01 · LeapQuant: training-free 8-bit quantization of linear-attention recurrent state
+
+- **Class:** B
+- **Date discovered:** 2026-09-30
+- **Date published:** 2026-09-29
+- **Source:** https://arxiv.org/abs/2609.38166 "LeapQuant: Efficient Linear Attention with Accurate Recurrent State Quantization"
+- **Organization/researchers:** Yi Pan, Haocheng Xi, Kan Zhu, Xingyang Li, Yibo Wu, Mayank Mishra, Hongtao Zhang, William X. Zheng, Baris Kasikci, Song Han, Kurt Keutzer, Rishabh Iyer, Ion Stoica (MIT/UC Berkeley-affiliated systems researchers; affiliations not stated on the abstract page)
+- **Category:** quantization
+- **What changed:** A training-free method for quantizing the recurrent state carried by linear-attention layers (the same kind of state the course's Gated DeltaNet lesson introduces) to 8 bits at inference time. Two mechanisms: "per-window" quantization that re-quantizes the state only once per window of tokens instead of every step, and high-precision "compensator tokens" that absorb outliers so the rest of the state can stay low-bit. Evaluated on real hybrid linear-attention models (Qwen, Kimi-Linear, GLM families).
+- **Technical summary:** Reports kernel-level speedups of 2.05-3.70x and 1.47x end-to-end inference speedup on NVIDIA B200, RTX PRO 6000, and RTX 5090, with accuracy close to unquantized state. Training-free (no fine-tuning needed), which matters for adoption since it can be applied to already-released checkpoints. No public code found yet (paper is one day old).
+- **Why it might matter:** The course just added a hybrid linear-attention lesson (`lessons/module-12/lesson-05.md`, Gated DeltaNet + full attention, accepted 2026-09-27). Serving-time quantization of exactly the recurrent state that lesson teaches is a natural, concrete extension — and the author list (Song Han, Ion Stoica, Kurt Keutzer, Baris Kasikci) has a strong track record of techniques that become standard practice in serving stacks (e.g., SmoothQuant, AWQ, vLLM/Ray ecosystem).
+- **Evidence of adoption:** none yet — paper submitted 2026-09-29, no released code found, no third-party reproduction, no serving-framework (vLLM/SGLang) integration confirmed.
+- **Major organizations using it:** none confirmed yet.
+- **Open-source implementation:** not confirmed (not yet found; may not be released).
+- **Paper:** https://arxiv.org/abs/2609.38166
+- **Code:** not confirmed
+- **Relationship to existing course material:** directly extends `lessons/module-12/lesson-05.md` and `research/accepted/hybrid-linear-attention-gated-deltanet.md` (recurrent-state quantization for the same architecture family); new topic, no registry entry.
+- **Potential course lesson:** possible module-12 addendum/exercise on quantizing the Gated DeltaNet recurrent state for serving, once code is available to implement/verify from scratch.
+- **Confidence:** low-medium (strong author pedigree and concrete measured speedups on real GPUs; no code or independent validation yet)
+- **Recommendation:** monitor closely — watch for released code; also see C-20260930-02 (STEPQuant), an independent same-day paper attacking the identical problem, which strengthens the signal that this is a real, currently-unsolved gap in hybrid linear-attention serving.
+
+### C-20260930-02 · STEPQuant: error-aware precision allocation for delta-rule recurrent state
+
+- **Class:** B
+- **Date discovered:** 2026-09-30
+- **Date published:** 2026-09-29
+- **Source:** https://arxiv.org/abs/2609.38169 "STEPQuant: When and Where Errors Matter in Delta-Rule Recurrent State Quantization"
+- **Organization/researchers:** Bingchen Yao, Haobo Xu, Haokun Lin, Yichen Wu, Ziyu Guo, Renrui Zhang, Zhichao Lu, Zhenan Sun, Ying Wei (affiliations not stated on the abstract page)
+- **Category:** quantization
+- **What changed:** Independent, same-day paper on the same underlying problem as C-20260930-01 (quantizing delta-rule/linear-attention recurrent state) but a different method: allocates bit-precision based on two axes — temporally, how long an error in a given state entry persists across future decoding steps, and spatially, which key rows/value columns matter most — then jointly optimizes key-row and value-column quantization scales, rather than LeapQuant's per-window-leap + compensator-token approach.
+- **Technical summary:** Evaluated on Qwen3.8-27B and Kimi-Linear-48B-A3B-Instruct. Reports matching FP32-state accuracy at a 6-bit budget and beating uniform INT8 at 4 bits, with up to 68.7% serving-memory reduction. No public code found yet.
+- **Why it might matter:** Same rationale as LeapQuant — directly extends the course's newly-accepted Gated DeltaNet/hybrid-linear-attention material with a memory-focused (rather than speed-focused) quantization angle, evaluated on some of the same real production model families.
+- **Evidence of adoption:** none yet — single paper, no code, no reproduction, no serving-stack integration.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed.
+- **Paper:** https://arxiv.org/abs/2609.38169
+- **Code:** not confirmed
+- **Relationship to existing course material:** directly extends `lessons/module-12/lesson-05.md` and `research/accepted/hybrid-linear-attention-gated-deltanet.md`, same as C-20260930-01, via a different memory-bit-allocation mechanism; new topic, no registry entry.
+- **Potential course lesson:** if a public implementation appears, a module-12 addendum comparing LeapQuant's (speed-oriented) and STEPQuant's (memory-oriented) approaches to quantizing the same recurrent state would be a strong from-scratch exercise.
+- **Confidence:** low-medium (concrete numbers on real production model families; no code or independent validation yet)
+- **Recommendation:** monitor alongside C-20260930-01 as a pair — two independent groups converging on quantizing the exact state the course just started teaching is a meaningful signal even though neither has adoption evidence yet; revisit together once either publishes code.
+
+### C-20260930-03 · Delta-Matching: closing the accuracy gap for native FP8 8-bit LLM training
+
+- **Class:** B
+- **Date discovered:** 2026-09-30
+- **Date published:** 2026-09-29
+- **Source:** https://arxiv.org/abs/2609.37852 "Delta-Matching: Closing the Final Gap of Native 8-bit Training for LLMs"
+- **Organization/researchers:** Haozhan Tang, Hao Kang, Han Cai, Song Han, Chenyan Xiong (Song Han's group; MIT/CMU-affiliated, affiliations not stated on the abstract page)
+- **Category:** training
+- **What changed:** Identifies that native FP8 attention training degrades at larger model scale because forward/backward numerical inconsistencies produce a "stale delta" that breaks the softmax gradient's zero-row-sum invariant. Delta-Matching restores that invariant, enabling native block-scaled FP8 training without architecture changes, smaller batches, or auxiliary forward passes — unlike prior FP8-training workarounds.
+- **Technical summary:** Tested at 1.67B and 5.29B parameters, reportedly matching BF16/FP32 mixed-precision training quality. Authors state they will release implementation, trained models, and training-data recipes (not yet available as of paper submission). Distinct from the course's existing mixed-precision material: this targets native low-precision training (compute + memory savings during pretraining itself), not post-training quantization for serving.
+- **Why it might matter:** If it holds and ships code, native FP8 training that "just works" without architectural workarounds would be directly relevant to the course's training-efficiency material — from a lab (Song Han's) with a strong history of techniques that become standard (also a co-author on C-20260930-01/LeapQuant, suggesting a research program specifically on production-grade low-precision LLM systems).
+- **Evidence of adoption:** none yet — single paper one day old, code promised but not released, no independent reproduction, no adoption in a training framework (Megatron-LM, TorchTitan, etc.).
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** promised, not yet available.
+- **Paper:** https://arxiv.org/abs/2609.37852
+- **Code:** not confirmed (authors state intent to release)
+- **Relationship to existing course material:** new — no existing lesson on native FP8 pretraining; no registry entry.
+- **Potential course lesson:** possible addition to the training-efficiency/mixed-precision material once code and independent scale-up results are available; only tested to 5.29B params so far, well below frontier scale.
+- **Confidence:** low (promising mechanism and credible authors, but no code yet and only mid-scale results)
+- **Recommendation:** monitor — revisit once code/checkpoints are released; check whether results hold at larger scale before considering for the course.
