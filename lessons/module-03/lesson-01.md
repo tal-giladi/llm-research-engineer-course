@@ -276,7 +276,35 @@ With $\eta = 1.0$ the update multiplies $x$ by $(1 - 2\eta) = -1$ each step. Wha
 
 <details><summary>Solution</summary>
 
-The iterates are $5 \to -5 \to 5 \to -5 \to \dots$ — the optimizer bounces between $+5$ and $-5$ forever, never approaching the minimum at $0$. The learning rate is exactly at the stability boundary: for $f(x)=x^2$, gradient descent converges only when $|1 - 2\eta| < 1$, i.e. $0 < \eta < 1$. At $\eta = 1$ the factor is $-1$ (perpetual oscillation); for $\eta > 1$ the iterates *grow* and diverge to $\pm\infty$. This is the concrete version of "learning rate too large" from §2.2: the step overshoots the minimum by more than it should, landing at equal or greater height.
+The iterates are $5 \to -5 \to 5 \to -5 \to \dots$ — the optimizer bounces between $+5$ and $-5$ forever, never approaching the minimum at $0$. The learning rate is exactly at the stability boundary. Here is why, step by step.
+
+**1. Every step multiplies $x$ by the same number.** The gradient of $f(x) = x^2$ is $f'(x) = 2x$, so one update is
+
+$$
+x_{t+1} = x_t - \eta \cdot 2x_t = (1 - 2\eta)\, x_t .
+$$
+
+Call $r = 1 - 2\eta$ the **step multiplier**. It does not depend on $x$, so after $t$ steps $x_t = r^t \, x_0$. The whole question "does GD converge?" becomes "does $r^t$ go to $0$?", and that happens exactly when $|r| < 1$.
+
+**2. Turn $|r| < 1$ into a range for $\eta$.** $|1 - 2\eta| < 1$ means $-1 < 1 - 2\eta < 1$. The right inequality gives $\eta > 0$; the left gives $2\eta < 2$, i.e. $\eta < 1$. So GD converges on $x^2$ only for $0 < \eta < 1$. The value $\eta = 1$ is the edge.
+
+**3. What each regime looks like, with $x_0 = 5$:**
+
+| $\eta$ | $r = 1 - 2\eta$ | $x_0, x_1, x_2, x_3$ | behaviour |
+|---|---|---|---|
+| $0.1$ | $0.8$ | $5,\ 4,\ 3.2,\ 2.56$ | slides smoothly toward $0$, same side every step |
+| $0.5$ | $0$ | $5,\ 0,\ 0,\ 0$ | lands exactly on the minimum in one step |
+| $0.9$ | $-0.8$ | $5,\ -4,\ 3.2,\ -2.56$ | overshoots to the other side each step, but converges |
+| $1.0$ | $-1$ | $5,\ -5,\ 5,\ -5$ | overshoots by exactly the distance it had: stuck forever |
+| $1.1$ | $-1.2$ | $5,\ -6,\ 7.2,\ -8.64$ | overshoots by *more* each step: diverges to $\pm\infty$ |
+
+A negative $r$ means the step jumps *past* the minimum to the other side; $|r|$ says whether it lands closer ($|r|<1$), at the same distance ($|r|=1$), or farther ($|r|>1$).
+
+**4. Why the step is so big at $\eta = 1$.** At $x = 5$ the gradient is $10$, so the step is $\eta \cdot 10 = 10$ — twice the distance ($5$) to the minimum. It carries you through $0$ and exactly as far out on the other side. Since $f$ is symmetric, the loss is $25$ before and after: no progress, ever.
+
+**5. The general rule.** The $2$ in "$\eta < 1$" comes from the curvature: $f(x) = x^2$ has second derivative $f''(x) = 2$. For any quadratic with curvature $L$ (i.e. $f = \tfrac{1}{2} L x^2$) the multiplier is $r = 1 - \eta L$, and GD is stable only for $\eta < 2/L$. Check: $L = 2$ gives $\eta < 1$. The steeper the direction (bigger $L$), the smaller the largest safe learning rate. This is the same rule used in §4.1 ($\eta < 2/20 = 0.1$) and §4.4 ($\eta < 2/100 = 0.02$): in a multi-dimensional problem, the *steepest* direction sets the limit for every direction.
+
+This is the concrete version of "learning rate too large" from §2.2: the step overshoots the minimum by more than it should, landing at equal or greater height.
 
 ```python
 import torch
