@@ -147,6 +147,16 @@ The test `code/tests/test_optim.py::test_sgd_plain_matches_torch` checks this re
 
 Plain SGD treats every step independently: it looks only at the current gradient and forgets everything before it. On a loss surface shaped like a long narrow valley — steep across the valley, gently sloped along it — this is slow. The gradient mostly points *across* the valley (the steep direction), so SGD zig-zags back and forth across the valley walls while creeping only slowly along the valley floor toward the minimum. The steep direction limits how large $\eta$ can be (too big and it diverges across the valley), which in turn starves the gentle direction of progress.
 
+The two plots below show one plain-SGD run on the valley $f(x, y) = \tfrac{1}{2}(x^2 + 20\,y^2)$, starting at $(-10, 1)$ with $\eta = 0.095$ (just under the stability limit $2/20 = 0.1$ set by the steep $y$-direction).
+
+![Plain SGD path on a narrow valley: it bounces between the valley walls in y while moving only slowly along x toward the minimum](../../assets/img/sgd-zigzag-valley.svg)
+
+*Top view of the loss surface (ellipses are equal-loss contours).* Each step lands on the opposite wall: $y$ is multiplied by $1 - 0.095 \cdot 20 = -0.9$ per step, so it flips sign and shrinks only 10% each time. Meanwhile $x$ is multiplied by $1 - 0.095 \cdot 1 = 0.905$ — a tiny move along the valley floor. After 25 steps the optimizer is still at $x \approx -0.8$.
+
+![Same run plotted per coordinate against step number: y alternates sign every step, x/10 decays slowly toward zero](../../assets/img/sgd-per-coordinate.svg)
+
+*The same run, one coordinate at a time.* The orange $y$ curve is pure oscillation — wasted motion. The blue $x$ curve is the useful progress, and it is slow because $\eta$ cannot be raised: at $\eta > 0.1$ the $y$ multiplier falls below $-1$ and the bounce grows instead of shrinking (divergence). The steep direction sets the speed limit; the gentle direction pays for it.
+
 **Momentum** fixes this by giving the optimizer memory. Instead of stepping along the raw gradient, it steps along a running average of recent gradients. Across the valley, successive gradients point in *opposite* directions and cancel in the average; along the valley, they consistently point the same way and *accumulate*. The optimizer builds up speed ("momentum") in the consistent direction and damps the oscillation.
 
 ### 4.2 The mathematics: an exponential moving average of gradients
