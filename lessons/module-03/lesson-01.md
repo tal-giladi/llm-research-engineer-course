@@ -101,6 +101,10 @@ $$
 \theta \;\leftarrow\; \theta - \eta\, g.
 $$
 
+<div class="callout key"><p><b>Where the randomness actually lives.</b> Not in the optimizer — the update $\theta \leftarrow \theta - \eta g$ and the <code>SGD</code> class in §3.3 are fully deterministic. The randomness is in <em>which examples end up in each batch</em>. Batching alone is not SGD: if you always fed examples in the same fixed order (e.g. sorted by topic or length), each batch would be a biased sample, not a random one, and $g$ would systematically point toward whatever that slice of data wants. The data pipeline makes it random by <b>shuffling</b>: before each pass over the data (an <em>epoch</em>), the example indices are randomly permuted, then chopped into consecutive batches.</p></div>
+
+Tiny example: $N = 6$ examples, $|B| = 2$. Epoch 1 draws the permutation $[4, 1, 6, 3, 2, 5]$, so the batches are $\{4,1\}, \{6,3\}, \{2,5\}$. Epoch 2 draws a fresh permutation, say $[2, 6, 1, 5, 4, 3]$, giving $\{2,6\}, \{1,5\}, \{4,3\}$. Every example is used once per epoch, but which ones share a batch — and therefore every $g$ — is random. In PyTorch this is `DataLoader(dataset, batch_size=2, shuffle=True)`: with `shuffle=True` it draws `torch.randperm(N)` at the start of each epoch and slices it into batches. LLM pretraining does the same thing at a larger scale: documents are shuffled (and usually seen only about once), so each batch is a random mix of web pages, code, books, and so on. We build that data pipeline in Module 11.
+
 "Stochastic" strictly means a batch of one example; "minibatch SGD" means a batch of many; in practice everyone says "SGD" for the minibatch version, and that is what we mean for the rest of the course.
 
 ### 3.2 Why noisy-but-cheap wins
