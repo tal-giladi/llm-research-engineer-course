@@ -58,7 +58,9 @@ python research/tools/research.py scope --daily      # fail if staged changes le
 
 ## Automation
 
-Two cloud routines run against the GitHub repo (see `TODO_FOR_TAL.md` for their IDs):
+Two shared cloud routines run this for several courses at once ("Courses — daily research" and
+"Courses — weekly curriculum review"); their instructions live in the tals-academy repo,
+`docs/course-upkeep/`, which also keeps the reimport ledger.
 
 - **Daily research** — every day, research + classify + stage. Commits only `research/`.
 - **Weekly curriculum review** — once a week, decides ADD/WAIT/REJECT and, only for ADD, edits the course.

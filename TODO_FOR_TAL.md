@@ -54,8 +54,8 @@ GitHub → repo Settings → Pages → Source: "Deploy from a branch", branch `m
 - Everything lives in `research/` — start at `research/README.md`. Behaviour is defined by
   `research/PROTOCOL-daily.md` and `research/PROTOCOL-weekly.md`; edit those to change it.
 - Cloud routines (manage/delete at https://claude.ai/code/routines):
-  - Daily research — `trig_013Pzqv4qmGhPcdHdGPsj7oK` — every day 03:00 UTC (06:00 Israel summer time), Sonnet 5. Writes only `research/`.
-  - Weekly curriculum review — `trig_013gjKGjxBCmYqNBriaAhy5V` — Sundays 05:00 UTC (08:00 Israel summer time), Opus 5.5. Only process allowed to change the course.
+  - The original per-course routines (`trig_013Pzqv4qmGhPcdHdGPsj7oK`, `trig_013gjKGjxBCmYqNBriaAhy5V`) are disabled since 2026-09-30.
+  - Now run by the shared routines for all tracked courses (instructions and reimport ledger in tals-academy `docs/course-upkeep/`): daily `trig_0197DJzS31b1zxrdDYoYqvfE` (03:00 UTC, Sonnet 5), weekly `trig_01L8E3QX1JtHd5BMCpbJoKpX` (Sundays 05:00 UTC, Opus 5.5).
   - After Israel moves to winter time (late Oct) both fire one hour earlier local time.
 - Both push to `main`; if the cloud environment refuses pushes to `main`, they fall back to
   `claude/research` / `claude/weekly-YYYY-Www` branches and the next run merges them.
