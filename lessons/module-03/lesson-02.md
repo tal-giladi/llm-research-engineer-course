@@ -93,7 +93,7 @@ $$
 \theta \leftarrow 1.0 - 0.1\cdot\frac{0.5}{0.5 + 10^{-8}} = 1.0 - 0.1\cdot 0.99999998 = 1.0 - 0.099999998 = 0.900000002.
 $$
 
-Two things worth noticing. First, $\hat m = g$ and $\sqrt{\hat v} = |g|$ exactly, because after one step the bias correction fully un-does the zero-init — so the ratio is $\pm 1$ and the step is $\eta \cdot \text{sign}(g) = 0.1$. **On the first step, Adam moves every parameter by almost exactly $\pm\eta$, regardless of the gradient's magnitude.** That is the adaptive normalization at its most extreme, and it is why Adam's early updates can be large — a fact that motivates the *warmup* in lesson 03.3. Second, the result $0.900000002$ matches `torch.optim.Adam` to floating-point precision:
+Two things worth noticing. First, $\hat m = g$ and $\sqrt{\hat v} = |g|$ exactly, because after one step the bias correction fully un-does the zero-init — so the ratio is $\pm 1$ and the step is $\eta \cdot \text{sign}(g) = 0.1$. **On the first step, Adam moves every parameter by almost exactly $\pm\eta$, regardless of the gradient's magnitude.** That is the adaptive normalization at its most extreme, and it is why Adam's early updates can be large (see the callout below). Second, the result $0.900000002$ matches `torch.optim.Adam` to floating-point precision:
 
 ```python
 import torch
@@ -103,6 +103,10 @@ w.grad = torch.tensor([0.5])
 opt.step()
 print(w.item())        # 0.9000000357627869  (matches 0.900000002 to ~1e-7)
 ```
+
+<div class="callout warn"><p><b>Adam can be bad at step 1 — and Adam itself does nothing about it.</b> Everything above is the <em>whole</em> Adam algorithm: moments, bias correction, update. There is no "warmup" anywhere inside it, and we have not taught warmup yet.</p>
+<p>The problem is real, though. At $t = 1$ every parameter moves by a full $\pm\eta$, even if its gradient is tiny ($g = 0.0001$ moves it just as far as $g = 50$). And that step is scaled by $\hat v$, an estimate of the gradient's typical size built from <em>one</em> noisy minibatch — so the per-parameter scaling is basically a guess. Early on, the model's weights are random and its gradients are at their noisiest. Result: the first few Adam steps are big, same-sized, and based on unreliable information, which can push a large model into a bad region or make the loss spike.</p>
+<p>The fix is <b>not part of Adam</b>. It is a separate thing wrapped <em>around</em> the optimizer called <b>learning-rate warmup</b>: instead of using the full $\eta$ from step 1, you start with a tiny $\eta$ and raise it gradually over the first few hundred or thousand steps, giving $\hat v$ time to become a trustworthy average before steps get large. Adam's code does not change; only the $\eta$ you pass in changes from step to step. We cover warmup in <a href="#/lessons/module-03/lesson-03">03.3</a>. For this lesson, just remember: <em>Adam's first steps are risky, and that risk is why warmup exists.</em></p></div>
 
 ## 4. Weight decay: classic L2 versus AdamW
 
@@ -197,7 +201,7 @@ Compute per step is again $O(P)$ elementwise work — negligible next to the for
 
 ## Exercise
 
-At step $t = 1$ Adam's step size is almost exactly $\pm\eta$ regardless of the gradient (§3.4). Show this holds for *any* nonzero gradient $g$ on the first step, ignoring $\epsilon$. Then explain in one sentence why this fact motivates learning-rate warmup.
+At step $t = 1$ Adam's step size is almost exactly $\pm\eta$ regardless of the gradient (§3.4). Show this holds for *any* nonzero gradient $g$ on the first step, ignoring $\epsilon$. Then explain in one sentence why this fact is a problem early in training — the problem that learning-rate warmup (a separate technique, not part of Adam, taught in 03.3) is designed to fix.
 
 <details><summary>Hint</summary>
 
@@ -211,7 +215,7 @@ At $t = 1$: $m = (1-\beta_1)g$ so $\hat m = m/(1-\beta_1) = g$. And $v = (1-\bet
 $$
 \eta\,\frac{\hat m}{\sqrt{\hat v}} = \eta\,\frac{g}{|g|} = \eta\,\operatorname{sign}(g),
 $$
-magnitude exactly $\eta$ for any nonzero $g$. Because the very first steps have this fixed, comparatively large size *and* are based on a second-moment estimate $\hat v$ built from just one or two noisy samples (so the per-parameter scaling is unreliable early), starting at full learning rate can send parameters flying in the wrong direction — which is exactly why we ramp $\eta$ up slowly with warmup (03.3).
+magnitude exactly $\eta$ for any nonzero $g$. Because the very first steps have this fixed, comparatively large size *and* are based on a second-moment estimate $\hat v$ built from just one or two noisy samples (so the per-parameter scaling is unreliable early), starting at full learning rate can send parameters flying in the wrong direction — which is exactly why training runs add learning-rate warmup on top of Adam: start $\eta$ small and ramp it up slowly (03.3). Adam's update rule is unchanged; only the $\eta$ fed into it varies.
 
 </details>
 
