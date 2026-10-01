@@ -184,6 +184,16 @@ batch, which is what distinguishes LayerNorm from BatchNorm and makes it indepen
 division by zero. Note the **biased** (population) variance — divide by $C$, not $C-1$ — to match
 `torch.nn.LayerNorm`.
 
+<div class="callout"><p><strong>Every token gets its own μ and σ.</strong> LayerNorm does not
+compute one mean for the whole input. It computes a separate mean and a separate variance for
+<em>each token's</em> $C$-dimensional vector, and normalizes that token with its own numbers. If the
+input is one sequence of 100 tokens, $x$ has shape $(B, T, C) = (1, 100, 768)$ and LayerNorm
+computes <strong>100 means and 100 variances</strong> (shape $(1, 100, 1)$ each) — 100 different
+normalizations, one per token. With a batch of 8 such sequences it is $8 \times 100 = 800$ separate
+$(\mu, \sigma^2)$ pairs. Tokens never share statistics, so one token's values cannot change how
+another token is normalized. Only $\gamma$ and $\beta$ (shape $(C,)$, 768 numbers each) are
+shared: the same learned scale and shift is applied to every token after its own normalization.</p></div>
+
 ### Numerical example (verified against PyTorch)
 
 Take one length-4 feature vector $x = [2, 4, 4, 6]$, with $\gamma = 1$, $\beta = 0$:
@@ -199,6 +209,26 @@ import torch, torch.nn as nn
 x  = torch.tensor([2., 4., 4., 6.])
 ln = nn.LayerNorm(4)                     # gamma=1, beta=0 at init
 ln(x)   # tensor([-1.4142,  0.0000,  0.0000,  1.4142])  -> matches by hand
+```
+
+Now feed **two tokens** at once, shape $(T, C) = (2, 4)$. Token 1 is the vector above; token 2 is
+$[0, 10, 0, 10]$. Each row is normalized with its own statistics:
+
+| token | $x$ | $\mu$ | $\sigma^2$ | $\sigma$ | normalized $\hat x$ |
+|---|---|---|---|---|---|
+| 1 | $[2, 4, 4, 6]$ | $4$ | $2$ | $1.4142$ | $[-1.4142,\ 0,\ 0,\ 1.4142]$ |
+| 2 | $[0, 10, 0, 10]$ | $5$ | $25$ | $5$ | $[-1,\ 1,\ -1,\ 1]$ |
+
+Two tokens in → two means, two variances, two different normalizations. Token 2's large values
+do not affect token 1 at all.
+
+```python
+x2 = torch.tensor([[2., 4., 4., 6.],
+                   [0., 10., 0., 10.]])           # (T=2, C=4)
+x2.mean(dim=-1, keepdim=True)                     # tensor([[4.], [5.]])   -> one mean per token
+x2.var(dim=-1, keepdim=True, unbiased=False)      # tensor([[ 2.], [25.]]) -> one variance per token
+ln(x2)  # tensor([[-1.4142,  0.0000,  0.0000,  1.4142],
+        #         [-1.0000,  1.0000, -1.0000,  1.0000]])
 ```
 
 ### From scratch, and matching PyTorch
