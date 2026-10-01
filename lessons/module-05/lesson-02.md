@@ -28,7 +28,7 @@ $$
 
 Each of $Q, K, V$ then has shape $(B, T, d_h)$: one $d_h$-vector per position. The point of learning three *separate* projections is that the same token can advertise one thing (its key), ask for a different thing (its query), and contribute a third thing (its value). Nothing forces $\mathbf{q}$, $\mathbf{k}$, $\mathbf{v}$ to be equal or even related except through training.
 
-For the worked example below we skip the projection and simply hand you $Q, K, V$ directly, so we can focus on attention itself. In real code (section 8, and the `CausalSelfAttention` module of the next lesson) the projection is a single `nn.Linear`.
+The worked example below starts from a tiny input $x$ and three small weight matrices, computes $Q = xW_Q$, $K = xW_K$, $V = xW_V$ by hand, and only then moves on to attention itself. In real code (section 9, and the `CausalSelfAttention` module of the next lesson) the projection is a single `nn.Linear`.
 
 <div class="callout key"><p>Attention is defined by one formula, which the rest of the lesson unpacks term by term:</p>
 <p>$$\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_h}} + M\right) V.$$</p>
@@ -36,7 +36,48 @@ For the worked example below we skip the projection and simply hand you $Q, K, V
 
 ## 3. The setup for the worked example
 
-We use $T = 3$ positions and head dimension $d_h = 2$. The three matrices, each shape $(T, d_h) = (3, 2)$:
+We use $T = 3$ positions, model width $C = 3$, and head dimension $d_h = 2$. Drop the batch axis ($B = 1$), so the input is one $(T, C) = (3, 3)$ matrix — one row per position, the position-aware vectors from 05.1 (tiny integers here so the arithmetic stays readable):
+
+$$
+x = \begin{bmatrix} 1 & 1 & 0 \\ 0 & 1 & 0 \\ 0 & 1 & 1 \end{bmatrix}
+\quad\begin{matrix} \leftarrow \mathbf{x}_1 \\ \leftarrow \mathbf{x}_2 \\ \leftarrow \mathbf{x}_3 \end{matrix}
+$$
+
+The three learned weight matrices, each shape $(C, d_h) = (3, 2)$:
+
+$$
+W_Q = \begin{bmatrix} 1 & -1 \\ 1 & 1 \\ -1 & 1 \end{bmatrix}, \qquad
+W_K = \begin{bmatrix} -1 & 1 \\ 2 & 0 \\ -2 & 1 \end{bmatrix}, \qquad
+W_V = \begin{bmatrix} 1 & -1 \\ 0 & 1 \\ 1 & 0 \end{bmatrix}.
+$$
+
+**Computing $Q = xW_Q$.** The product has shape $(T, C) \times (C, d_h) = (3, 3) \times (3, 2) = (3, 2)$. Entry $(i, j)$ is row $i$ of $x$ dotted with column $j$ of $W_Q$:
+
+$$
+Q_{ij} = \sum_{c=1}^{C} x_{ic}\,(W_Q)_{cj}.
+$$
+
+An equivalent and easier way to read it: row $i$ of $Q$ is a *mix of the rows of $W_Q$*, using the entries of $\mathbf{x}_i$ as the mixing amounts. The rows of $W_Q$ are $[1,-1]$, $[1,1]$, $[-1,1]$.
+
+- $\mathbf{q}_1$: $\mathbf{x}_1 = [1,1,0]$ → $1\cdot[1,-1] + 1\cdot[1,1] + 0\cdot[-1,1] = [2,\ 0]$.
+  Entry by entry: $Q_{11} = 1\cdot1 + 1\cdot1 + 0\cdot(-1) = 2$, $\;Q_{12} = 1\cdot(-1) + 1\cdot1 + 0\cdot1 = 0$.
+- $\mathbf{q}_2$: $\mathbf{x}_2 = [0,1,0]$ → $0\cdot[1,-1] + 1\cdot[1,1] + 0\cdot[-1,1] = [1,\ 1]$.
+- $\mathbf{q}_3$: $\mathbf{x}_3 = [0,1,1]$ → $0\cdot[1,-1] + 1\cdot[1,1] + 1\cdot[-1,1] = [0,\ 2]$.
+
+**Computing $K = xW_K$.** Same recipe; the rows of $W_K$ are $[-1,1]$, $[2,0]$, $[-2,1]$.
+
+- $\mathbf{k}_1$: $[1,1,0]$ → $1\cdot[-1,1] + 1\cdot[2,0] + 0\cdot[-2,1] = [1,\ 1]$.
+  Entry by entry: $K_{11} = 1\cdot(-1) + 1\cdot2 + 0\cdot(-2) = 1$, $\;K_{12} = 1\cdot1 + 1\cdot0 + 0\cdot1 = 1$.
+- $\mathbf{k}_2$: $[0,1,0]$ → $[2,\ 0]$.
+- $\mathbf{k}_3$: $[0,1,1]$ → $[2,0] + [-2,1] = [0,\ 1]$.
+
+**Computing $V = xW_V$.** Rows of $W_V$ are $[1,-1]$, $[0,1]$, $[1,0]$.
+
+- $\mathbf{v}_1$: $[1,1,0]$ → $[1,-1] + [0,1] = [1,\ 0]$.
+- $\mathbf{v}_2$: $[0,1,0]$ → $[0,\ 1]$.
+- $\mathbf{v}_3$: $[0,1,1]$ → $[0,1] + [1,0] = [1,\ 1]$.
+
+Notice the same input row produced three different vectors: $\mathbf{x}_1$ became query $[2,0]$, key $[1,1]$, and value $[1,0]$. That is the "ask one thing, advertise another, hand over a third" of section 2, made concrete. Stacking the rows, each result has shape $(T, d_h) = (3, 2)$:
 
 $$
 Q = \begin{bmatrix} 2 & 0 \\ 1 & 1 \\ 0 & 2 \end{bmatrix}, \qquad
@@ -44,7 +85,7 @@ K = \begin{bmatrix} 1 & 1 \\ 2 & 0 \\ 0 & 1 \end{bmatrix}, \qquad
 V = \begin{bmatrix} 1 & 0 \\ 0 & 1 \\ 1 & 1 \end{bmatrix}.
 $$
 
-Read the rows as positions: $\mathbf{q}_1 = [2, 0]$, $\mathbf{q}_2 = [1, 1]$, $\mathbf{q}_3 = [0, 2]$, and likewise for $K$ and $V$.
+Read the rows as positions: $\mathbf{q}_1 = [2, 0]$, $\mathbf{q}_2 = [1, 1]$, $\mathbf{q}_3 = [0, 2]$, and likewise for $K$ and $V$. Everything from here on uses only these three matrices.
 
 ## 4. Step one — scores are dot products
 
@@ -140,15 +181,21 @@ That is a full scaled dot-product attention worked end to end. Trace the pipelin
 
 ## 9. From scratch in PyTorch — and matching the fused kernel
 
-Here is the computation of sections 4–8, reproducing every number, and a check against PyTorch's own fused kernel `F.scaled_dot_product_attention` with `is_causal=True`.
+Here is the computation of sections 3–8, reproducing every number, and a check against PyTorch's own fused kernel `F.scaled_dot_product_attention` with `is_causal=True`.
 
 ```python
 import torch
 import torch.nn.functional as F
 
-Q = torch.tensor([[2., 0.], [1., 1.], [0., 2.]])   # (T, d_h) = (3, 2)
-K = torch.tensor([[1., 1.], [2., 0.], [0., 1.]])
-V = torch.tensor([[1., 0.], [0., 1.], [1., 1.]])
+x   = torch.tensor([[1., 1., 0.], [0., 1., 0.], [0., 1., 1.]])   # (T, C) = (3, 3)
+W_Q = torch.tensor([[1., -1.], [1., 1.], [-1., 1.]])              # (C, d_h) = (3, 2)
+W_K = torch.tensor([[-1., 1.], [2., 0.], [-2., 1.]])
+W_V = torch.tensor([[1., -1.], [0., 1.], [1., 0.]])
+
+Q, K, V = x @ W_Q, x @ W_K, x @ W_V                  # each (T, d_h) = (3, 2)
+print(Q)   # tensor([[2., 0.], [1., 1.], [0., 2.]])
+print(K)   # tensor([[1., 1.], [2., 0.], [0., 1.]])
+print(V)   # tensor([[1., 0.], [0., 1.], [1., 1.]])
 T, d_h = Q.shape                                     # 3, 2
 
 scores = Q @ K.transpose(-2, -1) / d_h**0.5          # (T, T); QK^T scaled
