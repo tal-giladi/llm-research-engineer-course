@@ -94,24 +94,71 @@ class MLP(nn.Module):
 A block does not replace `x` with `sublayer(x)`; it computes `x + sublayer(x)`. That single `+`
 is a **residual (skip) connection**, and it is what lets us stack dozens of blocks.
 
-Consider the backward pass. The gradient of the loss w.r.t. the block's input is, by the chain
-rule through `y = x + f(x)`:
+**Forward: keep the input, add an update.** Write the block as
 
 $$
-\frac{\partial L}{\partial x} = \frac{\partial L}{\partial y}\left(I + \frac{\partial f}{\partial x}\right)
-= \frac{\partial L}{\partial y} + \frac{\partial L}{\partial y}\frac{\partial f}{\partial x}.
+y = x + f(x),
 $$
 
-The identity term means the upstream gradient $\partial L/\partial y$ flows to $x$ **undiminished**,
-plus a correction from the sublayer. Without the skip, the gradient would be multiplied by
-$\partial f/\partial x$ at every layer, and across many layers those factors compound toward zero
-(vanishing gradients) or blow up (exploding). The residual gives gradients a clean "highway"
-straight from the loss back to every layer, so even a very deep stack trains.
+where $x$ is the block's input, $f$ is the sub-layer (attention or MLP, with its LayerNorm), and
+$y$ is the output. The input $x$ reaches the output **unchanged** through the identity path; the
+sub-layer only contributes an **additive update** $f(x)$ on top of it. So the sub-layer does not
+have to learn to reproduce $x$ — it only has to learn what to *change*. In particular, if
+$f(x) = 0$, then $y = x$: the block simply preserves its input. A freshly initialised block whose
+sub-layer outputs are small therefore starts out close to "do nothing", which is a safe place for
+a deep stack to start.
 
-<div class="callout key"><p>A residual connection <code>x + f(x)</code> adds an identity path.
-On the forward pass each sub-layer only has to learn a <em>correction</em> to <code>x</code>; on
-the backward pass the identity term carries the gradient through unchanged. This is the single
-most important trick for training deep networks.</p></div>
+Tiny example (the scalar toy in the animation below, $f(x) = 0.2x$): input $x = 10$, the learned
+branch gives $f(10) = 0.2 \times 10 = 2$, the identity branch carries $10$, and the output is
+$y = 10 + 2 = 12$.
+
+**Backward: two gradient contributions that add.** By the chain rule through $y = x + f(x)$, with
+$g = \partial L/\partial y$ the upstream gradient arriving at the output:
+
+$$
+\frac{\partial L}{\partial x} = g\left(I + \frac{\partial f}{\partial x}\right)
+= \underbrace{g}_{\text{identity branch}} + \underbrace{g\,\frac{\partial f}{\partial x}}_{\text{learned branch}}.
+$$
+
+Here $I$ is the identity matrix (in the scalar case, just $1$). Worked by hand with $g = 1$ and
+$f'(x) = 0.2$ (the toy $f(x) = 0.2x$ again):
+
+- identity branch: $g \cdot 1 = 1 \cdot 1 = 1$ — passed back **unchanged**;
+- learned branch: $g \cdot f'(x) = 1 \cdot 0.2 = 0.2$;
+- total: $\partial L/\partial x = 1 + 0.2 = 1.2$.
+
+<img
+  src="/assets/residual-connection.gif"
+  alt="Residual connection: forward addition and backward gradient contributions."
+  width="900"
+  height="470"
+  style="max-width:100%;height:auto;"
+>
+
+*The function in the animation, $f(x) = 0.2x$ on a single number, is a teaching example chosen
+so the arithmetic is easy to follow. A real GPT sub-layer is attention or an MLP acting on
+`(B, T, C)` tensors, and its Jacobian $\partial f/\partial x$ is a matrix, not the constant 0.2 —
+but the structure (identity contribution + learned contribution, summed) is exactly the same.*
+
+Why this helps: without the skip ($y = f(x)$), the only gradient path is $g\,\partial f/\partial x$,
+so a stack of $N$ layers multiplies $N$ such factors together, and those products tend to shrink
+toward zero (vanishing gradients) or blow up (exploding). The residual adds a path along which the
+upstream gradient reaches $x$ without being multiplied by any learned factor, so every layer gets
+a direct, well-scaled signal from the loss.
+
+What it does **not** do: it does not guarantee the *total* gradient is unchanged or that it never
+vanishes. The learned contribution is added to the identity one and can push the sum either way —
+with $f'(x) = 0.2$ the total is $1.2$, with $f'(x) = -0.5$ it is $0.5$, and with $f'(x) = -1$ it
+is $0$. Across many layers the factors $(I + \partial f/\partial x)$ still multiply, so gradients
+can still grow or shrink. Residuals make deep networks much *easier* to train; normalization
+(section 4), careful initialisation, and learning-rate schedules do the rest of the work.
+
+<div class="callout key"><p>A residual connection <code>y = x + f(x)</code> adds an identity path.
+On the forward pass it preserves <code>x</code> and lets each sub-layer learn an additive update
+(if <code>f(x) = 0</code>, the block passes its input through). On the backward pass the identity
+branch contributes the upstream gradient unchanged, and the learned branch adds its own
+contribution on top. This is one of the key ideas that make very deep networks easier to
+train — it helps gradient flow, but it does not by itself guarantee non-vanishing gradients.</p></div>
 
 ## 4. LayerNorm
 
