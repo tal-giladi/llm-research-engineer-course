@@ -132,7 +132,11 @@ Putting it together, DeepSeekMath's reasoning-RL loop is: start from a math-pret
 
 You are rerank­ing two solutions with the *same* final answer using a PRM. Solution C has per-step scores `[0.95, 0.95, 0.30]`; solution D has `[0.7, 0.7, 0.7]`. Which does **product** aggregation prefer, which does **minimum** prefer, and what does the disagreement tell you?
 
-*Hint:* compute $\prod_t s_t$ and $\min_t s_t$ for each.
+<details><summary>Hint</summary>
+
+compute $\prod_t s_t$ and $\min_t s_t$ for each.
+
+</details>
 
 <details><summary>Solution</summary>
 

@@ -165,9 +165,17 @@ Look at the STaR loop as a reward loop and the connection to Module 16 is exact.
 
 You sample four CoT chains for one question and `extract_answer` returns `["42", None, "42", "7"]`. One chain had no parseable answer (`None`). What does `self_consistency(["42", None, "42", "7"])` return, and is feeding `None` into the vote a good idea?
 
-*Hint:* `None` is a perfectly hashable Python value, so `Counter` will happily count it.
+<details><summary>Hint</summary>
 
-*Stronger hint:* count each distinct value; `"42"` appears twice, `None` once, `"7"` once.
+`None` is a perfectly hashable Python value, so `Counter` will happily count it.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+count each distinct value; `"42"` appears twice, `None` once, `"7"` once.
+
+</details>
 
 <details><summary>Solution</summary>
 

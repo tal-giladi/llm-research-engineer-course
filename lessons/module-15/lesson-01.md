@@ -197,9 +197,17 @@ for _ in range(20):
 
 Implement a batched Bradley-Terry loss that also returns the **preference accuracy**: the fraction of pairs where the model already ranks chosen above rejected ($r_w > r_l$). This is the standard metric reported alongside reward-model loss.
 
-*Hint:* accuracy does not need the sigmoid at all — it only needs the sign of the margin.
+<details><summary>Hint</summary>
 
-*Stronger hint:* `(reward_chosen > reward_rejected).float().mean()`.
+accuracy does not need the sigmoid at all — it only needs the sign of the margin.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+`(reward_chosen > reward_rejected).float().mean()`.
+
+</details>
 
 <details><summary>Solution</summary>
 

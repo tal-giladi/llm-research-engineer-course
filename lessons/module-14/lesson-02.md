@@ -148,9 +148,17 @@ Versus one-example-per-row padded to 100: rows would be 80%, 50%, 70% padding re
 
 You pack two examples into one block. Example 1 is `prompt=[a,b] response=[c]`; example 2 is `prompt=[d] response=[e,f]`. Using the delimiter-free token view (ignore chat tokens for this exercise), write the packed `input_ids` and the `labels` (with `-100` for masked positions) that `build_labels` would produce from the concatenated response mask.
 
-*Hint:* concatenate the tokens, concatenate the masks `[0,0,1]` and `[0,1,1]`, then apply `build_labels`.
+<details><summary>Hint</summary>
 
-*Stronger hint:* labels keep the token id exactly where the mask is 1 and are `-100` everywhere else. The tokens themselves are unchanged by masking.
+concatenate the tokens, concatenate the masks `[0,0,1]` and `[0,1,1]`, then apply `build_labels`.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+labels keep the token id exactly where the mask is 1 and are `-100` everywhere else. The tokens themselves are unchanged by masking.
+
+</details>
 
 <details><summary>Solution</summary>
 

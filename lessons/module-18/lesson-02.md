@@ -255,9 +255,17 @@ def test_run_tool_loop_respects_max_steps():
 
 Extend the scripted policy so the loop makes **two** calls: first `mock_search("chinchilla")`, then answers using the returned string. Assert `len(trace) == 2`... or is it 1? Work out the expected trace length first.
 
-*Hint:* the policy branches on `context[-1]["role"]` and on what the last observation contains.
+<details><summary>Hint</summary>
 
-*Stronger hint:* after the search observation, the policy should return a prose answer (no JSON), which ends the loop.
+the policy branches on `context[-1]["role"]` and on what the last observation contains.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+after the search observation, the policy should return a prose answer (no JSON), which ends the loop.
+
+</details>
 
 <details><summary>Solution</summary>
 

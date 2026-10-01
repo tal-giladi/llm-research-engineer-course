@@ -150,7 +150,11 @@ The `transpose(1, 2)` that produces $(B, n_h, T, d_h)$ is not cosmetic. PyTorch'
 
 A model has $C = 512$. You want $n_h = 8$ heads. What is $d_h$? Now someone proposes $n_h = 7$ heads instead — what goes wrong?
 
-*Optional hint:* $d_h = C / n_h$, and it must be a whole number.
+<details><summary>Optional hint</summary>
+
+$d_h = C / n_h$, and it must be a whole number.
+
+</details>
 
 <details><summary>Solution</summary>
 

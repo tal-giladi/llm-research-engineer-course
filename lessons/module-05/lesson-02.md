@@ -202,9 +202,17 @@ The mathematics does not require ever storing the full $T \times T$ matrix, thou
 
 With $C = 768$ and a single head so $d_h = C = 768$, a batch of $B = 4$ sequences of length $T = 512$: what is the shape of the score matrix $S$, and roughly how many entries does it hold?
 
-*Optional hint:* scores are one number per (query position, key position) pair, per sequence.
+<details><summary>Optional hint</summary>
 
-*Stronger hint:* the shape is $(B, T, T)$; multiply it out.
+scores are one number per (query position, key position) pair, per sequence.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+the shape is $(B, T, T)$; multiply it out.
+
+</details>
 
 <details><summary>Solution</summary>
 

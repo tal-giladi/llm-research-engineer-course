@@ -287,9 +287,17 @@ def test_parser_extracts_from_fenced_block():
 
 Add a `word_count(text: str) -> int` tool: register it with a correct schema, and confirm the model could call it via `parse_tool_call` + `registry.call`.
 
-*Hint:* the `parameters` schema needs one required string property named `text`.
+<details><summary>Hint</summary>
 
-*Stronger hint:* mirror the `mock_search` registration block in `register_builtins`; the callable is just `lambda text: len(text.split())` (or a named function with a docstring).
+the `parameters` schema needs one required string property named `text`.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+mirror the `mock_search` registration block in `register_builtins`; the callable is just `lambda text: len(text.split())` (or a named function with a docstring).
+
+</details>
 
 <details><summary>Solution</summary>
 

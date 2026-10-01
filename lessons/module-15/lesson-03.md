@@ -229,7 +229,11 @@ Someone reports their DPO run "learns nothing" — the loss sits almost exactly 
 
 DPO's implicit reward for a completion is $\hat r(x,y) = \beta\log(\pi_\theta(y|x)/\pi_{\text{ref}}(y|x))$. Implement `reward_accuracy(policy_chosen_logps, policy_rejected_logps, ref_chosen_logps, ref_rejected_logps, beta)` returning the fraction of pairs the *implicit* reward ranks correctly ($\hat r_w > \hat r_l$).
 
-*Hint:* like the reward-model accuracy in 15.1, you only need the sign of a margin — and $\beta>0$ doesn't change a sign.
+<details><summary>Hint</summary>
+
+like the reward-model accuracy in 15.1, you only need the sign of a margin — and $\beta>0$ doesn't change a sign.
+
+</details>
 
 <details><summary>Solution</summary>
 

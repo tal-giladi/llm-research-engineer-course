@@ -145,7 +145,11 @@ Frontier-lab honesty (a rule of this course): keep straight what the R1 report *
 
 In `mini_r1`, the cold-start SFT stage only fine-tunes on a *few* curated problems (`n_demos`), yet the later RL stage lifts accuracy on *all* problems to near-perfect. If you set `n_demos=0` (skip cold-start entirely), which R1 variant are you now simulating, and would you expect the RL stage to still work?
 
-*Hint:* re-read section 2 on R1-Zero, and recall the RL stage samples and scores every problem regardless of whether SFT touched it.
+<details><summary>Hint</summary>
+
+re-read section 2 on R1-Zero, and recall the RL stage samples and scores every problem regardless of whether SFT touched it.
+
+</details>
 
 <details><summary>Solution</summary>
 

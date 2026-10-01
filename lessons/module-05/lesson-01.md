@@ -233,9 +233,17 @@ Modern models mostly abandon both in favor of **relative** schemes, above all **
 
 You have a model with `n_embd = 768` and a token embedding `wte` of shape `(50257, 768)`. You embed a batch `idx` of shape `(4, 128)`.
 
-*Optional hint:* the embedding lookup adds exactly one axis.
+<details><summary>Optional hint</summary>
 
-*Stronger hint:* the new axis has length `n_embd`, appended last.
+the embedding lookup adds exactly one axis.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+the new axis has length `n_embd`, appended last.
+
+</details>
 
 <details><summary>Solution</summary>
 
