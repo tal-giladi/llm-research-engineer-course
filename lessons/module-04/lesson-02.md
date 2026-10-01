@@ -280,21 +280,65 @@ assert a.encode("some text") == b.encode("some text")
 
 ## Debugging exercise
 
-A teammate writes their own `encode` and complains it produces different, longer token lists than training implied. Here is their loop. Find the bug.
+A teammate writes their own `encode` by copying the pair-picking line from `train`. They complain it returns longer token lists than training implied. Here is their loop. Find the bug.
 
 ```python
 def encode_buggy(self, text):
     ids = list(text.encode("utf-8"))
-    for pair, new_id in self.merges.items():        # <-- apply merges "in order"
-        ids = merge(ids, pair, new_id)
+    while len(ids) >= 2:
+        stats = get_stats(ids)
+        pair = max(stats, key=stats.get)             # <-- copied from train()
+        if pair not in self.merges:
+            break
+        ids = merge(ids, pair, self.merges[pair])
     return ids
 ```
 
-<details><summary>What is wrong, and why does it sometimes still look right?</summary>
+**Run it by hand.** Use the three-merge tokenizer from section 3: `(e,s) → 256`, `(es,t) → 257`, `(est,space) → 258`. Encode the word `"newest"`, whose bytes are `[110, 101, 119, 101, 115, 116]` (`n e w e s t`).
 
-The loop applies each merge **exactly once, in dict-insertion order**, instead of repeatedly picking the earliest-applicable pair until nothing is mergeable. In modern Python `self.merges` does preserve insertion (training) order, so for simple inputs this often gives the right answer and hides the bug. But it is wrong in general: applying merge $k$ can create a *new* occurrence of the pair from an *earlier* merge $j < k$ that a single left-to-right pass has already gone past, so that earlier merge should fire again and never does. The result is an under-merged, longer encoding.
+Round 1. `get_stats` returns five pairs, each seen once:
 
-The correct `encode` (section 6) loops on the *current* sequence — `while len(ids) >= 2`, each time choosing the present pair with the smallest merge id — so a newly exposed earlier pair still gets merged. Fix it by replacing the single `for` pass with the repeat-until-stable loop.
+| Pair | Letters | Count | Learned? |
+|---|---|---|---|
+| `(110, 101)` | `n e` | 1 | no |
+| `(101, 119)` | `e w` | 1 | no |
+| `(119, 101)` | `w e` | 1 | no |
+| `(101, 115)` | `e s` | 1 | yes → 256 |
+| `(115, 116)` | `s t` | 1 | no |
+
+Now decide what `max(stats, key=stats.get)` returns, and what the next line does with it.
+
+| | Correct `encode` (section 6) | `encode_buggy` |
+|---|---|---|
+| Output | `[110, 101, 119, 257]`: `n e w est`, **4 tokens** | `[110, 101, 119, 101, 115, 116]`: raw bytes, **6 tokens** |
+
+Both results were checked with `py`. Longer input makes it worse. `"zzz newest"` encodes to 8 tokens with the correct loop and 10 with the buggy one.
+
+<details><summary>Hint</summary>
+
+All five counts are tied at 1. When there is a tie, which pair does `max` return?
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+When keys tie, `max` returns the first one it sees. Here that is `(110, 101)`, which is `n e`. Is that pair in `self.merges`? What does the `if` do next?
+
+</details>
+
+<details><summary>Solution</summary>
+
+The loop chooses a pair by **how often it appears in this input**. It should choose by **how early training learned it**. The two orderings answer different questions:
+
+- In `train`, picking the most frequent pair is the whole point, because that is how a merge gets learned.
+- In `encode` the merges are already fixed. The only correct question is which present pair has the smallest merge id.
+
+On `"newest"`, the buggy `max` returns `(n, e)`. It never learned that pair, so the `if pair not in self.merges: break` guard stops the loop on the very first round. The learned pair `(e, s)` is sitting in the same sequence, but it is never reached. Nothing gets merged.
+
+The guard is fine in the correct loop. There, `min` with the merge-id key always prefers a learned pair, so the loop breaks only when *no* present pair is learned. In the buggy loop it breaks whenever the most frequent pair happens to be unlearned. That is common, because frequent pairs in new text (`z z`, `n e`) often were not frequent in the training corpus.
+
+Fix: replace the `max` line with
+`pair = min(stats, key=lambda p: self.merges.get(p, float("inf")))`.
 
 </details>
 
