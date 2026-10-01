@@ -161,7 +161,20 @@ def encode(self, text: str) -> list[int]:
     return ids
 ```
 
-Two implementation notes worth internalizing. In `train`, `self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]]` concatenates the *byte strings* of the two children, so every id — byte or merged — always knows the exact bytes it stands for; that is what makes `decode` a pure lookup. In `encode`, `min(..., key=lambda p: self.merges.get(p, float("inf")))` gives any pair that was never learned an effectively infinite rank, so it is chosen only when nothing mergeable remains — at which point the guard `if pair not in self.merges` breaks the loop.
+Two implementation notes worth internalizing. In `train`, `self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]]` concatenates the *byte strings* of the two children, so every id — byte or merged — always knows the exact bytes it stands for; that is what makes `decode` a pure lookup. In `encode`, `min(..., key=lambda p: self.merges.get(p, float("inf")))` needs a little unpacking.
+
+- `min` must give every present pair a number to compare. For a learned pair that number is its merge id (its **rank**: smaller id = learned earlier = applied first).
+- A pair that was *never learned* has no merge id, so `self.merges.get(p, ...)` falls back to the default, `float("inf")` — a number larger than every real id.
+- Result: `min` never prefers an unlearned pair over a learned one. It can only return an unlearned pair when *every* present pair is unlearned — and then the guard `if pair not in self.merges` breaks the loop.
+
+Worked by hand: say `merges = {(104, 105): 256}` (only `h`+`i` was learned) and we encode `"hi!"` → `ids = [104, 105, 33]`.
+
+| Round | Present pairs → key | `min` picks | Action |
+|---|---|---|---|
+| 1 | `(104,105)` → 256, `(105,33)` → inf | `(104,105)` | merge → `[256, 33]` |
+| 2 | `(256,33)` → inf | `(256,33)` | not in `merges` → `break` |
+
+Output `[256, 33]`: two tokens. Without the `inf` default, `.get` would return `None` for `(105,33)` and `min` would crash comparing `None` with an `int`.
 
 These are plain-Python `int`s and `bytes`: no tensors, no dtype, no device. The output is a `list[int]`; only the data loader ([04.3](lessons/module-04/lesson-03.md)) turns lists of ids into a `torch.long` tensor for the model.
 
