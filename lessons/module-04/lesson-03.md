@@ -107,6 +107,27 @@ def get_batch(data, block_size, batch_size, device="cpu"):
     return x.to(device), y.to(device)
 ```
 
+#### Line by line, and why each line is written this way
+
+**`high = data.numel() - block_size`** — `data.numel()` is the number of elements in the tensor; for a 1-D id stream that is just its length $N$. This line computes the largest start index we are allowed to draw. Why *this* value? A single training example is not `block_size` tokens, it is `block_size + 1`: the window `data[i : i+block_size]` **plus one extra token** at the end so the shifted target `y` has something to point at. The target slice `data[i+1 : i+1+block_size]` reads up to index `i + block_size`, so we need `i + block_size ≤ N - 1`, i.e. `i ≤ N - block_size - 1`. In the next line `torch.randint(low=0, high=high)` treats `high` as **exclusive**, so passing `high = N - block_size` makes the largest drawn start exactly `N - block_size - 1` — the last position from which a full window *and* its shift still fit. Off by one here and you either waste the last valid window or index past the end of the tensor.
+
+**`ix = torch.randint(low=0, high=high, size=(batch_size,))`** — draw `batch_size` start positions, each a uniform random integer in `[0, high)`. The result `ix` is a 1-D `long` tensor of shape `(batch_size,)` (`torch.randint` returns int64). Two design choices are hiding here. First, **random** starts (not a sequential sweep) are what make successive batches near-independent — the "stochastic" in SGD; marching through the stream in order would give highly correlated consecutive gradients. Second, we sample *indices*, not the data itself — a handful of integers is almost free, and it lets us slice views out of the one big `data` tensor instead of copying or shuffling it (§6 expands on this).
+
+**`x = torch.stack([data[i : i + block_size] for i in ix])`** — the comprehension iterates over `ix` (each `i` is a 0-dim tensor, which indexes fine) and, for every start, takes a contiguous slice `data[i : i+block_size]` — a 1-D window of shape `(block_size,)`. That gives a Python list of `batch_size` windows. `torch.stack` then joins them along a **new** leading axis 0, producing one tensor of shape `(batch_size, block_size)`. `stack` *allocates a new tensor* (the stacked batch is contiguous and independent of `data`), unlike the slices themselves which are views into `data`. We use `stack`, not `cat`, precisely because we want a new batch dimension rather than concatenating the windows end to end.
+
+**`y = torch.stack([data[i + 1 : i + 1 + block_size] for i in ix])`** — identical in structure, but every window is shifted one position to the right. The crucial detail is that it reuses the **same `ix`**: `x[b]` and `y[b]` are built from the same start `i`, so `y[b, t]` is `data[i + 1 + t]` while `x[b, t]` is `data[i + t]` — hence `y[b, t] == x[b, t + 1]`, the "target is the next token" relationship, realized for the whole batch at once. If you drew fresh random starts for `y` here, the targets would be unrelated to the inputs and the model would learn nothing.
+
+**`return x.to(device), y.to(device)`** — all the indexing and stacking ran on the CPU, where the integer bookkeeping is cheap; only now do we move the two finished batches to the compute device (e.g. `"cuda"`). Doing the transfer once per batch, at the end, is why `device` is threaded through as an argument rather than forcing `data` onto the GPU up front. If `device` is already `"cpu"`, `.to("cpu")` is effectively a no-op.
+
+The condensed version above drops the two guard clauses that open the real function in [`code/src/llmre/data/loader.py`](../../code/src/llmre/data/loader.py): a check that `data` is 1-D and a check that `data.numel() > block_size`. They exist because both failure modes are silent-but-deadly — a 2-D `data` would make the slices mean the wrong thing, and a stream no longer than `block_size` would make `high ≤ 0`, which `torch.randint` rejects with an opaque error. Failing early with a clear message is cheaper than debugging the symptom later.
+
+> [!TIP]
+> Once you are comfortable with the loop, the same batch can be built without any Python-level
+> iteration using broadcasting: `idx = ix[:, None] + torch.arange(block_size)` gives a
+> `(batch_size, block_size)` index matrix, and `data[idx]` / `data[idx + 1]` gather `x` and `y` in
+> one fused indexing op — faster on GPU because it launches a single kernel instead of
+> `batch_size` slice-and-stack steps. The explicit loop is kept here because it reads more clearly.
+
 ### Numerical example — watch the shift
 
 Take a stream that is just `0, 1, 2, …, 11` so the ids double as positions, `block_size = 4`,
