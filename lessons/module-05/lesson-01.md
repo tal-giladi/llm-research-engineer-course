@@ -120,7 +120,15 @@ So, just as for token ids, the fix is to treat each position as a *category* and
 
 Why *add* rather than concatenate? Adding keeps the width at $C$ (concatenation would double it and force every downstream matrix to be wider). Because both tables are learned jointly, the model can carve out "directions" in the $C$-dimensional space for positional signal and other directions for token identity; it learns to keep them separable enough to use both. This is the "absolute" scheme: each position $0, 1, 2, \dots$ gets its own free vector, learned from scratch.
 
-<div class="callout warn"><p>Learned absolute positions have a hard limit: <code>wpe</code> only has <code>block_size</code> rows. The model literally has no vector for position <code>block_size</code> or beyond, so a GPT-2-style model cannot process a sequence longer than its trained context — there is no row to look up. This is one motivation for the relative schemes in Module 12.</p></div>
+### The real limit: a row is only as good as its training
+
+`wpe` has `block_size` rows, so a GPT-2-style model has no vector for position `block_size` or beyond. Stated like that it sounds like any other design limit — and you might reasonably say "then make `wpe` bigger from the start; RoPE also has a maximum you choose up front." The table size is not the problem. Three things are.
+
+1. **A bigger table does not mean a usable bigger context.** Row $t$ of `wpe` only gets a gradient when some training sequence actually has a token at position $t$. Suppose you build `wpe` with $8192$ rows but train on $1024$-token sequences (attention cost grows as $T^2$, so long-sequence training is expensive). Rows $1024 \dots 8191$ never receive a single gradient and stay at their random initialisation. At inference, position $5000$ gets a random vector the model has never seen — as if every token past $1024$ had noise added. So the usable context is not "rows in the table", it is "longest sequences you trained on".
+2. **You cannot cheaply extend a trained model.** Say GPT-2 is done and you now need $4096$ tokens. You can add $3072$ new rows, but they are untrained, and nothing the model learned about rows $0 \dots 1023$ transfers to them. The only fix is substantial training at the new length. With RoPE there is nothing per-position to learn: the rotation for position $5000$ is computed by the same formula as position $5$. Long-context methods (position interpolation, YaRN — Module 12) rescale that formula so long positions map onto angles the model already saw, and a short fine-tune is enough. That is how real models go from a 4K–8K pre-training context to 128K without re-pre-training.
+3. **Each position learns the same lesson separately.** The most useful positional fact in language is relative: "the token right before me". With `wpe`, the model must learn that relation from the pair $(W_{pe}[10], W_{pe}[11])$, again from $(W_{pe}[500], W_{pe}[501])$, and again for every pair. RoPE makes the attention score depend on the distance $i - j$ directly, so "one step back" is learned once and holds at every position.
+
+RoPE is not free of limits either: a RoPE model used *naively* far beyond its training length also degrades, because it meets rotation angles it never saw. The difference is that RoPE's limit can be moved after training with a formula change and a short fine-tune, while a learned table's limit is baked in by which rows got trained.
 
 ## 7. Numerical example: adding position
 
@@ -302,7 +310,7 @@ Because we add the positional embedding for position 0, $[0.01, 0.02, 0.03]$: $[
 
 <details><summary>GPT-2 uses learned absolute positions. Name one concrete limitation this imposes at inference time.</summary>
 
-The context length is hard-capped at `block_size`: `wpe` has exactly that many rows, so there is no positional vector to look up for any position at or beyond `block_size`. The model cannot process a longer sequence at all without changing the position scheme (e.g. switching to RoPE, Module 12).
+The usable context is capped at the length it was trained on. `wpe` has no row past `block_size`, and even if you add rows they are untrained random vectors, because a row only learns when training sequences reach that position. Extending the context means substantial retraining at the new length, whereas a RoPE model can be extended by rescaling its formula plus a short fine-tune (Module 12).
 
 </details>
 
