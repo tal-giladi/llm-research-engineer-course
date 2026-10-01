@@ -230,11 +230,21 @@ In a real block the tensors carry leading batch and head axes, but the last two 
 | $A = \mathrm{softmax}(S + M)$ | $(B, T, T)$ | attention weights |
 | $O = AV$ | $(B, T, d_h)$ | attended output, same shape as $V$ |
 
+**One head vs many heads.** The table is for *one* head, so the weights are $(B, T, T)$: one $T \times T$ grid per sequence. A real block runs $n_h$ heads side by side (05.3), and each head has its *own* $Q$, $K$, $V$ and therefore its own $T \times T$ grid. Stacking them adds a head axis right after the batch axis:
+
+| | single head (this lesson) | $n_h$ heads (05.3 onward, and the code) |
+|---|---|---|
+| $Q, K, V$ | $(B, T, d_h)$ | $(B, n_h, T, d_h)$ |
+| $S$, $A$ | $(B, T, T)$ | $(B, n_h, T, T)$ |
+| $O$ | $(B, T, d_h)$ | $(B, n_h, T, d_h)$ |
+
+Tiny example: $B = 2$, $n_h = 3$, $T = 4$ gives $A$ of shape $(2, 3, 4, 4)$ — $2 \cdot 3 = 6$ separate $4 \times 4$ weight grids, $96$ numbers. The math inside each grid is exactly the single-head math above; the head axis is just one more leading batch-like axis, which is why the code's `transpose(-2, -1)` and `dim=-1` work unchanged.
+
 The output has the same shape as the input to attention, which is what lets attention slot into a stack of layers. The dtype is whatever $x$ is (`float32` or, in mixed precision, `bfloat16`); everything stays on $x$'s device.
 
 ## 11. Under the hood: the $T \times T$ matrix is the bottleneck
 
-Look at $S$ and $A$: both are $(B, T, T)$. Their size grows with $T^2$. For a context of $T = 1024$ that is about a million entries per sequence per head; at $T = 8192$ it is 67 million. This quadratic scaling in sequence length is the defining cost of attention:
+Look at $S$ and $A$: both are $(B, T, T)$ for one head, $(B, n_h, T, T)$ for $n_h$ heads. Their size grows with $T^2$. For a context of $T = 1024$ that is about a million entries per sequence per head; at $T = 8192$ it is 67 million. This quadratic scaling in sequence length is the defining cost of attention:
 
 - **Memory.** Materializing $A$ of shape $(B, n_h, T, T)$ dominates activation memory for long contexts. At $T = 8192$, $B = 8$, $n_h = 12$ in `float32`, the weight matrix alone is $8 \cdot 12 \cdot 8192^2 \cdot 4$ bytes $\approx$ 26 GB — larger than most GPUs, just for one layer's attention weights.
 - **Compute.** Forming $S$ costs $O(B \cdot n_h \cdot T^2 \cdot d_h)$ multiply-adds, and $AV$ costs the same order. Both grow as $T^2$.
