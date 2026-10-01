@@ -105,6 +105,19 @@ $$
 
 Both terms are $C$-vectors, so the sum is a $C$-vector: the shape stays $(B, T, C)$. The positional table has no batch dependence — position $t$ gets the same vector $W_{pe}[t]$ in every sequence — so it broadcasts across the batch.
 
+### Why not just feed the real position number?
+
+The obvious idea is: position $t$ is already a number, so why learn a table at all? Just append $t$ itself — $0, 1, 2, \dots$ — as an extra input feature (or add it to every channel). It fails for the same reasons raw token ids failed in section 2, plus one more.
+
+1. **Magnitude swamps everything.** Token-embedding entries are small, around $\pm 1$. The raw position at the end of a GPT-2 context is $t = 1023$. Add that to the token vector $[-0.70, 0.80, 0.90]$ and you get $[1022.30, 1023.80, 1023.90]$: the token's identity is now a rounding error on top of "1023". Early positions barely change the vector, late positions drown it. The network sees "big number" and almost nothing else.
+2. **One scalar can only say "how far along".** A single number $t$ lets a linear layer compute things *proportional* to $t$ — "the later, the more". But what the model actually needs from position is categorical and multi-faceted: "am I the very first token?", "is this the token right after the previous one?", "am I near the start of the sentence?". Those are not straight-line functions of $t$. A $C$-dimensional vector per position can encode all of them at once, in different directions, exactly as a token vector encodes many facets of a word.
+3. **Neighbours are indistinguishable.** Positions $500$ and $501$ differ by $0.2\%$ of their value. After the scalar is mixed into 768 channels by a weight matrix, that difference is tiny compared to everything else, so "the token right before me" is hard to pick out — and that is the single most useful positional relation in language.
+4. **Normalising does not rescue it.** Dividing by the length, $t / T$, fixes the size but changes the meaning: in a 10-token sequence $0.5$ is position 5, in a 1000-token sequence it is position 500. The same input value no longer means the same place.
+
+So, just as for token ids, the fix is to treat each position as a *category* and give it its own learned $C$-vector: that is `wpe`, and indexing it is the same "one-hot times a matrix" trick. Every row has the same scale as a token vector, rows for positions 500 and 501 can be as different as training needs, and different directions can carry different positional facts. The sinusoidal encoding in section 11 is the other way to solve the same problem: it *does* start from the real number $t$, but spreads it over $C$ sines and cosines of different frequencies so each value stays in $[-1, 1]$ and nearby positions are still distinguishable.
+
+### Why add rather than concatenate?
+
 Why *add* rather than concatenate? Adding keeps the width at $C$ (concatenation would double it and force every downstream matrix to be wider). Because both tables are learned jointly, the model can carve out "directions" in the $C$-dimensional space for positional signal and other directions for token identity; it learns to keep them separable enough to use both. This is the "absolute" scheme: each position $0, 1, 2, \dots$ gets its own free vector, learned from scratch.
 
 <div class="callout warn"><p>Learned absolute positions have a hard limit: <code>wpe</code> only has <code>block_size</code> rows. The model literally has no vector for position <code>block_size</code> or beyond, so a GPT-2-style model cannot process a sequence longer than its trained context — there is no row to look up. This is one motivation for the relative schemes in Module 12.</p></div>
