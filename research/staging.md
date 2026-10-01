@@ -194,3 +194,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** possible addition to the training-efficiency/mixed-precision material once code and independent scale-up results are available; only tested to 5.29B params so far, well below frontier scale.
 - **Confidence:** low (promising mechanism and credible authors, but no code yet and only mid-scale results)
 - **Recommendation:** monitor — revisit once code/checkpoints are released; check whether results hold at larger scale before considering for the course.
+
+### C-20261001-01 · Periodic Weak Spots: phase sensitivity from chunked KV-cache compression
+
+- **Class:** B
+- **Date discovered:** 2026-10-01
+- **Date published:** 2026-09-28
+- **Source:** https://arxiv.org/abs/2609.36322 "Periodic Weak Spots: Phase Sensitivity from Chunked KV-Cache Compression"
+- **Organization/researchers:** Xingyu Zhu, Pu (Luke) Yi, Ziheng Cheng, Ang Lv, Jing Liu, Lexing Ying, Yiyuan Ma, Xin Dong (affiliations not stated on the abstract page)
+- **Category:** long-context | evaluation | interpretability
+- **What changed:** Shows that chunked KV-cache compression (used to cut memory during long-context inference) introduces *periodic* retrieval disparities tied to token position within a compression chunk, not just overall degradation — "the same information can be easy to retrieve at one phase and difficult at another," with gaps up to 40 percentage points in open-weight models tested.
+- **Technical summary:** The authors pretrain transformers with several chunked-compression designs and run mechanistic/gradient-flow analysis, finding that different attention heads specialize asymmetrically to different phases within a compression chunk, and that this phase specialization emerges naturally during training rather than being an artifact of one architecture. They argue average benchmark scores on compressed models hide these positional weak spots and that evaluation must probe multiple phases.
+- **Why it might matter:** The course's long-context/efficiency material (module 12: Gated DeltaNet, FlashAttention, KV-cache topics) teaches compression techniques; this is a concrete "what can go wrong" / evaluation-methodology finding — a good debugging-exercise or common-mistake candidate for any lesson that teaches or benchmarks KV-cache compression, independent of whether the specific technique itself gets added.
+- **Evidence of adoption:** none — single paper, own pretraining experiments only, no third-party reproduction, no adoption by an inference stack.
+- **Major organizations using it:** none.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.36322
+- **Code:** not confirmed
+- **Relationship to existing course material:** adjacent to `lessons/module-12/lesson-05.md` (Gated DeltaNet / long-context efficiency) and `papers/index.md`'s MLA/KV-cache-compression entry, but a distinct evaluation-methodology finding, not a technique already taught; `lookup "chunked KV cache"` found no exact match.
+- **Potential course lesson:** not a standalone lesson; a candidate "common mistake" / debugging-exercise addition to module-12's KV-cache material if the weekly review wants an evaluation-rigor callout, once independently checked.
+- **Confidence:** low
+- **Recommendation:** monitor — genuinely new mechanistic claim but single-paper; wait to see whether others confirm phase-sensitivity in production compression schemes (e.g. vLLM/SGLang's own KV-cache compression) before treating it as teachable.
+
+### C-20261001-02 · Scaling properties of same-family on-policy distillation
+
+- **Class:** B
+- **Date discovered:** 2026-10-01
+- **Date published:** 2026-09-26
+- **Source:** https://arxiv.org/abs/2609.32722 "Scaling Properties of Same-Family On-Policy Distillation"
+- **Organization/researchers:** Yuntai Bao, Qinfeng Li, Guoqing Jiang, Liwei Chen, Zhiheng Qin, Xuanping Li, Wenqi Zhang, Xuhong Zhang (affiliations not stated on the abstract page)
+- **Category:** RL/post-training
+- **What changed:** Studies how RL-driven reasoning transfers across model sizes via on-policy distillation, across weak-to-strong, same-base, and strong-to-weak teacher/student pairs. Finds an early "useful-transfer regime" (held-out accuracy grows linearly with divergence from student init), that smaller students can beat larger teachers, and a power-law relating peak student performance to model sizes and teacher quality — notably, peak score improves with teacher scale only up to roughly the student's own scale, so a stronger teacher alone doesn't keep buying supervision value.
+- **Technical summary:** A scaling-law study of the on-policy-distillation paradigm itself (not a new training technique), complementary to — but methodologically distinct from — the DCE/SRCL co-evolving-teacher recursive self-improvement paper already staged as `C-20260928-02`. Together with two other on-policy/self-distillation papers surfacing this same week ("OPSRD: On-Policy Self-Role Distillation", arXiv 2609.39884; "Better Supervision Is Nearby: Neighborhood On-Policy Self-Distillation", arXiv 2609.39687 — recorded as C items in `daily/2026-10-01.md`, not independently verified in depth), this is now a visible cluster of independent groups working on on-policy distillation as an alternative/complement to RLVR.
+- **Why it might matter:** If the "teacher scale saturates near student scale" finding holds up, it is directly actionable guidance for anyone running distillation-based post-training (course's module-17-adjacent RL/post-training material) — a concrete scaling rule, not just a benchmark win.
+- **Evidence of adoption:** none — single paper, no comparison against GRPO/DAPO baselines, no third-party reproduction. (company claim not applicable — appears academic.)
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.32722
+- **Code:** not confirmed
+- **Relationship to existing course material:** part of the same emerging topic as `C-20260928-02` (staged, on-policy distillation / recursive self-improvement) and `research/deferred/gvpo.md` (WAIT, on-policy distillation mentioned as an extension); `lookup "on-policy distillation"` confirms both.
+- **Potential course lesson:** none yet; if the scaling-law finding is reproduced, a candidate addition to module-17's RL/post-training material as a "how much does distillation buy you" scaling note.
+- **Confidence:** low
+- **Recommendation:** monitor alongside C-20260928-02 — the cluster of independent on-policy-distillation papers this week is worth flagging to the weekly review as a trend to watch, even though no single paper here clears the bar alone.
+
+### C-20261001-03 · ReCAP: persistent context graphs for LLM-agent memory compaction
+
+- **Class:** B
+- **Date discovered:** 2026-10-01
+- **Date published:** 2026-09-30
+- **Source:** https://arxiv.org/abs/2609.40118 "Persistent Context Graphs for Efficient Memory Compaction in LLM Agents"
+- **Organization/researchers:** Jingbo Yang, Kwei-Herng Lai, Xiaowen Wang, Zhaoxuan Tan, Pei Zhou, Mengting Wan, Yaar Harari, Evgeniy Gabrilovich, Shiyu Chang (affiliations not stated on the abstract page)
+- **Category:** agents/tools | memory/retrieval
+- **What changed:** Proposes ReCAP, a memory-compaction method for long-running LLM agents that replaces model-based summarization with a lightweight, persistent context graph storing attention-derived importance scores and dependency links; at query time it ranks/restores context from the graph combining stored importance with relevance signals, with no additional model calls for the selection step itself.
+- **Technical summary:** Reports ~95% latency reduction for compaction+restoration versus summarization-based memory methods, roughly half the historical context retained on some benchmarks, and up to +41.2 percentage points accuracy on code-related agent tasks versus a full-history baseline.
+- **Why it might matter:** The course's agent material (module 18 tool use, module 19 SWE-agent) doesn't yet teach a memory-compaction mechanism beyond basic context handling; a no-extra-inference-call compaction technique with a large claimed accuracy delta on code tasks would be directly relevant if it holds up, and it's architecturally simple enough to implement from scratch per the course's "mechanism before framework" rule.
+- **Evidence of adoption:** none — single paper, authors' own benchmarks only, no third-party reproduction or production adoption found.
+- **Major organizations using it:** none confirmed (author affiliations not stated on the abstract page, though some author names suggest a possible industry-research origin — not verified).
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.40118
+- **Code:** not confirmed
+- **Relationship to existing course material:** adjacent to `lessons/module-18/lesson-02.md` and `lessons/module-19/lesson-01.md` (agent tool-use/SWE-agent); `lookup "memory compaction"` and `"context graph agent"` found no existing registry/course entry — new topic.
+- **Potential course lesson:** if reproduced, a candidate extension to module-18/19's agent material on long-running-agent memory management.
+- **Confidence:** low
+- **Recommendation:** monitor — strong claimed deltas but single-paper, unverified affiliations/adoption; revisit if an open implementation or independent benchmark appears.
