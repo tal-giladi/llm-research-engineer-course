@@ -22,6 +22,11 @@ position is **individually** transformed. Alternating "mix across positions, the
 position" — that is the entire computational rhythm of a transformer. We already have `attn`;
 this lesson builds `mlp`, `ln`, and the residual `+`.
 
+<img src="/images/attention-mlp.gif"
+     alt="Attention mixes information between positions; the MLP transforms each position independently."
+     width="800" height="370"
+     style="max-width:100%;height:auto;">
+
 ## 2. The position-wise MLP
 
 ### Intuition and math
