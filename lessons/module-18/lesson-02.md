@@ -257,13 +257,13 @@ Extend the scripted policy so the loop makes **two** calls: first `mock_search("
 
 <details><summary>Hint</summary>
 
-the policy branches on `context[-1]["role"]` and on what the last observation contains.
+The policy branches on `context[-1]["role"]` and on what the last observation contains.
 
 </details>
 
 <details><summary>Stronger hint</summary>
 
-after the search observation, the policy should return a prose answer (no JSON), which ends the loop.
+After the search observation, the policy should return a prose answer (no JSON), which ends the loop.
 
 </details>
 

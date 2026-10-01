@@ -204,13 +204,13 @@ With $C = 768$ and a single head so $d_h = C = 768$, a batch of $B = 4$ sequence
 
 <details><summary>Optional hint</summary>
 
-scores are one number per (query position, key position) pair, per sequence.
+Scores are one number per (query position, key position) pair, per sequence.
 
 </details>
 
 <details><summary>Stronger hint</summary>
 
-the shape is $(B, T, T)$; multiply it out.
+The shape is $(B, T, T)$; multiply it out.
 
 </details>
 

@@ -150,13 +150,13 @@ You pack two examples into one block. Example 1 is `prompt=[a,b] response=[c]`; 
 
 <details><summary>Hint</summary>
 
-concatenate the tokens, concatenate the masks `[0,0,1]` and `[0,1,1]`, then apply `build_labels`.
+Concatenate the tokens, concatenate the masks `[0,0,1]` and `[0,1,1]`, then apply `build_labels`.
 
 </details>
 
 <details><summary>Stronger hint</summary>
 
-labels keep the token id exactly where the mask is 1 and are `-100` everywhere else. The tokens themselves are unchanged by masking.
+Labels keep the token id exactly where the mask is 1 and are `-100` everywhere else. The tokens themselves are unchanged by masking.
 
 </details>
 

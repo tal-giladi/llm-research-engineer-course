@@ -235,13 +235,13 @@ You have a model with `n_embd = 768` and a token embedding `wte` of shape `(5025
 
 <details><summary>Optional hint</summary>
 
-the embedding lookup adds exactly one axis.
+The embedding lookup adds exactly one axis.
 
 </details>
 
 <details><summary>Stronger hint</summary>
 
-the new axis has length `n_embd`, appended last.
+The new axis has length `n_embd`, appended last.
 
 </details>
 

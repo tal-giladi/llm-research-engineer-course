@@ -173,7 +173,7 @@ You sample four CoT chains for one question and `extract_answer` returns `["42",
 
 <details><summary>Stronger hint</summary>
 
-count each distinct value; `"42"` appears twice, `None` once, `"7"` once.
+Count each distinct value; `"42"` appears twice, `None` once, `"7"` once.
 
 </details>
 

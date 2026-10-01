@@ -134,7 +134,7 @@ You are rerank­ing two solutions with the *same* final answer using a PRM. Solu
 
 <details><summary>Hint</summary>
 
-compute $\prod_t s_t$ and $\min_t s_t$ for each.
+Compute $\prod_t s_t$ and $\min_t s_t$ for each.
 
 </details>
 

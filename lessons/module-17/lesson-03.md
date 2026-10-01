@@ -147,7 +147,7 @@ In `mini_r1`, the cold-start SFT stage only fine-tunes on a *few* curated proble
 
 <details><summary>Hint</summary>
 
-re-read section 2 on R1-Zero, and recall the RL stage samples and scores every problem regardless of whether SFT touched it.
+Re-read section 2 on R1-Zero, and recall the RL stage samples and scores every problem regardless of whether SFT touched it.
 
 </details>
 

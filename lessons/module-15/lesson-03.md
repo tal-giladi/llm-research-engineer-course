@@ -231,7 +231,7 @@ DPO's implicit reward for a completion is $\hat r(x,y) = \beta\log(\pi_\theta(y|
 
 <details><summary>Hint</summary>
 
-like the reward-model accuracy in 15.1, you only need the sign of a margin — and $\beta>0$ doesn't change a sign.
+Like the reward-model accuracy in 15.1, you only need the sign of a margin — and $\beta>0$ doesn't change a sign.
 
 </details>
 

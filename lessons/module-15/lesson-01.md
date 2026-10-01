@@ -199,7 +199,7 @@ Implement a batched Bradley-Terry loss that also returns the **preference accura
 
 <details><summary>Hint</summary>
 
-accuracy does not need the sigmoid at all — it only needs the sign of the margin.
+Accuracy does not need the sigmoid at all — it only needs the sign of the margin.
 
 </details>
 
