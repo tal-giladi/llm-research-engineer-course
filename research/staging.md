@@ -257,3 +257,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** if reproduced, a candidate extension to module-18/19's agent material on long-running-agent memory management.
 - **Confidence:** low
 - **Recommendation:** monitor — strong claimed deltas but single-paper, unverified affiliations/adoption; revisit if an open implementation or independent benchmark appears.
+
+### C-20261002-01 · Proof that RLVR (not SFT) permits unbounded CoT language drift, with a performance/monitorability tradeoff
+
+- **Class:** B
+- **Date discovered:** 2026-10-02
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.02015 "On Language Drift during RLVR Post-Training"
+- **Organization/researchers:** Michael Sullivan, Alexander Koller (Koller: established computational-linguistics researcher, Saarland University; affiliation not stated on the abstract page itself)
+- **Category:** RL/post-training | interpretability
+- **What changed:** Proves theoretically that RLVR optimization pressure permits *unbounded* language drift in chain-of-thought (unusual/nonsensical language use), while supervised fine-tuning does not. Shows empirically that drift specifically arises during RLVR on genuinely novel reasoning tasks (where the target behavior can't be elicited from the base model). Further proves that language drift cannot be constrained without constraining expected reward — i.e. CoT monitorability cannot be improved without hurting RLVR performance at the frontier.
+- **Technical summary:** A theory-plus-experiment paper, not a new training technique. The theoretical result gives a mechanistic explanation (grounded in RLVR's optimization pressure vs. SFT's) for an already-observed phenomenon (frontier labs have reported CoTs drifting into odd language), and derives a hard performance/monitorability tradeoff rather than proposing a mitigation.
+- **Why it might matter:** Directly relevant to the course's RL/post-training material (module 17, `lessons/frontier/update-02.md`'s RLVR content) and to CoT-faithfulness/monitorability framing used in safety-adjacent discussion — a concrete theoretical result (not speculation) about a known, previously only empirically-observed phenomenon.
+- **Evidence of adoption:** none — single paper, one day old, no independent replication of the theoretical proofs or empirical claims yet.
+- **Major organizations using it:** none; frames itself around a phenomenon industry labs have informally reported, but that reporting is not evidence for *this* paper's specific theoretical claims.
+- **Open-source implementation:** not applicable (theory + small-scale experiments; no code link found on the abstract page).
+- **Paper:** https://arxiv.org/abs/2610.02015
+- **Code:** not confirmed
+- **Relationship to existing course material:** extends the course's existing RLVR content (module 17, `lessons/frontier/update-02.md`) with a theoretical account of a failure mode not currently discussed there; `lookup "language drift RLVR"` found no existing match — new topic.
+- **Potential course lesson:** possible addendum to module-17's RLVR material (or `lessons/frontier/`) on CoT language drift as a concrete, provable performance/monitorability tradeoff, once the proofs get scrutiny.
+- **Confidence:** low-medium (rigorous theory from a credible academic; single paper, unreplicated)
+- **Recommendation:** monitor — a genuinely novel theoretical contribution on a real, previously anecdotal phenomenon; worth the weekly review's attention as a possible RLVR-caveat addendum, but not yet independently checked.
+
+### C-20261002-02 · GMC-GRPO: tighter convergence bound for asynchronous GRPO under stale rollouts
+
+- **Class:** B
+- **Date discovered:** 2026-10-02
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.01896 "Asynchronous LLM Post-Training: Group-Mass Capping and Convergence Analysis"
+- **Organization/researchers:** Qijia He, Ruinan Jin, Jun Luo, Shaofeng Zou, Yingbin Liang (affiliations not stated on the abstract page)
+- **Category:** RL/post-training | distributed
+- **What changed:** Derives a convergence bound for GRPO-style algorithms under asynchronous rollout staleness that explicitly separates the gradient estimator's second moment from its bias, then proposes Group-Mass Capping GRPO (GMC-GRPO), which minimizes a ratio-based bias bound within a class of weighted estimators sharing a common second-moment guarantee. Compared with the prior TIC-GRPO baseline, it improves the threshold-dependence of the fourth-order delay term from $O(\epsilon^{-4})$ to $O(\epsilon^{-2})$, and shows the delay-dependent term shrinks as $G^{-2/5}$ with group-size tuning.
+- **Technical summary:** Experiments on Qwen3 models and reasoning benchmarks show improved robustness to large rollout delays versus stable baselines. This is a formal-theory extension of exactly the staleness/async-RL mechanics the course already teaches qualitatively (`lessons/frontier/update-01.md` §2.4, "Asynchronous RL and policy staleness," and its GRPO-ratio-clipping-under-staleness math) — `lookup "asynchronous GRPO"` confirms the course section. The paper's contribution is a sharper theoretical bound plus a new capping method, not a restatement.
+- **Why it might matter:** The course currently presents staleness clipping qualitatively/empirically (MLPerf harness staleness=1 bound); this paper would let a from-scratch lesson state *why* a given staleness bound degrades convergence with an actual rate, and introduce a concrete alternative-to-clipping mechanism (group-mass capping).
+- **Evidence of adoption:** none — single paper, evaluated only on the authors' own Qwen3 runs, no third-party reproduction or adoption in a training framework (verl/OpenRLHF/Megatron-LM RL stacks).
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.01896
+- **Code:** not confirmed
+- **Relationship to existing course material:** genuinely new theoretical/methodological evidence on a topic the course already teaches qualitatively (`lessons/frontier/update-01.md` §2.4); per the dedup rule this is new evidence, not a plain duplicate, since it adds a formal convergence rate and a new capping mechanism absent from the existing lesson.
+- **Potential course lesson:** possible addendum to `lessons/frontier/update-01.md` §2.4 with the convergence-rate intuition and GMC-GRPO as a concrete alternative to simple ratio clipping, once code/independent validation appears.
+- **Confidence:** low-medium (solid theory + real-model experiments; single paper, no replication)
+- **Recommendation:** monitor — strong fit for an existing lesson section; revisit if code is released or another group reproduces the robustness claim under large staleness.
+
+### C-20261002-03 · AutoCompact: RL-trained context-compaction policy for long-horizon coding agents (part of a growing agent-memory-compaction cluster)
+
+- **Class:** B
+- **Date discovered:** 2026-10-02
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.02163 "AutoCompact: Learning When to Compact Context in Long-Horizon Coding Agents"
+- **Organization/researchers:** Xuan Zhang, Longtao Zheng, Cunxiao Du, Bo An, Xin Dong (affiliations not stated on the abstract page)
+- **Category:** agents/tools | memory/retrieval
+- **What changed:** Trains a coding agent to decide, as part of its own policy, when to compact context, what working state to preserve, and how to continue afterward — rather than compacting on a fixed trigger (e.g. context-window-full) or leaving the decision to a separate heuristic. Training data comes from running the base agent, having a judge review/correct its compaction decisions and summaries, then SFT on the corrected trajectories followed by joint RL on coding + compaction with task-success reward.
+- **Technical summary:** On SWE-bench Verified and SWE-PolyBench Verified, improves pass rates by an absolute 9.2 and 5.0 percentage points over the base model respectively, holding across inference budgets, including a 16K-context setting where overflow triggers fallback compaction and a 256K setting that never overflows. Architecturally simple enough (judge-corrected trajectories → SFT → RL) to fit the course's "implement the mechanism before the framework" rule.
+- **Why it might matter:** This is now the *third* independent paper in ~a week on agent context/memory management surfacing in this research process: `C-20261001-03` (ReCAP, persistent context graphs, staged 2026-10-01) and "Mem++" (non-destructive read-time memory, arXiv 2610.02002, logged as C in `daily/2026-10-02.md`, same day as this paper) all attack the same underlying problem — long-running agents accumulating context they can't just keep or just discard — with three structurally different mechanisms (trained compaction policy vs. context graph vs. read-time document store). That convergence of independent approaches is itself a signal worth flagging to the weekly review, beyond any single paper's numbers.
+- **Evidence of adoption:** none — single paper, authors' own SWE-bench evaluation only, no third-party reproduction or adoption in an agent framework.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.02163
+- **Code:** not confirmed
+- **Relationship to existing course material:** adjacent to `lessons/module-18/lesson-02.md` and `lessons/module-19/lesson-01.md` (agent tool-use/SWE-agent); directly complements the already-staged `C-20261001-03` (ReCAP) as part of the same emerging agent-memory-compaction cluster; `lookup "SWE-bench coding agent context"` and `"context compaction agent"` found no exact prior match for this specific mechanism.
+- **Potential course lesson:** if the cluster holds up, a candidate module-18/19 extension comparing the different compaction strategies (trained policy vs. context graph vs. read-time store) as a from-scratch exercise on long-running-agent context management.
+- **Confidence:** low-medium (concrete SWE-bench numbers; single paper, no third-party validation; part of a 3-paper independent cluster)
+- **Recommendation:** monitor alongside `C-20261001-03` as a cluster — flag the convergence of three independent groups on agent-memory-compaction to the weekly review even though no single paper alone clears the bar.
