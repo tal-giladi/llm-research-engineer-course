@@ -179,7 +179,49 @@ $$
 
 This is precisely the mean next-token cross-entropy of [01.4](lessons/module-01/lesson-04.md), now computed for every position of every sequence at once. `ignore_index=-1` lets us mark padding positions with a target of $-1$ so they contribute nothing to the loss.
 
-<div class="callout pt"><p><code>logits.view(-1, logits.size(-1))</code> collapses <code>(B, T, V)</code> to <code>(B*T, V)</code> without copying data — <code>view</code> just reinterprets the strides. <code>F.cross_entropy</code> then fuses <code>log_softmax</code> and the negative-log-likelihood gather into one numerically stable kernel; it never materializes the softmax probabilities as a separate tensor.</p></div>
+#### Numerical example: $B = 2$, $T = 2$, $V = 3$
+
+A toy vocabulary of 3 tokens, 2 sequences, 2 positions each. The model outputs `logits` of shape $(2, 2, 3)$ and we have `targets` of shape $(2, 2)$:
+
+```text
+logits[0] = [[2, 1, 0],      targets[0] = [ 0,  1]
+             [0, 2, 0]]
+logits[1] = [[1, 1, 1],      targets[1] = [ 2, -1]     (-1 = padding)
+             [0, 0, 3]]
+```
+
+**Step 1 — flatten.** `logits.view(-1, 3)` stacks the rows into $B \cdot T = 4$ rows; `targets.view(-1)` lines up the 4 matching answers:
+
+```text
+row   logits (4, 3)    target (4,)
+ 0    [2, 1, 0]          0
+ 1    [0, 2, 0]          1
+ 2    [1, 1, 1]          2
+ 3    [0, 0, 3]         -1
+```
+
+Each row is now an independent 3-way classification question: "which token comes next here?"
+
+**Step 2 — loss per row.** For one row, $-\log \operatorname{softmax}(z)[y] = \log\sum_j e^{z_j} - z_y$ (log-sum-exp minus the correct token's logit):
+
+| row | $\log\sum_j e^{z_j}$ | $z_y$ | loss | $p(\text{correct})$ |
+|---|---|---|---|---|
+| 0 | $\log(e^2 + e^1 + e^0) = \log 11.107 = 2.4076$ | $2$ | $0.4076$ | $0.665$ |
+| 1 | $\log(e^0 + e^2 + e^0) = \log 9.389 = 2.2395$ | $2$ | $0.2395$ | $0.787$ |
+| 2 | $\log(3e^1) = 1 + \log 3 = 2.0986$ | $1$ | $1.0986$ | $0.333$ |
+| 3 | target is $-1$ → **skipped** | — | — | — |
+
+Row 2 is the "uniform guess" case: all logits equal, so $p = 1/3$ and the loss is $\log 3 \approx 1.0986$ — exactly what an untrained model scores on a 3-token vocabulary (for GPT-2's $V = 50257$ that number is $\log 50257 \approx 10.82$, the loss you should see at step 0).
+
+**Step 3 — average.** Only the 3 non-ignored rows count, so we divide by 3, not 4:
+
+$$
+\mathcal{L} = \frac{0.4076 + 0.2395 + 1.0986}{3} = \frac{1.7457}{3} \approx 0.582.
+$$
+
+With `ignore_index`, the $\frac{1}{BT}$ in the formula above really means "1 over the number of non-ignored positions". Row 3's logits strongly favored token 2, but since it is padding it neither adds to the loss nor sends any gradient back.
+
+<div class="callout pt"><p><code>logits.view(-1, logits.size(-1))</code> collapses <code>(B, T, V)</code> to <code>(B*T, V)</code> without copying data — <code>view</code> just reinterprets the strides. <code>F.cross_entropy</code> then computes <code>log_softmax</code> with the max-subtraction trick (numerically stable, never forms the raw <code>exp</code> probabilities) and gathers the target entry of each row — the negative-log-likelihood step.</p></div>
 
 ### Full shape trace
 
@@ -201,8 +243,29 @@ The stack preserves shape at every step — that invariance is exactly why block
 
 Two observations you will lean on when you train this in Module 7.
 
-- **The logits tensor is huge.** $(B, T, V)$ with $V = 50257$ dwarfs the $(B, T, C)$ activations inside the stack — for $B{=}2, T{=}1024$ that is $2 \cdot 1024 \cdot 50257 \approx 10^8$ floats, ~400 MB in fp32, just for one layer's output. This is why the final projection and the cross-entropy over it are a real slice of training memory, and why long-context training fuses them carefully.
-- **`arange` is on-device.** `torch.arange(T, device=idx.device)` builds the positions where the model already lives (CPU or GPU); forgetting the `device=` is a classic bug that throws a "tensors on different devices" error the first time you move the model to a GPU.
+### The logits tensor is huge
+
+Inside the stack, every tensor is $(B, T, C)$: one $C$-vector per token. At the very end, `lm_head` replaces each $C = 768$ vector with a $V = 50257$ vector — one score per vocabulary word. So the last axis grows by a factor of $V / C = 50257 / 768 \approx 65$.
+
+Count it for a realistic batch, $B = 2$ sequences of $T = 1024$ tokens, in fp32 (4 bytes per float):
+
+| tensor | shape | floats | memory |
+|---|---|---|---|
+| activations in the stack | $(2, 1024, 768)$ | $\approx 1.6\text{M}$ | $\approx 6.3$ MB |
+| logits | $(2, 1024, 50257)$ | $\approx 103\text{M}$ | $\approx 412$ MB |
+
+So a single tensor at the end of the model is ~65× bigger than any one activation inside it.
+
+And it is not paid only once:
+
+- **Forward:** the logits themselves (~412 MB), plus the log-softmax that cross-entropy keeps for the backward pass (another tensor of the same size).
+- **Backward:** the gradient of the loss with respect to the logits is again $(B, T, V)$ — another ~412 MB.
+
+Double $T$ or $B$ and all of these double too. This is why the final projection and its cross-entropy are a real slice of training memory, and why long-context training fuses them carefully (computing the loss in chunks of positions so the full $(B, T, V)$ tensor never exists at once).
+
+### `arange` is on-device
+
+`torch.arange(T, device=idx.device)` builds the positions where the model already lives (CPU or GPU); forgetting the `device=` is a classic bug that throws a "tensors on different devices" error the first time you move the model to a GPU.
 
 ## Exercise
 
