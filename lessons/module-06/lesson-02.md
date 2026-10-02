@@ -57,6 +57,39 @@ for name, p in self.named_parameters():
 
 For GPT-2 small, $n_{\text{layer}} = 12$, so the factor is $1/\sqrt{24} \approx 0.204$ and the residual-writing projections start at std $\approx 0.02 \times 0.204 \approx 0.00408$ — five times smaller than every other weight.
 
+#### Worked example with tiny numbers
+
+Take a toy model with $n_{\text{layer}} = 2$, so there are $N = 2 \times 2 = 4$ residual adds (attn, MLP, attn, MLP). Say the stream starts with $\operatorname{Var}(x_0) = 1$, and with the normal init each sublayer adds variance $v = 1$.
+
+**Step 1 — why dividing the std by $\sqrt{N}$ divides the variance by $N$.** Variance is std squared. With $N = 4$, $\sqrt{N} = 2$:
+
+| | std | variance $=\text{std}^2$ |
+|---|---|---|
+| normal init | $0.02$ | $0.0004$ |
+| scaled init, $0.02 / \sqrt{4}$ | $0.01$ | $0.0001$ |
+
+Halving the std made the variance $4\times$ smaller ($0.0004 / 0.0001 = 4$). A sublayer's output is a sum of (weight × input) terms, so its variance scales with the weight variance: each add now contributes $v / N = 1/4 = 0.25$ instead of $1$.
+
+**Step 2 — add up the stream, block by block.**
+
+| after add # | without fix: $+1$ each | with fix: $+0.25$ each |
+|---|---|---|
+| start | $1$ | $1$ |
+| 1 (attn, layer 1) | $2$ | $1.25$ |
+| 2 (MLP, layer 1) | $3$ | $1.5$ |
+| 3 (attn, layer 2) | $4$ | $1.75$ |
+| 4 (MLP, layer 2) | $5$ | $2$ |
+
+**Step 3 — make the model deeper and watch what changes.** The general rule is $\operatorname{Var}(x_L) \approx 1 + N \cdot (\text{per-add variance})$:
+
+| model | $N$ adds | without fix: $1 + N \cdot 1$ | with fix: $1 + N \cdot \tfrac{1}{N}$ |
+|---|---|---|---|
+| 2 layers | 4 | $5$ | $2$ |
+| 12 layers (GPT-2 small) | 24 | $25$ | $2$ |
+| 96 layers | 192 | $193$ | $2$ |
+
+Without the fix the variance grows with depth ($5 \to 25 \to 193$). With the fix, more adds each contribute proportionally less, so the $N$'s cancel: $N \cdot \frac{1}{N} = 1$, and the stream ends at $\approx 2$ whatever the depth. That is what "stays $\mathcal{O}(1)$ regardless of depth" means — not that the variance stays exactly at its starting value, but that it no longer depends on how many layers you stack.
+
 <div class="callout key"><p>Scaled residual init = shrink only the projections that <em>write into</em> the residual stream by $1/\sqrt{2\,n_{\text{layer}}}$. Because independent variances add, this keeps the stream's variance $\approx$ constant as you stack layers, so a 12-layer and a 96-layer model both start out well-behaved. The "2" counts the two residual adds per block (attention and MLP).</p></div>
 
 ## 3. Counting the parameters of GPT-2 small
