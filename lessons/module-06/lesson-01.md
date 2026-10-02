@@ -18,6 +18,39 @@ positions ──▶ embed each position        (wpe)          ──┴─▶ ad
           ──▶ linear to vocabulary scores (lm_head)  ──▶ logits
 ```
 
+The same model inside the whole training run, as pseudocode. Each name maps to a piece you have built: `EmbedTokens` is `wte`, `EmbedPositions` is `wpe`, the inner loop is one pre-norm `Block` (05.4), `FinalLayerNorm` is `ln_f`, `ProjectToVocabulary` is `lm_head`. The outer training loop is Module 7; this module builds everything between `ClearGradients()` and `CrossEntropy`.
+
+```text
+model, optimizer = Initialize()
+tokens = TokenizeTrainingText()
+
+RepeatForEachTrainingBatch:
+    inputs, targets = GetInputsAndNextTokenTargets(tokens)   # targets = inputs shifted left by one
+    ClearGradients()
+
+    x = EmbedTokens(inputs) + EmbedPositions(0 .. T-1)
+    x = Dropout(x)
+
+    RepeatForEachTransformerBlock:
+        a = CausalMultiHeadAttention(LayerNorm(x))
+        x = x + Dropout(OutputProjection(a))
+
+        m = Linear2(GELU(Linear1(LayerNorm(x))))
+        x = x + Dropout(m)
+
+    x = FinalLayerNorm(x)
+    logits = ProjectToVocabulary(x)          # same weights as EmbedTokens (weight tying)
+    loss = CrossEntropy(logits, targets)
+
+    Backpropagate(loss)
+    ClipGradients()
+    UpdateWeights()
+    UpdateLearningRate()
+
+Evaluate()
+SaveModelAndTokenizer()
+```
+
 The stack of blocks is where all the thinking happens. The two ends are pure translation: the **front end** turns integer token ids into vectors the blocks can work with, and the **back end** turns the blocks' output vectors back into a score for every possible next token. That is the entire architecture. This lesson builds the front end, the back end, and the `forward` that runs them; [06.2](lessons/module-06/lesson-02.md) covers initialization and the parameter count; [06.3](lessons/module-06/lesson-03.md) covers using a trained model to generate text.
 
 ## 2. The front end: two embedding tables
