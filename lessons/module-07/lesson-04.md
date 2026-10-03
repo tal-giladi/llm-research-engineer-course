@@ -13,7 +13,7 @@ For any training run you ask two things: *how much arithmetic is this?* (which s
 - **Compute:** ≈ $6N$ FLOPs per token, forward+backward. Multiply by the tokens you will train on and you have the run's total arithmetic.
 - **Memory:** parameters + gradients + optimizer state + activations. The first three are each ~$N$ numbers (optimizer state is $2N$ for Adam); activations depend on batch and context.
 
-<div class="callout key"><p>Two rules run all of training-cost reasoning: <strong>compute ≈ 6ND FLOPs</strong> (N = params, D = tokens), and <strong>memory ≈ (params + grads + 2×params optimizer state) + activations</strong>. Everything in this lesson is unpacking those two.</p></div>
+<div class="callout key"><p>Two rules run all of training-cost reasoning: <strong>compute ≈ 6N FLOPs per token × D training tokens = 6·N·D FLOPs total</strong> (N = params, D = number of tokens; e.g. N = 10⁸, D = 10¹⁰ → 6·10⁸·10¹⁰ = 6×10¹⁸ FLOPs), and <strong>memory ≈ (params + grads + 2×params optimizer state) + activations</strong>. Everything in this lesson is unpacking those two.</p></div>
 
 ## 2. The 6N rule: 2 forward + 4 backward
 
