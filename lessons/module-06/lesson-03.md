@@ -158,11 +158,13 @@ Each survivor was divided by the kept mass $0.9720$: e.g. token 0 becomes $0.563
 
 ```python
 q = F.softmax(z, dim=-1)
-sp, si = torch.sort(q, descending=True)           # sorted probs and their indices
-csum = torch.cumsum(sp, dim=-1)                     # [0.5630,0.7701,0.8958,0.9720,1.0]
-keep = (csum - sp) < 0.9        # keep a token if the mass BEFORE it is still < p
-kept = sp * keep
-kept = kept / kept.sum()
+sp, si = torch.sort(q, descending=True)           # sorted probs: [0.5630,0.2071,0.1257,0.0762,0.0280]
+csum = torch.cumsum(sp, dim=-1)                     # mass AFTER each token:  [0.5630,0.7701,0.8958,0.9720,1.0]
+before = csum - sp                                  # mass BEFORE each token: [0.0,0.5630,0.7701,0.8958,0.9720]
+keep = before < 0.9             # keep a token if the mass BEFORE it is still < p
+                                # [True,True,True,True,False] -> 4th token kept: 0.8958 < 0.9 (it tips the total to 0.9720)
+kept = sp * keep                # [0.5630,0.2071,0.1257,0.0762,0.0]
+kept = kept / kept.sum()        # divide by the kept mass 0.9720
 print(kept.round(decimals=4).tolist())              # [0.5793,0.2131,0.1293,0.0784,0.0]
 ```
 
