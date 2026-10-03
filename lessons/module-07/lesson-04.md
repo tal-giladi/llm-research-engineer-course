@@ -124,7 +124,7 @@ $$
 
 <div class="callout key"><p>Large-scale LLM pretraining commonly runs at roughly <strong>30–50% MFU</strong> when well tuned. Treat this as <em>reasonable industry practice</em> reported across several public training write-ups — not a law and not a guarantee. The exact figure depends on model size, sequence length, hardware, and how much of the time is spent on non-matmul work (attention scores, communication, data loading). A small model at short context, like our GPT-2-small toy above, will sit lower because the fixed overheads are a larger fraction.</p></div>
 
-Why MFU matters: at 40% MFU a step that does 255 TFLOP finishes in $\approx 2.0$ s on one A100; at 20% it takes twice as long and costs twice as much. Doubling MFU halves the bill. It is the single most useful number for spotting a run that is bottlenecked on something other than arithmetic (data loading, communication, tiny batches) — a low MFU says "the GPU is starving, go find the stall."
+Why MFU matters: at 40% MFU a step that does 255 TFLOP finishes in $\approx 2.0$ s on one A100; at 20% it takes twice as long and costs twice as much. Doubling MFU halves the bill. It is the single most useful number for spotting a run that is bottlenecked on something other than arithmetic (data loading, communication, tiny batches) — a low MFU says "the GPU is sitting idle, waiting for data or for other GPUs — go find the stall." (Engineers often call this "starving": idle not because it is done, but because its inputs have not arrived yet.)
 
 ## 5. Memory accounting: four buckets
 
