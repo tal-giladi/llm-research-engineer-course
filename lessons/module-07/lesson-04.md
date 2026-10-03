@@ -131,7 +131,7 @@ Why MFU matters: at 40% MFU a step that does 255 TFLOP finishes in $\approx 2.0$
 Training memory is four contributions. Let $P$ be the total parameter count and assume fp32 (4 bytes each) for the accounting:
 
 1. **Parameters** — $P$ numbers, $4P$ bytes. You must hold the weights.
-2. **Gradients** — one per parameter, another $4P$ bytes. `loss.backward()` fills a `.grad` the same shape as every parameter.
+2. **Gradients** — one per parameter, another $4P$ bytes. `loss.backward()` fills a `.grad` the same shape as every parameter. (Do not confuse this with the "2" and "4" in the FLOP count: those count *operations* — a multiply and an add — performed with each parameter for every token. Memory counts *stored numbers*: each weight $w$ has exactly one gradient $\partial L/\partial w$, and the backward pass keeps adding each token's contribution into that same slot, so millions of FLOPs end up in one 4-byte number.)
 3. **Optimizer state** — AdamW keeps *two* buffers per parameter, $m$ and $v$ (03.2), so $2P$ numbers, $8P$ bytes. This is why people say "Adam **triples** your parameter memory": params + $m$ + $v$ = $3P$ numbers, and with gradients you are at $4P$.
 4. **Activations** — the intermediate tensors the forward pass saves for backward. Unlike the first three, this scales with **batch × context**, not with $P$, and for language models the logits tensor $(B, T, V)$ often dominates.
 
