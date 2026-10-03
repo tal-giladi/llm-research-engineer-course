@@ -320,3 +320,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** if the cluster holds up, a candidate module-18/19 extension comparing the different compaction strategies (trained policy vs. context graph vs. read-time store) as a from-scratch exercise on long-running-agent context management.
 - **Confidence:** low-medium (concrete SWE-bench numbers; single paper, no third-party validation; part of a 3-paper independent cluster)
 - **Recommendation:** monitor alongside `C-20261001-03` as a cluster — flag the convergence of three independent groups on agent-memory-compaction to the weekly review even though no single paper alone clears the bar.
+
+### C-20261003-01 · TLX Jagged Flash Attention on Blackwell: matches/beats FlashAttention-4 in production at Meta
+
+- **Class:** A
+- **Date discovered:** 2026-10-03
+- **Date published:** 2026-10-01
+- **Source:** https://pytorch.org/blog/optimizing-jagged-flash-attention-with-tlx-the-road-toward-sota-fa4-on-blackwell/ "Optimizing Jagged Flash Attention with TLX: The Road Toward SOTA FA4 on Blackwell" (official PyTorch engineering blog)
+- **Organization/researchers:** Meta (PyTorch/GenAI infra team); builds on the TLX (Triton Low-level Extensions) line of PyTorch blog posts and on FlashAttention-4 (arXiv 2603.05451)
+- **Category:** attention | efficiency | architecture
+- **What changed:** Rewrites Meta's production Jagged Flash Attention kernel (the attention kernel behind Meta's Generative Ads Model, GEM) on NVIDIA Blackwell (B200) using TLX — a Triton extension exposing explicit warp specialization, SMEM/TMEM allocation, async TMA/MMA, and Cluster Launch Control — instead of hand-written CuteDSL/CUDA. Documents concrete kernel-engineering techniques (host-side jagged-tile load balancing with CLC, multi-stage double-buffered dQ reduce-add staging, early TMEM release, branch-free loop peeling via compile-time mask constants, 2-CTA collaborative MMA) and ports the same kernel to MXFP8 and block-sparse attention variants with minimal code changes.
+- **Technical summary:** Benchmarked in bf16 on B200 against FlashAttention-4 (May 2026 version), the state-of-the-art open-source CuteDSL kernel: on the production jagged (broadcast-Q) shapes, the TLX kernel is ~13% faster on the forward pass (on average, trailing FA4 only at the longest/densest sequences) and ~50% faster on the backward pass; on dense LLM-style shapes (B=768, H=4, head_dim=128) it is ~87% of FA4 forward and ~+17% faster backward. The TLX implementation is ~3.2K lines vs. ~10K lines of hand-written CuteDSL for FA4. Code is public: https://github.com/facebookresearch/ads_model_kernel_library/tree/main/tlx_jfa.
+- **Why it might matter:** This is a from-scratch, line-by-line account of how a real SOTA attention kernel is built and tuned on current hardware (Blackwell) — warp specialization, TMEM/SMEM management, barrier pipelining, load balancing for ragged sequence lengths, and low-precision (MXFP8) and block-sparse variants built on the same skeleton. It is squarely in the course's "implement the mechanism, explain what the framework does under the hood" territory for the attention/efficiency module, with working code and quantified numbers against the current open-source SOTA.
+- **Evidence of adoption:** Real production use (Meta's GEM ads-recommendation model), not a company claim about an LLM product — the numeric comparison against FA4 is an apples-to-apples kernel benchmark, independently checkable since both are open source.
+- **Major organizations using it:** Meta (production, GEM/Kunlun ads models).
+- **Open-source implementation:** https://github.com/facebookresearch/ads_model_kernel_library/tree/main/tlx_jfa
+- **Paper:** none (engineering blog post, not a paper); related paper is FlashAttention-4 itself, https://arxiv.org/abs/2603.05451
+- **Code:** https://github.com/facebookresearch/ads_model_kernel_library/tree/main/tlx_jfa
+- **Relationship to existing course material:** `lookup "FlashAttention-4"`, `"TLX Triton low-level extensions"`, and `"Blackwell kernel warp specialization"` all found no existing match. The course's efficiency/kernels module (`lessons/module-08/`) and attention lessons (`lessons/module-05/`) already cover FlashAttention; this is new material on FA4-era Blackwell kernel engineering (TLX, warp specialization, CLC) not yet taught.
+- **Potential course lesson:** candidate addendum to `lessons/module-08/` (efficient training/inference kernels) covering Blackwell-generation attention kernel engineering (warp specialization, TMEM, Cluster Launch Control) using this post's worked techniques as the concrete numerical/code example, referencing FA4 as the baseline it's benchmarked against.
+- **Confidence:** high (official engineering source, public code, production deployment, apples-to-apples benchmark against a named open-source SOTA)
+- **Recommendation:** review for ADD as a module-08 extension on modern (Blackwell/FA4-era) attention kernel engineering — strong fit for the course's "implement before framework" rule and well-documented with code.
+
+### C-20261003-02 · Sharpening Tax: RL post-training trades solution coverage for single-shot accuracy, even in agentic tasks
+
+- **Class:** B
+- **Date discovered:** 2026-10-03
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.01509 "Sharpening Tax in Post-Training"
+- **Organization/researchers:** Changdae Oh, Qi Zeng, Qi Qi, Andrey Zhmoginov, Deren Lei, Yun He, Hoang Phan, Hangoo Kang, Azalia Mirhoseini, Sharon (Yixuan) Li — affiliations not listed on the abstract page; HF Daily Papers tags the paper as Meta-affiliated; Mirhoseini and Li are established academic/industry researchers (RL/MoE and OOD-robustness respectively).
+- **Category:** RL/post-training | evaluation
+- **What changed:** Tests the "RL post-training merely sharpens existing base-model behavior" hypothesis on agentic (multi-turn, tool-use) tasks, not just math/coding. Finds that pre-trained base models with a light inference harness often beat their post-trained counterparts on solution coverage (pass@K) under a large sampling budget, despite much lower pass@1 — because post-training pushes tasks toward "always solved or never solved," raising sampling efficiency/consistency at the cost of coverage. Introduces **Sharpening Tax**, a diagnostic metric for this test-time-scalability loss, and **posterior-tempered group sampling (PTGS)**, a Bayesian per-prompt-difficulty temperature sampler used during RL training to reduce the tax.
+- **Technical summary:** Evaluated across 14 base/post-trained model pairs from four model families and three agentic benchmarks (42 cases total); the tax is "prevalent in most settings," estimable from a few rollouts, and correlates with other metrics. PTGS, applied during RL training in two agentic environments, pays a smaller tax than fixed-temperature sampling while also improving pass@1.
+- **Why it might matter:** Directly bears on the course's RL/post-training and evaluation material — a concrete, broadly-tested empirical result (not a single-task anecdote) plus an actionable diagnostic metric and a training-time mitigation, relevant anywhere pass@K / test-time scaling is taught alongside RLHF/RLVR.
+- **Evidence of adoption:** none — single paper, author-run evaluation only, no third-party reproduction.
+- **Major organizations using it:** none confirmed; HF tags the paper as Meta-affiliated but this is not independently confirmed from the abstract page.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.01509
+- **Code:** not confirmed
+- **Relationship to existing course material:** `lookup "sharpening tax post-training"` and `"pass@k RL post-training diversity"` found no exact match (the latter surfaced only the unrelated MLPerf post-training-benchmark lesson in `lessons/frontier/update-01.md`); new topic, complements existing RLVR/RLHF material.
+- **Potential course lesson:** possible addendum to the RL/post-training module on pass@1-vs-pass@K tradeoffs after RLVR, using Sharpening Tax as the diagnostic and PTGS as a from-scratch-implementable mitigation.
+- **Confidence:** medium (broad evaluation scope for a single paper; no independent replication yet)
+- **Recommendation:** monitor — strong empirical breadth for a single-paper result; revisit at weekly review and watch for independent reproduction or adoption of PTGS in an RL training stack (verl/OpenRLHF).
+
+### C-20261003-03 · Evaluation objectives for mechanistic circuit discovery can reward worse circuits (objective-level recovery gap)
+
+- **Class:** B
+- **Date discovered:** 2026-10-03
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.02098 "Are We Recovering Mechanisms? Objective-Level Recovery Gaps in Mechanistic Interpretability"
+- **Organization/researchers:** Chuqin Geng, Li Zhang, Haolin Ye, Mark Zhang, Luke Zhang, Xujie Si — affiliations not listed on the abstract page.
+- **Category:** interpretability | evaluation
+- **What changed:** Shows that intervention-defined faithfulness — the standard objective used to score automated circuit-discovery methods (e.g. EAP, EAP-IG, ACDC, Edge-SP) — can prefer an equally-sized circuit that reproduces the model's actual behavior *less* well than an alternative, i.e. the evaluation objective itself has a recovery gap, independent of how good the search/attribution method is.
+- **Technical summary:** Empirical study with controlled experiments across four human-reference circuit tasks plus InterpBench, comparing multiple circuit-discovery algorithms (EAP, EAP-IG, ACDC, Edge-SP) and showing KL-divergence-based faithfulness scores can misrank circuits relative to ground truth.
+- **Why it might matter:** A methodological caution directly relevant to any interpretability curriculum content that teaches or uses automated circuit discovery (module touching mechanistic interpretability) — it argues that better search alone cannot fix circuit discovery if the scoring objective is mis-specified, which changes what "progress" in circuit discovery should be measured against.
+- **Evidence of adoption:** none — single paper; no third-party replication found.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.02098
+- **Code:** not confirmed
+- **Relationship to existing course material:** `lookup "circuit discovery faithfulness interpretability"` and `"mechanistic interpretability circuits"` found no existing match; course interpretability content (`lessons/module-20/lesson-01.md` and circuit mentions in `lessons/module-05/lesson-01.md`) does not currently discuss evaluation-objective pitfalls in circuit discovery.
+- **Potential course lesson:** possible addendum to the interpretability module's circuit-discovery coverage, flagging intervention-faithfulness recovery gaps as a caveat when teaching/using EAP/ACDC-style methods.
+- **Confidence:** medium (controlled multi-method empirical study; single paper, unreplicated)
+- **Recommendation:** monitor — a methodological result worth the weekly review's attention if the course teaches or plans to teach automated circuit discovery; revisit if independently reproduced.
