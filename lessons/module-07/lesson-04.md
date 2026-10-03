@@ -44,7 +44,7 @@ We take $N$ as the **non-embedding** parameter count, estimated by `non_embeddin
 
 Tiny check with $C = 4$: $W_Q, W_K, W_V, W_O$ are each $4\times 4 = 16$ weights → 64 $= 4\cdot 4^2$; the MLP is $4\times 16 + 16\times 4 = 128 = 8\cdot 4^2$; total 192 $= 12\cdot 4^2$.
 
-Embeddings are excluded because they are a lookup (no matmul) and contribute negligible FLOPs.
+The input embedding is excluded because it is a lookup (no matmul). The output head (logits = $x\,W_E^\top$, a $C\times V$ matmul with the tied embedding) *is* a matmul, but the standard 6N convention counts non-embedding parameters only, so it is left out too. For a large model that is a few percent; for GPT-2 small, with its big vocabulary relative to $C$, it is not — see the full tally at the end of §3.
 
 ### What the 6N rule leaves out: attention scores
 
@@ -91,6 +91,26 @@ $$
 $$
 
 `model_flops_per_token(GPTConfig())` returns exactly `509607936.0`. For a step of 500,000 tokens (07.2), that is $5.1\times 10^8 \cdot 5\times 10^5 \approx 2.5\times 10^{14}$ FLOPs — 255 TFLOP — per optimizer step.
+
+### The full FLOP picture: GPT-2 small, one token, forward + backward
+
+6N is the headline, but it is not everything. Here is every FLOP one training token costs, at context $T = 1024$, $C = 768$, $V = 50{,}257$, 12 layers:
+
+$$
+\begin{aligned}
+\text{weight matmuls } (6N = 6\cdot 12\cdot 12C^2) &= 509{,}607{,}936 &&\;\; 63.6\% \\
+\text{LM head } (6CV = 6\cdot 768\cdot 50{,}257) &= 231{,}584{,}256 &&\;\; 28.9\% \\
+\text{attention scores, causal } (6\cdot n_{\text{layer}}\cdot T\cdot C) &= \phantom{0}56{,}623{,}104 &&\;\; \phantom{0}7.1\% \\
+\text{elementwise (LayerNorm, GELU, softmax, residual, loss)} &\approx \phantom{00}3{,}000{,}000 &&\;\; \phantom{0}0.4\% \\
+\hline
+\text{total per token} &\approx 800{,}815{,}296 \approx 8.0\times 10^8 &&\;\; 100\%
+\end{aligned}
+$$
+
+- The first three lines are exact matmul counts (2 FLOPs per multiply-add, backward = 2× forward). The elementwise line is a rough estimate (a handful of FLOPs per element over $\sim 85C$ elements per layer plus $\sim 5V$ for the loss, ×3 for forward+backward); it is too small to matter.
+- The attention-score line grows with $T$; the other matmul lines do not. At $T = 2048$ it doubles to ≈ 13% of the total.
+- The LM head line is big here only because GPT-2 small's vocabulary is large relative to its width ($V/C \approx 65$). For a 7B model ($C = 4096$, 32 layers, $V = 32{,}000$) the same line is $6CV \approx 7.9\times 10^8$ against $6N \approx 3.9\times 10^{10}$ — about 2%.
+- MFU is conventionally reported with 6N in the numerator, so on GPT-2 small it *understates* the true arithmetic by about a third. That is fine as long as you compare MFUs computed the same way.
 
 ## 4. Throughput and MFU
 
@@ -153,11 +173,34 @@ $$
 
 So ~2 GB is spoken for before a single activation. Now activations, for a batch $B = 8$, context $T = 1024$: the logits tensor alone is $B\cdot T\cdot V = 8\cdot 1024\cdot 50257 \approx 4.1\times 10^8$ floats $\approx 1.65$ GB in fp32 — nearly as much as all the fixed state combined, and that is just one tensor. Add the per-layer residual/attention activations (each $(B,T,C)$ tensor is ~25 MB, and there are dozens across 12 layers) and activations become the dominant, batch-scaling cost. This is the concrete reason a 124M model does not train in a batch of 8×1024 on a small GPU without help — and the motivation for everything in [Module 8](lessons/module-08/lesson-01.md).
 
+### The full memory picture: GPT-2 small, fp32, B = 8, T = 1024
+
+Everything above, in one column. One $(B,T,C)$ fp32 tensor is $8\cdot 1024\cdot 768\cdot 4 = 25{,}165{,}824$ bytes ≈ 25.2 MB.
+
+$$
+\begin{aligned}
+\text{params } (4P) &= 0.498 \text{ GB} &&\;\; \phantom{0}3.7\% \\
+\text{gradients } (4P) &= 0.498 \text{ GB} &&\;\; \phantom{0}3.7\% \\
+\text{Adam } m, v\ (8P) &= 0.996 \text{ GB} &&\;\; \phantom{0}7.5\% \\
+\text{per-layer saved tensors } (16 \times 25.2\text{ MB} \times 12 \text{ layers}) &= 4.832 \text{ GB} &&\;\; 36.1\% \\
+\text{attention probabilities } (B\cdot H\cdot T^2 \times 4 \text{ bytes} \times 12) &= 4.832 \text{ GB} &&\;\; 36.1\% \\
+\text{embedding output + final LayerNorm } (3 \times 25.2\text{ MB}) &= 0.075 \text{ GB} &&\;\; \phantom{0}0.6\% \\
+\text{logits } (B\cdot T\cdot V \times 4 \text{ bytes}) &= 1.647 \text{ GB} &&\;\; 12.3\% \\
+\hline
+\text{total} &\approx 13.38 \text{ GB} &&\;\; 100\%
+\end{aligned}
+$$
+
+- **The "16" per layer**, in units of one $(B,T,C)$ tensor, is what each block saves for backward: LayerNorm-1 input (1) and output (1), $Q, K, V$ (3), attention output before $W_O$ (1), LayerNorm-2 input (1) and output (1), MLP hidden before GELU (4) and after GELU (4) = 16.
+- **Attention probabilities** are the $T\times T$ softmax matrix per head, $8\cdot 12\cdot 1024^2 \approx 1.0\times 10^8$ floats per layer. It equals the 16-tensor line here only by coincidence ($H\cdot T = 12\cdot 1024 = 16\cdot 768$). This line exists only for a naive attention that materializes the matrix; FlashAttention-style kernels never store it, which removes 36% of this total in one move (Module 8).
+- **Fixed vs. variable:** the first three lines (1.99 GB, 14.9%) do not change with batch or context. The last four (11.39 GB, 85.1%) scale with $B$; the attention line scales with $T^2$, the rest with $T$. Halve $B$ to 4 and the total falls to ≈ 7.7 GB; double $T$ to 2048 and it rises to ≈ 34.4 GB.
+- These activation numbers are an estimate for a straightforward PyTorch implementation; real frameworks save slightly more or less depending on fusion. Measure with `torch.cuda.max_memory_allocated()` for the exact figure.
+
 <div class="callout pt"><p>Two standard savings, previewed: <strong>mixed precision</strong> stores activations (and often a weight copy) in bf16/fp16 at 2 bytes, roughly halving the activation and parameter-copy memory; and <strong>activation checkpointing</strong> discards most activations during forward and recomputes them during backward, trading extra FLOPs for much lower activation memory. Both are Module 8. Neither changes the $4P$ fixed cost, which is attacked instead by optimizer-state sharding (ZeRO/FSDP, Module 9).</p></div>
 
 ## 6. Under the hood: why these estimates are trustworthy
 
-The 6N rule is an *estimate*, deliberately dropping the attention-score FLOPs, the softmax, LayerNorm, and the embedding lookups. It is trusted because in a standard-shaped transformer at moderate context those omitted terms are around 10% of the total or less — the matmuls against weights genuinely dominate. When they stop dominating (very long context, very small models, MoE routing), you switch to a fuller FLOP count; the metrics module's docstring flags exactly this. The point of the estimate is not perfect accuracy but a number you can compute from `cfg` alone, before writing any training code, that is right to within about 10% at ordinary context — enough to budget GPU-hours and choose a model size.
+The 6N rule is an *estimate*, deliberately dropping the attention-score FLOPs, the softmax, LayerNorm, and the embedding lookups. It is trusted because in a standard-shaped transformer at moderate context those omitted terms are around 10% of the total or less once the model is large (for a small model with a big vocabulary, like GPT-2 small, the omitted LM head alone is ~29% — see the full tally in §3) — the matmuls against weights genuinely dominate. When they stop dominating (very long context, very small models, MoE routing), you switch to a fuller FLOP count; the metrics module's docstring flags exactly this. The point of the estimate is not perfect accuracy but a number you can compute from `cfg` alone, before writing any training code, that is right to within about 10% at ordinary context — enough to budget GPU-hours and choose a model size.
 
 The memory buckets are exact for the first three (you can count $P$ and multiply by the dtype size) and estimated for activations (which depend on the implementation's fusion and what it chooses to save). That asymmetry is why optimizer-state and parameter memory are predicted precisely in capacity planning, while activation memory is usually measured empirically with a short profiling run.
 
