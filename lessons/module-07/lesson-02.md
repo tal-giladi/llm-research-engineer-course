@@ -26,6 +26,20 @@ Define, precisely:
 | $W$ | data-parallel workers | independent devices each processing their own micro-batches |
 | $B_{\text{global}}$ | global batch size | total sequences per optimizer step |
 
+### What a "data-parallel worker" is (first look — built in Module 9)
+
+$W$ is the one quantity in this table you have not met yet, so here is enough to read this lesson; the full treatment is [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md).
+
+So far everything ran as **one process driving one device** (one GPU, or the CPU). A **worker** is one such process. With **data parallelism** you launch $W$ of them at once — typically one per GPU, e.g. $W = 8$ on an 8-GPU machine — and each one:
+
+1. holds a **full, identical copy** of the model and optimizer state;
+2. reads a **different** slice of the training data (worker 0 gets different sequences from worker 1, …);
+3. runs the ordinary forward/backward (and its own $G$ accumulation micro-steps) on its slice, producing its own gradient;
+4. joins an **all-reduce**: a collective communication operation in which every worker contributes its gradient tensor and every worker receives back the **average** of all $W$ of them;
+5. calls `optimizer.step()` with that averaged gradient. Because all workers started identical and applied the identical averaged gradient, they are still identical afterwards — no worker ever has to send its weights to another.
+
+Tiny example: $W = 2$ workers, $b = 4$, $G = 2$. Each worker processes $4 \times 2 = 8$ sequences per step; the two together process $16$. After the all-reduce, each worker's gradient is the average over all 16 sequences — exactly what one device would get from a batch of 16 if it had the memory and the time. So $W$ multiplies the batch the same way $G$ does; the difference is that $G$ buys a bigger batch with **more time on one device**, while $W$ buys it with **more devices in parallel**. Module 9 implements the all-reduce, shows why averaging gradients is mathematically the same as one big batch, and covers its communication cost. In this module we always have $W = 1$.
+
 They combine as
 
 $$
@@ -61,7 +75,49 @@ Take $G = 2$ micro-batches. Suppose the per-token losses are $[2, 4]$ in micro-b
 
 The full mean and the $\frac{1}{G}$-weighted sum of micro means agree exactly, because each micro-batch holds the same token count. This is not an approximation — it is an identity, and the from-scratch test `test_grad_accumulation_matches_full_batch` in `code/tests/test_training.py` checks the *gradients* match to $10^{-5}$ on a real tiny GPT.
 
-<div class="callout warn"><p>The identity relies on <strong>equal-size</strong> micro-batches. If the last micro-batch is short (e.g. the tail of an epoch), a plain <code>1/G</code> average slightly mis-weights it — every token no longer carries equal weight. Production loops handle this by weighting each micro-batch by its token count, or simply by dropping the ragged tail. For fixed <code>b</code> (our case) it is exact.</p></div>
+<div class="callout warn"><p>The identity relies on every micro-batch holding the <strong>same number of real target tokens</strong>. Our pretraining <code>get_batch</code> always returns full <code>(b, T)</code> windows, so for us it is exact. When token counts differ, a plain <code>1/G</code> average is wrong — the fix is below.</p></div>
+
+### When micro-batches have different token counts
+
+Two everyday situations break the equal-count assumption:
+
+- **A ragged tail.** If you iterate over a fixed dataset in order, the last micro-batch of an epoch can be short (e.g. 3 sequences instead of $b = 8$).
+- **Padding / ignored targets.** In fine-tuning ([Module 14](lessons/module-14/lesson-01.md)) sequences have different lengths and are padded to a common $T$; padded positions (and often the prompt tokens) get target $-1$, which our `GPT.forward` passes as `ignore_index=-1`, so they contribute no loss. Two micro-batches of the same shape can then contain very different numbers of *real* tokens.
+
+**Worked example.** Micro-batch 1 has 3 real tokens with losses $[2, 4, 6]$; micro-batch 2 has 1 real token with loss $[0]$ (the other positions are padding).
+
+- What we want — the mean over all 4 real tokens: $\dfrac{2+4+6+0}{4} = 3.0$.
+- Plain $1/G$ averaging of micro means: $\mathcal{L}_1 = 12/3 = 4.0$, $\mathcal{L}_2 = 0/1 = 0.0$, and $\tfrac12(4.0 + 0.0) = 2.0$. **Wrong** — the single token in micro-batch 2 got the same total weight as the three tokens in micro-batch 1, so each of its tokens counts 3× as much.
+
+**The fix: sum, then divide by the total token count.** Let $N_g$ be the number of real target tokens in micro-batch $g$ and $N = \sum_g N_g$. Compute each micro-batch's loss as a **sum** $S_g$ over its tokens (not a mean) and backpropagate $S_g / N$:
+
+$$
+\mathcal{L}_{\text{full}} = \frac{1}{N}\sum_{g=1}^{G} S_g, \qquad
+\nabla \mathcal{L}_{\text{full}} = \sum_{g=1}^{G} \nabla\!\left(\frac{S_g}{N}\right).
+$$
+
+Check: $S_1 = 12$, $S_2 = 0$, $N = 4$, so $\tfrac{12}{4} + \tfrac{0}{4} = 3.0$. ✓ When every $N_g$ is equal to $n$, $N = G\,n$ and $S_g/N = (S_g/n)/G = \mathcal{L}_g / G$ — the plain recipe is just the special case.
+
+Because $N$ must be known before the first `backward()`, fetch all $G$ micro-batches first and count:
+
+```python
+import torch.nn.functional as F
+
+batches = [get_batch("train") for _ in range(G)]           # G x ((b, T), (b, T))
+n_total = sum((y != -1).sum().item() for _, y in batches)  # real target tokens N
+
+optimizer.zero_grad()
+for x, y in batches:
+    logits, _ = model(x)                                   # (b, T, V)
+    loss_sum = F.cross_entropy(                            # S_g: SUM over real tokens
+        logits.view(-1, logits.size(-1)), y.view(-1),
+        ignore_index=-1, reduction="sum")
+    (loss_sum / n_total).backward()                        # accumulate S_g / N
+clip_grad_norm_(params, cfg.grad_clip)
+optimizer.step()
+```
+
+The cost is that all $G$ batches of token ids sit in memory at once — only `(b, T)` int64 tensors, tiny next to activations, which still exist for one micro-batch at a time. The alternative for the ragged-tail case is to **drop the short last batch** (PyTorch's `DataLoader(..., drop_last=True)` does exactly that), which is standard in pretraining where one missing batch out of millions does not matter; padding in fine-tuning cannot be dropped, so there the token-weighted version is required. With $W > 1$ workers the same rule applies globally: $N$ must be the token count summed across *all* workers, which takes one extra all-reduce of a single number — covered in [09.1](lessons/module-09/lesson-01.md).
 
 ## 4. Tensor shapes: nothing new, just repeated
 
