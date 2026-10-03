@@ -61,3 +61,7 @@ GitHub → repo Settings → Pages → Source: "Deploy from a branch", branch `m
   `claude/research` / `claude/weekly-YYYY-Www` branches and the next run merges them.
 - Student-facing log: `research/CHANGELOG.md` (sidebar → Reference → Course changelog).
 - F.1/F.2 recorded retroactively: MLPerf RLVR + GRPO fixes = ADD, GVPO = WAIT (review 2026-11-26).
+
+## Practice pages in the tracker (added 2026-10-03)
+- `course.py` now tracks `lessons/module-NN/practice-AA[-BB].md` as ids `NN.PAA[-BB]`: `01.P3-4` (01.3–01.4 practice) and `07.P4` (new 07.4 practice: FLOPs, MFU, memory). Use e.g. `python course.py complete 7.p4`.
+- Practice pages follow the existing course style (`<div>` boxes, docsify links, `<details>`-free solutions section), not the Academy importer rules; the importer may not map `practice-*.md` to an id.

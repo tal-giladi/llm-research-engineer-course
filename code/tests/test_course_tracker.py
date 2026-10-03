@@ -28,6 +28,8 @@ def test_sidebar_parses_every_lesson(course):
     modules, lessons = course.load_lessons()
     assert "00.1" in lessons and "20.1" in lessons and "F.1" in lessons
     assert lessons["00.2"]["path"] == "lessons/module-00/lesson-02.md"
+    assert lessons["01.P3-4"]["path"] == "lessons/module-01/practice-03-04.md"
+    assert lessons["07.P4"]["path"] == "lessons/module-07/practice-04.md"
     assert all((ROOT / l["path"]).exists() for l in lessons.values())
     assert sum(len(m["lessons"]) for m in modules) == len(lessons)
 
@@ -37,6 +39,8 @@ def test_id_normalization(course):
     assert course.normalize_id("5.2", lessons) == "05.2"
     assert course.normalize_id("20", lessons) == "20.1"
     assert course.normalize_id("f1", lessons) == "F.1"
+    assert course.normalize_id("1.p3-4", lessons) == "01.P3-4"
+    assert course.normalize_id("7.p4", lessons) == "07.P4"
     with pytest.raises(SystemExit):
         course.normalize_id("99.9", lessons)
 

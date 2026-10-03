@@ -51,6 +51,10 @@ def lesson_id(path: str) -> str | None:
     m = re.search(r"lessons/module-(\d+)/lesson-(\d+)\.md$", path)
     if m:
         return f"{int(m.group(1)):02d}.{int(m.group(2))}"
+    m = re.search(r"lessons/module-(\d+)/practice-(\d+)(?:-(\d+))?\.md$", path)
+    if m:
+        span = f"{int(m.group(2))}" + (f"-{int(m.group(3))}" if m.group(3) else "")
+        return f"{int(m.group(1)):02d}.P{span}"
     m = re.search(r"lessons/frontier/update-(\d+)\.md$", path)
     if m:
         return f"F.{int(m.group(1))}"
@@ -116,6 +120,9 @@ def normalize_id(raw: str, lessons: dict) -> str:
     m = re.fullmatch(r"(\d{1,2})(?:\.(\d{1,2}))?", s)
     if m:
         s = f"{int(m.group(1)):02d}.{int(m.group(2) or 1)}"
+    m = re.fullmatch(r"(\d{1,2})\.P(\d{1,2})(?:-(\d{1,2}))?", s)
+    if m:
+        s = f"{int(m.group(1)):02d}.P{int(m.group(2))}" + (f"-{int(m.group(3))}" if m.group(3) else "")
     m = re.fullmatch(r"F\.?(\d{1,2})", s)
     if m:
         s = f"F.{int(m.group(1))}"

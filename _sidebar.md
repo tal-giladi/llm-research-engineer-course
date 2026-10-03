@@ -41,6 +41,7 @@
   - [07.2 · Micro-batch, global batch, grad accumulation](lessons/module-07/lesson-02.md)
   - [07.3 · Checkpointing, resuming, seeds, reproducibility](lessons/module-07/lesson-03.md)
   - [07.4 · Throughput, FLOPs, MFU, memory accounting](lessons/module-07/lesson-04.md)
+  - [07.4 · Practice set](lessons/module-07/practice-04.md)
 - **8 · GPU performance & memory**
   - [08.1 · GPU architecture & memory hierarchy](lessons/module-08/lesson-01.md)
   - [08.2 · Arithmetic intensity, roofline, fusion](lessons/module-08/lesson-02.md)
