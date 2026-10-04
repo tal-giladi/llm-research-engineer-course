@@ -383,3 +383,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** possible addendum to the interpretability module's circuit-discovery coverage, flagging intervention-faithfulness recovery gaps as a caveat when teaching/using EAP/ACDC-style methods.
 - **Confidence:** medium (controlled multi-method empirical study; single paper, unreplicated)
 - **Recommendation:** monitor — a methodological result worth the weekly review's attention if the course teaches or plans to teach automated circuit discovery; revisit if independently reproduced.
+
+### C-20261004-01 · On-Policy or Off-Policy Learning? A Systematic Study of Distillation Dynamics
+
+- **Class:** B
+- **Date discovered:** 2026-10-04
+- **Date published:** 2026-09-28
+- **Source:** https://arxiv.org/abs/2609.35259 "On-Policy or Off-Policy Learning? A Systematic Study of Distillation Dynamics" (verified: resolves, abstract matches)
+- **Organization/researchers:** Julianna Piskorz, Antonin Berthon, Mihaela van der Schaar — affiliation not stated on the abstract page (van der Schaar is a Cambridge professor; not confirmed as this paper's institutional affiliation from the primary source itself, so treated as unconfirmed).
+- **Category:** training | RL/post-training | efficiency
+- **What changed:** A controlled strong-to-weak distillation study that independently varies rollout policy (on- vs off-policy), token-level KL direction (forward vs reverse), and learning rate across the Llama3 and Qwen2.5 model families on scientific/medical/arithmetic reasoning tasks, to isolate which factor actually drives distillation outcomes — previous comparisons of SFT vs. RL-style distillation conflate these factors.
+- **Technical summary:** Finds rollout policy is *not* the central factor people assume: forward KL is robust to rollout policy (stable regardless of on/off-policy rollouts), while reverse KL is far more rollout-sensitive and favors student-generated (on-policy) rollouts. Learning rate, not rollout policy, governs forgetting and update sparsity. On-policy data does help generalization on harder Countdown-arithmetic variants under both KL directions, but that edge does not reliably survive subsequent RLVR. Robust to removing gradient clipping, to sampled-KL estimators, and to longer reasoning chains.
+- **Why it might matter:** Directly actionable for anyone designing a distillation/post-training pipeline (e.g. distilling reasoning traces into a smaller model, as taught in `lessons/module-17/lesson-03.md`'s R1-distillation discussion): it reframes the design question from "on-policy vs off-policy" to "which KL direction, and what learning rate," with a mechanistic (KL-gradient) explanation.
+- **Evidence of adoption:** none — single paper, author-run experiments only, no third-party reproduction.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.35259
+- **Code:** not confirmed
+- **Relationship to existing course material:** `lookup "distillation on-policy off-policy KL"` found no match. `lessons/module-17/lesson-03.md` (DeepSeek-R1 case study) mentions distilling R1's traces into dense models but does not discuss on/off-policy or KL-direction tradeoffs; this is new, complementary material.
+- **Potential course lesson:** possible addendum to `lessons/module-17/lesson-03.md` (R1 distillation stage) or a new short distillation-methodology note, contrasting forward/reverse KL and rollout policy using this paper's controlled ablation as the worked example.
+- **Confidence:** medium (broad, controlled, multi-model-family ablation; single paper, unreplicated)
+- **Recommendation:** monitor — methodologically solid single-paper result; revisit at weekly review, watch for independent reproduction or use in an open distillation/RLVR stack (TRL, verl, OpenRLHF).
+
+### C-20261004-02 · Beyond Memory: Harnessing Long-Horizon Agents with Explicit Belief States (PoS)
+
+- **Class:** B
+- **Date discovered:** 2026-10-04
+- **Date published:** 2026-10-01
+- **Source:** https://arxiv.org/abs/2610.01415 "Beyond Memory: Harnessing Long-Horizon Agents with Explicit Belief States" (verified: resolves, abstract matches)
+- **Organization/researchers:** Yu Luo, Jiamin Jiang, Yimin Zuo, Xidao Wen, Rongchen Gao, Yongqian Sun, Shenglin Zhang, Guiyang Liu, Cheng Zhang, Fang Situ, Qi Zhou, Dan Pei — affiliation not stated on the abstract page (a third-party aggregator tagged it "Alibaba"-affiliated; not confirmed from the primary source, so treated as unconfirmed).
+- **Category:** agents/tools | memory/retrieval
+- **What changed:** Introduces PoS (Progression of States), an inference-time-only (no training) framework that has an LLM agent build and continually update an explicit "belief state" — a combination of current-world-state estimate plus unresolved task requirements — instead of just appending to a raw interaction-history/context buffer. It names and diagnoses a specific failure mode, "Belief Trapping" (agent keeps acting without making real progress: stagnation, cycles, or drift), and composes targeted recovery constraints when it is detected.
+- **Technical summary:** Evaluated across 4 benchmarks (task execution + evidence-seeking diagnosis) and 3 backbone LLMs (12 backbone-benchmark combinations); PoS reportedly achieves the best overall performance in all 12 combinations, with relative gains over the strongest same-backbone baseline up to +22.68% (ALFWorld) and +37.89% (RCA-100 joint accuracy). Ablations attribute the gains to the consistency-validation and recovery-constraint steps specifically; scaling experiments show resilience as context grows.
+- **Why it might matter:** The course currently covers agent loops (`lessons/module-19/lesson-01.md`, ReAct → mini SWE-agent) and tool use (module 18) but has no dedicated long-horizon-memory treatment; this gives a concrete, implementable (prompt/inference-time, not training) technique and a named failure mode (Belief Trapping) that's a good complement to the ReAct-style loop already taught.
+- **Evidence of adoption:** none — single paper, author-run evaluation only.
+- **Major organizations using it:** none confirmed (see affiliation caveat above).
+- **Open-source implementation:** not confirmed on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.01415
+- **Code:** not confirmed
+- **Relationship to existing course material:** `lookup "belief state long horizon agent memory"` found no match. New topic; complements `lessons/module-19/lesson-01.md`'s agent loop.
+- **Potential course lesson:** possible addendum to module 19 (agents) on long-horizon context/memory management, using Belief Trapping as the diagnosed failure mode and PoS's belief-state update loop as the worked mechanism — inference-time only, so cheap to implement from scratch for an exercise.
+- **Confidence:** medium (multi-benchmark, multi-backbone single-paper result; no independent replication; author affiliation unconfirmed)
+- **Recommendation:** monitor — strong empirical breadth for a single paper and directly extends existing agent-loop material; revisit at weekly review.
+
+### C-20261004-03 · GraphForge: Training Working Agents with Graph-Anchored Workspace Synthesis
+
+- **Class:** B
+- **Date discovered:** 2026-10-04
+- **Date published:** 2026-09-30
+- **Source:** https://arxiv.org/abs/2609.38923 "GraphForge: Training Working Agents with Graph-Anchored Workspace Synthesis" (verified: resolves, abstract matches)
+- **Organization/researchers:** Qisheng Su, Hanchen Wang, Guanru Zhu, Huicheng Jiang, Qiuyinzhe Zhang, Kou Shi, Zhen Fang, Ziao Zhang, Qingnan Ren, Zehui Chen, Tao Gui, Feng Zhao — affiliation not stated on the abstract page.
+- **Category:** agents/tools | data
+- **What changed:** A training-data-synthesis method for fine-tuning "working agents" (agents that read real files, coordinate tools, and produce deliverables) that grounds both the generated task statement and its grading rubric in an "evidence graph" built over an assembled workspace of real files, rather than synthesizing files/tasks from scratch (which tends to produce unrealistic, ungroundable tasks). Rollout-and-revision filtering precedes data collection.
+- **Technical summary:** Fine-tuning on ~2,169 GraphForge-generated trajectories, plus rejection sampling, reportedly improves performance across three benchmarks, including raising a GDPVal-style score to 144 (scale/baseline not independently confirmed from the abstract alone). Data and models released on Hugging Face (`huggingface.co/collections/groundhogLLM/graphforge` — not independently verified to load).
+- **Why it might matter:** Directly relevant to the course's data-curation and agent-training material: a concrete recipe for generating verifiable, grounded agent-training tasks (task + rubric both derived from the same evidence graph) rather than hand-written or ungrounded synthetic tasks, which is a recurring practical problem in training tool-using agents.
+- **Evidence of adoption:** none — single paper, author-run evaluation only.
+- **Major organizations using it:** none confirmed.
+- **Open-source implementation:** data/models claimed at `huggingface.co/collections/groundhogLLM/graphforge` (link not independently verified to load in this run).
+- **Paper:** https://arxiv.org/abs/2609.38923
+- **Code:** not confirmed
+- **Relationship to existing course material:** `lookup "agent training data synthesis workspace graph"` found no match. New topic; complements module 19 (agents) and the course's general data-curation coverage.
+- **Potential course lesson:** possible addendum to module 19 on synthesizing verifiable agent-training data (task+rubric grounded in a file/evidence graph), as a concrete alternative to hand-written agent benchmarks.
+- **Confidence:** low-medium (single paper; key benchmark number not independently interpretable from the abstract; HF data link unverified)
+- **Recommendation:** monitor — plausible and relevant technique, but verify the HF data/model release actually exists and check the GDPVal-score claim before any weekly-review action.
