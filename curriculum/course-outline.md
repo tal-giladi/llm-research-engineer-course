@@ -71,6 +71,7 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 - After **14 (SFT)**: FLAN, Self-Instruct.
 - After **15 (RLHF/DPO)**: InstructGPT, Anthropic HH-RLHF, Constitutional AI, RLAIF, DPO.
 - After **16–17 (reasoning)**: Chain-of-Thought, STaR, Let's Verify Step by Step, DeepSeekMath, DeepSeek-R1.
+- After **17.4 (logit & on-policy distillation, added 2026-10-04)**: Distilling the Knowledge in a Neural Network, Sequence-Level KD, GKD (on-policy distillation), MiniLLM, Qwen3 strong-to-weak distillation. Lesson [17.4](lessons/module-17/lesson-04.md) depends on 14.2, 15.2, 16.1 and 17.3; code `reasoning/distill.py`.
 - After **18–19 (tools/agents)**: Toolformer, Gorilla, ReAct, SWE-agent.
 
 ## What "done" means

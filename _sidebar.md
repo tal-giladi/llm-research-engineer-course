@@ -86,6 +86,7 @@
   - [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md)
   - [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md)
   - [17.3 · DeepSeek-R1 case study](lessons/module-17/lesson-03.md)
+  - [17.4 · Logit & on-policy distillation](lessons/module-17/lesson-04.md)
 - **18 · Tool use**
   - [18.1 · Tool schemas & function calling](lessons/module-18/lesson-01.md)
   - [18.2 · The observation/action loop](lessons/module-18/lesson-02.md)

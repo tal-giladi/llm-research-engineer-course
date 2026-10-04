@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W40 (2026-10-04)
+
+- Added **[17.4 · Logit distillation: forward vs reverse KL & on-policy distillation](lessons/module-17/lesson-04.md)**: matching the teacher's full next-token distribution (forward KL covers modes, reverse KL seeks one, generalized JSD in between) and on-policy distillation, where the student generates and the teacher grades every token. With `llmre/reasoning/distill.py` and `tests/test_distill.py`. Extends 17.3's sequence-level distillation; nothing replaced. [Review](research/weekly/2026-W40.md).
+
 ## 2026-W39 (2026-09-27)
 
 - Added **[12.5 · Linear attention, Gated DeltaNet & hybrid stacks](lessons/module-12/lesson-05.md)**: linear attention as an RNN, the (gated) delta rule, and the 3:1 hybrid layouts of Qwen3-Next and Kimi Linear, with `llmre/attention/gated_deltanet.py` and `tests/test_gated_deltanet.py`. Extends 12.3 (GQA); nothing replaced. [Review](research/weekly/2026-W39.md).

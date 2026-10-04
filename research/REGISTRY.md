@@ -7,8 +7,25 @@ Every topic the weekly review has decided on, so nothing is reconsidered without
 |---|---|---|---|---|
 | ADD | [GRPO stability fixes: Dr. GRPO and DAPO](research/accepted/grpo-stability-fixes.md) | n/a | lessons/frontier/update-02.md (comparison table and discussion; no separate code) | 2026-09-26 |
 | ADD | [Hybrid linear attention: Gated DeltaNet + full attention (3:1)](research/accepted/hybrid-linear-attention-gated-deltanet.md) | n/a | lessons/module-12/lesson-05.md (new lesson 12.5); code/src/llmre/attention/gated_deltanet.py; code/tests/test_gated_deltanet.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-09-27 |
+| ADD | [Logit distillation (forward vs reverse KL) and on-policy distillation](research/accepted/on-policy-distillation.md) | n/a | lessons/module-17/lesson-04.md (new lesson 17.4); code/src/llmre/reasoning/distill.py; code/tests/test_distill.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-10-04 |
 | ADD | [MLPerf Training post-training benchmark (agentic RLVR)](research/accepted/mlperf-post-training-rlvr.md) | n/a | lessons/frontier/update-01.md; code/src/llmre/evaluation/pass_at_k.py; code/tests/test_frontier_updates.py | 2026-09-26 |
+| WAIT | [Blackwell-era attention kernel engineering (TLX Jagged Flash Attention, FlashAttention-4 techniques)](research/deferred/tlx-blackwell-attention-kernels.md) | 2026-12-06 | none | 2026-10-04 |
+| WAIT | [Context and memory compaction for long-horizon agents](research/deferred/agent-context-compaction.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Convergence bounds for asynchronous GRPO under stale rollouts (GMC-GRPO)](research/deferred/async-grpo-staleness-convergence.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Delta-Matching for native FP8 attention training](research/deferred/native-fp8-training-delta-matching.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [GraphForge: evidence-graph-anchored synthesis of agent training tasks](research/deferred/agent-training-data-synthesis-graphforge.md) | 2026-12-06 | none | 2026-10-04 |
 | WAIT | [GVPO: Group Variance Policy Optimization](research/deferred/gvpo.md) | 2026-11-26 | taught only as directional design-space reading in lessons/frontier/update-02.md (code/src/llmre/rl/gvpo.py); not presented as standard practice | 2026-09-26 |
+| WAIT | [Language drift in chain-of-thought under RLVR](research/deferred/rlvr-cot-language-drift.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [On-policy distillation variants: co-evolving teacher (DCE/SRCL) and same-family scaling laws](research/deferred/on-policy-distillation-variants.md) | 2026-11-29 | none (the base technique is taught in lesson 17.4) | 2026-10-04 |
+| WAIT | [PISA: hierarchical block-sparse attention with O(N log N) scoring](research/deferred/block-sparse-attention-pisa.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Quantizing the recurrent state of linear-attention / Gated DeltaNet layers (LeapQuant, STEPQuant)](research/deferred/linear-attention-state-quantization.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Self-play pretraining with zero natural data](research/deferred/self-play-pretraining-zero-data.md) | 2026-12-06 | none | 2026-10-04 |
+| WAIT | [Sharpening tax: RL post-training trades pass@k coverage for pass@1](research/deferred/rl-sharpening-tax.md) | 2026-11-29 | none | 2026-10-04 |
 | WAIT | [Superposition Linearity Hypothesis (two continuations from one forward pass)](research/deferred/superposition-linearity-hypothesis.md) | 2026-11-22 | none | 2026-09-27 |
+| WAIT | [ToolSearcher: RL-trained tool selection over large tool catalogs](research/deferred/tool-selection-rl-toolsearcher.md) | 2026-12-06 | none | 2026-10-04 |
 | WAIT | [Training-free sparse-attention decoding (FFD, "Faster Than Flash")](research/deferred/sparse-attention-decoding-ffd.md) | 2026-11-22 | none | 2026-09-27 |
 | REJECT | [Encoded but not decoded: probe vs LM-head vs behavior gap (syntax)](research/rejected/probe-behavior-gap-syntax.md) | on new evidence | none | 2026-09-27 |
+| REJECT | [H2S: highlight-then-summarize evidence compression for long-context QA](research/rejected/evidence-compression-h2s.md) | on new evidence | none | 2026-10-04 |
+| REJECT | [Objective-level recovery gaps in circuit discovery](research/rejected/circuit-discovery-objective-gap.md) | on new evidence | none | 2026-10-04 |
+| REJECT | [Periodic weak spots from chunked KV-cache compression](research/rejected/chunked-kv-compression-phase-sensitivity.md) | on new evidence | none | 2026-10-04 |
+| REJECT | [SinkProbe: published attention-sink fixes fail to reproduce at small scale](research/rejected/attention-sink-reproduction-sinkprobe.md) | on new evidence | none | 2026-10-04 |
