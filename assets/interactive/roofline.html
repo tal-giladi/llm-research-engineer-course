@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roofline explorer</title>
+<style>
+:root{--bg:#ffffff;--panel:#f7f9fc;--text:#111827;--muted:#4b5563;--line:#d1d5db;--mem:#e7f1fb;--memd:#1d4f91;--cmp:#fdf0e2;--cmpd:#9a4a06;--a:#2563eb;--b:#dc2626;--c:#16a34a;--focus:#f59e0b}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:auto;padding:16px}
+.eyebrow{color:var(--memd);text-transform:uppercase;letter-spacing:.08em;font-size:12px}
+h1{font-size:22px;margin:4px 0 6px}p{margin:6px 0;color:var(--muted)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button,select{font:inherit;color:var(--text);background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--memd);color:#fff;border-color:var(--memd)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;margin-top:12px}
+.controls label{display:flex;flex-direction:column;gap:3px;font-size:14px}
+.controls .val{font-family:ui-monospace,Consolas,monospace;color:var(--memd)}
+input[type=range]{width:100%}
+.check{flex-direction:row!important;align-items:center;gap:8px!important}
+svg{width:100%;height:auto;display:block}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.card{background:#fff;border:1px solid var(--line);border-left:5px solid var(--color);border-radius:8px;padding:10px 12px}
+.card h3{margin:0 0 6px;font-size:15px;color:var(--color)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:13.5px}
+.card dt{color:var(--muted)}.card dd{margin:0;font-family:ui-monospace,Consolas,monospace}
+.verdict{font-weight:600;margin-top:6px;font-size:14px}
+.mem{color:var(--memd)}.cmp{color:var(--cmpd)}
+.note{font-size:13px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Educational model · roofline</div>
+<h1>Where does this kernel sit on the roofline?</h1>
+<p>Pick a GPU and a kernel, move the sliders, and watch the dot. Left of the dashed ridge the kernel is memory-bound (only fewer bytes help); right of it, compute-bound (only fewer or faster FLOPs help).</p>
+
+<section>
+  <div class="controls" style="margin-top:0">
+    <label>GPU
+      <select id="gpu">
+        <option value="a100">A100 SXM: 312 TFLOP/s bf16, 2.04 TB/s</option>
+        <option value="h100">H100 SXM: 989 TFLOP/s bf16, 3.35 TB/s</option>
+      </select>
+    </label>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Kernel" style="margin-top:12px">
+    <button role="tab" id="tab-matmul" aria-selected="true">Matmul</button>
+    <button role="tab" id="tab-elem" aria-selected="false">Elementwise chain + fusion</button>
+    <button role="tab" id="tab-attn" aria-selected="false">Attention vs FlashAttention</button>
+  </div>
+  <div id="ctl-matmul" class="controls">
+    <label>Square size n <span class="val" id="n-out"></span><input id="n" type="range" min="4" max="14" step="0.25" value="10" aria-describedby="n-out"></label>
+    <label>Dtype <select id="mm-dtype"><option value="4">fp32 (4 bytes)</option><option value="2">bf16 (2 bytes)</option></select></label>
+  </div>
+  <div id="ctl-elem" class="controls" hidden>
+    <label>Ops in the chain <span class="val" id="k-out"></span><input id="k" type="range" min="1" max="10" step="1" value="3"></label>
+    <label>FLOPs per element per op <span class="val" id="f-out"></span><input id="f" type="range" min="1" max="10" step="1" value="1"></label>
+    <label>Dtype <select id="el-dtype"><option value="2">bf16 (2 bytes)</option><option value="4">fp32 (4 bytes)</option></select></label>
+    <label class="check"><input id="fused" type="checkbox" checked> Show the fused kernel</label>
+  </div>
+  <div id="ctl-attn" class="controls" hidden>
+    <label>Sequence length T <span class="val" id="t-out"></span><input id="t" type="range" min="9" max="17" step="1" value="12"></label>
+    <label>Head dim d <select id="d"><option>64</option><option>128</option></select></label>
+    <label>Flash query-block rows B <select id="br"><option>64</option><option selected>128</option></select></label>
+  </div>
+</section>
+
+<section aria-label="Roofline plot">
+  <svg id="plot" viewBox="0 0 760 420" role="img" aria-labelledby="plot-desc"><desc id="plot-desc">Log-log roofline plot of attainable FLOP/s against arithmetic intensity with the current kernel marked.</desc></svg>
+</section>
+
+<section aria-live="polite"><div class="readout" id="readout"></div></section>
+
+<p class="note">Model: time ≈ max(FLOPs ÷ peak, bytes ÷ bandwidth). Bytes count only HBM traffic, each tensor read or written once per kernel; real kernels add launch overhead, caches and imperfect overlap, so measured numbers land below the roof. Attention is one head, fp16, FLOPs ≈ 4·T²·d (the two matmuls; the softmax adds a few FLOPs per score).</p>
+</main>
+<script>
+'use strict';
+(() => {
+  const GPUS = {a100:{P:312e12,B:2.039e12,name:'A100'}, h100:{P:989e12,B:3.35e12,name:'H100'}};
+  const $ = id => document.getElementById(id);
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const W = 760, H = 420, L = 70, R = 20, T0 = 20, Bm = 50;
+  const X0 = -2, X1 = 4, Y0 = 9, Y1 = 15.3;
+  const sx = ai => L + (Math.log10(ai) - X0) / (X1 - X0) * (W - L - R);
+  const sy = f => T0 + (Y1 - Math.log10(f)) / (Y1 - Y0) * (H - T0 - Bm);
+  let mode = 'matmul';
+
+  const si = (v, unit) => {
+    const p = [[1e15,'P'],[1e12,'T'],[1e9,'G'],[1e6,'M'],[1e3,'k']].find(([s]) => Math.abs(v) >= s);
+    return p ? (v / p[0]).toPrecision(3) + ' ' + p[1] + unit : v.toPrecision(3) + ' ' + unit;
+  };
+  const time = s => s >= 1e-3 ? (s * 1e3).toPrecision(3) + ' ms' : (s * 1e6).toPrecision(3) + ' µs';
+
+  function kernels() {
+    if (mode === 'matmul') {
+      const n = Math.round(2 ** Number($('n').value)), b = Number($('mm-dtype').value);
+      $('n-out').textContent = n;
+      return [{name:`matmul ${n}×${n}`, flops:2*n**3, bytes:3*n*n*b, color:'var(--c)'}];
+    }
+    if (mode === 'elem') {
+      const k = Number($('k').value), f = Number($('f').value), b = Number($('el-dtype').value), M = 2**24;
+      $('k-out').textContent = k; $('f-out').textContent = f;
+      const out = [{name:`unfused: ${k} kernel${k>1?'s':''}`, flops:k*f*M, bytes:k*2*b*M, color:'var(--b)'}];
+      if ($('fused').checked) out.push({name:'fused: 1 kernel', flops:k*f*M, bytes:2*b*M, color:'var(--c)'});
+      return out;
+    }
+    const Tn = 2 ** Number($('t').value), d = Number($('d').value), br = Number($('br').value), b = 2;
+    $('t-out').textContent = Tn.toLocaleString('en-US');
+    const flops = 4 * Tn * Tn * d;
+    return [
+      {name:'standard (S, P in HBM)', flops, bytes:4*Tn*Tn*b + 4*Tn*d*b, color:'var(--b)', held:`${si(Tn*Tn*b,'B')} per T×T matrix, per head`},
+      {name:'FlashAttention (fused, tiled)', flops, bytes:2*Tn*d*b + (Tn/br)*2*Tn*d*b, color:'var(--c)', held:'none (only m and ℓ per row)'}
+    ];
+  }
+
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(svgNS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function draw(gpu, ks) {
+    const svg = $('plot');
+    [...svg.querySelectorAll(':not(desc)')].forEach(n => n.remove());
+    const ridge = gpu.P / gpu.B, xr = sx(ridge), yp = sy(gpu.P);
+    svg.append(el('rect', {x:L, y:T0, width:xr-L, height:H-Bm-T0, fill:'var(--mem)'}));
+    svg.append(el('rect', {x:xr, y:T0, width:W-R-xr, height:H-Bm-T0, fill:'var(--cmp)'}));
+    for (let e = X0; e <= X1; e++) {
+      svg.append(el('line', {x1:sx(10**e), x2:sx(10**e), y1:H-Bm, y2:H-Bm+5, stroke:'#6b7280'}));
+      svg.append(el('text', {x:sx(10**e), y:H-Bm+20, 'text-anchor':'middle', 'font-size':12, fill:'#374151'}, e === 0 ? '1' : '10^' + e));
+    }
+    for (let e = Y0; e <= 15; e++) {
+      svg.append(el('line', {x1:L-5, x2:L, y1:sy(10**e), y2:sy(10**e), stroke:'#6b7280'}));
+      svg.append(el('text', {x:L-8, y:sy(10**e)+4, 'text-anchor':'end', 'font-size':12, fill:'#374151'}, si(10**e, 'F/s')));
+    }
+    svg.append(el('line', {x1:L, x2:L, y1:T0, y2:H-Bm, stroke:'#6b7280'}));
+    svg.append(el('line', {x1:L, x2:W-R, y1:H-Bm, y2:H-Bm, stroke:'#6b7280'}));
+    svg.append(el('text', {x:(L+W-R)/2, y:H-10, 'text-anchor':'middle', 'font-size':13, fill:'#111827'}, 'arithmetic intensity (FLOPs per HBM byte, log scale)'));
+    const a0 = 10**X0, yA0 = sy(gpu.B*a0);
+    svg.append(el('path', {d:`M${sx(a0)},${yA0} L${xr},${yp} L${W-R},${yp}`, fill:'none', stroke:'#1f2937', 'stroke-width':3}));
+    svg.append(el('line', {x1:xr, x2:xr, y1:T0, y2:H-Bm, stroke:'#6b7280', 'stroke-dasharray':'5 4'}));
+    svg.append(el('text', {x:xr+6, y:H-Bm-8, 'font-size':12, fill:'#374151'}, `ridge ≈ ${ridge.toFixed(0)} FLOPs/byte`));
+    svg.append(el('text', {x:W-R-6, y:yp-8, 'text-anchor':'end', 'font-size':12, fill:'#111827'}, `peak ${si(gpu.P,'FLOP/s')}`));
+    svg.append(el('text', {x:L+10, y:T0+20, 'font-size':13, 'font-weight':600, fill:'var(--memd)'}, 'MEMORY-BOUND'));
+    svg.append(el('text', {x:W-R-10, y:T0+90, 'text-anchor':'end', 'font-size':13, 'font-weight':600, fill:'var(--cmpd)'}, 'COMPUTE-BOUND'));
+    ks.forEach((k, i) => {
+      const ai = k.flops / k.bytes, att = Math.min(gpu.P, gpu.B * ai), cx = sx(Math.min(Math.max(ai, a0), 10**X1)), cy = sy(att);
+      svg.append(el('circle', {cx, cy, r:8, fill:k.color, stroke:'#fff', 'stroke-width':2}));
+      // first dot: label below-right of the slope; second dot: above-left, so the two never collide
+      const right = i === 0 ? cx < W - 230 : cx < 260;
+      svg.append(el('text', {x:cx + (right ? 12 : -12), y:cy + (i === 0 ? 24 : -14), 'text-anchor':right ? 'start' : 'end', 'font-size':13, 'font-weight':600, fill:k.color}, k.name));
+    });
+    if (ks.length === 2) {
+      const a = ks.map(k => k.flops / k.bytes);
+      if (Math.abs(Math.log10(a[1] / a[0])) > 0.05) {
+        const x1 = sx(a[0]), x2 = sx(Math.min(a[1], 10**X1)), y1 = sy(Math.min(gpu.P, gpu.B*a[0])), y2 = sy(Math.min(gpu.P, gpu.B*a[1]));
+        svg.append(el('path', {d:`M${x1},${y1+14} L${x2},${y2+14}`, stroke:'#374151', 'stroke-width':1.5, 'stroke-dasharray':'3 3', fill:'none'}));
+      }
+    }
+  }
+
+  function render() {
+    const gpu = GPUS[$('gpu').value], ks = kernels();
+    draw(gpu, ks);
+    $('readout').innerHTML = ks.map(k => {
+      const ai = k.flops / k.bytes, att = Math.min(gpu.P, gpu.B * ai), tc = k.flops / gpu.P, tm = k.bytes / gpu.B;
+      const mem = tm > tc;
+      return `<div class="card" style="--color:${k.color}"><h3>${k.name}</h3><dl>
+        <dt>FLOPs</dt><dd>${si(k.flops,'FLOP')}</dd>
+        <dt>HBM bytes</dt><dd>${si(k.bytes,'B')}</dd>
+        <dt>AI</dt><dd>${ai < 10 ? ai.toPrecision(2) : ai.toFixed(0)} FLOPs/byte</dd>
+        <dt>attainable</dt><dd>${si(att,'FLOP/s')} (${(100*att/gpu.P).toPrecision(2)}% of peak)</dd>
+        <dt>time</dt><dd>${time(Math.max(tc, tm))} (compute ${time(tc)}, memory ${time(tm)})</dd>${k.held ? `<dt>score matrix</dt><dd>${k.held}</dd>` : ''}</dl>
+        <div class="verdict ${mem?'mem':'cmp'}">${mem ? 'Memory-bound: cut bytes (fuse, smaller dtype, reuse on-chip).' : 'Compute-bound: cut or speed up FLOPs; more bandwidth will not help.'}</div></div>`;
+    }).join('') + (ks.length === 2 ? `<p>Same FLOPs, ${(ks[0].bytes / ks[1].bytes).toPrecision(2)}× fewer HBM bytes, so ${(Math.max(ks[0].flops/gpu.P, ks[0].bytes/gpu.B) / Math.max(ks[1].flops/gpu.P, ks[1].bytes/gpu.B)).toPrecision(2)}× faster in this model.</p>` : '');
+  }
+
+  const tabs = ['matmul', 'elem', 'attn'];
+  function select(m) {
+    mode = m;
+    tabs.forEach(t => { $('tab-' + t).setAttribute('aria-selected', String(t === m)); $('ctl-' + t).hidden = t !== m; });
+    render();
+  }
+  tabs.forEach((t, i) => {
+    $('tab-' + t).addEventListener('click', () => select(t));
+    $('tab-' + t).addEventListener('keydown', e => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      select(next); $('tab-' + next).focus();
+    });
+  });
+  document.querySelectorAll('input,select').forEach(e => e.addEventListener('input', render));
+  try { const m = new URLSearchParams(location.search).get('mode'); if (tabs.includes(m)) mode = m; } catch (e) {}
+  select(mode);
+})();
+</script></body></html>

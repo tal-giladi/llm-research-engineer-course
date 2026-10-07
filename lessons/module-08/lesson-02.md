@@ -106,6 +106,16 @@ The ridge point is the dividing line:
 - Elementwise add, AI ≈ 0.083: far left of the ridge, deep in memory-bound territory. Attainable FLOP/s $= B \cdot \text{AI} = 2\times10^{12} \cdot 0.083 \approx 1.7 \times 10^{11}$ — about 0.05% of the 312 TFLOP/s peak. The GPU's arithmetic is almost entirely idle; it is a bandwidth machine here.
 - Matmul $n=1024$, AI ≈ 171: just right of the ridge, compute-bound. Attainable FLOP/s $\approx P_{\max}$ — it can actually approach peak. This is where the GPU earns its keep.
 
+Here is the picture, with a few more kernels from this lesson placed on it. Every dot sits *on* the roof at its own AI: that is the best the kernel can possibly do. Notice how the dot for a matmul walks up the slope as $n$ grows ($n/6$: 64 → 10.7, 1024 → 171, 4096 → 683) and stops climbing once it crosses the ridge, while the elementwise ops and LayerNorm sit far down the slope no matter how big the tensor is.
+
+![Roofline for an A100 on log-log axes: a rising diagonal (bandwidth times arithmetic intensity) meets a flat ceiling at 312 TFLOP/s at the ridge, about 153 FLOPs per byte. Elementwise add sits at 0.083, the unfused bias plus GELU plus dropout chain at 0.25, the fused version at 0.75, LayerNorm at 2 and a 64 by 64 matmul at 10.7, all on the memory-bound slope; matmuls of size 1024 and 4096 sit on the flat compute-bound ceiling](../../assets/img/roofline-a100.svg)
+
+(The bias+GELU+dropout dots assume about one FLOP per element per op in bf16; section 6 explains why fusing them moves the dot 3× to the right.)
+
+Try it yourself: change $n$ and the dtype and watch where the matmul crosses the ridge, then switch the GPU to an H100 and see the ridge move right (its peak FLOP/s grew faster than its bandwidth, so the same kernel can become *more* memory-bound on newer hardware).
+
+<iframe src="assets/interactive/roofline.html?mode=matmul" title="Roofline explorer" style="width:100%;height:1150px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,m=f.contentDocument.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);f.contentDocument.addEventListener('input',s,true);f.contentDocument.addEventListener('click',s,true)}catch(e){}"></iframe>
+
 ## 6. Kernel fusion: raise AI by not writing intermediates to HBM
 
 The roofline gives the fix for memory-bound kernels directly: **move fewer bytes.** The most important way to do that in practice is **kernel fusion**.
@@ -130,17 +140,83 @@ Now **fuse** them into one kernel: read $z$ once from HBM into registers, add th
 
 - fused: read $z$ + write $y$ = $4M$ bytes total.
 
+![Two panels. Top, unfused: three kernels (bias add, GELU, dropout) each read their input from HBM and write their output back, so the intermediates h and g make round trips through HBM, 12M bytes in total. Bottom, fused: one kernel reads z once, keeps h and g in registers, and writes y once, 4M bytes in total](../../assets/img/fusion-hbm-traffic.svg)
+
 Same FLOPs, **one third of the HBM traffic**, and the AI triples. On the roofline the kernel slides up its bandwidth line toward the ridge. You also save two of the three kernel launches (08.1: each launch has fixed overhead). This is why every serious framework fuses elementwise chains — `torch.compile`, TorchInductor, and hand-written fused kernels all do exactly this.
 
 <div class="callout key"><p><strong>Fusion = do a chain of elementwise/reduction ops in one kernel so the intermediate tensors stay in registers/SRAM and never round-trip to HBM.</strong> It cuts bytes moved (raising AI toward the ridge) and cuts kernel-launch overhead. It cannot speed up an already compute-bound matmul — fusion is the lever for the memory-bound tail around the matmuls.</p></div>
 
 <div class="callout pt"><p>In PyTorch you rarely hand-write fused kernels; you call <code>torch.compile(model)</code> and TorchInductor fuses the elementwise chains for you, generating a single kernel (often via Triton — 08.4) for a run of pointwise ops. But "PyTorch does it for you" is not an explanation: what it is <em>doing</em> is exactly the byte-count reduction above — keeping <code>h</code> and <code>g</code> in registers so the only HBM traffic is one read of <code>z</code> and one write of <code>y</code>. Knowing that is how you predict whether <code>compile</code> will help (it helps a memory-bound elementwise tail a lot; it does little for a kernel already at the compute ceiling).</p></div>
 
-## 7. This is exactly why FlashAttention wins
+To see this move on the roofline, open the **Elementwise chain + fusion** tab in the roofline explorer above: add ops to the chain and the unfused dot stays put (every op is another full round trip) while the fused dot slides right, because its bytes stay fixed at one read and one write.
 
-Everything above is the setup for 08.4, so name the connection now. Standard attention computes $S = QK^\top$, a $T \times T$ score matrix, **writes it to HBM**, reads it back to apply softmax, writes the probabilities to HBM, and reads them back to multiply by $V$. The score/probability matrix is $O(T^2)$ bytes, and the softmax over it is a low-AI, memory-bound reduction. For long $T$ this HBM traffic dominates: attention becomes memory-bound, sitting far left of the ridge.
+## 7. FlashAttention: fusion applied to attention, plus the tricks that make it possible
 
-FlashAttention refuses to write the $T \times T$ matrix at all. It tiles $Q, K, V$ into blocks that fit in **SRAM**, computes each block's scores there, folds them into the output with the online-softmax recurrence, and only ever writes the final $O(T)$-sized output back to HBM. Same FLOPs (actually slightly more — it recomputes some exponentials), but the byte count drops from $O(T^2)$ to $O(T)$. On the roofline the kernel slides right, off the memory-bound slope and up toward the compute ceiling. That is the whole trick, and it is just fusion + the roofline applied to attention. Lesson 08.4 builds it.
+Is FlashAttention the same thing as kernel fusion, or something extra? **Both.** Its *goal* is exactly the fusion goal from section 6: run a whole chain of operations as one kernel so the intermediate results never touch HBM. What is new is that attention's intermediates are too big, and too interconnected, for the simple fusion of section 6 to work. FlashAttention adds two tricks, **tiling** and **online softmax**, that make fusion possible for attention. Fusion is the idea; FlashAttention is the hardest case of that idea plus the engineering that cracks it.
+
+### 7.1 The chain we want to fuse
+
+Standard attention for one head is a chain of three kernels, the same shape as section 6's bias → GELU → dropout chain:
+
+1. $S = QK^\top/\sqrt d$ (a matmul): write $S$ to HBM;
+2. $P = \mathrm{softmax}(S)$ (a row-wise reduction plus elementwise work): read $S$, write $P$;
+3. $O = PV$ (a matmul): read $P$ and $V$, write $O$.
+
+The difference from section 6 is size. $Q, K, V, O$ are $T \times d$, but the intermediates $S$ and $P$ are $T \times T$. With one head, $T = 4096$, $d = 64$, fp16:
+
+- $Q, K, V, O$: $4096 \cdot 64 \cdot 2 \approx 0.5$ MB each, about 2 MB together.
+- $S$ and $P$: $4096^2 \cdot 2 \approx 33.5$ MB **each**.
+- HBM traffic: write $S$, read $S$, write $P$, read $P$ $= 4 \times 33.5 \approx 134$ MB, plus the 2 MB of inputs and outputs, $\approx 136$ MB.
+- FLOPs: two matmuls of $2T^2d$ each, $4T^2d = 4 \cdot 4096^2 \cdot 64 \approx 4.3$ GFLOP.
+- $\text{AI} \approx 4.3 \times 10^9 / 136 \times 10^6 \approx 32$ FLOPs/byte: left of the A100 ridge (~153), memory-bound, at most ~21% of peak.
+
+About 98% of the bytes are $S$ and $P$, intermediates nobody needs once the output is computed. That is exactly the situation fusion fixes.
+
+### 7.2 Why section 6's fusion does not work as-is
+
+Fusing bias → GELU → dropout was easy for two reasons. Both fail for attention.
+
+1. **Each output depended only on the matching input.** $\mathrm{gelu}(h_i)$ needs only $h_i$, so a thread can load a chunk, process it, write it, and never look at anything else. Softmax is different: $P_{ij} = e^{S_{ij} - m_i} / \sum_k e^{S_{ik} - m_i}$, where $m_i$ is the row maximum. To produce even one probability you need the max and the sum over the **entire row** of $T$ scores.
+2. **The intermediates fit on chip.** $h$ and $g$ were the same size as the chunk being processed, so they lived in registers. A block of 128 query rows of $S$ is $128 \times 4096 \times 4$ bytes $= 2$ MB in fp32, while an A100 SM has about 164 KB of SRAM (08.1). It does not fit, and it grows with $T$.
+
+Could you process one query row at a time instead? One row of 4096 scores is 16 KB and fits. But then every query row has to read **all of $K$ and $V$** from HBM again: $4096 \text{ rows} \times 1 \text{ MB} \approx 4$ GB of traffic, 30× *worse* than standard attention. Tiny tiles kill data reuse, and reuse is what buys arithmetic intensity (section 4).
+
+### 7.3 The two extra tricks
+
+- **Tiling in both dimensions.** Cut $Q$ into blocks of $B_q$ rows (say 128) and $K, V$ into blocks of $B_k$ rows. Each kernel instance owns one $Q$ block, keeps it in SRAM, and streams $K, V$ tiles past it. One score tile is $128 \times 128 \times 4$ bytes $= 64$ KB and fits. Every $K, V$ tile it loads is reused by all 128 query rows, so the work on each tile is a small matmul with matmul-like reuse.
+- **Online softmax.** This removes the row dependency. For each query row the kernel keeps a running max $m$, a running sum $\ell$, and a running output accumulator. When a new tile reveals a larger max, it rescales what it has accumulated so far by $e^{m_{\text{old}} - m_{\text{new}}}$. After the last tile it divides by $\ell$. The result is exactly softmax over the full row, not an approximation. 08.4 works it through by hand.
+
+Training adds one more roofline decision: the backward pass does not store $P$ either. It recomputes the score tiles from $Q$, $K$ and the saved $m, \ell$. That spends extra FLOPs, which are cheap, to avoid storing and re-reading $T \times T$ bytes, which are not.
+
+### 7.4 What it buys, in numbers
+
+Same $T = 4096$, $d = 64$, $B_q = 128$:
+
+- read $Q$ once and write $O$ once: about 1 MB;
+- stream $K$ and $V$ once per query block, $T / B_q = 32$ times: $32 \times 1.05 \approx 33.6$ MB;
+- total $\approx 35$ MB instead of 136 MB, for the same 4.3 GFLOP;
+- $\text{AI} \approx 124$ FLOPs/byte instead of 32. On the roofline the dot slides from ~21% of peak to ~81%, close to the ridge.
+
+The bigger win is **memory held**. The $T \times T$ matrix never exists, so attention needs $O(T)$ memory instead of $O(T^2)$. At $T = 131{,}072$ a single fp16 $T \times T$ matrix is $131072^2 \cdot 2 \approx 34$ GB, per head, per layer. Without FlashAttention, long context does not fit on the GPU at all.
+
+(The $K, V$ re-reads still grow like $T^2$, but scaled by $d/B_q$, which keeps them about 4× below the standard version's $S$/$P$ traffic here. What drops to $O(T)$ is the memory held, not the traffic.)
+
+![Two panels. Top, standard attention: three kernels, with the T by T matrices S and P written to and read back from HBM, about 136 MB of traffic for T 4096 and d 64, arithmetic intensity about 32, memory-bound. Bottom, FlashAttention: one kernel per block of 128 query rows keeps a 128 by 128 score tile in SRAM, updates the running max and sum, and accumulates the output; only Q, K, V and O touch HBM, about 35 MB, arithmetic intensity about 124](../../assets/img/flashattention-vs-fusion.svg)
+
+| | Section 6 fusion (bias → GELU → dropout) | FlashAttention |
+|---|---|---|
+| What is fused | 3 elementwise kernels | matmul → softmax → matmul |
+| Intermediates kept off HBM | $h$, $g$ (same size as the input) | $S$, $P$ ($T \times T$) |
+| Each output needs | the matching input element | a whole row of $T$ scores |
+| Fits on chip? | yes, chunk by chunk | only as tiles |
+| Extra tricks needed | none | tiling + online softmax (+ recompute in backward) |
+| Bytes saved here | 3× | ~4×, and the $T \times T$ memory is gone |
+
+Try it below: slide $T$ and watch the "score matrix" line. The AI of both versions barely moves with $T$ (standard stays near $d/2$, Flash near $B_q$), but the standard version's $T \times T$ matrix grows from megabytes to tens of gigabytes.
+
+<iframe src="assets/interactive/roofline.html?mode=attn" title="Roofline explorer: attention vs FlashAttention" style="width:100%;height:1150px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,m=f.contentDocument.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);f.contentDocument.addEventListener('input',s,true);f.contentDocument.addEventListener('click',s,true)}catch(e){}"></iframe>
+
+<div class="callout key"><p><strong>FlashAttention = kernel fusion of the whole attention chain + tiling + online softmax.</strong> Fusion is the goal: never write $S$ or $P$ to HBM. Tiling makes the intermediates fit in SRAM while keeping data reuse high. Online softmax lets softmax be computed tile by tile, exactly. Same FLOPs (slightly more), far fewer bytes, and $O(T)$ memory. Lesson 08.4 builds it.</p></div>
 
 ## Exercise
 
@@ -194,6 +270,12 @@ Not surprising — at AI = 4, far left of the ridge, the roofline caps you at $B
 <details><summary>How does kernel fusion raise arithmetic intensity, and why can't it speed up a compute-bound matmul?</summary>
 
 Fusion keeps intermediate tensors in registers/SRAM instead of writing them to HBM and reading them back, so the bytes-moved denominator of AI shrinks while FLOPs stay the same — AI rises and the kernel slides up toward the ridge. A compute-bound matmul is already limited by the arithmetic-unit ceiling, not by bytes, so removing HBM traffic (which was not the bottleneck) does not make it faster. Fusion is the tool for the memory-bound tail, not the matmul.
+
+</details>
+
+<details><summary>A colleague says "FlashAttention is just torch.compile fusing the attention ops." What is right and what is missing?</summary>
+
+Right: the goal is fusion, one kernel so the $T \times T$ intermediates $S$ and $P$ never go to HBM. Missing: the simple elementwise fusion a compiler does for bias → GELU → dropout cannot do this, because softmax needs a whole row of $T$ scores before it can output anything, and a block of those rows does not fit in SRAM. FlashAttention adds tiling (so tiles fit and $K, V$ are reused across a block of queries) and online softmax (running max and sum, rescaling as new tiles arrive) so the softmax can be done tile by tile, exactly.
 
 </details>
 

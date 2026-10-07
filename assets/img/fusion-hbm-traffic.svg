@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" width="760" height="430" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+  </defs>
+  <rect width="760" height="430" fill="#ffffff"/>
+
+  <!-- Unfused -->
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#111827">Unfused: 3 kernels, every intermediate goes to HBM and back</text>
+  <rect x="20" y="44" width="720" height="44" rx="6" fill="#e7f1fb" stroke="#1d4f91"/>
+  <text x="32" y="71" font-weight="bold" fill="#1d4f91">HBM (slow, 2 TB/s)</text>
+  <g font-family="DejaVu Sans Mono, monospace" font-size="13" fill="#1d4f91">
+    <rect x="200" y="54" width="40" height="24" rx="4" fill="#fff" stroke="#1d4f91"/><text x="214" y="71">z</text>
+    <rect x="335" y="54" width="40" height="24" rx="4" fill="#fff" stroke="#dc2626"/><text x="349" y="71" fill="#dc2626">h</text>
+    <rect x="470" y="54" width="40" height="24" rx="4" fill="#fff" stroke="#dc2626"/><text x="484" y="71" fill="#dc2626">g</text>
+    <rect x="605" y="54" width="40" height="24" rx="4" fill="#fff" stroke="#1d4f91"/><text x="619" y="71">y</text>
+  </g>
+  <g fill="#f3f4f6" stroke="#6b7280">
+    <rect x="185" y="140" width="125" height="42" rx="6"/>
+    <rect x="320" y="140" width="125" height="42" rx="6"/>
+    <rect x="455" y="140" width="125" height="42" rx="6"/>
+  </g>
+  <g text-anchor="middle" fill="#111827">
+    <text x="247" y="158">kernel 1</text><text x="247" y="174" font-family="DejaVu Sans Mono, monospace" font-size="12">+ bias</text>
+    <text x="382" y="158">kernel 2</text><text x="382" y="174" font-family="DejaVu Sans Mono, monospace" font-size="12">gelu</text>
+    <text x="517" y="158">kernel 3</text><text x="517" y="174" font-family="DejaVu Sans Mono, monospace" font-size="12">dropout</text>
+  </g>
+  <g stroke-width="1.8" fill="none">
+    <path d="M220,80 L230,138" stroke="#374151" marker-end="url(#a)"/>
+    <path d="M285,138 L345,80" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M355,80 L365,138" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M420,138 L480,80" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M490,80 L500,138" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M555,138 L615,80" stroke="#374151" marker-end="url(#a)"/>
+  </g>
+  <text x="20" y="212" fill="#111827">HBM traffic: read z, write h, read h, write g, read g, write y = 6 passes × 2M bytes = <tspan font-weight="bold">12M bytes</tspan></text>
+  <text x="20" y="232" fill="#dc2626">Red arrows: 4 passes exist only because h and g were parked in HBM between kernels.</text>
+
+  <line x1="20" y1="252" x2="740" y2="252" stroke="#d1d5db"/>
+
+  <!-- Fused -->
+  <text x="20" y="282" font-size="15" font-weight="bold" fill="#111827">Fused: 1 kernel, intermediates stay in registers on the SM</text>
+  <rect x="20" y="298" width="720" height="44" rx="6" fill="#e7f1fb" stroke="#1d4f91"/>
+  <text x="32" y="325" font-weight="bold" fill="#1d4f91">HBM (slow, 2 TB/s)</text>
+  <g font-family="DejaVu Sans Mono, monospace" font-size="13" fill="#1d4f91">
+    <rect x="200" y="308" width="40" height="24" rx="4" fill="#fff" stroke="#1d4f91"/><text x="214" y="325">z</text>
+    <rect x="545" y="308" width="40" height="24" rx="4" fill="#fff" stroke="#1d4f91"/><text x="559" y="325">y</text>
+  </g>
+  <rect x="185" y="362" width="400" height="46" rx="6" fill="#fdf0e2" stroke="#9a4a06"/>
+  <text x="200" y="381" fill="#9a4a06" font-weight="bold">one kernel, on-chip registers (fast)</text>
+  <text x="200" y="400" font-family="DejaVu Sans Mono, monospace" font-size="12" fill="#111827">z → +bias → h → gelu → g → dropout → y</text>
+  <g stroke-width="1.8" fill="none" stroke="#374151">
+    <path d="M220,334 L220,360" marker-end="url(#a)"/>
+    <path d="M565,360 L565,334" marker-end="url(#a)"/>
+  </g>
+  <text x="600" y="380" fill="#111827">read z + write y</text>
+  <text x="600" y="398" fill="#111827" font-weight="bold">= 4M bytes (3× less)</text>
+</svg>

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 560" width="760" height="560" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+  </defs>
+  <rect width="760" height="560" fill="#ffffff"/>
+
+  <!-- Standard -->
+  <text x="20" y="26" font-size="15" font-weight="bold" fill="#111827">Standard attention: 3 kernels, the T×T matrices S and P go through HBM</text>
+  <text x="20" y="45" fill="#4b5563" font-size="12">one head, T = 4096, d = 64, fp16:  Q, K, V, O are 0.5 MB each;  S and P are 33.5 MB each</text>
+  <rect x="20" y="56" width="720" height="58" rx="6" fill="#e7f1fb" stroke="#1d4f91"/>
+  <text x="30" y="90" font-weight="bold" fill="#1d4f91">HBM</text>
+  <g font-family="DejaVu Sans Mono, monospace" fill="#1d4f91" text-anchor="middle">
+    <rect x="80" y="74" width="80" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="120" y="90">Q, K</text>
+    <rect x="215" y="62" width="110" height="46" rx="4" fill="#fee2e2" stroke="#dc2626"/><text x="270" y="84" fill="#dc2626">S</text><text x="270" y="100" fill="#dc2626" font-size="11">T×T</text>
+    <rect x="390" y="62" width="110" height="46" rx="4" fill="#fee2e2" stroke="#dc2626"/><text x="445" y="84" fill="#dc2626">P</text><text x="445" y="100" fill="#dc2626" font-size="11">T×T</text>
+    <rect x="555" y="74" width="40" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="575" y="90">V</text>
+    <rect x="655" y="74" width="40" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="675" y="90">O</text>
+  </g>
+  <g fill="#f3f4f6" stroke="#6b7280">
+    <rect x="90" y="160" width="160" height="44" rx="6"/>
+    <rect x="290" y="160" width="160" height="44" rx="6"/>
+    <rect x="490" y="160" width="160" height="44" rx="6"/>
+  </g>
+  <g text-anchor="middle" fill="#111827">
+    <text x="170" y="178">kernel 1: matmul</text><text x="170" y="195" font-family="DejaVu Sans Mono, monospace" font-size="12">S = QKᵀ/√d</text>
+    <text x="370" y="178">kernel 2: softmax</text><text x="370" y="195" font-family="DejaVu Sans Mono, monospace" font-size="12">P = softmax(S)</text>
+    <text x="570" y="178">kernel 3: matmul</text><text x="570" y="195" font-family="DejaVu Sans Mono, monospace" font-size="12">O = P V</text>
+  </g>
+  <g stroke-width="1.8" fill="none">
+    <path d="M120,98 L140,158" stroke="#374151" marker-end="url(#a)"/>
+    <path d="M220,158 L255,110" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M285,110 L330,158" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M410,158 L430,110" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M460,110 L520,158" stroke="#dc2626" marker-end="url(#r)"/>
+    <path d="M575,98 L580,158" stroke="#374151" marker-end="url(#a)"/>
+    <path d="M620,158 L665,98" stroke="#374151" marker-end="url(#a)"/>
+  </g>
+  <text x="20" y="232" fill="#111827">HBM traffic ≈ 4 × 33.5 MB (write S, read S, write P, read P) + 2 MB (Q, K, V, O) ≈ <tspan font-weight="bold">136 MB</tspan></text>
+  <text x="20" y="252" fill="#111827">FLOPs ≈ 4·T²·d ≈ 4.3 GFLOP  →  AI ≈ 32 FLOPs/byte: memory-bound (A100 ridge ≈ 153)</text>
+
+  <line x1="20" y1="270" x2="740" y2="270" stroke="#d1d5db"/>
+
+  <!-- Flash -->
+  <text x="20" y="298" font-size="15" font-weight="bold" fill="#111827">FlashAttention: 1 fused kernel, S and P only ever exist as small tiles in SRAM</text>
+  <rect x="20" y="312" width="720" height="44" rx="6" fill="#e7f1fb" stroke="#1d4f91"/>
+  <text x="30" y="339" font-weight="bold" fill="#1d4f91">HBM</text>
+  <g font-family="DejaVu Sans Mono, monospace" fill="#1d4f91" text-anchor="middle">
+    <rect x="90" y="322" width="40" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="110" y="338">Q</text>
+    <rect x="290" y="322" width="70" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="325" y="338">K, V</text>
+    <rect x="655" y="322" width="40" height="22" rx="4" fill="#fff" stroke="#1d4f91"/><text x="675" y="338">O</text>
+  </g>
+  <text x="400" y="339" fill="#6b7280" font-size="12">no S, no P here</text>
+
+  <rect x="60" y="384" width="660" height="118" rx="8" fill="#fdf0e2" stroke="#9a4a06"/>
+  <text x="74" y="404" font-weight="bold" fill="#9a4a06">one kernel per block of 128 query rows, working in SRAM (on-chip)</text>
+  <text x="74" y="424" fill="#111827" font-size="12">for each 128-row K, V tile (loop over the T keys):</text>
+  <g font-family="DejaVu Sans Mono, monospace" font-size="12" fill="#111827">
+    <text x="94" y="446">s = q_tile · k_tileᵀ / √d        # 128×128 tile of S, 64 KB in fp32</text>
+    <text x="94" y="465">update running max m and sum ℓ    # online softmax</text>
+    <text x="94" y="484">acc = acc·rescale + exp(s − m) · v_tile</text>
+  </g>
+  <g stroke-width="1.8" fill="none" stroke="#374151">
+    <path d="M110,346 L110,382" marker-end="url(#a)"/>
+    <path d="M325,346 L325,382" marker-end="url(#a)"/>
+    <path d="M675,382 L675,346" marker-end="url(#a)"/>
+  </g>
+  <text x="335" y="372" fill="#4b5563" font-size="11">K, V tiles re-read once per query block</text>
+  <text x="20" y="528" fill="#111827">HBM traffic ≈ Q + O (1 MB) + K, V re-read 32 times (33.6 MB) ≈ <tspan font-weight="bold">35 MB</tspan>; same 4.3 GFLOP  →  AI ≈ 124</text>
+  <text x="20" y="548" fill="#4b5563" font-size="12">Memory held: O(T) instead of a 33.5 MB T×T matrix per head. That is what unlocked long context.</text>
+</svg>
