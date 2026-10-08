@@ -228,6 +228,87 @@ What to notice:
 - **Experiment 2** is the starving GPU: 8.3 ms of wall time per step but only 1.7 ms of actual GPU work, so the GPU sits idle 80% of the time waiting for Python to launch the next kernel. Making the kernels faster would change nothing; the fix is fewer, bigger kernels (bigger batch, fusion, `torch.compile`, CUDA graphs). Open `trace.json` in Perfetto for this run and you will literally see the gaps on the GPU row. (The profiler itself adds some CPU overhead, which makes this case look a bit worse than reality — but the gap is real without it too.)
 - **Experiment 3** is mixed precision: the gemm kernels switch from `sgemm` (fp32 CUDA cores) to `fp16_s1688gemm` (fp16 Tensor Cores; `1688` is the 16×8×8 Tensor-Core instruction shape) and drop from ~78 ms to ~20 ms per step. The non-matmul share rises from 27% to 44% — not because those kernels got slower but because the matmuls got so much faster. That is the roofline lesson of 08.2 in one number: after you speed up the compute-bound part, the memory-bound tail becomes the next thing to fix.
 
+## 2.2 Doing the analysis yourself
+
+Section 2.1 handed you finished numbers. This section shows where each one comes from, so you can produce them for any model without the script.
+
+### Where "GPU busy 96%" comes from
+
+It is **not** read off a screen. It is one division the script does:
+
+$$\text{GPU busy} = \frac{\text{sum of the durations of every GPU kernel}}{\text{wall-clock time of the profiled steps}}$$
+
+- **Numerator.** For every row of `prof.key_averages()`, `self_device_time_total` is how long that kernel ran on the GPU, summed over all its calls. The script keeps only real kernel rows (it drops `aten::*`, autograd and annotation rows, because those just repeat the time of the kernels they launched) and adds them up: `total`.
+- **Denominator.** `time.perf_counter()` before the 5 steps, `torch.cuda.synchronize()` + `time.perf_counter()` after. The synchronize makes sure the GPU has really finished, so this is true wall time: `wall_ms`.
+- Worked example with the experiment-1 numbers: kernels summed to 590.4 ms over 5 steps, wall was 613.0 ms → 590.4 / 613.0 = 0.963 → **96%**. Per step: 118.1 ms of GPU work in 122.6 ms. The missing 4% (~4.5 ms per step) is time the GPU had nothing queued.
+- **Why adding durations is legitimate:** all these kernels run on *one* CUDA stream (the single GPU row you saw), and kernels on one stream run one after another, never overlapping. So the sum of their durations is exactly the time the GPU was occupied. If your code uses several streams (e.g. communication overlapped with compute in Module 10), kernels can overlap and the sum can exceed 100% — then you measure busy time per stream.
+
+The same number from `trace.json` directly — useful when someone hands you a trace and not the code. Every event in the file has a `cat` (category), a `name`, a start `ts` and a duration `dur`, both in microseconds. GPU work has category `kernel`, `gpu_memcpy` or `gpu_memset`:
+
+```python
+import json
+ev = json.load(open("trace.json"))["traceEvents"]
+gpu = sorted((e for e in ev if e.get("cat") in ("kernel", "gpu_memcpy", "gpu_memset")),
+             key=lambda e: e["ts"])
+busy = sum(e["dur"] for e in gpu)
+span = gpu[-1]["ts"] + gpu[-1]["dur"] - gpu[0]["ts"]          # first kernel start -> last kernel end
+print(f"GPU busy {busy/1e3:.1f} ms of {span/1e3:.1f} ms = {100*busy/span:.0f}%")
+
+# the 5 biggest holes on the GPU row, and which kernels surround them
+gaps = [(b["ts"] - (a["ts"] + a["dur"]), a["name"][:50], b["name"][:50]) for a, b in zip(gpu, gpu[1:])]
+for g, before, after in sorted(gaps, reverse=True)[:5]:
+    print(f"{g:8.0f} us idle   after {before}   before {after}")
+```
+
+The percentage comes out a bit *higher* than the script's, because `span` starts at the first kernel and ends at the last one, while the script's wall time also includes the Python launch time before the first kernel. The gap list is the practical part: it tells you *where* the GPU waited. A big hole right after a `Memcpy DtoH` almost always means a `.item()` / `.cpu()` / `print(loss)` forced a sync; a big hole at the start of every step usually means the data loader.
+
+### How to tell matmul from attention from everything else
+
+The kernel name is the only label the GPU gives you, and you read it like a filename. Two methods: the name itself, and (when the name is cryptic) the CPU operator that launched it.
+
+**Method 1 — read the name.** The keywords:
+
+| If the name contains | It is | Examples you will see |
+|---|---|---|
+| `gemm` (GEneral Matrix Multiply — the BLAS name for $C = AB$) | **matmul** | `volta_sgemm_128x64_nt`, `turing_fp16_s1688gemm_...`, `ampere_bf16_s16816gemm_...`, `sm80_xmma_gemm_...`, `cutlass_80_tensorop_...gemm...` |
+| `gemv` | matmul with a vector (batch of 1 — inference decode) | `gemv2T_kernel...` |
+| `fmha`, `flash_fwd`, `flash_bwd`, `attention` | **fused attention** (scores + softmax + weighted sum in one kernel) | `fmha_cutlassF_...` (F = forward), `fmha_cutlassB_...` (B = backward), `flash_fwd_kernel` |
+| `elementwise`, `vectorized_elementwise` | elementwise op; the functor in `<...>` says which: `GeluCUDAKernelImpl`, `MulFunctor`, `FillFunctor` (= zeroing) | |
+| `layer_norm`, `SoftMax`, `reduce_kernel`, `fused_dropout` | normalization / softmax / sums / dropout — the memory-bound tail | `vectorized_layer_norm_kernel`, `cunn_SoftMaxForward` (the log-softmax inside cross-entropy) |
+| `multi_tensor_apply` | the optimizer (`foreach` AdamW updates many parameters per launch) | |
+| `Memcpy`, `Memset` | data copies (HtoD = host to device, DtoH = device to host) | |
+
+How to read a gemm name piece by piece, using `volta_sgemm_128x64_nt`:
+
+- `volta_` — the GPU generation the kernel was **written** for, not the one you have. cuBLAS reuses Volta (V100) kernels on the Turing T4 for fp32 because Turing added nothing new for fp32. `turing_`, `ampere_`, `sm80_`, `sm90_` are the same idea.
+- `s` in `sgemm` — **s**ingle precision (fp32), running on ordinary CUDA cores. `h` = half (fp16). `fp16_s1688gemm` / `bf16_s16816gemm` = Tensor-Core kernels; the digits are the Tensor-Core instruction shape (16×8×8, 16×8×16).
+- `128x64` — the tile of the output matrix each thread block computes (the tiling idea of 08.1).
+- `nt` / `nn` / `tn` — whether the first/second operand is read **n**ormal or **t**ransposed. One `nn.Linear` produces three: the forward $Y = XW^T$, and in backward $\partial L/\partial X = (\partial L/\partial Y)\,W$ and $\partial L/\partial W = (\partial L/\partial Y)^T X$. That is why experiment 1 shows three gemm kernels with exactly the same call count (17 = number of Linears).
+
+Watch out: **unfused attention contains matmuls too.** If your model computes attention by hand (`q @ k.transpose(-2,-1)`, `softmax`, `@ v`, like the from-scratch attention in Module 3), there is no `fmha` kernel — you will see batched gemms (`gemm` with `batched` / `strided` in the name, launched by `aten::bmm`) plus a softmax kernel. The name says "matmul"; you only know it is attention from the launching op and the shapes. The script's `kind()` counts those as matmul.
+
+**Method 2 — find the launching operator.** Every kernel has a parent CPU op, and the parent's name is readable:
+
+- In the table: `aten::addmm` (forward Linear), `aten::mm` (backward Linear), `aten::bmm` (batched matmul — hand-written attention, or anything with a batch dimension), `aten::_efficient_attention_forward` / `aten::_scaled_dot_product_flash_attention` (fused attention). Add `record_shapes=True` and print `prof.key_averages(group_by_input_shape=True).table(...)` to see *which* matmul by its shapes: `[16, 256, 512] × [2048, 512]` is the first MLP layer of a $d=512$ model, `[4096, 8000]` is the vocab head.
+- In the trace viewer: click a kernel on the GPU row. The bottom panel shows its arguments, including `correlation` (an ID). An arrow (a "flow event", turn on *Flow events* in the viewer's settings if hidden) connects the kernel to the `cudaLaunchKernel` call on the CPU row that queued it; that call sits inside the `aten::...` op that wanted it. Follow the arrow up and you have the parent.
+
+### What you see in the trace viewer
+
+What the rows are (as in your fp32 trace):
+
+- **CPU process, two threads.** Thread 1 is your Python main thread: the forward pass, `optimizer.step()`, `zero_grad`. Thread 2 is PyTorch's **autograd engine thread**: when you call `loss.backward()`, the main thread hands the backward graph to a C++ worker thread (one per GPU) and waits for it. So all the `...Backward0` ops and the backward kernel launches live on thread 2, and on thread 1 you see one long `backward` block doing nothing but waiting.
+- **GPU process, one row** (labelled with a stream number, typically `stream 7`): the default CUDA stream. One row because everything was queued on one stream — the same fact that made the busy-time sum legitimate above.
+- Above the kernels on the GPU row you may also see a long `train_step` bar: that is the `record_function("train_step")` span mirrored onto the GPU (category `gpu_user_annotation`), showing which kernels belong to which step. It is a label, not GPU work.
+
+Every block also has a category, shown when you click it: `cpu_op` (an `aten::` operator on the CPU), `cuda_runtime` (`cudaLaunchKernel`, `cudaMemcpyAsync` — the CPU talking to the driver), `kernel` (real GPU work), `gpu_memcpy` / `gpu_memset`, `user_annotation` / `gpu_user_annotation` (your `record_function` labels), `python_function` (only with `with_stack=True`), `ac2g` (the arrows: "**a**sync **C**PU **to** **G**PU" — the link from a launch to its kernel).
+
+What "healthy" looks like in the timeline, and why "full colour" is not quite enough:
+
+- **Zoomed out, the GPU row always looks solid.** A 4-µs gap is far smaller than one screen pixel at that zoom. "No gaps" only means "no big gaps"; that is why you compute the busy percentage instead of eyeballing it. Use `W`/`S` to zoom in on a stretch of the GPU row until single kernels are visible.
+- **Look at the arrows' slant.** In a healthy trace the CPU runs *ahead*: it has finished launching step N's backward while the GPU is still executing step N's forward, so the arrows from launch to kernel lean far to the right — the GPU has a queue of work waiting. In a starving trace (experiment 2) the arrows are nearly vertical: each kernel starts the instant it is launched, finishes immediately, and then the GPU waits for the next launch. That is the gap, seen directly.
+- **Measure a stretch by hand:** drag-select a region of the GPU row. The bottom panel lists the selected slices with their total duration and the length of the selected time range; busy fraction = slices total ÷ range length. It is the same division as above, for any window you choose.
+- `chrome://tracing` is deprecated and slow on big traces. [Perfetto](https://ui.perfetto.dev) opens the same `trace.json` (drag the file in), stays fast at hundreds of MB, and has the same drag-select summary.
+
 ## 3. Reading the trace: hot kernels and CPU↔GPU gaps
 
 Two questions the trace answers.
