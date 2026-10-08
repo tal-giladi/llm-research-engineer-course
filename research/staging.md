@@ -89,3 +89,87 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** If a future lesson covers test-time training for agents (building on ASCENT or similar), this instability + the Fixed Generation fix is exactly the kind of failure-mode-and-fix pairing the course's templates ask for; on its own (without ASCENT or a similar motivating case) it's too narrow for a standalone lesson.
 - **Confidence:** low — single paper, no independent reproduction, though the mechanism-level explanation plausibly generalizes the narrower instability ASCENT already works around.
 - **Recommendation:** monitor alongside `C-20261006-01`; if the weekly review looks at ASCENT or any other agent-TTT candidate, flag this paper as the general mechanism behind the instability those papers work around.
+
+### C-20261008-01 · NP-OPD: negative-policy rollouts for on-policy distillation (NAVER AI Lab)
+
+- **Class:** B
+- **Date discovered:** 2026-10-08
+- **Date published:** 2026-10-06
+- **Source:** https://arxiv.org/abs/2610.07874 (verified resolves; v1 "Tue, 6 Oct 2026 07:25:03 UTC")
+- **Organization/researchers:** Jaehui Hwang, Dongyoon Han, Sangdoo Yun, Byeongho Heo — NAVER AI Lab (industrial AI lab, not pure academic)
+- **Category:** RL/post-training (on-policy distillation, taught in lesson 17.4)
+- **What changed:** On-policy distillation (OPD) trains a student on its own rollouts using token-level teacher feedback; the authors argue that when teacher and student distributions have little overlap, teacher guidance alone gives a weak signal. Negative-Policy OPD (NP-OPD) adds rollouts from a weaker "negative policy" during generation (without changing the distillation reward), giving the student tokens the negative policy prefers over the teacher as an explicit negative signal while keeping teacher supervision.
+- **Technical summary:** Reports gains across model scales, generation modes, reasoning domains, and existing OPD variants; shows the method suppresses negative-policy-preferred tokens and moves the student away from the negative policy. Code promised at github.com/naver-ai/np-opd (not yet confirmed live).
+- **Why it might matter:** Lesson 17.4 already teaches on-policy distillation, and the registry already carries a deferred topic (`on-policy-distillation-variants.md`, WAIT, next review 2026-11-29) tracking single-paper OPD variants (co-evolving teacher DCE/SRCL; same-family scaling). NP-OPD is a third independent single-paper OPD variant, this time from a named industrial lab rather than only academic groups, adding to the body of evidence the weekly review should weigh when that deferred topic comes up for its next review.
+- **Evidence of adoption:** None yet — single paper, code not yet confirmed live, no third-party use found.
+- **Major organizations using it:** NAVER AI Lab (authoring org only).
+- **Open-source implementation:** Promised at github.com/naver-ai/np-opd; not yet confirmed live.
+- **Paper:** https://arxiv.org/abs/2610.07874
+- **Code:** github.com/naver-ai/np-opd (promised, unconfirmed)
+- **Relationship to existing course material:** Extends `lessons/module-17/lesson-04.md` (on-policy distillation) and relates directly to the deferred registry topic `research/deferred/on-policy-distillation-variants.md` (a third OPD-variant data point, from an industrial lab this time).
+- **Potential course lesson:** Not a standalone lesson; a candidate short addition/example to 17.4 if the weekly review decides the OPD-variants deferred topic has enough evidence, or simply more evidence to fold into that topic's file.
+- **Confidence:** low-medium — single paper, no reproduction, but from a named industrial lab and directly extends already-taught material.
+- **Recommendation:** fold into the existing deferred topic `on-policy-distillation-variants.md` at its next review (2026-11-29) as a third variant; not yet enough on its own for ADD.
+
+### C-20261008-02 · STEPQuant: spatial-temporal quantization of delta-rule recurrent states, integrated into SGLang
+
+- **Class:** B
+- **Date discovered:** 2026-10-08
+- **Date published:** 2026-09-29
+- **Source:** https://arxiv.org/abs/2609.38169 (verified resolves; v1 "Tue, 29 Sep 2026 17:59:40 UTC")
+- **Organization/researchers:** Bingchen Yao, Haobo Xu, Haokun Lin, Yichen Wu, Ziyu Guo, Renrui Zhang, Zhichao Lu, Zhenan Sun, Ying Wei (affiliations not listed on the abstract page; academic group)
+- **Category:** efficiency/quantization (linear attention / Gated-DeltaNet-style recurrent state serving)
+- **What changed:** Linear-attention models replace growing KV caches with a fixed-size recurrent state, but under concurrent serving that persistent state itself becomes a memory bottleneck; naively quantizing it degrades accuracy because errors compound across state updates. STEPQuant is a post-training quantization framework for delta-rule recurrent states that allocates precision by *when* an error occurs (how long it persists in the state) and *where* (which key rows/value columns matter most), jointly fitting per-row/column scales from state distributions and each key row's measured impact on output error.
+- **Technical summary:** Evaluated on Qwen3.8-27B and Kimi-Linear-48B-A3B-Instruct (real, named production-scale models) on long- and short-generation benchmarks; 6-bit STEPQuant closely matches FP32-state accuracy and outperforms uniform INT8 at 4-bit. Integrated into SGLang with custom GPU kernels: 6-bit STEPQuant gives over 5x recurrent-state compression and cuts total serving memory by up to 68.7%. Code released (per abstract).
+- **Why it might matter:** Directly extends the course's existing linear-attention/Gated-DeltaNet material (`lessons/module-12/lesson-05.md`) into the serving/efficiency domain this course also teaches (quantization, serving infrastructure), with a concrete mechanism (time- and space-aware error allocation) and a real systems integration (SGLang, an inference stack the course already references) rather than only an isolated benchmark number.
+- **Evidence of adoption:** None beyond the authors' own SGLang integration; no confirmation this landed in mainline SGLang or was adopted by another group.
+- **Major organizations using it:** None identified (academic authors); SGLang integration is the authors' own patch, not confirmed merged upstream.
+- **Open-source implementation:** Reported as released (per abstract); exact repo URL not shown on the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.38169
+- **Code:** reported released, URL not confirmed from abstract page
+- **Relationship to existing course material:** Extends `lessons/module-12/lesson-05.md` (linear attention, Gated DeltaNet & hybrid stacks) into recurrent-state quantization for serving — new sub-topic, not currently in registry (checked via `lookup "delta rule quantization"`).
+- **Potential course lesson:** Possible addition/example to module-12/lesson-05 or a serving/quantization lesson, covering recurrent-state (as opposed to KV-cache) quantization — contingent on independent confirmation the SGLang integration is real/merged and on a second source.
+- **Confidence:** medium — concrete real-model evaluation and a named inference stack, but single paper, no independent reproduction, and the "integrated into SGLang" claim is not yet verified against SGLang's own release notes (checked SGLang v0.5.19-21 release notes this run; STEPQuant not mentioned).
+- **Recommendation:** monitor; verify against SGLang's upstream repo/release notes before any course addition, and look for a second source or confirmed merge.
+
+### C-20261008-03 · ReSAIL: a third independent line on instability in iterative/online agent self-training
+
+- **Class:** B
+- **Date discovered:** 2026-10-08
+- **Date published:** 2026-09-30
+- **Source:** https://arxiv.org/abs/2609.39306 (verified resolves; v1 "Wed, 30 Sep 2026 08:49:03 UTC")
+- **Organization/researchers:** Shengjie Jin, Hengbo Xu, Zelong Sun, YuJie Guo, Zhiwu Lu (affiliations not listed on the page; academic group, Zhiwu Lu is a known Renmin University researcher)
+- **Category:** agents/tools, adjacent to RL/post-training (self-distillation stability)
+- **What changed:** Iterative self-distillation lets agents learn across successive deployments using privileged information (PI), but existing methods collapse in deployment performance over cycles. ReSAIL is a plug-in augmentation that selects the interaction steps where PI most changes the teacher's predictions, balances distillation losses across trajectories, and regularizes the student's PI-conditioned outputs toward a frozen teacher.
+- **Technical summary:** On ALFWorld and TextCraft, ReSAIL sustains gains over three cycles across model scales, reporting an average absolute gain of 22.5% in final-cycle success rate over self-distillation baselines; sensitivity-guided data selection also improves action prediction for multimodal GUI agents on AITZ.
+- **Why it might matter:** This is now the *third* independent paper within roughly a week touching the same underlying phenomenon the course is already tracking in staging — self-referential/iterative training signals (an agent's own trajectories, or a model's own generated text) destabilizing training without an explicit correction — alongside the already-staged ASCENT (`C-20261006-01`, online TTT via self-distillation on verified trajectories) and the Fixed-Generation TTT-instability paper (`C-20261007-02`). Each proposes a different specific fix (ASCENT: filter invalid turns; Fixed Generation: freeze the generator; ReSAIL: PI-sensitivity-weighted step selection + loss balancing + teacher regularization), so this is convergent-but-not-identical evidence rather than reproduction of one paper.
+- **Evidence of adoption:** None — single paper, no independent reproduction, no adoption found.
+- **Major organizations using it:** None identified (academic).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2609.39306
+- **Code:** none found
+- **Relationship to existing course material:** Related to the still-staged `C-20261006-01` (ASCENT) and `C-20261007-02` (Fixed Generation); same general phenomenon (iterative/self-referential training instability), distinct specific mechanism/fix. Not in any accepted/deferred/rejected file.
+- **Potential course lesson:** Not on its own; if the weekly review is already looking at ASCENT or the TTT-instability thread, this is a third data point worth weighing together with the other two — possibly enough convergent evidence, across three independent groups in one week, to justify at least a frontier-update note on "iterative/online self-distillation instability and mitigations" even though no single paper here clears the bar alone.
+- **Confidence:** low-medium — plausible mechanism, real (if small-scale) benchmarks, but still single-paper per specific fix.
+- **Recommendation:** weekly review should look at `C-20261006-01`, `C-20261007-02`, and this record together as one thread, since three independent groups converging on the same destabilization pattern in a week is itself notable evidence even though each individual fix is single-paper.
+
+### C-20261008-04 · Sliding-Window Linear Attention: a "Seesaw Effect" between linear-attention and sliding-window hybrids on long context
+
+- **Class:** B
+- **Date discovered:** 2026-10-08
+- **Date published:** 2026-10-07
+- **Source:** https://arxiv.org/abs/2610.10114 (verified resolves; v1 "Wed, 7 Oct 2026 14:02:35 UTC")
+- **Organization/researchers:** Xiaoran Liu, Ziwei He, Xipeng Qiu — Fudan University (Xipeng Qiu is an established NLP/ML-systems researcher); paper is labeled "Part 1.1" of a series ("Mechanics of Long-Context Hybrid Models")
+- **Category:** architecture / long-context / attention (hybrid full+linear/sliding-window attention)
+- **What changed:** Systematically studies hybrids that pair full attention with either sliding-window attention (SWA) or gated linear attention (GLA/Gated DeltaNet), reporting a "Seesaw Effect": linear-attention hybrids benefit more from long-context continual pretraining, while SWA hybrids extrapolate better to unseen lengths, attributed to differing positional inductive biases. Also documents SWA failure modes and a "Matthew Effect" in linear-attention hybrids' position extrapolation, and proposes Sliding-Window Linear Attention (SWLA) as a fix.
+- **Technical summary:** Reports SWLA achieves 16x training-free length extrapolation while keeping 100% accuracy on NIAH-SK1 at 64k context. 60 pages, 36 figures, 25 tables — a systematic empirical study, not a single benchmark number.
+- **Why it might matter:** Directly extends the course's existing hybrid-attention material (`lessons/module-12/lesson-05.md`, linear attention/Gated DeltaNet/hybrid stacks) with a mechanism-level explanation of *why* hybrid designs trade off long-context training benefit against length-extrapolation robustness, plus a concrete proposed fix — exactly the kind of "what PyTorch/the architecture does under the hood, and why" material the course's lesson template asks for.
+- **Evidence of adoption:** None yet — single paper, "under review," no third-party validation.
+- **Major organizations using it:** None identified (academic, Fudan).
+- **Open-source implementation:** Not confirmed from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.10114
+- **Code:** not confirmed
+- **Relationship to existing course material:** Extends `lessons/module-12/lesson-05.md` (linear attention, Gated DeltaNet & hybrid stacks) with new analysis of position-extrapolation trade-offs; new sub-topic in the registry (checked via `lookup "hybrid position long context"`, which only matched the existing lesson, not a registry topic).
+- **Potential course lesson:** Possible addition to module-12/lesson-05 explaining the Seesaw/Matthew Effects and SWLA, contingent on a second source or the paper clearing peer review ("under review" per the abstract page).
+- **Confidence:** medium — large, systematic empirical study from an established researcher, but single paper, still under review, no code confirmed.
+- **Recommendation:** monitor; revisit once the paper is no longer "under review" or a second group reproduces the Seesaw/Matthew Effect framing.
