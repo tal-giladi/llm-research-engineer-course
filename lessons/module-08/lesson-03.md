@@ -298,7 +298,23 @@ What the rows are (as in your fp32 trace):
 
 - **CPU process, two threads.** Thread 1 is your Python main thread: the forward pass, `optimizer.step()`, `zero_grad`. Thread 2 is PyTorch's **autograd engine thread**: when you call `loss.backward()`, the main thread hands the backward graph to a C++ worker thread (one per GPU) and waits for it. So all the `...Backward0` ops and the backward kernel launches live on thread 2, and on thread 1 you see one long `backward` block doing nothing but waiting.
 - **GPU process, one row** (labelled with a stream number, typically `stream 7`): the default CUDA stream. One row because everything was queued on one stream — the same fact that made the busy-time sum legitimate above.
-- Above the kernels on the GPU row you may also see a long `train_step` bar: that is the `record_function("train_step")` span mirrored onto the GPU (category `gpu_user_annotation`), showing which kernels belong to which step. It is a label, not GPU work.
+- Above the kernels on the GPU row you may also see a long `train_step` bar: that is the `record_function("train_step")` span mirrored onto the GPU (category `gpu_user_annotation`), showing which kernels belong to which step. It is a label, not GPU work. Any name you give `record_function` shows up this way (a span named `CPU_step_0` in your code becomes a `CPU_step_0` bar on the GPU row), so name your spans well: `data`, `forward`, `backward`, `optim` turn the GPU row into a readable map of the step.
+
+Reading the panel you get when you click a block, e.g. a clicked annotation:
+
+```text
+Title           CPU_step_0
+Category        gpu_user_annotation
+Start           25.209 ms
+Wall Duration   4.871 ms
+Self Time       4.138 ms
+External id     17710
+```
+
+- **Category** tells you what kind of block it is (list below). `gpu_user_annotation` = your label mirrored on the GPU, not a kernel.
+- **Start** is measured from the beginning of the trace; **Wall Duration** is how long the block spans, here from the first to the last GPU kernel that ran inside that span.
+- **Self Time** = Wall Duration minus the time covered by blocks drawn *inside* it. For a kernel, Self Time = Wall Duration (kernels have no children). For an annotation, a large Self Time means most of the window has no nested kernel under it — either the GPU was idle there, or the kernels are drawn on another row. Zoom in to see which.
+- **External id** links the block to the CPU-side event with the same id: search for it (`/` or the search box) to jump to the matching `record_function` / `aten::` op on the CPU row.
 
 Every block also has a category, shown when you click it: `cpu_op` (an `aten::` operator on the CPU), `cuda_runtime` (`cudaLaunchKernel`, `cudaMemcpyAsync` — the CPU talking to the driver), `kernel` (real GPU work), `gpu_memcpy` / `gpu_memset`, `user_annotation` / `gpu_user_annotation` (your `record_function` labels), `python_function` (only with `with_stack=True`), `ac2g` (the arrows: "**a**sync **C**PU **to** **G**PU" — the link from a launch to its kernel).
 
