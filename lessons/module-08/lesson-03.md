@@ -69,6 +69,47 @@ Everything so far says: move fewer bytes. The most direct way to move fewer byte
 - halves the activation-memory bucket (07.4) — the one that scales with batch×context and often decides whether the model fits,
 - lets the Tensor Cores run their fast 16-bit matmul path (much higher peak FLOP/s than fp32).
 
+### Two different mechanisms: fewer bytes vs a higher ceiling
+
+The first and third bullets sound like one benefit ("16-bit is faster") but they act on *different terms* of the roofline from 08.2, and each one only helps one kind of kernel. Recall a kernel's runtime is set by whichever limit it hits first:
+
+$$
+t \approx \max\!\left(\frac{\text{FLOPs}}{P_{\max}},\ \frac{\text{bytes}}{B}\right)
+$$
+
+where $\text{FLOPs}$ is the arithmetic the kernel does, $P_{\max}$ the peak FLOP/s of the arithmetic unit it runs on, $\text{bytes}$ the HBM traffic, and $B$ the HBM bandwidth. Going to 16-bit can change two things in this formula:
+
+- **Halving bytes** shrinks the *second* term. It only helps if that term is the larger one — a memory-bound kernel.
+- **Switching to the 16-bit Tensor-Core path** raises $P_{\max}$ and shrinks the *first* term. It only helps if that term is the larger one — a compute-bound kernel.
+
+Work both cases by hand on an A100 ($B = 2.039\times10^{12}$ bytes/s; $P_{\max}$ = 19.5 TFLOP/s for plain fp32, 312 TFLOP/s for bf16 Tensor Cores).
+
+**Case 1: a compute-bound matmul**, $n = 4096$ (the AI ≈ 683 dot from 08.2).
+
+- FLOPs $= 2n^3 = 2 \cdot 4096^3 \approx 1.37\times10^{11}$.
+- fp32 bytes $= 3n^2 \cdot 4 \approx 2.01\times10^{8}$ (read A, read B, write C).
+- fp32: compute term $= 1.37\times10^{11} / 19.5\times10^{12} \approx 7.05$ ms; memory term $= 2.01\times10^{8} / 2.039\times10^{12} \approx 0.099$ ms. Runtime $\approx \max(7.05, 0.099) = 7.05$ ms. Compute is 70× larger than memory.
+- **Halve the bytes only** (store in 16-bit but still do fp32 arithmetic): memory term $0.099 \to 0.049$ ms. Runtime $= \max(7.05, 0.049) = 7.05$ ms. **Zero speedup.** You shrank a term that was not the bottleneck.
+- **Use the bf16 Tensor-Core path**: compute term $= 1.37\times10^{11} / 312\times10^{12} \approx 0.44$ ms. Runtime $= \max(0.44, 0.049) \approx 0.44$ ms — **16× faster**, and all of it came from the higher ceiling, none from the halved bytes.
+
+**Case 2: a memory-bound elementwise add**, $n = 10^8$ elements (AI ≈ 0.083).
+
+- FLOPs $= 10^8$; fp32 bytes $= 12 \cdot 10^8 = 1.2\times10^{9}$ (read two inputs, write one, 4 bytes each).
+- fp32: compute term $= 10^8 / 19.5\times10^{12} \approx 0.005$ ms; memory term $= 1.2\times10^9 / 2.039\times10^{12} \approx 0.59$ ms. Runtime $\approx 0.59$ ms. Memory is >100× larger than compute.
+- **Halve the bytes** (bf16, 6 bytes per element): memory term $\to 0.29$ ms. Runtime $\approx 0.29$ ms — **2× faster**, entirely from the bytes.
+- **A faster arithmetic unit** does nothing: the compute term was already ~0.005 ms. (Elementwise ops don't even run on Tensor Cores — there is no matmul for them to accelerate.)
+
+On the roofline picture from 08.2: halving bytes **doubles AI**, moving the dot *right*. For the elementwise add (0.083 → 0.167) that walks it up the slanted bandwidth line, so it gets 2× higher. For the $n = 4096$ matmul (683 → 1365) it slides right along the *flat* roof — no higher at all. The Tensor-Core path does something else entirely: it **raises the flat roof itself** (19.5 → 312 TFLOP/s), which lifts every compute-bound dot but leaves memory-bound dots, still under the slanted line, exactly where they were.
+
+One subtlety: the ridge itself moves with the dtype, because $P_{\max}$ changes. For plain fp32 the A100 ridge is $19.5\times10^{12} / 2.039\times10^{12} \approx 9.6$ FLOPs/byte; for bf16 Tensor Cores it is ≈ 153. So a small matmul can be compute-bound in fp32 and memory-bound in bf16, and then it needs *both* wins. Take $n = 256$: FLOPs $= 2\cdot256^3 \approx 3.4\times10^{7}$.
+
+- fp32: AI $= n/6 \approx 43$ (> 9.6, compute-bound). Compute $\approx 1.72\ \mu$s, memory $= 786{,}432 / 2.039\times10^{12} \approx 0.39\ \mu$s. Runtime ≈ 1.72 µs.
+- bf16: AI $= n/3 \approx 85$ (< 153, now memory-bound). Compute $\approx 0.11\ \mu$s, memory $\approx 0.19\ \mu$s. Runtime ≈ 0.19 µs.
+
+The Tensor Cores collapsed the compute term so far that the bytes became the limit — and the halved bytes are what keep that new limit at 0.19 µs instead of 0.39 µs. In practice this is why many small, skinny matmuls in a model (small heads, small batch at inference) are bandwidth-limited once they run in bf16.
+
+<div class="callout key"><p>"16-bit is faster" is two separate wins. <strong>Halved bytes</strong> speed up memory-bound kernels (elementwise, LayerNorm, softmax) and do nothing for compute-bound matmuls. <strong>The 16-bit Tensor-Core path</strong> speeds up compute-bound matmuls and does nothing for memory-bound kernels. Before predicting what mixed precision will buy a kernel, place it on the roofline: left of the ridge, count bytes; right of the ridge, count FLOP/s.</p></div>
+
 But you cannot naively make *everything* 16-bit — some operations lose too much accuracy at low precision. **Mixed precision** is the disciplined version: run the matmul-heavy, error-tolerant operations in 16-bit for speed and memory, but keep the numerically sensitive parts (the master copy of the weights, the optimizer's accumulation, large reductions) in fp32. `torch.autocast` automates the choice per operation.
 
 To understand *which* 16-bit format and *why* the sensitive parts stay fp32, you have to look at the bits.
@@ -194,7 +235,7 @@ You profile a training step and the sorted table shows: 55% of CUDA time in `amp
 - **Calling `.item()`/`.cpu()`/`print(loss)` every step.** Each forces a host sync and stalls the GPU (the gap in section 3). Keep logging off the hot path.
 - **Using fp16 without a GradScaler.** Small gradients silently underflow to zero and the model quietly fails to learn — no crash, just a bad loss curve. Either scale, or use bf16.
 - **Expecting bf16 to match fp32 loss curves to many digits.** bf16 has only ~3 significant digits; small run-to-run differences are normal. Correctness comes from the fp32 master weights and fp32 accumulation, not from bf16 precision.
-- **Assuming mixed precision fixes a compute-bound bottleneck by halving bytes.** For the matmuls the win is the faster 16-bit Tensor-Core path, not bandwidth; for the elementwise tail the win is the halved bytes. Different mechanisms — the profiler + roofline tell you which applies where.
+- **Assuming mixed precision fixes a compute-bound bottleneck by halving bytes.** For the matmuls the win is the faster 16-bit Tensor-Core path, not bandwidth; for the elementwise tail the win is the halved bytes. Different mechanisms — the profiler + roofline tell you which applies where. Worked through by hand in section 4: halving the bytes of an $n=4096$ matmul gives 0% speedup; the bf16 Tensor Cores give 16×.
 
 ## Check yourself
 
