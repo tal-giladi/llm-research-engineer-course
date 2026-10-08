@@ -14,6 +14,8 @@ The roofline (08.2) tells you what *kind* of fix a kernel needs, but not *which*
 
 `torch.profiler` wraps a slice of your code, records every operator and every CUDA kernel with timestamps, and lets you print a sorted table or export a trace to view on a timeline.
 
+The snippet below shows the *shape* of the call: `model`, `optimizer`, `x`, `y` stand for whatever your training loop already has. A complete, self-contained version you can paste into Colab is in [section 2.1](#/lessons/module-08/lesson-03?id=_21-run-it-yourself-on-a-colab-t4).
+
 ```python
 import torch
 from torch.profiler import profile, record_function, ProfilerActivity
@@ -41,10 +43,190 @@ print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
 prof.export_chrome_trace("trace.json")
 ```
 
+What the printed table looks like (illustrative, from the small 4-layer model of section 2.1 on a T4 in fp32, 5 steps; the real table has more columns — CPU times, memory — trimmed here to the ones you read first):
+
+```text
+-------------------------------------------------  ------------  ------------  ----------
+Name                                                  Self CUDA    CUDA total  # of Calls
+-------------------------------------------------  ------------  ------------  ----------
+train_step                                              0.000us     590.412ms           5
+aten::mm                                              296.540ms     296.540ms         170
+volta_sgemm_128x64_nt                                 157.030ms     157.030ms          85
+volta_sgemm_128x64_nn                                 139.510ms     139.510ms          85
+aten::addmm                                            96.020ms      96.020ms          85
+volta_sgemm_128x128_tn                                 96.020ms      96.020ms          85
+aten::_efficient_attention_backward                    30.480ms      30.480ms          20
+fmha_cutlassB_f32_aligned_64x64_k64_sm75               30.480ms      30.480ms          20
+aten::gelu                                             15.470ms      15.470ms          20
+aten::native_dropout                                   13.010ms      13.010ms          60
+fmha_cutlassF_f32_aligned_64x64_rf_sm75                12.060ms      12.060ms          20
+aten::native_layer_norm                                11.020ms      11.020ms          45
+-------------------------------------------------  ------------  ------------  ----------
+Self CPU time total: 612.874ms
+Self CUDA time total: 590.412ms
+```
+
+How to read it: `aten::*` rows are PyTorch operators, the rows below them with cryptic names are the actual GPU kernels they launched (so the same time appears twice — once on the op, once on its kernel). `aten::addmm` is the forward of every `nn.Linear` (17 per step × 5 steps = 85 calls); `aten::mm` is the backward (two matmuls per Linear: gradient w.r.t. input and w.r.t. weight → 170). The three `sgemm` kernels together are ~66% of GPU time — the healthy picture: compute-bound matmuls on top. GELU, dropout and LayerNorm are the memory-bound tail (08.2), small here but exactly what fusion would remove.
+
 Two things to internalize about *why* the calls are shaped this way:
 
 - **`ProfilerActivity.CPU` and `.CUDA` are both needed** because work happens on two devices. The CPU (your Python + PyTorch dispatcher) *launches* kernels; the GPU *runs* them. The profiler records both timelines so you can see how they line up.
 - **`torch.cuda.synchronize()` matters** because CUDA is asynchronous. When Python calls `loss.backward()`, it does not wait for the GPU — it queues the kernels and returns immediately. Without a synchronize, a naive wall-clock timer would measure only the *launch* time, not the *execution*. The profiler handles device timing correctly via CUDA events, but any manual timing around GPU code must synchronize, or the numbers are fiction. (This is the same async fact behind the `torch.cuda.synchronize()` calls in the benchmark script `code/scripts/bench_attention.py`.)
+
+## 2.1 Run it yourself on a Colab T4
+
+<div class="hw"><p><strong>Hardware:</strong> free Colab T4 (16 GB). Runtime → Change runtime type → T4 GPU. Runs in about 1 minute, uses under 2 GB of GPU memory. Does not run on CPU (the point is to see GPU kernels).</p></div>
+
+Paste this into one Colab cell. It builds a small 4-layer transformer (~21M parameters) on random tokens, so it needs no data and no course code. It runs three experiments:
+
+1. **Healthy step** — batch 16 × 256 tokens, fp32. Expect the GPU busy almost the whole time and matmuls on top.
+2. **Starving GPU** — the same model with batch 1 × 16 tokens. Every kernel is tiny, so the GPU finishes each one before the CPU can launch the next: you will see the GPU busy only a fraction of the wall time. This is the CPU↔GPU gap from section 3.
+3. **Mixed precision** — experiment 1 again under fp16 `autocast` + `GradScaler` (sections 6–7). The T4 has fp16 Tensor Cores but no bf16 hardware, so fp16 is the right choice on this card.
+
+```python
+import time, torch, torch.nn as nn, torch.nn.functional as F
+from torch.profiler import profile, record_function, ProfilerActivity
+
+assert torch.cuda.is_available(), "Runtime -> Change runtime type -> T4 GPU"
+dev = "cuda"
+print(torch.cuda.get_device_name(0), "| torch", torch.__version__)
+VOCAB = 8000
+
+class TinyLM(nn.Module):
+    def __init__(self, d=512, layers=4, heads=8):
+        super().__init__()
+        self.emb = nn.Embedding(VOCAB, d)
+        layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.1, activation="gelu",
+                                           batch_first=True, norm_first=True)
+        self.blocks = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
+        self.head = nn.Linear(d, VOCAB)
+
+    def forward(self, x, y):
+        logits = self.head(self.blocks(self.emb(x)))
+        return logits, F.cross_entropy(logits.view(-1, VOCAB), y.view(-1))
+
+def make(batch, seq):
+    torch.manual_seed(0)
+    model = TinyLM().to(dev)
+    opt = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    x = torch.randint(0, VOCAB, (batch, seq), device=dev)   # random token ids
+    y = torch.randint(0, VOCAB, (batch, seq), device=dev)   # random targets
+    return model, opt, x, y
+
+def step(model, opt, x, y, scaler=None):
+    with torch.autocast("cuda", dtype=torch.float16, enabled=scaler is not None):
+        _, loss = model(x, y)
+    if scaler is None:
+        loss.backward(); opt.step()
+    else:
+        scaler.scale(loss).backward(); scaler.step(opt); scaler.update()
+    opt.zero_grad(set_to_none=True)
+
+def gpu_us(e):  # self GPU time of one profiler row, in microseconds (name changed in torch 2.4)
+    return e.self_device_time_total if hasattr(e, "self_device_time_total") else e.self_cuda_time_total
+
+def kind(name):
+    n = name.lower()
+    if "gemm" in n or "xmma" in n: return "matmul"
+    if "fmha" in n or "flash" in n or "attention" in n: return "attention"
+    return "other"
+
+def run(title, batch, seq, fp16=False, steps=5, top=8):
+    model, opt, x, y = make(batch, seq)
+    scaler = torch.amp.GradScaler("cuda") if fp16 else None
+    for _ in range(3): step(model, opt, x, y, scaler)        # warm-up: cuBLAS picks kernels here
+    torch.cuda.synchronize()
+
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+        t0 = time.perf_counter()
+        for _ in range(steps):
+            with record_function("train_step"):
+                step(model, opt, x, y, scaler)
+        torch.cuda.synchronize()
+        wall_ms = (time.perf_counter() - t0) * 1e3
+
+    # keep only real GPU kernels (op / autograd / annotation rows would double-count their kernels' time)
+    rows = [e for e in prof.key_averages()
+            if gpu_us(e) > 0
+            and not e.key.startswith(("aten::", "train_step", "autograd::", "Optimizer.", "torch::"))
+            and not e.key.endswith(("Backward0", "Backward1"))]
+    total = sum(gpu_us(e) for e in rows)
+    by_kind = {k: sum(gpu_us(e) for e in rows if kind(e.key) == k) for k in ("matmul", "attention", "other")}
+
+    print(f"\n=== {title} ===")
+    print(f"wall {wall_ms/steps:.1f} ms/step | GPU busy {total/1e3/steps:.1f} ms/step "
+          f"= {100*total/1e3/wall_ms:.0f}% of wall time")
+    print("GPU time split: " + " | ".join(f"{k} {100*v/total:.0f}%" for k, v in by_kind.items()))
+    print(f"{'ms/step':>8} {'share':>6} {'calls/step':>10}  kernel")
+    for e in sorted(rows, key=gpu_us, reverse=True)[:top]:
+        print(f"{gpu_us(e)/1e3/steps:8.2f} {100*gpu_us(e)/total:5.1f}% {e.count//steps:10d}  {e.key[:70]}")
+    return prof
+
+def timed(batch, seq, fp16=False, steps=20):  # clean timing, no profiler overhead
+    model, opt, x, y = make(batch, seq)
+    scaler = torch.amp.GradScaler("cuda") if fp16 else None
+    for _ in range(3): step(model, opt, x, y, scaler)
+    torch.cuda.synchronize(); t0 = time.perf_counter()
+    for _ in range(steps): step(model, opt, x, y, scaler)
+    torch.cuda.synchronize()                                  # without this you time only the launches
+    return (time.perf_counter() - t0) * 1e3 / steps
+
+prof = run("1) healthy: batch 16 x 256 tokens, fp32", 16, 256)
+prof.export_chrome_trace("trace.json")                       # open at https://ui.perfetto.dev
+run("2) starving: batch 1 x 16 tokens, fp32", 1, 16, top=4)
+run("3) mixed precision: batch 16 x 256, fp16 autocast", 16, 256, fp16=True, top=4)
+
+t32, t16 = timed(16, 256), timed(16, 256, fp16=True)
+print(f"\nclean timing: fp32 {t32:.1f} ms/step | fp16 autocast {t16:.1f} ms/step | speedup {t32/t16:.1f}x")
+# to see the full table of section 2:
+# print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=15))
+# to view the timeline: from google.colab import files; files.download("trace.json")
+```
+
+Illustrative output (a T4; your numbers will differ by ±20%, and kernel names change with the CUDA/cuBLAS version — newer versions may show `sm75_xmma_gemm_...` or `cutlass_...` instead of `volta_sgemm_...`):
+
+```text
+Tesla T4 | torch 2.8.0+cu126
+
+=== 1) healthy: batch 16 x 256 tokens, fp32 ===
+wall 122.6 ms/step | GPU busy 118.1 ms/step = 96% of wall time
+GPU time split: matmul 66% | attention 7% | other 27%
+ ms/step  share calls/step  kernel
+   31.41  26.6%         17  volta_sgemm_128x64_nt
+   27.90  23.6%         17  volta_sgemm_128x64_nn
+   19.20  16.3%         17  volta_sgemm_128x128_tn
+    6.10   5.2%          4  fmha_cutlassB_f32_aligned_64x64_k64_sm75
+    3.09   2.6%          4  void at::native::vectorized_elementwise_kernel<4, at::native::GeluCUD
+    2.60   2.2%         12  void at::native::(anonymous namespace)::fused_dropout_kernel_vec<floa
+    2.41   2.0%          4  fmha_cutlassF_f32_aligned_64x64_rf_sm75
+    2.20   1.9%          9  void at::native::(anonymous namespace)::vectorized_layer_norm_kernel<
+
+=== 2) starving: batch 1 x 16 tokens, fp32 ===
+wall 8.3 ms/step | GPU busy 1.7 ms/step = 20% of wall time
+GPU time split: matmul 41% | attention 6% | other 53%
+ ms/step  share calls/step  kernel
+    0.29  17.1%         17  volta_sgemm_32x32_sliced1x4_tn
+    0.21  12.4%         17  volta_sgemm_32x32_sliced1x4_nt
+    0.18  10.6%          6  void at::native::(anonymous namespace)::multi_tensor_apply_kernel<at:
+    0.09   5.3%         34  void at::native::vectorized_elementwise_kernel<4, at::native::FillFun
+
+=== 3) mixed precision: batch 16 x 256, fp16 autocast ===
+wall 46.9 ms/step | GPU busy 44.2 ms/step = 94% of wall time
+GPU time split: matmul 47% | attention 9% | other 44%
+ ms/step  share calls/step  kernel
+    7.62  17.2%         17  turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_tn
+    6.94  15.7%         17  turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_nn
+    5.31  12.0%         17  turing_fp16_s1688gemm_fp16_256x128_ldg8_f2f_nt
+    3.12   7.1%          4  fmha_cutlassB_f16_aligned_64x64_k64_sm75
+
+clean timing: fp32 121.4 ms/step | fp16 autocast 44.8 ms/step | speedup 2.7x
+```
+
+What to notice:
+
+- **Experiment 1** is the healthy picture: GPU busy 96% of the time, and the three `sgemm` (fp32 matmul) kernels are two thirds of it. `calls/step = 17` is the 17 `nn.Linear` layers (4 per block × 4 blocks + the output head), each with one forward and two backward matmuls — that's why there are three different gemm kernels.
+- **Experiment 2** is the starving GPU: 8.3 ms of wall time per step but only 1.7 ms of actual GPU work, so the GPU sits idle 80% of the time waiting for Python to launch the next kernel. Making the kernels faster would change nothing; the fix is fewer, bigger kernels (bigger batch, fusion, `torch.compile`, CUDA graphs). Open `trace.json` in Perfetto for this run and you will literally see the gaps on the GPU row. (The profiler itself adds some CPU overhead, which makes this case look a bit worse than reality — but the gap is real without it too.)
+- **Experiment 3** is mixed precision: the gemm kernels switch from `sgemm` (fp32 CUDA cores) to `fp16_s1688gemm` (fp16 Tensor Cores; `1688` is the 16×8×8 Tensor-Core instruction shape) and drop from ~78 ms to ~20 ms per step. The non-matmul share rises from 27% to 44% — not because those kernels got slower but because the matmuls got so much faster. That is the roofline lesson of 08.2 in one number: after you speed up the compute-bound part, the memory-bound tail becomes the next thing to fix.
 
 ## 3. Reading the trace: hot kernels and CPU↔GPU gaps
 
