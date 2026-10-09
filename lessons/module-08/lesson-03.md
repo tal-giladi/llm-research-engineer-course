@@ -427,7 +427,27 @@ The crucial line of the table is the contrast between fp16 and bf16, which have 
 
 ## 6. Why bf16 is preferred for training (and needs no loss scaling)
 
-During training, activations and especially **gradients** can span a huge range of magnitudes and occasionally spike very large or shrink very small. bf16's fp32-equal exponent means those values stay representable — a gradient of $10^{-10}$ or an activation of $10^{5}$ is fine. The cost is only ~3 significant digits of precision, and that turns out to be tolerable because the *master weights and the optimizer accumulation are kept in fp32* (section 7): the coarse bf16 is used for the throughput-critical matmuls and the bytes-in-flight, while the slow, error-accumulating parts stay precise.
+During training, activations and especially **gradients** can span a huge range of magnitudes and occasionally spike very large or shrink very small. bf16's fp32-equal exponent means those values stay representable — a gradient of $10^{-10}$ or an activation of $10^{5}$ is fine. The cost is only ~3 significant digits of precision, and that turns out to be tolerable because the *master weights and the optimizer accumulation are kept in fp32* (section 7): the coarse bf16 is used for the throughput-critical matmuls and the bytes-in-flight, while the slow, error-accumulating parts stay in fp32 so they do not lose *more* precision.
+
+### What the fp32 master weights do — and do not — buy you
+
+fp32 cannot recover precision that a bf16 calculation already lost. The gradients that come out of a bf16 forward/backward are approximate, and they stay approximate. What fp32 does is **stop further loss** — specifically, it stops small updates from being rounded away when they are added to the weights.
+
+Tiny example. A weight starts at $w = 1.0$ and every step adds $\Delta = 0.001$. bf16 has 7 mantissa bits, so near 1.0 its spacing is $2^{-7} = 0.0078125$: the next bf16 value above 1.0 is **1.0078125**. Anything below the midpoint 1.00390625 rounds back to 1.0.
+
+| Step | Weight stored in bf16 | fp32 master weight | bf16 copy of the master (used for compute) |
+|---|---|---|---|
+| 0 | 1.0 | 1.000 | 1.0 |
+| 1 | 1.0 (1.001 rounds back) | 1.001 | 1.0 |
+| 2 | 1.0 | 1.002 | 1.0 |
+| 3 | 1.0 | 1.003 | 1.0 |
+| 4 | 1.0 | 1.004 | **1.0078125** |
+
+Stored directly in bf16, the weight **never moves** — every update is rounded away, forever. With an fp32 master, the small updates pile up (≈1.001, 1.002, 1.003, 1.004 — fp32 is itself only approximate, but far finer), and at step 4 the master crosses the midpoint, so the bf16 copy the matmuls use finally steps to 1.0078125. Learning progresses because small, approximate updates are *kept*, not because they became exact.
+
+**fp32 accumulation** inside a matmul works the same way: summing many bf16 products into an fp32 accumulator avoids adding a new rounding error at every addition. It does not undo the rounding already in the bf16 inputs.
+
+So mixed precision does **not** give the same numbers as full-fp32 training — the losses differ slightly, step by step. It gives training that still learns about as well, because the errors stay small instead of compounding.
 
 fp16 has the opposite problem in exactly the place it hurts. Gradients are often small — well below fp16's smallest normal $6.1\times10^{-5}$ — so they **underflow to zero** in fp16 and the update is lost. The standard fix is **loss scaling** via `torch.cuda.amp.GradScaler`: multiply the loss by a large factor $s$ before `backward()`, which scales every gradient up by $s$ into fp16's representable range; then divide the gradients by $s$ (in fp32) before the optimizer step. The scaler even adjusts $s$ dynamically — if it detects an `inf`/`nan` (the gradients overflowed the top of fp16's range), it skips the step and lowers $s$. It works, but it is extra machinery and a source of bugs.
 
@@ -513,7 +533,7 @@ You profile a training step and the sorted table shows: 55% of CUDA time in `amp
 - **Timing GPU code without synchronizing.** CUDA is async; a bare `time.perf_counter()` around `loss.backward()` measures launch time, not run time. Use the profiler or wrap manual timers with `torch.cuda.synchronize()`.
 - **Calling `.item()`/`.cpu()`/`print(loss)` every step.** Each forces a host sync and stalls the GPU (the gap in section 3). Keep logging off the hot path.
 - **Using fp16 without a GradScaler.** Small gradients silently underflow to zero and the model quietly fails to learn — no crash, just a bad loss curve. Either scale, or use bf16.
-- **Expecting bf16 to match fp32 loss curves to many digits.** bf16 has only ~3 significant digits; small run-to-run differences are normal. Correctness comes from the fp32 master weights and fp32 accumulation, not from bf16 precision.
+- **Expecting bf16 to match fp32 loss curves to many digits.** bf16 has only ~3 significant digits; small run-to-run differences are normal. The fp32 master weights and fp32 accumulation do not make results match fp32; they stop small updates and sums from losing *further* precision, so training still progresses (section 6).
 - **Assuming mixed precision fixes a compute-bound bottleneck by halving bytes.** For the matmuls the win is the faster 16-bit Tensor-Core path, not bandwidth; for the elementwise tail the win is the halved bytes. Different mechanisms — the profiler + roofline tell you which applies where. Worked through by hand in section 4: halving the bytes of an $n=4096$ matmul gives 0% speedup; the bf16 Tensor Cores give 16×.
 
 ## Check yourself
@@ -538,7 +558,7 @@ The GPU is idle — it drained its queued kernels and is waiting on the CPU. Lik
 
 <details><summary>You autocast to bf16 but the model's weights are still fp32 in memory. Is that a bug?</summary>
 
-No — that is exactly how mixed precision works. The fp32 weights are the *master copy* the optimizer updates precisely; autocast casts them to bf16 on the fly for the matmul-shaped ops (for speed and to halve bytes) and computes fragile ops (softmax, reductions, loss) in fp32. Keeping the master weights and optimizer accumulation in fp32 is what preserves training quality while the 16-bit path provides the throughput.
+No — that is exactly how mixed precision works. The fp32 weights are the *master copy* the optimizer updates precisely; autocast casts them to bf16 on the fly for the matmul-shaped ops (for speed and to halve bytes) and computes fragile ops (softmax, reductions, loss) in fp32. Keeping the master weights and optimizer accumulation in fp32 stops small updates from being rounded away (a $+0.001$ update to a bf16 weight of 1.0 would vanish every step), so training keeps progressing while the 16-bit path provides the throughput. Results still differ slightly from full fp32.
 
 </details>
 
