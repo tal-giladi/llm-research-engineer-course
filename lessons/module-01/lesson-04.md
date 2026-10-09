@@ -228,7 +228,25 @@ $$
 \log q_j = z_j - \log\big(e^{z_0} + e^{z_1} + e^{z_2}\big),
 $$
 
-which is softmax followed by log, done in one step so a tiny $q$ never rounds to 0. The logits are *scores*, not probabilities; this step is where they become (log-)probabilities. Row 0: $\log(e^2 + e^1 + e^0) = \log(7.389 + 2.718 + 1) = 2.4076$, so $\log q = (2 - 2.4076,\ 1 - 2.4076,\ 0 - 2.4076) = (-0.4076,\ -1.4076,\ -2.4076)$. All four rows:
+which is softmax followed by log, done in one step so a tiny $q$ never rounds to 0.
+
+*Why that line is "softmax, then log".* Start from softmax and take the log of both sides, using two rules: $\log(a/b) = \log a - \log b$, and $\log(e^{x}) = x$.
+
+$$
+q_j = \frac{e^{z_j}}{e^{z_0} + e^{z_1} + e^{z_2}}
+\;\;\Longrightarrow\;\;
+\log q_j = \log\big(e^{z_j}\big) - \log\big(e^{z_0} + e^{z_1} + e^{z_2}\big)
+= z_j - \log\big(e^{z_0} + e^{z_1} + e^{z_2}\big).
+$$
+
+The division inside softmax became a subtraction, and $\log$ undid the $e^{z_j}$ on top, leaving the raw logit $z_j$. Check it both ways on row 0, $z = (2, 1, 0)$, for $j = 0$:
+
+- Softmax first, then log: $q_0 = \dfrac{e^2}{e^2 + e^1 + e^0} = \dfrac{7.389}{11.107} = 0.6652$, and $\log 0.6652 = -0.4076$.
+- The one-step formula: $z_0 - \log(11.107) = 2 - 2.4076 = -0.4076$.
+
+Same number. The one-step version never forms the fraction $q_0$ itself, so even when $q_0$ would be something like $10^{-50}$ (which rounds to 0 in float32, and $\log 0 = -\infty$), the subtraction still gives a finite answer like $-115$. Section 6.1 derives this again with the max-shift added.
+
+The logits are *scores*, not probabilities; this step is where they become (log-)probabilities. Row 0: $\log(e^2 + e^1 + e^0) = \log(7.389 + 2.718 + 1) = 2.4076$, so $\log q = (2 - 2.4076,\ 1 - 2.4076,\ 0 - 2.4076) = (-0.4076,\ -1.4076,\ -2.4076)$. All four rows:
 
 ```text
 log q = [[-0.4076, -1.4076, -2.4076],
