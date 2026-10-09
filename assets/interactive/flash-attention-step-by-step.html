@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FlashAttention · Every number, every tile</title>
+<style>
+:root{color-scheme:light;--bg:#f3f5f7;--panel:#fff;--ink:#162631;--muted:#566775;--line:#d6e0e5;--q:#176f9b;--kv:#8450ae;--keep:#167762;--hot:#fff0c5;--soft:#eaf5f1}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:26px}h1{font-size:30px;line-height:1.15;letter-spacing:-1px;margin:6px 0 12px}h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:0 0 5px}p{margin:6px 0 12px}.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700;color:var(--keep)}.muted,small{color:var(--muted)}.intro{max-width:1000px}.toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:14px 0}.toolbar label{display:flex;gap:6px;align-items:center}button,select{font:inherit;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);padding:9px 12px;cursor:pointer}button:hover{border-color:var(--q)}button:disabled{opacity:.4;cursor:default}button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--q);outline-offset:3px}#play{background:var(--ink);color:white;min-width:98px}#seek{width:100%;accent-color:var(--keep)}.progress{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}.stage{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;background:var(--ink);color:#fff;border-radius:12px;padding:18px;margin:14px 0}.stage h2{font-size:20px}.stage .muted{color:#bad0dc}.formula{font:14px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#243a48;padding:12px;border-radius:7px;align-self:center;min-height:90px}.workspace{display:grid;grid-template-columns:.95fr 1.4fr;gap:18px}.zone{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}.zone-header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.zone-header small{font-size:11px}.matrices{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}.matrix{flex:1;min-width:170px}#hbm-inputs .matrix{min-width:125px}.matrix table{width:100%;border-spacing:3px;table-layout:fixed}.matrix caption{text-align:left;font-size:13px;margin-bottom:4px;font-weight:650}.matrix th{font-size:11px;color:var(--muted);font-weight:500}.matrix td{font:13px/1.4 ui-monospace,Consolas,monospace;text-align:center;padding:6px 3px;background:#f0f3f6;border-radius:3px;transition:background .25s;white-space:nowrap}.matrix tr.selected td{background:#e3eff8}.matrix.kv tr.selected td{background:#f0e8f7}.matrix td.hit{background:var(--hot)!important;box-shadow:inset 0 0 0 2px #b8861d}.matrix td.done{background:var(--soft)}.output-group{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.resident{padding:7px 10px;background:var(--soft);color:var(--keep);border-radius:5px;font-size:12px;margin-bottom:12px}.ephemeral{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}.state-wrap{overflow-x:auto;margin-top:12px}.state-table{width:100%;border-collapse:collapse;font:13px ui-monospace,Consolas,monospace}.state-table th{font:11px system-ui;text-align:left;padding:6px;color:var(--muted)}.state-table td{padding:8px 6px;border-top:1px solid var(--line);background:var(--soft)}.state-table td.hit{background:var(--hot)}.bus{grid-column:1/-1;position:relative;border-radius:9px;background:#e6ecef;min-height:43px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:13px}.bus .label{position:relative;z-index:2;background:#e6ecefe8;padding:4px 15px;border-radius:6px}.packet{position:absolute;top:5px;left:2%;height:33px;width:65px;background:var(--q);border-radius:6px;animation:move 2s ease-in-out infinite}.bus.write .packet{background:var(--keep);animation-direction:reverse}.bus.idle .packet{display:none}@keyframes move{from{left:2%;opacity:.2}50%{opacity:.8}to{left:93%;opacity:.2}}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;margin:12px 0}.legend span::before{content:'';display:inline-block;width:10px;height:10px;margin-right:5px;background:var(--hot)}.legend span:nth-child(2)::before{background:#d3ecdf}.legend span:nth-child(3)::before{background:#e3eff8}details{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;font-weight:650}details .content{padding-top:12px;max-width:1100px}code,pre{font-family:ui-monospace,Consolas,monospace}pre{overflow:auto;padding:14px;background:#f0f3f6;border-radius:6px;font-size:13px}.reference .matrix{min-width:0}.reference table{table-layout:auto}.reference{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}a{color:var(--q)}#error{background:#ffe3de;padding:20px}footer{font-size:12px;color:var(--muted);margin-top:20px}.note{background:#f5f8fa;padding:8px;border-radius:5px;font-size:12px;margin-top:10px}.status-line{font-size:12px;min-height:18px;margin-top:8px}.jump{margin-left:auto}.pass{color:var(--keep);font-weight:650}@media(max-width:900px){main{padding:16px}.workspace,.stage{grid-template-columns:1fr}.bus{grid-row:2}.reference{grid-template-columns:1fr}.jump{margin-left:0}}@media(prefers-reduced-motion:reduce){.packet{animation:none!important;left:46%}.matrix td{transition:none}}
+</style></head><body><main id="flash-lab">
+<header><div class="eyebrow">THE FORWARD PASS · FLASHATTENTION-2</div><h1>Every number. One tile at a time.</h1><p class="intro">Four tokens, one head, two features. Q stays <strong>two rows at a time</strong>; K and V arrive in two-row tiles. Follow the arithmetic all the way to O = softmax(QKᵀ / √2)V.</p><p class="muted">Start with <strong>Next</strong>, or play slowly. Yellow marks the current calculation; green marks state carried forward. All displayed values are rounded to 4 decimals; calculations use full JavaScript precision.</p></header>
+<div id="error" hidden role="alert"></div>
+<div class="toolbar"><button id="restart" title="Return to beginning">↺ Start</button><button id="prev">← Back</button><button id="play">▶ Play</button><button id="next">Next →</button><label>Step time <select id="speed"><option value="7000" selected>7 seconds</option><option value="4500">4.5 seconds</option><option value="2000">2 seconds</option></select></label><label class="jump">Jump to <select id="jump" aria-label="Jump to a major step"></select></label></div>
+<div class="progress"><span id="position"></span><span id="location"></span></div><input type="range" id="seek" min="0" value="0" aria-label="Animation step">
+<section class="stage" aria-live="polite" aria-atomic="true"><div><div id="phase" class="muted"></div><h2 id="title"></h2><p id="explain"></p></div><div id="formula" class="formula"></div></section>
+<div class="workspace">
+<section class="zone"><div class="zone-header"><h2>HBM · full tensors</h2><small>Global memory</small></div><div class="matrices" id="hbm-inputs"></div><div class="matrices output-group" id="hbm-outputs"></div><div class="note">Q, K and V already exist here. A read copies a tile; it does not remove the original. No full score or probability matrix is written here.</div><div class="status-line" id="io"></div></section>
+<section class="zone"><div class="zone-header"><h2>On-chip · current work</h2><small>Shared memory + registers, grouped</small></div><div class="resident" id="resident"></div><div class="matrices" id="chip-inputs"></div><div class="state-wrap" id="state"></div><div class="ephemeral"><div class="matrices" id="temps"></div><div class="note">S and W are temporary tile values. W = exp(S − m′) is <strong>unnormalized</strong>. Keep m, ℓ and A; discard S and W after their contribution is accumulated.</div></div></section>
+<div class="bus idle" id="bus"><div class="packet"></div><span class="label" id="transfer"></span></div>
+</div>
+<div class="legend"><span>Current operands/result</span><span>Persistent running state</span><span>Active source rows (K/V shown in purple)</span></div>
+<details open><summary>What exactly is kept between K/V tiles?</summary><div class="content"><p>Independently for <strong>each query row</strong>: <strong>m</strong>, the maximum score seen; <strong>ℓ</strong>, the sum of exp(score − m); and <strong>A</strong>, the vector sum of exp(score − m) × V. A is a numerator, not yet the final output.</p><p>When a later tile raises m, multiply <em>both</em> old ℓ and old A by α = exp(m<sub>old</sub> − m<sub>new</sub>). This changes their scale without revisiting old scores. At the end, O = A / ℓ. The intermediate normalized softmax probabilities are never needed as a full matrix.</p><p><strong>L = m + ln(ℓ)</strong> is one saved log-sum-exp per query for the backward pass. This demo writes L alongside O. During backward, probabilities can be reconstructed from recomputed scores and L; that pass is outside this animation.</p></div></details>
+<details id="reference-details"><summary>Reference only: full scores, final probabilities, and a numerical check</summary><div class="content"><p>This panel is a teaching reference computed separately. These full matrices are <strong>not</strong> buffers kept by the animated FlashAttention kernel. A full probability row sums to 1; a temporary W row usually does not.</p><div id="reference" class="reference"></div><p id="verification" class="pass"></p><p id="weighted-example"></p></div></details>
+<details><summary>Algorithm, scope, and embedding this animation</summary><div class="content"><pre>for each Q tile:                         # 2 query rows here
+    load Q_tile
+    m = −∞; ℓ = 0; A = 0                 # per query row
+    for each K/V tile:                   # 2 key/value rows here
+        load K_tile, V_tile
+        S = Q_tile @ K_tile.T / sqrt(d)
+        m_new = max(m, rowmax(S))
+        α = exp(m − m_new)
+        W = exp(S − m_new[:, None])
+        ℓ = α * ℓ + rowsum(W)
+        A = α[:, None] * A + W @ V_tile
+        m = m_new
+    O_tile = A / ℓ[:, None]
+    L_tile = m + log(ℓ)
+    write O_tile, L_tile</pre><p>This is a pedagogical FlashAttention-2-style forward schedule with <strong>no mask and no dropout</strong>. In GPT causal attention, future-key scores are masked to −∞ before the maximum and exponentials; their exponential weights are zero. The animation serializes arithmetic and query tiles for learning. Real kernels parallelize query tiles, use Tensor Cores, and can overlap loads and computation. On-chip placement, buffer reuse, caches, and precision vary by kernel; separate S/W boxes here show logical values, not necessarily distinct physical buffers.</p><p>The counts are logical scalar transfers for this tiled schedule, not measured HBM transactions. Tiny matrices illustrate the method, not a speed benchmark. The arithmetic is JavaScript floating point, not a GPU execution or a simulator of BF16 rounding.</p><p>This file is self-contained and works offline. To embed it in a course, serve the file and use:</p><pre>&lt;iframe src="flash-attention-step-by-step.html"
+        title="FlashAttention step-by-step animation"
+        style="width:100%;height:1250px;border:0"
+        loading="lazy"&gt;&lt;/iframe&gt;</pre><p>Source: <a href="https://tridao.me/publications/flash2/flash2.pdf" target="_blank" rel="noopener noreferrer">Tri Dao, FlashAttention-2, §3.1 and Algorithm 1</a>. The demo includes the standard 1/√d score scaling.</p></div></details>
+<footer>Controls: Left / Right arrow to step (outside form controls). Playback pauses when the tab is hidden. No libraries, network requests, or tracking.</footer>
+</main><script>
+'use strict';
+(() => {
+  // Isolated module: deterministic trace generation is separate from rendering/playback.
+  const root = document.getElementById('flash-lab');
+  const el = id => root.querySelector('#' + id);
+  const Q = [[1,0],[0,1],[1,1],[1,-1]];
+  const K = [[1,0],[0,1],[2,1],[-1,2]];
+  const V = [[1,2],[3,0],[0,4],[2,1]];
+  const f = x => x === null || x === undefined ? '·' : x === -Infinity ? '−∞' : Math.abs(x) < 0.00005 ? '0' : Number(x.toFixed(4)).toString();
+  const vec = x => '[' + x.map(f).join(', ') + ']';
+  const blank = () => [[null,null],[null,null]];
+  const copy = x => structuredClone(x); // Preserves −Infinity in trace snapshots.
+  const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const dot = (a,b) => a.reduce((t,v,j) => t + v*b[j],0);
+
+  function buildTrace() {
+    const frames = [], milestones = [];
+    const s = {qi:null,kj:null,q:null,k:null,v:null,S:blank(),W:blank(),m:[-Infinity,-Infinity],l:[0,0],A:[[0,0],[0,0]],mn:[null,null],alpha:[null,null],o:blank(),L:[null,null],O:Array.from({length:4},()=>[null,null]),savedL:[null,null,null,null],reads:0,writes:0};
+    function emit(title, explain, formula, phase, options={}) {
+      frames.push({...copy(s),title,explain,formula,phase,hit:[],direction:'idle',transfer:'On-chip arithmetic only · no HBM transfer',...options});
+      if (options.mark) milestones.push({index:frames.length-1,label:options.mark});
+    }
+    emit('All inputs begin in HBM','Each row belongs to one token. Q, K, V are 4 × 2. We will produce all four rows of O without keeping a 4 × 4 score or probability matrix.','Q, K, V: 4 rows × 2 features\nQuery tile: 2 rows · K/V tile: 2 rows\nd = 2 → score scale = 1 / √2','Ready',{mark:'Beginning',transfer:'No data has moved yet'});
+    for(let qi=0;qi<4;qi+=2) {
+      Object.assign(s,{qi,kj:null,q:Q.slice(qi,qi+2),k:null,v:null,S:blank(),W:blank(),m:[-Infinity,-Infinity],l:[0,0],A:[[0,0],[0,0]],mn:[null,null],alpha:[null,null],o:blank(),L:[null,null]});
+      s.reads+=4;
+      emit(`Load Q rows ${qi+1}–${qi+2}`,`Only these two complete query vectors enter this work block. They stay here while both K/V tiles are processed. The other Q rows remain in HBM.`,`Q_tile = ${s.q.map(vec).join('\n         ')}\nInitialize each row: m = −∞, ℓ = 0, A = [0, 0]`,'Load query',{direction:'read',transfer:`HBM → on-chip: Q rows ${qi+1}–${qi+2} · 4 scalars`,mark:`Q${qi+1}–Q${qi+2}: load`,hit:['q:0:0','q:0:1','q:1:0','q:1:1']});
+      for(let kj=0;kj<4;kj+=2) {
+        Object.assign(s,{kj,k:K.slice(kj,kj+2),v:V.slice(kj,kj+2),S:blank(),W:blank(),mn:[null,null],alpha:[null,null]});s.reads+=8;
+        emit(`Load K/V rows ${kj+1}–${kj+2}`,kj===0?'The first K and V tiles arrive together. K gives the scores; matching V rows will supply the vectors we accumulate.':'The next K/V tile arrives. Q and its running m, ℓ, A survived; the previous tile’s scores and weights did not.',`K_tile = ${s.k.map(vec).join('; ')}\nV_tile = ${s.v.map(vec).join('; ')}`,'Load keys and values',{direction:'read',transfer:`HBM → on-chip: K${kj+1}–K${kj+2} and V${kj+1}–V${kj+2} · 8 scalars`,mark:`Q${qi+1}–Q${qi+2}: K/V${kj+1}–${kj+2}`});
+        for(let r=0;r<2;r++)for(let c=0;c<2;c++) {
+          const q=s.q[r],k=s.k[c];s.S[r][c]=dot(q,k)/Math.sqrt(2);
+          emit(`Score: Q${qi+r+1} · K${kj+c+1}`,`Multiply matching features and add, then divide by √2. This fills one cell of the 2 × 2 score tile. No V values are used yet.`,`S[Q${qi+r+1}, K${kj+c+1}]\n= (${f(q[0])} × ${f(k[0])} + ${f(q[1])} × ${f(k[1])}) / √2\n= ${f(s.S[r][c])}`,'Compute score tile',{hit:[`q:${r}:0`,`q:${r}:1`,`k:${c}:0`,`k:${c}:1`,`S:${r}:${c}`]});
+        }
+        for(let r=0;r<2;r++) {
+          s.mn[r]=Math.max(s.m[r],...s.S[r]);s.alpha[r]=Math.exp(s.m[r]-s.mn[r]);
+          emit(`Q${qi+r+1}: choose the new maximum`,s.m[r]===-Infinity?'There is no old contribution yet. α is zero because the initial maximum is −∞; old ℓ and A are zero.':s.mn[r]>s.m[r]?'A larger score has arrived. Previously accumulated exponentials used a smaller maximum. α rescales the old denominator AND numerator to the new maximum.':'The maximum did not rise for this query. α = 1, so its old denominator and numerator retain their scale.',`m′ = max(${f(s.m[r])}, ${s.S[r].map(f).join(', ')}) = ${f(s.mn[r])}\nα = exp(${f(s.m[r])} − ${f(s.mn[r])}) = ${f(s.alpha[r])}`,'Online softmax · rescale',{hit:[`S:${r}:0`,`S:${r}:1`,`state:${r}:m`,`state:${r}:mn`,`state:${r}:alpha`],...(kj===2&&r===0?{mark:`Q${qi+1}–Q${qi+2}: rescale old state`}:{})});
+        }
+        for(let r=0;r<2;r++)for(let c=0;c<2;c++) {
+          s.W[r][c]=Math.exp(s.S[r][c]-s.mn[r]);
+          emit(`Exponentiate: Q${qi+r+1}, K${kj+c+1}`,'Subtract this query’s new maximum, then exponentiate. This is an unnormalized weight, not the final softmax probability. Its denominator will include all key tiles.',`W[Q${qi+r+1}, K${kj+c+1}]\n= exp(${f(s.S[r][c])} − ${f(s.mn[r])})\n= ${f(s.W[r][c])}`,'Online softmax · temporary weights',{hit:[`S:${r}:${c}`,`W:${r}:${c}`,`state:${r}:mn`]});
+        }
+        for(let r=0;r<2;r++) {
+          const old=s.l[r];s.l[r]=s.alpha[r]*old+s.W[r][0]+s.W[r][1];
+          emit(`Q${qi+r+1}: update denominator ℓ`,'First rescale the old sum, then add this tile’s exponential weights. This one number summarizes all keys seen for this query.',`ℓ_new = α × ℓ_old + W₁ + W₂\n= ${f(s.alpha[r])} × ${f(old)} + ${f(s.W[r][0])} + ${f(s.W[r][1])}\n= ${f(s.l[r])}`,'Accumulate denominator',{hit:[`state:${r}:l`,`W:${r}:0`,`W:${r}:1`]});
+          for(let d=0;d<2;d++) {
+            const oldA=s.A[r][d];s.A[r][d]=s.alpha[r]*oldA+s.W[r][0]*s.v[0][d]+s.W[r][1]*s.v[1][d];
+            emit(`Q${qi+r+1}: update A feature ${d+1}`,'Use exactly the same α to rescale the old weighted-value sum. Then add the two new V features, weighted by W. We postpone division by ℓ until all keys are processed.',`A_new[${d+1}] = α × A_old[${d+1}] + W₁V₁[${d+1}] + W₂V₂[${d+1}]\n= ${f(s.alpha[r])} × ${f(oldA)} + ${f(s.W[r][0])} × ${f(s.v[0][d])} + ${f(s.W[r][1])} × ${f(s.v[1][d])}\n= ${f(s.A[r][d])}`,'Accumulate numerator',{hit:[`state:${r}:A${d}`,`W:${r}:0`,`W:${r}:1`,`v:0:${d}`,`v:1:${d}`]});
+          }
+        }
+        s.m=[...s.mn];
+        emit('Commit the running state','Both query rows now include this K/V tile. Keep the updated m, ℓ and A. The state table has one independent set of statistics per query.',s.m.map((m,r)=>`Q${qi+r+1}: m=${f(m)}, ℓ=${f(s.l[r])}, A=${vec(s.A[r])}`).join('\n'),'Keep state');
+        Object.assign(s,{k:null,v:null,S:blank(),W:blank(),mn:[null,null],alpha:[null,null]});
+        emit('Discard the temporary tile',kj===0?'The K/V tile and its S/W values are no longer needed. They are not written to HBM. Q, m, ℓ and A stay on-chip for the next tile.':'All keys have contributed to these two queries. Temporary K/V, S and W can be discarded; the accumulated numerator and denominator are enough to finish.',`Kept: Q tile, m, ℓ, A\nDiscarded: K/V tile, S tile, W tile\nHBM writes in this step: 0`,'Release temporaries',{mark:`Q${qi+1}–Q${qi+2}: discard tile ${kj/2+1}`});
+      }
+      for(let r=0;r<2;r++) {
+        for(let d=0;d<2;d++) {
+          s.o[r][d]=s.A[r][d]/s.l[r];
+          emit(`Finalize O${qi+r+1}, feature ${d+1}`,'Now the denominator includes every key. Divide the accumulated weighted-value numerator by this query’s denominator to get one final output feature.',`O[Q${qi+r+1}, ${d+1}] = A[${d+1}] / ℓ\n= ${f(s.A[r][d])} / ${f(s.l[r])}\n= ${f(s.o[r][d])}`,'Normalize output',{hit:[`state:${r}:A${d}`,`state:${r}:l`,`o:${r}:${d}`],...(r===0&&d===0?{mark:`Q${qi+1}–Q${qi+2}: final division`}:{})});
+        }
+        s.L[r]=s.m[r]+Math.log(s.l[r]);
+        emit(`Q${qi+r+1}: prepare saved log-sum-exp`,'L compresses the row’s softmax normalization into one value for backward. It is not a saved row of probabilities.',`L = m + ln(ℓ)\n= ${f(s.m[r])} + ln(${f(s.l[r])})\n= ${f(s.L[r])}`,'Prepare backward statistic',{hit:[`state:${r}:m`,`state:${r}:l`,`L:${r}:0`]});
+      }
+      for(let r=0;r<2;r++){s.O[qi+r]=[...s.o[r]];s.savedL[qi+r]=s.L[r];}s.writes+=6;
+      emit(`Write output rows ${qi+1}–${qi+2} to HBM`,qi===0?'These output rows are finished. We can release their Q tile and statistics, then repeat with Q rows 3–4. K/V tiles will be read again for that work block.':'The last output rows are finished. Every query attended to all four keys. The full output is now in HBM.',`Write O rows: ${s.o.map(vec).join('; ')}\nWrite L rows: ${vec(s.L)}\n4 output scalars + 2 log-sum-exp scalars`,'Write results',{direction:'write',transfer:`On-chip → HBM: O${qi+1}–O${qi+2} and L${qi+1}–L${qi+2} · 6 scalars`,mark:`Q${qi+1}–Q${qi+2}: write output`});
+    }
+    Object.assign(s,{qi:null,kj:null,q:null,k:null,v:null,S:blank(),W:blank(),o:blank(),L:[null,null]});
+    emit('Complete: the full output is in HBM','All on-chip work can be released. Open the reference below to see the complete softmax matrix and verify the same weighted sums. The animated kernel never stored that matrix.',`O = ${s.O.map(vec).join('\n    ')}\nSaved L = ${vec(s.savedL)}`,'Done',{mark:'Final output',transfer:'Done · only Q, K, V, O and L remain in HBM'});
+    return {frames,milestones};
+  }
+
+  function reference() {
+    const scores=Q.map(q=>K.map(k=>dot(q,k)/Math.sqrt(2)));
+    const probs=scores.map(row=>{const m=Math.max(...row),w=row.map(s=>Math.exp(s-m)),l=w.reduce((a,b)=>a+b,0);return w.map(x=>x/l);});
+    const O=probs.map(row=>[0,1].map(d=>row.reduce((a,p,k)=>a+p*V[k][d],0)));
+    return {scores,probs,O};
+  }
+
+  function matrix(name,data,opts={}) {
+    const cols=opts.cols||['f1','f2'];
+    return `<div class="matrix ${opts.kind||''}"><table><caption>${esc(name)}</caption><thead><tr><th scope="col"></th>${cols.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${data.map((row,r)=>`<tr class="${opts.active?.includes(r)?'selected':''}"><th scope="row">${esc(opts.rows?.[r]||r+1)}</th>${row.map((n,c)=>`<td class="${opts.hit?.includes(`${opts.id}:${r}:${c}`)?'hit':opts.done&&n!==null?'done':''}">${f(n)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+
+  let trace,index=0,timer=null;
+  const pause=()=>{clearTimeout(timer);timer=null;el('play').textContent='▶ Play';};
+  function render() {
+    const s=trace.frames[index],qrows=s.qi===null?['—','—']:[`Q${s.qi+1}`,`Q${s.qi+2}`],krows=s.kj===null?['—','—']:[`K${s.kj+1}`,`K${s.kj+2}`];
+    el('position').textContent=`Step ${index+1} / ${trace.frames.length}`;
+    el('location').textContent=s.qi===null?'All 4 tokens':`Query rows ${s.qi+1}–${s.qi+2}${s.kj===null?'':` · key tile ${s.kj/2+1}/2`}`;
+    el('seek').value=index;el('prev').disabled=index===0;el('next').disabled=index===trace.frames.length-1;
+    ['title','explain','formula','phase'].forEach(k=>el(k).textContent=s[k]);
+    const qa=s.qi===null?[]:[s.qi,s.qi+1],ka=s.k?[s.kj,s.kj+1]:[];
+    el('hbm-inputs').innerHTML=matrix('Q · 4 × 2',Q,{active:qa})+matrix('K · 4 × 2',K,{active:ka,kind:'kv'})+matrix('V · 4 × 2',V,{active:ka,kind:'kv'});
+    el('hbm-outputs').innerHTML=matrix('O · final output',s.O,{done:true})+matrix('L · saved for backward',s.savedL.map(x=>[x]),{cols:['L'],done:true});
+    el('chip-inputs').innerHTML=matrix('Q tile · stays resident',s.q||blank(),{id:'q',rows:qrows,hit:s.hit})+matrix('K tile',s.k||blank(),{id:'k',rows:krows,hit:s.hit})+matrix('V tile',s.v||blank(),{id:'v',rows:krows.map(x=>x.replace('K','V')),hit:s.hit});
+    const fields=['m','mn','alpha','l','A0','A1'];
+    el('state').innerHTML=`<table class="state-table"><caption style="text-align:left">Running state · one set per query</caption><thead><tr><th>Query</th><th>m</th><th>m′ (new)</th><th>α</th><th>ℓ (sum)</th><th>A[f1]</th><th>A[f2]</th></tr></thead><tbody>${[0,1].map(r=>`<tr><th>${qrows[r]}</th>${[s.m[r],s.mn[r],s.alpha[r],s.l[r],s.A[r][0],s.A[r][1]].map((n,c)=>`<td class="${s.hit.includes(`state:${r}:${fields[c]}`)?'hit':''}">${s.q?f(n):'·'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    el('temps').innerHTML=matrix('S · temporary scores',s.S,{id:'S',cols:krows,rows:qrows,hit:s.hit})+matrix('W · temporary exp weights',s.W,{id:'W',cols:krows,rows:qrows,hit:s.hit})+matrix('O tile · A / ℓ',s.o,{id:'o',rows:qrows,hit:s.hit})+matrix('L tile · m + ln(ℓ)',s.L.map(x=>[x]),{id:'L',cols:['L'],rows:qrows,hit:s.hit});
+    el('resident').textContent=s.q?`Kept on-chip: Q${s.qi+1}–Q${s.qi+2} + independent m, ℓ, A per row`:'No active on-chip tile';
+    el('io').textContent=`Logical transfers so far: ${s.reads} input scalars read · ${s.writes} O/L scalars written`;
+    el('bus').className='bus '+s.direction;el('transfer').textContent=s.transfer;
+    const current=trace.milestones.filter(m=>m.index<=index).at(-1);el('jump').value=current?.index||0;
+  }
+  function go(n){pause();index=Math.max(0,Math.min(trace.frames.length-1,Number(n)));render();}
+  function tick(){if(index>=trace.frames.length-1){pause();return;}timer=setTimeout(()=>{index++;render();tick();},Number(el('speed').value));}
+  function play(){if(timer){pause();return;}if(index===trace.frames.length-1){index=0;render();}el('play').textContent='Ⅱ Pause';tick();}
+  try {
+    trace=buildTrace();const ref=reference(),last=trace.frames.at(-1);
+    const maxError=Math.max(...ref.O.flatMap((row,r)=>row.map((v,c)=>Math.abs(v-last.O[r][c]))));
+    if(!Number.isFinite(maxError)||maxError>1e-12)throw new Error('The tiled calculation did not match the reference.');
+    el('seek').max=trace.frames.length-1;
+    el('jump').innerHTML=trace.milestones.map(m=>`<option value="${m.index}">${esc(m.label)}</option>`).join('');
+    el('reference').innerHTML=matrix('Full S · teaching reference',ref.scores,{cols:['K1','K2','K3','K4'],rows:['Q1','Q2','Q3','Q4']})+matrix('Full P = softmax(S)',ref.probs,{cols:['K1','K2','K3','K4'],rows:['Q1','Q2','Q3','Q4']})+matrix('Reference O = P × V',ref.O,{rows:['Q1','Q2','Q3','Q4'],done:true});
+    el('verification').textContent=`Verified: every tiled output matches ordinary attention. Maximum absolute difference: ${maxError.toExponential(2)}.`;
+    el('weighted-example').textContent=`For example, O1 feature 1 = ${ref.probs[0].map((p,k)=>`${f(p)} × ${V[k][0]}`).join(' + ')} = ${f(ref.O[0][0])}. Each probability is the key’s final share of the complete denominator.`;
+    el('play').addEventListener('click',play);el('next').addEventListener('click',()=>go(index+1));el('prev').addEventListener('click',()=>go(index-1));el('restart').addEventListener('click',()=>go(0));el('seek').addEventListener('input',e=>go(e.target.value));el('jump').addEventListener('change',e=>go(e.target.value));
+    el('speed').addEventListener('change',()=>{if(timer){pause();play();}});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('pagehide',pause);
+    document.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA|BUTTON|SUMMARY/.test(e.target.tagName))return;if(e.key==='ArrowRight'){e.preventDefault();go(index+1);}if(e.key==='ArrowLeft'){e.preventDefault();go(index-1);}});
+    render();
+  } catch(error) {
+    pause();console.error('FlashAttention animation initialization failed',error);el('error').hidden=false;el('error').textContent='The animation could not initialize. Please use a current browser with JavaScript enabled. Details: '+error.message;root.querySelectorAll('button,input,select').forEach(control=>control.disabled=true);
+  }
+})();
+</script></body></html>

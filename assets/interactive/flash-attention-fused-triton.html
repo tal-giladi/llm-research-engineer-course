@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Inside a fused Triton FlashAttention kernel</title>
+<style>
+:root{color-scheme:light;--bg:#f3f5f7;--panel:#fff;--ink:#162631;--muted:#566775;--line:#d6e0e5;--q:#176f9b;--kv:#8450ae;--keep:#167762;--hot:#fff0c5;--soft:#eaf5f1}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:26px}h1{font-size:30px;line-height:1.15;letter-spacing:-1px;margin:6px 0 12px}h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:0 0 5px}p{margin:6px 0 12px}.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700;color:var(--keep)}.muted,small{color:var(--muted)}.intro{max-width:1000px}.toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:14px 0}.toolbar label{display:flex;gap:6px;align-items:center}button,select{font:inherit;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);padding:9px 12px;cursor:pointer}button:hover{border-color:var(--q)}button:disabled{opacity:.4;cursor:default}button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--q);outline-offset:3px}#play{background:var(--ink);color:white;min-width:98px}#seek{width:100%;accent-color:var(--keep)}.progress{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}.stage{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;background:var(--ink);color:#fff;border-radius:12px;padding:18px;margin:14px 0}.stage h2{font-size:20px}.stage .muted{color:#bad0dc}.formula{font:14px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#243a48;padding:12px;border-radius:7px;align-self:center;min-height:90px}.workspace{display:grid;grid-template-columns:.95fr 1.4fr;gap:18px}.zone{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}.zone-header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.zone-header small{font-size:11px}.matrices{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}.matrix{flex:1;min-width:170px}#hbm-inputs .matrix{min-width:125px}.matrix table{width:100%;border-spacing:3px;table-layout:fixed}.matrix caption{text-align:left;font-size:13px;margin-bottom:4px;font-weight:650}.matrix th{font-size:11px;color:var(--muted);font-weight:500}.matrix td{font:13px/1.4 ui-monospace,Consolas,monospace;text-align:center;padding:6px 3px;background:#f0f3f6;border-radius:3px;transition:background .25s;white-space:nowrap}.matrix tr.selected td{background:#e3eff8}.matrix.kv tr.selected td{background:#f0e8f7}.matrix td.hit{background:var(--hot)!important;box-shadow:inset 0 0 0 2px #b8861d}.matrix td.done{background:var(--soft)}.output-group{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.resident{padding:7px 10px;background:var(--soft);color:var(--keep);border-radius:5px;font-size:12px;margin-bottom:12px}.ephemeral{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}.state-wrap{overflow-x:auto;margin-top:12px}.state-table{width:100%;border-collapse:collapse;font:13px ui-monospace,Consolas,monospace}.state-table th{font:11px system-ui;text-align:left;padding:6px;color:var(--muted)}.state-table td{padding:8px 6px;border-top:1px solid var(--line);background:var(--soft)}.state-table td.hit{background:var(--hot)}.bus{grid-column:1/-1;position:relative;border-radius:9px;background:#e6ecef;min-height:43px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:13px}.bus .label{position:relative;z-index:2;background:#e6ecefe8;padding:4px 15px;border-radius:6px}.packet{position:absolute;top:5px;left:2%;height:33px;width:65px;background:var(--q);border-radius:6px;animation:move 2s ease-in-out infinite}.bus.write .packet{background:var(--keep);animation-direction:reverse}.bus.idle .packet{display:none}@keyframes move{from{left:2%;opacity:.2}50%{opacity:.8}to{left:93%;opacity:.2}}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;margin:12px 0}.legend span::before{content:'';display:inline-block;width:10px;height:10px;margin-right:5px;background:var(--hot)}.legend span:nth-child(2)::before{background:#d3ecdf}.legend span:nth-child(3)::before{background:#e3eff8}details{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin-top:14px}summary{cursor:pointer;font-weight:650}details .content{padding-top:12px;max-width:1100px}code,pre{font-family:ui-monospace,Consolas,monospace}pre{overflow:auto;padding:14px;background:#f0f3f6;border-radius:6px;font-size:13px}.reference .matrix{min-width:0}.reference table{table-layout:auto}.reference{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}a{color:var(--q)}#error{background:#ffe3de;padding:20px}footer{font-size:12px;color:var(--muted);margin-top:20px}.note{background:#f5f8fa;padding:8px;border-radius:5px;font-size:12px;margin-top:10px}.status-line{font-size:12px;min-height:18px;margin-top:8px}.jump{margin-left:auto}.pass{color:var(--keep);font-weight:650}@media(max-width:900px){main{padding:16px}.workspace,.stage{grid-template-columns:1fr}.bus{grid-row:2}.reference{grid-template-columns:1fr}.jump{margin-left:0}}@media(prefers-reduced-motion:reduce){.packet{animation:none!important;left:46%}.matrix td{transition:none}}
+
+main{max-width:1700px}.small{font-size:12px}.programs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 6px}.program{text-align:left;padding:12px 16px}.program strong{display:block;font-size:14px}.program span{display:block;font-size:12px;margin-top:4px}.program[aria-pressed="true"]{background:#e5f1ed;border-color:var(--keep)}.machine{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0}.machine>div{border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px;background:var(--panel)}.machine small{display:block;font-size:11px;margin-top:4px}.machine .active-unit{background:var(--hot);border-color:#b8861d;box-shadow:0 0 0 1px #b8861d}.outer{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}.outer .workspace{grid-template-columns:minmax(230px,.72fr) minmax(0,1.3fr);align-items:start}.matrix{min-width:150px}.matrix td{font-size:12px}.matrix table{table-layout:auto}.code-zone{position:sticky;top:12px}.code-list{overflow:auto;max-height:540px;background:#f5f7f8;position:relative;border-radius:6px;font:12px/1.8 ui-monospace,Consolas,monospace;padding:8px 0}.code-line{white-space:pre;padding:3px 8px;min-width:max-content}.line-no{color:#6a7883;display:inline-block;width:24px;user-select:none}.active-line{background:var(--hot);border-left:3px solid #b8861d;padding-left:5px}.separated{padding-top:12px;border-top:1px solid var(--line);margin-top:12px}.bus{margin-top:10px}.compare{width:100%;border-collapse:collapse;text-align:left}.compare td,.compare th{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}.note{font-size:12px}.state-table{font-size:12px}.reference .matrix{min-width:0}
+@media(max-width:1400px){.outer{grid-template-columns:minmax(0,1fr) 330px}.outer .workspace{grid-template-columns:1fr}.outer .workspace>section:first-child .matrices{flex-wrap:nowrap}.outer .workspace>section:first-child .matrix{min-width:0}.code-list{max-height:600px}}
+@media(max-width:950px){.outer{grid-template-columns:1fr}.outer .workspace{grid-template-columns:1fr}.code-zone{position:static}.code-list{max-height:300px}.machine{grid-template-columns:repeat(3,1fr)}.stage{grid-template-columns:1fr}.programs{grid-template-columns:1fr}.outer .workspace>section:first-child .matrices{flex-wrap:wrap}.outer .workspace>section:first-child .matrix{min-width:135px}}
+@media(max-width:500px){.machine{grid-template-columns:repeat(2,1fr)}.matrix{min-width:135px}.state-table td,.state-table th{padding:5px}.reference{display:block}.reference>.matrix{margin-bottom:14px}}
+</style></head><body><main id="fused-lab">
+<header><div class="eyebrow">FLASHATTENTION-2 · INSIDE A FUSED TRITON-STYLE KERNEL</div><h1>One launch. Many programs. No score round trips.</h1><p class="intro">The same Q, K, V and final output as before—now with GPU program ownership, on-chip data movement, and synchronized kernel pseudocode. <strong>FlashAttention is already fused.</strong> Here we open that fused kernel and look inside.</p><p class="muted">One head · 4 tokens · 2 features · 2 query rows per program · 2 key rows per tile. No mask or dropout. Start with <strong>Next</strong>, or play at 7 seconds per step.</p></header>
+<div id="error" hidden role="alert"></div>
+<div class="toolbar"><button id="restart">↺ Start</button><button id="prev">← Back</button><button id="play">▶ Play</button><button id="next">Next →</button><label>Step time <select id="speed"><option value="7000" selected>7 seconds</option><option value="4500">4.5 seconds</option><option value="2000">2 seconds</option></select></label><label class="jump">Jump <select id="jump" aria-label="Jump to stage"></select></label></div>
+<div class="progress"><span id="position"></span><span id="launch"></span></div><input id="seek" type="range" min="0" value="0" aria-label="Animation step">
+<div class="programs"><button id="p0" class="program" aria-pressed="true"></button><button id="p1" class="program" aria-pressed="false"></button></div><p class="small muted">Select a program to inspect its values. Both programs are shown progressing together for teaching; real blocks are independently scheduled, with no cross-program barrier at these steps. Each uses its own on-chip state.</p>
+<section class="stage" aria-live="polite" aria-atomic="true"><div><div id="phase" class="muted"></div><h2 id="title"></h2><p id="explain"></p></div><div id="formula" class="formula"></div></section>
+<div class="machine" aria-label="Active hardware resource"><div id="unit-hbm">HBM<small>Full Q, K, V, O, L₂</small></div><div id="unit-load">Load / store<small>Copies tiles and results</small></div><div id="unit-shared">Shared memory<small>Operand staging / reuse</small></div><div id="unit-mma">Matrix multiply<small>Tensor Cores at real tile sizes</small></div><div id="unit-alu">SIMT math / reductions<small>max, exp2, sum, rescale, divide</small></div></div>
+<div class="bus idle" id="bus"><div class="packet"></div><span class="label" id="transfer"></span></div>
+<p class="small muted">Conceptual NVIDIA GPU view. The compiler determines layouts and transfers; source-level tensors are distributed across threads. Not a cycle-accurate trace or a literal 2 × 2 Tensor Core instruction.</p>
+<div class="outer"><div class="workspace">
+<section class="zone"><div class="zone-header"><h2>HBM · full tensors</h2><small>Shared global address space</small></div><div class="matrices" id="hbm-inputs"></div><div class="matrices output-group" id="hbm-outputs"></div><div class="note">Both programs read the same K/V rows, but keep different Q rows. Output ownership is disjoint. No global S or P allocation is needed.</div><div class="status-line" id="io"></div></section>
+<section class="zone"><div class="zone-header"><h2 id="chip-title"></h2><small>Selected program only</small></div><div class="resident" id="resident"></div><h3>Shared-memory staging · conceptual</h3><div class="matrices" id="staging"></div><h3 class="separated">Resident / working operands</h3><div class="matrices" id="operands"></div><div class="state-wrap" id="state"></div><div class="ephemeral"><div class="matrices" id="temps"></div><div class="note">m₂, ℓ and A are the persistent reduction / accumulator state (conceptually FP32). Z and W are transient logical values; compilers can reuse their storage. The whole sequence never needs to fit on-chip.</div></div></section>
+</div><aside class="zone code-zone"><h2>Inside the same kernel</h2><p class="small muted">Triton-style pseudocode. Highlighted lines are GPU instructions in one launch—not separate kernels. Tiny teaching shapes and omitted pointer setup make this explanatory, not runnable Triton.</p><div id="code" class="code-list" aria-label="Highlighted kernel pseudocode"></div><div class="note" id="instruction"></div></aside></div>
+<details open><summary>What “fused” means here</summary><div class="content"><p>All the highlighted work—loads, QKᵀ, online softmax, weighted V accumulation, and final stores—is compiled into <strong>one forward kernel</strong>. Its launch creates a grid of programs. Program 0 owns Q1–Q2 and O1–O2; program 1 owns Q3–Q4 and O3–O4. Each loops over both K/V tiles independently.</p><p>One kernel is <strong>not one GPU thread, one program, or one giant register</strong>. In a conventional NVIDIA lowering, a program corresponds to a thread block with several warps; a warp contains 32 threads. Tensor tiles are distributed among their threads. Register and shared-memory capacity constrain tile size, not total sequence length.</p><p>The diagram uses shared memory as a conceptual operand-staging route. Actual placement depends on the Triton version, architecture and generated instructions. Registers hold scalar/reduction state and accumulator fragments in conventional kernels; some newer implementations also use specialized tensor memory. There is no guaranteed one-to-one mapping between a Python variable and a physical storage box.</p></div></details>
+<details><summary>Why the numbers change when Triton uses exp2</summary><div class="content"><p>The earlier animation used natural exponentials: S = QKᵀ / √d and exp(S − m). Here we use <strong>Z = S × log₂(e)</strong>, so 2^(Z − m₂) is the same weight as exp(S − m). The running maximum m₂ is measured in base-2 units, while ℓ and A retain the same mathematical values.</p><pre>2^(x × log₂(e)) = exp(x)
+Z = (QKᵀ / √d) × log₂(e)
+m₂ = maximum Z seen so far
+α = 2^(m₂_old − m₂_new)
+W = 2^(Z − m₂_new)
+ℓ_new = α × ℓ_old + row_sum(W)
+A_new = α × A_old + W @ V
+O = A / ℓ
+L₂ = m₂ + log₂(ℓ)       # saved base-2 log-sum-exp
+L_natural = L₂ × ln(2)</pre><p>When reconstructing probabilities, use P = 2^(Z − L₂). Do not combine a base-2 L₂ with natural exp. The reference panel verifies the conversion against the first animation.</p></div></details>
+<details><summary>Unfused baseline vs this fused schedule</summary><div class="content"><table class="compare"><thead><tr><th>Materialized three-stage baseline</th><th>Fused forward kernel</th></tr></thead><tbody><tr><td>Launch QKᵀ stage; write full scores S to HBM</td><td>Compute a score tile on-chip</td></tr><tr><td>Launch softmax; read S, write full P</td><td>Compute temporary exponential weights and update state</td></tr><tr><td>Launch PV; read P and V, write O</td><td>Accumulate weighted V on-chip; write O and L₂ at the end</td></tr></tbody></table><p>This comparison describes an explicitly materialized baseline. A high-level attention API may already dispatch a fused implementation. FlashAttention still reads K/V tiles for each query program; caches can reduce physical HBM traffic. “Fused” does not mean every input is read just once globally.</p></div></details>
+<details id="reference-details"><summary>Full softmax reference and correctness check</summary><div class="content"><p>These matrices are computed only for teaching and validation. They are not hidden global buffers in the animated kernel.</p><div id="reference" class="reference"></div><p class="pass" id="verification"></p><p id="logs"></p></div></details>
+<details><summary>Scope, real Triton code, and embedding</summary><div class="content"><p>The animation uses JavaScript doubles to keep the mathematics clear. Real kernels commonly use lower-precision operands with FP32 accumulation; converting W to the dot-product input dtype introduces rounding. We show that conversion explicitly but do not simulate its rounding. No performance claims or measured memory counts are implied.</p><p>Two-by-two tiles are for readability, not valid efficient Triton dot configurations. Production kernels need appropriate block sizes, layouts, boundary masks, numerical tests, dtype handling and architecture-specific tuning. We omit pipelined prefetch and warp specialization so each dependency stays visible; real kernels can overlap memory work and computation.</p><p>For runnable GPU code, use the maintained <a href="https://triton-lang.org/main/getting-started/tutorials/06-fused-attention.html" target="_blank" rel="noopener noreferrer">official Triton fused-attention tutorial</a>. This explainer follows its FA2-style online accumulation and base-2 exponential convention, with a simplified operation order.</p><p>The animation is self-contained and works offline. Embed the complete file:</p><pre>&lt;iframe src="flash-attention-fused-triton.html"
+        title="Inside a fused Triton FlashAttention kernel"
+        style="width:100%;height:1500px;border:0"
+        loading="lazy"&gt;&lt;/iframe&gt;</pre></div></details>
+<footer>Left / Right arrows step outside form controls. Playback pauses when the tab is hidden. Four decimal display; full precision arithmetic. No external libraries or network requests.</footer>
+</main><script>
+'use strict';
+(() => {
+ const root=document.getElementById('fused-lab'),el=id=>root.querySelector('#'+id);
+ const Q=[[1,0],[0,1],[1,1],[1,-1]],K=[[1,0],[0,1],[2,1],[-1,2]],V=[[1,2],[3,0],[0,4],[2,1]],scale=Math.LOG2E/Math.sqrt(2);
+ const blank=()=>[[null,null],[null,null]],clone=x=>structuredClone(x),dot=(a,b)=>a.reduce((t,v,i)=>t+v*b[i],0);
+ const f=x=>x===null||x===undefined?'·':x===-Infinity?'−∞':Math.abs(x)<0.00005?'0':Number(x.toFixed(4)).toString();
+ const vec=x=>'['+x.map(f).join(', ')+']';
+ const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const codeLines=[
+ ['launch','fused_attention[(ceil_div(N, BM),)](...)'],
+ ['pid','pid = tl.program_id(0)'],
+ ['rows','rows = pid * BM + tl.arange(0, BM)'],
+ ['q','q = tl.load(Q_ptrs_for(rows))'],
+ ['init','m2 = full((BM,), -inf, fp32)'],
+ ['init','ell = zeros((BM,), fp32)'],
+ ['init','acc = zeros((BM, D), fp32)'],
+ ['loop','for start_n in range(0, N, BN):'],
+ ['k','    kT = tl.load(K_transposed_ptrs(start_n))'],
+ ['dot','    raw = tl.dot(q, kT)'],
+ ['scale','    z = raw * (sm_scale * log2e)'],
+ ['max','    m_new = tl.maximum(m2, tl.max(z, 1))'],
+ ['exp','    p = tl.exp2(z - m_new[:, None])'],
+ ['alpha','    alpha = tl.exp2(m2 - m_new)'],
+ ['sum','    tile_sum = tl.sum(p, axis=1)'],
+ ['rescale','    acc = acc * alpha[:, None]'],
+ ['v','    v = tl.load(V_ptrs(start_n))'],
+ ['cast','    p_dot = p.to(v.dtype)'],
+ ['acc','    acc = tl.dot(p_dot, v, acc)'],
+ ['ell','    ell = ell * alpha + tile_sum'],
+ ['commit','    m2 = m_new'],
+ ['out','out = acc / ell[:, None]'],
+ ['log','lse2 = m2 + tl.log2(ell)'],
+ ['store','tl.store(O_ptrs_for(rows), out.to(O_dtype))'],
+ ['store','tl.store(LSE2_ptrs_for(rows), lse2)']];
+
+ // Each snapshot contains two independent program states. Lockstep here is only a
+ // presentation device; there are no simulated cross-program reads or barriers.
+ function buildTrace(){
+  const state={launched:false,done:false,reads:0,writes:0,O:Array.from({length:4},()=>[null,null]),L:[null,null,null,null],programs:[0,1].map(pid=>({pid,qi:pid*2,kj:null,q:null,k:null,v:null,stageQ:null,stageK:null,stageV:null,raw:blank(),Z:blank(),W:blank(),m:[-Infinity,-Infinity],mn:[null,null],alpha:[null,null],l:[0,0],tileSum:[null,null],A:[[0,0],[0,0]],o:blank(),L:[null,null],live:false}))};
+  const frames=[],milestones=[];
+  function emit(title,explain,formula,key,unit,options={}){
+   const formulas=typeof formula==='function'?state.programs.map(formula):[formula,formula];
+   frames.push({...clone(state),title,explain,formulas,key,unit,hit:[],direction:'idle',transfer:'On-chip only · no global intermediate read or write',...options});
+   if(options.mark)milestones.push({index:frames.length-1,label:options.mark});
+  }
+  const each=fn=>state.programs.forEach(fn);
+  emit('Before the launch','Q, K and V already exist in GPU global memory. We will launch one forward kernel, with two independent programs.','N = 4; D = 2; BM = BN = 2\nGrid = ceil(4 / 2) = 2 programs\nAttention kernel launches so far: 0','launch','hbm',{mark:'Start',transfer:'Inputs already in HBM · no attention kernel launched'});
+  state.launched=true;
+  emit('One launch creates two programs','The CPU submits the kernel once. The GPU schedules its program instances. Each program cooperatively executes the same code on a different pair of query rows.',p=>`pid = ${p.pid}\nQuery rows = ${p.qi+1}–${p.qi+2}\nOutput rows = ${p.qi+1}–${p.qi+2}\nOne launch; independent on-chip state per program`,'pid','load',{mark:'Launch and ownership',transfer:'CPU → GPU: one kernel launch · both programs belong to it'});
+  each(p=>{p.stageQ=Q.slice(p.qi,p.qi+2);p.live=true;});state.reads+=8;
+  emit('Load each program’s Q tile','Each program loads just its two complete query vectors. We show shared-memory staging conceptually; exact compiler placement can differ.',p=>`Program ${p.pid}: Q${p.qi+1}–Q${p.qi+2}\n${p.stageQ.map(vec).join('\n')}\n4 scalars for this program; 8 total`,'q','shared',{direction:'read',transfer:'HBM → on-chip staging: Q1–Q2 for P0; Q3–Q4 for P1',mark:'Load Q'});
+  each(p=>{p.q=p.stageQ;p.stageQ=null;});
+  emit('Keep Q available on-chip','Q is now a resident operand tile for this program. It is distributed across the program’s threads and on-chip resources; not copied in full into every thread.',p=>`Resident Q tile: ${p.q.map(vec).join('; ')}\nThis tile survives both K/V loop iterations.`,'q','shared',{transfer:'On-chip staging → working Q fragments · no new HBM read'});
+  emit('Initialize per-query state','Each query row needs its own maximum, denominator and two-feature accumulator. Here acc is A: the unnormalized weighted-value sum.',p=>`Program ${p.pid}:\nm₂ = [−∞, −∞]\nℓ = [0, 0]\nA = [[0, 0], [0, 0]]`,'init','alu');
+  for(let kj=0;kj<4;kj+=2){
+   each(p=>{p.kj=kj;p.stageK=K.slice(kj,kj+2);p.raw=blank();p.Z=blank();p.W=blank();p.mn=[null,null];p.alpha=[null,null];p.tileSum=[null,null];});state.reads+=8;
+   emit(`Load K${kj+1}–K${kj+2} for both programs`,kj===0?'Both programs need these same key rows. Each gets a logical copy for its private work; the physical traffic may benefit from caches.':'Keep Q and m₂, ℓ, A. Replace the previous key tile with the next. This is another loop iteration inside the SAME kernel.',p=>`K tile = ${p.stageK.map(vec).join('; ')}\nEach program reads 4 scalars\nKernel launch count stays 1`,'k','shared',{direction:'read',transfer:`HBM → on-chip: K rows ${kj+1}–${kj+2}, independently for P0 and P1`,mark:`K/V tile ${kj/2+1}: load K`});
+   each(p=>{p.k=p.stageK;p.stageK=null;});
+   emit('Arrange K as a transposed dot operand','K is displayed as Kᵀ in the working operands below: features are rows, key tokens are columns. A transpose can be a layout/addressing choice; it does not require writing a new Kᵀ tensor to HBM.',p=>`Q shape: (2 queries, 2 features)\nKᵀ shape: (2 features, 2 keys)\nQ @ Kᵀ shape: (2 queries, 2 keys)`,'k','shared',{transfer:'On-chip layout / operand preparation · no HBM transpose write'});
+   for(let r=0;r<2;r++)for(let c=0;c<2;c++){
+    each(p=>{p.raw[r][c]=dot(p.q[r],p.k[c]);});
+    emit(`Inspect QKᵀ cell (${r+1}, ${c+1})`,'One tl.dot computes a whole tile cooperatively. We reveal its cells one by one for readability; these are NOT four kernel launches or four source-level tl.dot calls.',p=>`Q${p.qi+r+1} · K${kj+c+1}\n= ${p.q[r][0]} × ${p.k[c][0]} + ${p.q[r][1]} × ${p.k[c][1]}\n= ${f(p.raw[r][c])}`,'dot','mma',{hit:[`q:${r}:0`,`q:${r}:1`,`kT:0:${c}`,`kT:1:${c}`,`raw:${r}:${c}`]});
+   }
+   each(p=>{p.Z=p.raw.map(row=>row.map(x=>x*scale));});
+   emit('Scale for exp2, not natural exp','Triton’s tutorial uses base-2 exponentials. Multiply the usual scaled scores by log₂(e), so exp2 gives the same weights. Z below is in base-2 units.',p=>`Z = (QKᵀ / √2) × log₂(e)\nMultiplier = ${f(scale)}\nZ = ${p.Z.map(vec).join('; ')}`,'scale','alu',{mark:`Tile ${kj/2+1}: base-2 scores`});
+   for(let r=0;r<2;r++){
+    each(p=>{p.mn[r]=Math.max(p.m[r],...p.Z[r]);});
+    emit(`Reduce row ${r+1}: new maximum`,'The row maximum is a cooperative reduction over this score tile. Combine it with that query’s previous maximum; different queries have different maxima.',p=>`Q${p.qi+r+1}: m₂_new\n= max(${f(p.m[r])}, ${p.Z[r].map(f).join(', ')})\n= ${f(p.mn[r])}`,'max','alu',{hit:[`Z:${r}:0`,`Z:${r}:1`,`state:${r}:m`,`state:${r}:mn`]});
+   }
+   for(let r=0;r<2;r++)for(let c=0;c<2;c++){
+    each(p=>{p.W[r][c]=2**(p.Z[r][c]-p.mn[r]);});
+    emit(`Compute weight (${r+1}, ${c+1})`,'SIMT elementwise math computes exp2 on the tile. This W (called p in the pseudocode) is temporary and unnormalized; it is not a final probability.',p=>`W[Q${p.qi+r+1}, K${kj+c+1}]\n= 2^(${f(p.Z[r][c])} − ${f(p.mn[r])})\n= ${f(p.W[r][c])}`,'exp','alu',{hit:[`Z:${r}:${c}`,`W:${r}:${c}`,`state:${r}:mn`]});
+   }
+   for(let r=0;r<2;r++){
+    each(p=>{p.alpha[r]=2**(p.m[r]-p.mn[r]);});
+    emit(`Row ${r+1}: compute the correction α`,'If the maximum increased, α is below 1. We must rescale old contributions before adding the new tile. For the first tile, α = 0 because m₂ was −∞.',p=>`Q${p.qi+r+1}: α = 2^(m₂_old − m₂_new)\n= 2^(${f(p.m[r])} − ${f(p.mn[r])})\n= ${f(p.alpha[r])}`,'alpha','alu',{hit:[`state:${r}:m`,`state:${r}:mn`,`state:${r}:alpha`],...(r===0?{mark:`Tile ${kj/2+1}: correction α`}:{})});
+   }
+   each(p=>{p.tileSum=p.W.map(row=>row[0]+row[1]);});
+   emit('Reduce each row’s new weights','Sum the two new weights per query. This is only the current tile’s sum; the full running denominator will also include the rescaled old sum.',p=>p.W.map((row,r)=>`Q${p.qi+r+1}: ${f(row[0])} + ${f(row[1])} = ${f(p.tileSum[r])}`).join('\n'),'sum','alu');
+   const oldA=state.programs.map(p=>clone(p.A));
+   each(p=>{p.A=p.A.map((row,r)=>row.map(x=>x*p.alpha[r]));});
+   emit('Rescale the old accumulator in place','Every feature in a query’s accumulator uses that query’s α. These values stay on-chip. No old score or probability is fetched from HBM.',p=>p.A.map((row,r)=>`Q${p.qi+r+1}: ${vec(oldA[p.pid][r])} × ${f(p.alpha[r])}\n→ ${vec(row)}`).join('\n'),'rescale','alu',{mark:`Tile ${kj/2+1}: rescale A`});
+   each(p=>{p.stageV=V.slice(kj,kj+2);});state.reads+=8;
+   emit(`Load matching V${kj+1}–V${kj+2}`,'The weights refer to these key positions, so use the corresponding V rows. Load them for the second matrix multiply; Q and the running state are still on-chip.',p=>`V tile = ${p.stageV.map(vec).join('; ')}\n4 scalars for this program\nNo score/weight tensor crossed HBM`,'v','shared',{direction:'read',transfer:`HBM → on-chip: V rows ${kj+1}–${kj+2}, independently for P0 and P1`});
+   each(p=>{p.v=p.stageV;p.stageV=null;});
+   emit('Prepare W and V as dot operands','The production tutorial converts W to the dot-product input dtype before multiplying by V. A remains an FP32 accumulator. This animation shows exact values without simulating low-precision rounding.',p=>`W shape: (2 queries, 2 keys)\nV shape: (2 keys, 2 features)\nW @ V shape: (2 queries, 2 features)`,'cast','shared',{transfer:'On-chip operand preparation / dtype conversion · no HBM transfer'});
+   for(let r=0;r<2;r++)for(let d=0;d<2;d++){
+    const before=state.programs.map(p=>p.A[r][d]);
+    each(p=>{p.A[r][d]+=p.W[r][0]*p.v[0][d]+p.W[r][1]*p.v[1][d];});
+    emit(`Inspect accumulation: row ${r+1}, feature ${d+1}`,'The second tl.dot adds W @ V to the already-rescaled accumulator. These cells belong to one cooperative tile operation; A is still unnormalized.',p=>`A[Q${p.qi+r+1}, f${d+1}]\n= ${f(before[p.pid])} + ${f(p.W[r][0])} × ${f(p.v[0][d])} + ${f(p.W[r][1])} × ${f(p.v[1][d])}\n= ${f(p.A[r][d])}`,'acc','mma',{hit:[`W:${r}:0`,`W:${r}:1`,`v:0:${d}`,`v:1:${d}`,`state:${r}:A${d}`]});
+   }
+   for(let r=0;r<2;r++){
+    const before=state.programs.map(p=>p.l[r]);each(p=>{p.l[r]=p.alpha[r]*p.l[r]+p.tileSum[r];});
+    emit(`Update denominator for row ${r+1}`,'The same α used for A rescales the old denominator. Add the tile’s weight sum; this incorporates every key processed so far.',p=>`ℓ_new = α × ℓ_old + tile_sum\n= ${f(p.alpha[r])} × ${f(before[p.pid])} + ${f(p.tileSum[r])}\n= ${f(p.l[r])}`,'ell','alu',{hit:[`state:${r}:l`,`state:${r}:alpha`]});
+   }
+   each(p=>{p.m=[...p.mn];});
+   emit('Commit the new maxima','The running maximum, denominator and accumulator now agree on the same exponential scale. The programs keep their states independently.',p=>p.m.map((m,r)=>`Q${p.qi+r+1}: m₂=${f(m)}, ℓ=${f(p.l[r])}\nA=${vec(p.A[r])}`).join('\n'),'commit','alu',{mark:`Tile ${kj/2+1}: committed state`});
+   each(p=>{p.k=null;p.v=null;p.raw=blank();p.Z=blank();p.W=blank();p.mn=[null,null];p.alpha=[null,null];p.tileSum=[null,null];});
+   emit('Reuse the temporary storage',kj===0?'K, V, scores and weights can be discarded or overwritten. Only Q, m₂, ℓ and A must survive. The loop continues inside the same kernel.':'Both K/V tiles have contributed. Release temporary operands and weights. Q and the completed accumulator state remain until the epilogue.',p=>`Program ${p.pid}: keep Q, m₂, ℓ, A\nTemporary K/V and score/weight tiles: released\nIntermediate HBM stores: 0`,'loop','shared',{mark:`Tile ${kj/2+1}: discard temporaries`,transfer:'On-chip storage reused · no data written back for discarded tiles'});
+  }
+  for(let r=0;r<2;r++)for(let d=0;d<2;d++){
+   each(p=>{p.o[r][d]=p.A[r][d]/p.l[r];});
+   emit(`Normalize output row ${r+1}, feature ${d+1}`,'All keys have now contributed. Divide A by the query’s denominator. This is the epilogue of the same fused kernel, not a new normalization kernel.',p=>`O[Q${p.qi+r+1}, f${d+1}] = A / ℓ\n= ${f(p.A[r][d])} / ${f(p.l[r])}\n= ${f(p.o[r][d])}`,'out','alu',{hit:[`state:${r}:A${d}`,`state:${r}:l`,`o:${r}:${d}`],...(r===0&&d===0?{mark:'Final division'}:{})});
+  }
+  each(p=>{p.L=p.m.map((m,r)=>m+Math.log2(p.l[r]));});
+  emit('Prepare base-2 log-sum-exp for backward','Save one normalization statistic per query. Because scores used exp2, this L₂ is base-2. It differs numerically from the previous animation’s natural-log L.',p=>p.L.map((L,r)=>`Q${p.qi+r+1}: L₂ = ${f(p.m[r])} + log₂(${f(p.l[r])})\n= ${f(L)}; natural L = ${f(L*Math.LN2)}`).join('\n'),'log','alu',{mark:'Saved base-2 statistic'});
+  each(p=>{for(let r=0;r<2;r++){state.O[p.qi+r]=[...p.o[r]];state.L[p.qi+r]=p.L[r];}});state.writes+=12;
+  emit('Store final O and L₂','Each program writes only its two output rows and two statistics. Their destinations do not overlap, so no cross-program output reduction or atomic addition is required.',p=>`Program ${p.pid} writes:\nO${p.qi+1}–O${p.qi+2} = ${p.o.map(vec).join('; ')}\nL₂ = ${vec(p.L)}\n6 scalars; 12 total across both programs`,'store','load',{direction:'write',transfer:'On-chip → HBM: final O (8 scalars) and L₂ (4 scalars)',mark:'Store final output'});
+  state.done=true;each(p=>{p.live=false;p.q=null;p.o=blank();p.L=[null,null];});
+  emit('Kernel complete','All four output rows are in HBM. Both programs release their on-chip resources. The full score and probability matrices were never global buffers.',`One attention forward launch completed\n40 logical input scalars read\n12 O/L₂ scalars written\n0 intermediate score/probability stores`,'store','hbm',{mark:'Done',transfer:'Complete · Q, K, V, O and saved L₂ remain in HBM'});
+  return {frames,milestones};
+ }
+ function reference(){const S=Q.map(q=>K.map(k=>dot(q,k)/Math.sqrt(2)));const P=S.map(row=>{const m=Math.max(...row),w=row.map(x=>Math.exp(x-m)),l=w.reduce((a,b)=>a+b,0);return w.map(x=>x/l);});const O=P.map(row=>[0,1].map(d=>row.reduce((a,p,k)=>a+p*V[k][d],0)));const L=S.map(row=>{const m=Math.max(...row);return m+Math.log(row.reduce((a,x)=>a+Math.exp(x-m),0));});return {S,P,O,L};}
+ function matrix(name,data,opts={}){const cols=opts.cols||['f1','f2'];return `<div class="matrix"><table><caption>${esc(name)}</caption><thead><tr><th scope="col"></th>${cols.map(c=>`<th scope="col">${esc(c)}</th>`).join('')}</tr></thead><tbody>${data.map((row,r)=>`<tr class="${opts.active?.includes(r)?'selected':''}"><th scope="row">${esc(opts.rows?.[r]||r+1)}</th>${row.map((x,c)=>`<td class="${opts.hit?.includes(`${opts.id}:${r}:${c}`)?'hit':opts.done&&x!==null?'done':''}">${f(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
+ let trace,index=0,focus=0,timer=null;
+ const pause=()=>{clearTimeout(timer);timer=null;el('play').textContent='▶ Play';};
+ function render(){
+  const s=trace.frames[index],p=s.programs[focus],qr=[`Q${p.qi+1}`,`Q${p.qi+2}`],kr=p.kj===null?['—','—']:[`K${p.kj+1}`,`K${p.kj+2}`];
+  el('position').textContent=`Step ${index+1} / ${trace.frames.length} · inspecting program ${focus}`;el('launch').textContent=`Forward launches: ${s.launched?1:0} · ${s.done?'complete':s.launched?'same kernel still running':'not launched'}`;
+  el('seek').value=index;el('prev').disabled=index===0;el('next').disabled=index===trace.frames.length-1;
+  ['title','phase','explain'].forEach(k=>el(k).textContent=s[k]);el('formula').textContent=s.formulas[focus];
+  for(const prog of s.programs){const btn=el('p'+prog.pid);btn.setAttribute('aria-pressed',String(prog.pid===focus));btn.innerHTML=`<strong>Program ${prog.pid} · Q${prog.qi+1}–Q${prog.qi+2} → O${prog.qi+1}–O${prog.qi+2}</strong><span>${s.done?'Complete':!s.launched?'Not launched':prog.live?`Own state · ℓ = ${vec(prog.l)}`:'Scheduled work'}${prog.pid===focus?' · inspecting':''}</span>`;}
+  el('hbm-inputs').innerHTML=matrix('Q · 4 × 2',Q,{active:p.live?[p.qi,p.qi+1]:[]})+matrix('K · 4 × 2',K,{active:p.k||p.stageK?[p.kj,p.kj+1]:[]})+matrix('V · 4 × 2',V,{active:p.v||p.stageV?[p.kj,p.kj+1]:[]});
+  el('hbm-outputs').innerHTML=matrix('O · final output',s.O,{done:true})+matrix('L₂ · base-2, saved',s.L.map(x=>[x]),{cols:['L₂'],done:true});
+  el('io').textContent=`Both programs total: ${s.reads} logical input scalars read · ${s.writes} final scalars written. Cache effects excluded.`;
+  el('chip-title').textContent=`Program ${focus} · on-chip work`;
+  el('resident').textContent=p.q?`Q${p.qi+1}–Q${p.qi+2} stays on-chip across the K/V loop · independent state`:'No resident Q tile';
+  el('staging').innerHTML=matrix('Q staging',p.stageQ||blank(),{rows:qr})+matrix('K staging',p.stageK||blank(),{rows:kr})+matrix('V staging',p.stageV||blank(),{rows:kr.map(x=>x.replace('K','V'))});
+  el('operands').innerHTML=matrix('Q · resident operand',p.q||blank(),{rows:qr,id:'q',hit:s.hit})+matrix('Kᵀ · dot operand',p.k?[[p.k[0][0],p.k[1][0]],[p.k[0][1],p.k[1][1]]]:blank(),{rows:['f1','f2'],cols:kr,id:'kT',hit:s.hit})+matrix('V · dot operand',p.v||blank(),{rows:kr.map(x=>x.replace('K','V')),id:'v',hit:s.hit});
+  const keys=['m','mn','alpha','l','A0','A1'];
+  el('state').innerHTML=`<table class="state-table"><caption style="text-align:left">Persistent m₂, ℓ, A + temporary m′, α</caption><thead><tr><th>Query</th><th>m₂</th><th>m′₂</th><th>α</th><th>ℓ</th><th>A[f1]</th><th>A[f2]</th></tr></thead><tbody>${[0,1].map(r=>`<tr><th>${qr[r]}</th>${[p.m[r],p.mn[r],p.alpha[r],p.l[r],p.A[r][0],p.A[r][1]].map((n,c)=>`<td class="${s.hit.includes(`state:${r}:${keys[c]}`)?'hit':''}">${p.live?f(n):'·'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  el('temps').innerHTML=matrix('Raw · QKᵀ',p.raw,{rows:qr,cols:kr,id:'raw',hit:s.hit})+matrix('Z · scores × log₂(e)',p.Z,{rows:qr,cols:kr,id:'Z',hit:s.hit})+matrix('W · exp2, not probability',p.W,{rows:qr,cols:kr,id:'W',hit:s.hit})+matrix('O tile · A / ℓ',p.o,{rows:qr,id:'o',hit:s.hit});
+  el('bus').className='bus '+s.direction;el('transfer').textContent=s.transfer;
+  for(const unit of ['hbm','load','shared','mma','alu'])el('unit-'+unit).classList.toggle('active-unit',s.unit===unit);
+  el('code').innerHTML=codeLines.map(([key,line],n)=>`<div class="code-line ${s.key===key&&!s.done?'active-line':''}"><span class="line-no">${n+1}</span><code>${esc(line)}</code></div>`).join('');
+  el('instruction').textContent=s.done?'Kernel finished. All on-chip state released.':`Current operation: ${s.key} · ${s.direction==='idle'?'no global tensor transfer at this step':s.direction==='read'?'global input load':'global result store'}.`;
+  const selectedLine=el('code').querySelector('.active-line');if(selectedLine){const top=selectedLine.offsetTop;if(top<el('code').scrollTop||top+selectedLine.offsetHeight>el('code').scrollTop+el('code').clientHeight)el('code').scrollTop=Math.max(0,top-el('code').clientHeight/2);}
+  el('jump').value=trace.milestones.filter(x=>x.index<=index).at(-1)?.index||0;
+ }
+ function go(n){pause();index=Math.max(0,Math.min(trace.frames.length-1,Number(n)));render();}
+ function tick(){if(index>=trace.frames.length-1){pause();return;}timer=setTimeout(()=>{index++;render();tick();},Number(el('speed').value));}
+ function play(){if(timer){pause();return;}if(index===trace.frames.length-1){index=0;render();}el('play').textContent='Ⅱ Pause';tick();}
+ try{
+  trace=buildTrace();const ref=reference(),last=trace.frames.at(-1);const err=Math.max(...ref.O.flatMap((row,r)=>row.map((v,c)=>Math.abs(v-last.O[r][c]))));const logErr=Math.max(...ref.L.map((v,r)=>Math.abs(v-last.L[r]*Math.LN2)));
+  if(!Number.isFinite(err)||err>1e-12||logErr>1e-12)throw new Error('Online output or base-2 normalization check failed.');
+  el('seek').max=trace.frames.length-1;el('jump').innerHTML=trace.milestones.map(x=>`<option value="${x.index}">${esc(x.label)}</option>`).join('');
+  el('reference').innerHTML=matrix('Natural scores S',ref.S,{rows:['Q1','Q2','Q3','Q4'],cols:['K1','K2','K3','K4']})+matrix('Final P = softmax(S)',ref.P,{rows:['Q1','Q2','Q3','Q4'],cols:['K1','K2','K3','K4']})+matrix('Reference output O',ref.O,{rows:['Q1','Q2','Q3','Q4'],done:true});
+  el('verification').textContent=`Verified all output entries: max absolute error ${err.toExponential(2)}. Base-2 → natural log-sum-exp max error ${logErr.toExponential(2)}.`;
+  el('logs').textContent=`Saved L₂ = ${vec(last.L)}. Multiply by ln(2) → natural L = ${vec(ref.L)}, matching the first animation.`;
+  el('restart').addEventListener('click',()=>go(0));el('next').addEventListener('click',()=>go(index+1));el('prev').addEventListener('click',()=>go(index-1));el('play').addEventListener('click',play);el('seek').addEventListener('input',e=>go(e.target.value));el('jump').addEventListener('change',e=>go(e.target.value));el('speed').addEventListener('change',()=>{if(timer){pause();play();}});
+  for(let i=0;i<2;i++)el('p'+i).addEventListener('click',()=>{focus=i;render();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});window.addEventListener('pagehide',pause);document.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA|BUTTON|SUMMARY/.test(e.target.tagName))return;if(e.key==='ArrowRight'){e.preventDefault();go(index+1);}if(e.key==='ArrowLeft'){e.preventDefault();go(index-1);}});render();
+ }catch(error){pause();console.error('Fused attention animation failed',error);el('error').hidden=false;el('error').textContent='Could not initialize. Please use a current browser with JavaScript enabled. '+error.message;root.querySelectorAll('button,input,select').forEach(e=>e.disabled=true);}
+})();
+</script></body></html>

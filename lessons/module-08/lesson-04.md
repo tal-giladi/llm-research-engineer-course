@@ -192,7 +192,13 @@ Rerun the same tiles but skip the correction (just add each block's $\sum p$ and
 
 Row 1 is wrong because keys 1–2 were exponentiated against $2$ and keys 3–4 against $3$: block 1's weights are $e^{1} \approx 2.7\times$ too large relative to block 2's, so the output is pulled toward $v_1, v_2$. Row 2 happens to be right only because its max never moved, so $\alpha$ was $1$ anyway. This is the trap: a missing correction passes any test where the first block holds the row max, and fails silently otherwise.
 
-### 4.4 Run it
+### 4.4 Watch it run: every number, every tile
+
+The animation below runs the same online-softmax recurrence on a slightly larger toy — 4 tokens, $d = 2$, query tiles of 2 rows and K/V tiles of 2 rows — and shows each score, each $\alpha$, each $\ell$ and each accumulator update as it happens, with what lives in HBM versus on-chip at every step. Step through it with **Next** (or the arrow keys) and check a few cells against your own arithmetic. Its accumulator is called $A$ here; it is the same unnormalized $\mathbf o$ as in 4.2.
+
+<iframe src="assets/interactive/flash-attention-step-by-step.html" title="FlashAttention step-by-step animation" style="width:100%;height:1400px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,m=f.contentDocument.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);f.contentDocument.addEventListener('toggle',s,true);f.contentDocument.addEventListener('click',s,true)}catch(e){}"></iframe>
+
+### 4.5 Run it
 
 The same numbers, through the course's implementation, against naive attention and PyTorch's SDPA. `flash_attention_reference` assumes self-attention ($T_q = T_k$), so pad $Q$ to four rows and read the first two; it also applies the $1/\sqrt d$ scale itself, so pre-multiply $Q$ by $\sqrt 2$ to cancel it.
 
@@ -302,6 +308,12 @@ def flash_fwd_kernel(Q, K, V, O, scale,
 ```
 
 Notice it is the *same recurrence* as the CPU reference — `m`, `l`, `acc`, `alpha` — but now `tl.load`/`tl.store` are explicit HBM↔SRAM transfers and the whole thing is one kernel, so the tiles genuinely stay on-chip and the $T\times T$ matrix is never written to HBM. That is where the real speed and memory win come from. Writing correct, fast Triton (handling masks, backward, numerical edge cases, block-size tuning) is a specialty; the point here is that the *algorithm* you implemented on CPU is exactly the algorithm the kernel runs.
+
+### 6.1 Inside the fused kernel, animated
+
+The second animation runs the same 4-token example through a Triton-style kernel: one launch, two programs (each owning two query rows), the kernel pseudocode highlighted line by line, and which hardware unit (load/store, shared memory, matrix multiply, SIMT math) is busy at each step. Two differences from the sketch above are worth noticing as you step through: it uses `tl.exp2` with scores pre-multiplied by $\log_2 e$ (as the official Triton tutorial does — $2^{x \log_2 e} = e^x$, so the weights are identical), and it saves a per-row log-sum-exp $L$ for the backward pass. Click a program button to switch which program's on-chip state you are inspecting.
+
+<iframe src="assets/interactive/flash-attention-fused-triton.html" title="Inside a fused Triton FlashAttention kernel" style="width:100%;height:1700px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,m=f.contentDocument.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);f.contentDocument.addEventListener('toggle',s,true);f.contentDocument.addEventListener('click',s,true)}catch(e){}"></iframe>
 
 ## 7. Benchmark
 
