@@ -239,6 +239,30 @@ print(torch.log_softmax(logits, 0))   # tensor([0., -200.])   <- correct, finite
 
 The fix is to never compute `softmax` and then `log` as two steps. Compute $\log q_i = z_i - \log\sum_j e^{z_j}$ directly (`torch.log_softmax`), which never forms the tiny $q_i$ and so never underflows. `torch.nn.functional.cross_entropy` takes raw logits and does exactly this internally — on the logits above with target 1 it returns `200.0`, not `inf`. That is why the loss takes logits, not probabilities, and why lesson 01.4 builds the loss the same way.
 
+**How exactly it gets 200 and not inf, step by step.** `cross_entropy(z, t)` is literally `nll_loss(log_softmax(z), t)`: compute $\log q$ for every token, then return $-\log q_t$. The whole trick is inside `log_softmax`, which computes
+
+$$\log q_i = z_i - \underbrace{\Big(m + \log \sum_j e^{z_j - m}\Big)}_{\log\sum_j e^{z_j}\ \text{(log-sum-exp)}}, \qquad m = \max_j z_j .$$
+
+The bracket equals $\log\sum_j e^{z_j}$ exactly (factor $e^{m}$ out of the sum: $\log(e^m \sum_j e^{z_j-m}) = m + \log\sum_j e^{z_j-m}$). Run it on $z = (0, -200)$, target $t = 1$:
+
+1. $m = \max(0, -200) = 0$.
+2. Shift: $z - m = (0, -200)$.
+3. Exponentiate: $e^{0} = 1$, $e^{-200} \to 0$ in float32. It still underflows! But it is harmless here, because it is only *added* to 1: the true sum is $1 + 10^{-87}$, the computed sum is $1$, an error of $10^{-87}$.
+4. $\log\sum = \log 1 = 0$, so log-sum-exp $= m + 0 = 0$.
+5. $\log q_1 = z_1 - 0 = -200$. Loss $= -\log q_1 = 200$.
+
+Compare with the two-step version: there the tiny $e^{-200}$ was *divided* into its own probability $q_1 = 10^{-87} \to 0$, and then that lone 0 went into the log. In `log_softmax`, $z_1 = -200$ is never exponentiated on its own: it goes straight into the subtraction in step 5 as a plain number. The tiny exponentials only ever appear as addends next to the max term, which is always $e^{0} = 1$, so the sum is always $\ge 1$ and its log can never be $-\infty$.
+
+Why subtract $m$ at all? For the other direction: overflow. With $z = (1000, 800)$, $e^{1000} = \text{inf}$ in float32 and the naive $\log\sum e^{z}$ is `inf`. Shifted: $e^{0} + e^{-200} = 1$, log-sum-exp $= 1000 + 0 = 1000$, and $\log q_2 = 800 - 1000 = -200$ — the same answer, because shifting all logits by a constant does not change softmax.
+
+```python
+z = torch.tensor([0.0, -200.0]); t = 1
+m = z.max()                                   # 0
+lse = m + torch.log(torch.exp(z - m).sum())   # 0 + log(1 + 0) = 0
+print(-(z[t] - lse))                          # tensor(200.)
+print(torch.nn.functional.cross_entropy(z[None], torch.tensor([t])))   # tensor(200.)
+```
+
 ## Exercise
 
 Let $p = (0.7, 0.3)$ (the true distribution over two tokens) and $q = (0.5, 0.5)$ (a model that guesses uniformly). Compute $H(p)$, $H(p, q)$, and $\mathrm{KL}(p \parallel q)$ in nats, and confirm the identity.
