@@ -82,6 +82,147 @@ Now the **online** computation in two blocks of two.
 
 That final $26.2089$ is **exactly** the full-row softmax answer. Watch what the correction factor did: after block 1 the running state was scaled to a max of $2$; block 2 found a bigger score ($3$), so $\alpha = e^{-1} = 0.3679$ shrank the old $\ell$ and $\mathbf o$ to the new reference max before adding block 2's contribution. Without $\alpha$ the two blocks would have been on incompatible scales and the sum would be wrong. Note also the denominator $\ell = 1.5530$ matches the ground-truth sum exactly. This is the entire FlashAttention numerics, on four numbers.
 
+### 4.1 Why it is exact — the proof, checked on the same numbers
+
+Claim (the **invariant**): after any number of blocks, the running state equals what you would get by computing over *only the scores seen so far*, referenced to their max:
+
+$$
+m = \max_{t\,\in\,\text{seen}} s_t, \qquad \ell = \sum_{t\,\in\,\text{seen}} e^{\,s_t - m}, \qquad \mathbf o = \sum_{t\,\in\,\text{seen}} e^{\,s_t - m}\,\mathbf v_t .
+$$
+
+Here "seen" is the set of key indices in the blocks processed so far, $s_t$ is the scaled score of key $t$, and $\mathbf v_t$ its value row.
+
+**Base case (first block).** $m=-\infty$, so $\alpha = e^{-\infty} = 0$ and the update reduces to $\ell = \sum_{\text{blk}} e^{s_t - m_{\text{new}}}$, $\mathbf o = \sum_{\text{blk}} e^{s_t - m_{\text{new}}}\mathbf v_t$ — exactly the invariant for the first block.
+
+**Step.** Suppose the invariant holds with max $m$. A new block arrives, $m_{\text{new}} = \max(m, m_{\text{blk}})$. The only thing to check is that $\alpha\,\ell$ is the old sum re-referenced to the new max:
+
+$$
+\alpha\,\ell = e^{\,m - m_{\text{new}}}\sum_{\text{old}} e^{\,s_t - m} = \sum_{\text{old}} e^{\,s_t - m + m - m_{\text{new}}} = \sum_{\text{old}} e^{\,s_t - m_{\text{new}}} .
+$$
+
+The $m$ cancels inside the exponent. Adding the new block's $\sum_{\text{blk}} e^{s_t - m_{\text{new}}}$ gives the sum over old $\cup$ new, all relative to $m_{\text{new}}$ — the invariant again. The identical argument (multiply each term by $\mathbf v_t$) holds for $\mathbf o$.
+
+**Conclusion.** After the last block, "seen" is every key and $m$ is the true row max, so
+
+$$
+\frac{\mathbf o}{\ell} = \frac{\sum_t e^{\,s_t - m}\,\mathbf v_t}{\sum_u e^{\,s_u - m}} = \frac{e^{-m}\sum_t e^{\,s_t}\,\mathbf v_t}{e^{-m}\sum_u e^{\,s_u}} = \sum_t \operatorname{softmax}(s)_t\,\mathbf v_t .
+$$
+
+The $e^{-m}$ cancels between numerator and denominator, so the result is the ordinary softmax-weighted average — whichever max was used as the reference. The reference max only exists to keep every $e^{(\cdot)} \le 1$ so nothing overflows.
+
+**The step, checked on the numbers above.** Block 2 rescaled $\ell = 1.3679$ by $\alpha = e^{-1}$:
+
+| quantity | via the recurrence | directly, old scores $[1,2]$ re-referenced to $m_{\text{new}}=3$ |
+|---|---|---|
+| $\alpha\,\ell$ | $0.3679 \times 1.3679 = 0.5032$ | $e^{1-3} + e^{2-3} = 0.1353 + 0.3679 = 0.5032$ |
+| $\alpha\,\mathbf o$ | $0.3679 \times 23.6788 = 8.7118$ | $0.1353\cdot 10 + 0.3679\cdot 20 = 1.353 + 7.358 = 8.711$ |
+
+Both columns agree: rescaling by $\alpha$ is *literally the same thing* as having exponentiated the old scores against the new max from the start. That is the proof in two rows.
+
+### 4.2 A full FlashAttention pass by hand: two queries, $d = 2$
+
+Section 4 used one query and scalar values. Real attention has a matrix of queries and vector values, and the recurrence runs on **every query row of the tile independently**, with vector $\mathbf o$. Here is the whole thing with matrices, block size $B_k = 2$.
+
+To keep the arithmetic in integers, fold the $1/\sqrt d$ into $Q$ (i.e. these $Q$ rows are already divided by $\sqrt 2$). Two queries, four keys, four values, all $d = 2$:
+
+$$
+Q = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad
+K = \begin{bmatrix} 1 & 2 \\ 2 & 0 \\ 3 & 1 \\ 0 & 1 \end{bmatrix}, \quad
+V = \begin{bmatrix} 10 & 4 \\ 20 & 0 \\ 30 & 2 \\ 40 & 1 \end{bmatrix}.
+$$
+
+Shapes: $Q$ is $(T_q{=}2,\ d{=}2)$, $K$ and $V$ are $(T_k{=}4,\ d{=}2)$, all fp32 on CPU. Scores $S = QK^\top$ are $(2, 4)$:
+
+$$
+S = \begin{bmatrix} 1 & 2 & 3 & 0 \\ 2 & 0 & 1 & 1 \end{bmatrix}.
+$$
+
+Row 1 is the section-4 example (the max arrives late, in block 2). Row 2 is chosen so the max ($2$) arrives in block 1 and never changes — the case where $\alpha = 1$.
+
+**Ground truth (standard attention, full $P$ materialized).** Row 1: $e^{s-3} = [0.1353, 0.3679, 1, 0.0498]$, sum $1.5530$, $P_1 = [0.0871, 0.2369, 0.6439, 0.0321]$. Row 2: $e^{s-2} = [1, 0.1353, 0.3679, 0.3679]$, sum $1.8711$, $P_2 = [0.5344, 0.0723, 0.1966, 0.1966]$. Then $O = PV$:
+
+$$
+O_1 = [\,0.0871\cdot 10 + 0.2369\cdot 20 + 0.6439\cdot 30 + 0.0321\cdot 40,\ \ 0.0871\cdot 4 + 0.6439\cdot 2 + 0.0321\cdot 1\,] = [\,26.2089,\ 1.6685\,]
+$$
+
+$$
+O_2 = [\,0.5344\cdot 10 + 0.0723\cdot 20 + 0.1966\cdot 30 + 0.1966\cdot 40,\ \ 0.5344\cdot 4 + 0.1966\cdot 2 + 0.1966\cdot 1\,] = [\,20.5539,\ 2.7276\,]
+$$
+
+**FlashAttention, tile by tile.** State per query row: $m$ $(2,1)$, $\ell$ $(2,1)$, $\mathbf o$ $(2,2)$, starting at $-\infty$, $0$, $\mathbf 0$. Only one $(2\times 2)$ score tile ever exists.
+
+*Key block 1* — keys 1–2, $K_{\text{blk}} = \begin{bmatrix}1&2\\2&0\end{bmatrix}$, $V_{\text{blk}} = \begin{bmatrix}10&4\\20&0\end{bmatrix}$.
+
+| | row 1 | row 2 |
+|---|---|---|
+| tile scores $S^{(1)}$ | $[1, 2]$ | $[2, 0]$ |
+| $m_{\text{new}}$ | $2$ | $2$ |
+| $\alpha$ | $0$ (first block) | $0$ (first block) |
+| $p = e^{S^{(1)} - m_{\text{new}}}$ | $[0.3679,\ 1]$ | $[1,\ 0.1353]$ |
+| $\ell$ | $1.3679$ | $1.1353$ |
+| $p\,V_{\text{blk}}$ | $[0.3679\cdot10 + 20,\ 0.3679\cdot 4 + 0] = [23.6788,\ 1.4715]$ | $[10 + 0.1353\cdot 20,\ 4 + 0] = [12.7067,\ 4.0000]$ |
+| $\mathbf o$ | $[23.6788,\ 1.4715]$ | $[12.7067,\ 4.0000]$ |
+| provisional $\mathbf o/\ell$ | $[17.3106,\ 1.0758]$ | $[11.1920,\ 3.5232]$ |
+
+The tile is now discarded. Keys 1–2 never need to be read again.
+
+*Key block 2* — keys 3–4, $K_{\text{blk}} = \begin{bmatrix}3&1\\0&1\end{bmatrix}$, $V_{\text{blk}} = \begin{bmatrix}30&2\\40&1\end{bmatrix}$.
+
+| | row 1 | row 2 |
+|---|---|---|
+| tile scores $S^{(2)}$ | $[3, 0]$ | $[1, 1]$ |
+| $m_{\text{blk}}$, $m_{\text{new}}$ | $3$, $\max(2,3) = 3$ — **max grew** | $1$, $\max(2,1) = 2$ — max unchanged |
+| $\alpha = e^{m - m_{\text{new}}}$ | $e^{-1} = 0.3679$ | $e^{0} = 1$ |
+| $p = e^{S^{(2)} - m_{\text{new}}}$ | $[1,\ 0.0498]$ | $[0.3679,\ 0.3679]$ |
+| $\ell \leftarrow \alpha\ell + \sum p$ | $0.3679\cdot 1.3679 + 1.0498 = 1.5530$ | $1\cdot 1.1353 + 0.7358 = 1.8711$ |
+| $p\,V_{\text{blk}}$ | $[30 + 0.0498\cdot 40,\ 2 + 0.0498] = [31.9915,\ 2.0498]$ | $[0.3679\cdot 70,\ 0.3679\cdot 3] = [25.7516,\ 1.1036]$ |
+| $\mathbf o \leftarrow \alpha\mathbf o + pV_{\text{blk}}$ | $[8.7118 + 31.9915,\ 0.5413 + 2.0498] = [40.7024,\ 2.5911]$ | $[12.7067 + 25.7516,\ 4 + 1.1036] = [38.4583,\ 5.1036]$ |
+| **final $\mathbf o/\ell$** | $[40.7024/1.5530,\ 2.5911/1.5530] = $ **$[26.2089,\ 1.6685]$** | $[38.4583/1.8711,\ 5.1036/1.8711] = $ **$[20.5539,\ 2.7276]$** |
+
+Both rows match the ground truth $O$ to every printed digit, and both final $\ell$ values ($1.5530$, $1.8711$) equal the full-row softmax denominators. Note that $\alpha$ is a *vector* — one correction per query row, $(B_q, 1)$ — and it multiplies **every column** of that row's $\mathbf o$ (here both $d$ entries). In the code it is the `(B, nh, Bq, 1)` tensor `corr`, broadcast across `hd`.
+
+### 4.3 What goes wrong without $\alpha$
+
+Rerun the same tiles but skip the correction (just add each block's $\sum p$ and $pV$ as-is):
+
+| | row 1 (max grew) | row 2 (max unchanged) |
+|---|---|---|
+| $\ell$ without $\alpha$ | $1.3679 + 1.0498 = 2.4177$ (true: $1.5530$) | $1.1353 + 0.7358 = 1.8711$ (true: $1.8711$) |
+| output without $\alpha$ | $[23.0265,\ 1.4565]$ — **wrong** | $[20.5539,\ 2.7276]$ — correct |
+
+Row 1 is wrong because keys 1–2 were exponentiated against $2$ and keys 3–4 against $3$: block 1's weights are $e^{1} \approx 2.7\times$ too large relative to block 2's, so the output is pulled toward $v_1, v_2$. Row 2 happens to be right only because its max never moved, so $\alpha$ was $1$ anyway. This is the trap: a missing correction passes any test where the first block holds the row max, and fails silently otherwise.
+
+### 4.4 Run it
+
+The same numbers, through the course's implementation, against naive attention and PyTorch's SDPA. `flash_attention_reference` assumes self-attention ($T_q = T_k$), so pad $Q$ to four rows and read the first two; it also applies the $1/\sqrt d$ scale itself, so pre-multiply $Q$ by $\sqrt 2$ to cancel it.
+
+```python
+import math, torch
+import torch.nn.functional as F
+from llmre.attention.flash import flash_attention_reference
+
+Q = torch.tensor([[1., 0.], [0., 1.], [1., 1.], [0., 0.]]) * math.sqrt(2)  # rows 3-4 are padding
+K = torch.tensor([[1., 2.], [2., 0.], [3., 1.], [0., 1.]])
+V = torch.tensor([[10., 4.], [20., 0.], [30., 2.], [40., 1.]])
+q, k, v = Q[None, None], K[None, None], V[None, None]     # (B=1, nh=1, T=4, d=2), fp32, CPU
+
+naive = torch.softmax(q @ k.transpose(-2, -1) / math.sqrt(2), dim=-1) @ v
+flash = flash_attention_reference(q, k, v, block_size=2)  # two key blocks, as above
+sdpa  = F.scaled_dot_product_attention(q, k, v)
+print(flash[0, 0, :2])
+print((flash - naive).abs().max().item(), (flash - sdpa).abs().max().item())
+```
+
+Output (run from `code/` after `pip install -e .`):
+
+```text
+tensor([[26.2089,  1.6685],
+        [20.5539,  2.7276]])
+3.814697265625e-06 3.814697265625e-06
+```
+
+The first two rows are the hand-computed $O$; the max difference against both naive attention and SDPA is $\approx 4\times 10^{-6}$ — fp32 rounding, not an algorithmic difference. Change `block_size` to `1` or `4` and the output is unchanged: tiling never changes the answer.
+
 <div class="callout pt"><p>You can run this exact example against the from-scratch implementation. <code>flash_attention_reference</code> in <code>code/src/llmre/attention/flash.py</code> is this recurrence, vectorized over batch, heads, and query rows, with <code>block_size</code> as the tile length. The tests in <code>code/tests/test_flash.py</code> assert it matches both a plain <code>softmax(QKᵀ/√d)V</code> and <code>F.scaled_dot_product_attention</code> to 1e-4, causal and non-causal, and that the result is <em>independent of block size</em> — because tiling is an implementation detail, not a change to the math.</p></div>
 
 ## 5. The from-scratch implementation (CPU, exact)
