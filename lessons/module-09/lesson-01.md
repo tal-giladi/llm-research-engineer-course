@@ -471,6 +471,70 @@ Here each local batch contains 8 examples, so four ranks contribute 32 examples 
 
 For accumulation over `A` equal micro-batches, use `model.no_sync()` around **both forward and backward** for the first `A-1` micro-batches. On the last one, use normal synchronization. Divide each mean loss by `A`, and call the optimizer once after the window. This avoids synchronizing every intermediate backward; the [PyTorch tuning guide](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide.html) covers this pattern.
 
+#### What `model.no_sync()` actually does
+
+**Intuition.** Normally every `loss.backward()` on a DDP model ends with an all-reduce: the ranks exchange gradients and each one ends up with the average. With gradient accumulation you call `backward()` several times before a single `optimizer.step()`, so exchanging after every micro-batch is wasted network traffic: nobody uses the intermediate averages. `no_sync()` is a context manager (a `with` block) that tells DDP: "for backward passes inside this block, skip the all-reduce and just add the gradient into this rank's own `.grad`." The first backward **outside** the block all-reduces as usual, and because `.grad` already holds the sum of all the earlier micro-batches, that one exchange averages the whole accumulated window.
+
+Under the hood, DDP's forward pass prepares its reducer (the component that launches the all-reduce hooks during backward). Inside `no_sync()` the forward marks the reducer as "do not communicate", which is why the **forward must be inside the block too**, not just the backward. If you only wrap `backward()`, DDP still synchronizes.
+
+**Mathematics.** Let $W$ be the number of ranks, $A$ the number of micro-batches per window, and $g_{w,a}$ the gradient of rank $w$'s mean loss on micro-batch $a$. Each micro-batch loss is divided by $A$, so after the window rank $w$ holds the local accumulated gradient
+
+$$G_w = \sum_{a=1}^{A} \frac{g_{w,a}}{A}.$$
+
+The single all-reduce at the end gives every rank
+
+$$\bar{G} = \frac{1}{W}\sum_{w=1}^{W} G_w = \frac{1}{W A}\sum_{w=1}^{W}\sum_{a=1}^{A} g_{w,a},$$
+
+the mean over all $W \cdot A$ micro-batch gradients: exactly what one big batch would give (for equal-size micro-batches).
+
+**Worked example.** $W = 2$ ranks, $A = 2$ micro-batches, one scalar weight.
+
+| | micro-batch 1 | micro-batch 2 |
+|---|---|---|
+| rank 0 gradient $g_{0,a}$ | 4 | 2 |
+| rank 1 gradient $g_{1,a}$ | 6 | 0 |
+
+Micro-batch 1 runs inside `no_sync()`: no communication. Rank 0's `.grad` is $4/2 = 2$, rank 1's is $6/2 = 3$. They differ, which is fine because nobody steps yet.
+
+Micro-batch 2 runs outside the block. Backward adds into `.grad`: rank 0 has $2 + 2/2 = 3$, rank 1 has $3 + 0/2 = 3$. DDP all-reduces and averages: $(3 + 3)/2 = 3$. Check against the full mean: $(4 + 2 + 6 + 0)/4 = 3$. One all-reduce instead of two.
+
+If you forget `no_sync()`, the result is **still correct**: averaging is linear, so averaging each micro-batch and then adding gives the same 3. What changes is cost: you pay $A$ all-reduces of the full gradient per optimizer step instead of 1. For a 1B-parameter model with fp32 gradients that is 4 GB of all-reduce payload per micro-batch, so with $A = 8$ you move 8× more data for the same update.
+
+**Shapes and memory.** `no_sync()` changes no tensor: each `param.grad` keeps the parameter's shape, dtype and device (here `[1, 16]` and `[1]`, `float32`, on the rank's GPU or CPU). It costs no extra memory, because the accumulation happens in the `.grad` tensors that already exist.
+
+**Code.** This replaces the inner loop of the `train()` function above, with `A = 4`. Add `import contextlib` at the top of the script.
+
+```python
+A = 4                                            # micro-batches per optimizer step
+
+for epoch in range(3):
+    sampler.set_epoch(epoch)
+    loss_sum = torch.zeros((), device=device)
+    optimizer.zero_grad(set_to_none=True)
+
+    for i, (local_x, local_y) in enumerate(loader):
+        local_x = local_x.to(device)
+        local_y = local_y.to(device)
+        is_last_in_window = (i + 1) % A == 0
+
+        # Inside no_sync: backward only adds into .grad, no all-reduce.
+        # On the last micro-batch: a normal DDP backward that all-reduces
+        # the accumulated .grad once.
+        sync_ctx = contextlib.nullcontext() if is_last_in_window else model.no_sync()
+        with sync_ctx:
+            loss = loss_fn(model(local_x), local_y)   # forward INSIDE the block
+            (loss / A).backward()                     # divide so the window averages
+
+        if is_last_in_window:
+            optimizer.step()                          # one step per A micro-batches
+            optimizer.zero_grad(set_to_none=True)
+        loss_sum += loss.detach()
+```
+
+`contextlib.nullcontext()` is a `with` block that does nothing, so the same two lines run in both cases. All ranks reach the synchronizing micro-batch at the same `i`, because the `DistributedSampler` gives every rank the same number of batches. If `len(loader)` is not a multiple of `A`, the leftover micro-batches at the end of the epoch accumulate into `.grad` without a step; drop them, or make the last batch of the epoch also count as the end of a window.
+
+To see the saving yourself, register a counting communication hook (`model.register_comm_hook`) that increments a counter and then performs the all-reduce: with the loop above, a small model like this `Linear(16, 1)` (one gradient bucket) shows one call per `A` micro-batches; without `no_sync()` it shows one per micro-batch, and the final gradients are the same.
+
 <div class="callout warn"><p>All ranks must follow a compatible collective sequence. A rank that skips backward, crashes, or runs out of batches early can leave peers waiting. Unused parameters are a separate issue: models with branches may need <code>find_unused_parameters=True</code>, depending on their graph. This flag is not a general repair for mismatched loops. Investigate the first error across all ranks before retrying the job.</p></div>
 
 ## Exercise
