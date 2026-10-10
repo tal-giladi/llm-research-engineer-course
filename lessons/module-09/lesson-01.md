@@ -184,7 +184,55 @@ def data_parallel_grads(grad_fn, params, batch, world_size):
     return ring_all_reduce(grads, op="mean")              # averaged == full-batch
 ```
 
-In a real run there is no `for` loop here — the `W` `grad_fn` calls happen *simultaneously* on `W` GPUs, and `ring_all_reduce` is a NCCL call across the interconnect. The returned gradient is what the optimizer consumes, exactly as in the single-GPU loop of [07.1](lessons/module-07/lesson-01.md); every worker gets the same averaged gradient and takes the same step.
+This is a **single-process simulation**: one Python process plays all `W` workers, so the `for shard in shards` loop runs their `grad_fn` calls one after another. That loop stands in for `W` GPUs working in parallel. The returned gradient is what the optimizer consumes, exactly as in the single-GPU loop of [07.1](lessons/module-07/lesson-01.md); every worker gets the same averaged gradient and takes the same step.
+
+### The same step on real GPUs
+
+On real hardware there is no process that holds all the shards. You launch `W` copies of the same script, one per GPU, with `torchrun`. Each copy learns its **rank** (its worker id, `0 … W-1`), takes only its own shard, computes one local gradient, and joins a NCCL all-reduce with the other `W-1` processes:
+
+```python
+# train.py — launch on one node with 4 GPUs:
+#   torchrun --nproc_per_node=4 train.py
+import os
+import torch
+import torch.distributed as dist
+
+dist.init_process_group(backend="nccl")        # join the group of W processes
+rank = dist.get_rank()                          # 0 .. W-1: which worker am I?
+W = dist.get_world_size()                       # 4 here
+local_rank = int(os.environ["LOCAL_RANK"])      # GPU index on this machine
+torch.cuda.set_device(local_rank)
+device = torch.device("cuda", local_rank)
+
+torch.manual_seed(0)                            # same seed on every rank -> identical starting weights
+model = torch.nn.Linear(16, 1).to(device)
+loss_fn = torch.nn.MSELoss()
+
+def data_parallel_grads(model, batch_x, batch_y):
+    # 1. take only MY shard: rank r gets rows [r*B/W, (r+1)*B/W)
+    x = batch_x.chunk(W)[rank].to(device)      # (B/W, 16) float32 cuda:local_rank
+    y = batch_y.chunk(W)[rank].to(device)      # (B/W, 1)  float32 cuda:local_rank
+    # 2. local gradient: runs on this GPU only, at the same time as the other W-1 GPUs
+    model.zero_grad()
+    loss_fn(model(x), y).backward()            # p.grad = mean-loss gradient of MY shard
+    # 3. average across GPUs: NCCL ring/tree all-reduce over NVLink / InfiniBand
+    for p in model.parameters():               # loop over parameter TENSORS, not over workers
+        dist.all_reduce(p.grad, op=dist.ReduceOp.SUM)   # every rank now holds the sum of W grads
+        p.grad /= W                                       # sum -> mean == full-batch gradient
+
+torch.manual_seed(1)                            # same seed -> every rank sees the same global batch
+batch_x, batch_y = torch.randn(32, 16), torch.randn(32, 1)   # B = 32 -> 8 rows per GPU
+data_parallel_grads(model, batch_x, batch_y)
+torch.optim.SGD(model.parameters(), lr=0.1).step()  # identical step on every rank
+
+dist.destroy_process_group()
+```
+
+Map it line by line onto the simulation: `split_batch(batch, W)` became `batch.chunk(W)[rank]` (each process keeps one piece instead of a list of all of them); the list comprehension over shards became a single `backward()` per process, running on `W` GPUs at once; and `ring_all_reduce(grads, op="mean")` became `dist.all_reduce(..., SUM)` followed by `/ W`, where NCCL runs the ring from §3 across the GPUs. The only `for` loop left is over the model's parameter tensors (here a weight of shape `(1, 16)` and a bias of shape `(1,)`), and every rank runs that same loop in step, so each `all_reduce` call is matched on all `W` GPUs.
+
+Two details that the simulation hid. First, the weights must start **identical** on every rank (here, the same seed); otherwise averaging gradients is meaningless. In production DDP broadcasts rank 0's weights at startup to guarantee it. Second, in real training each rank usually loads only its own rows from disk via a `DistributedSampler` rather than building the full batch and slicing it; the full batch here just keeps the mapping to `split_batch` obvious. Calling `all_reduce` once per parameter after backward finishes is the naive schedule; §7 shows how DDP buckets these calls and overlaps them with backward.
+
+<div class="hw"><p><strong>Hardware:</strong> needs ≥ 2 NVIDIA GPUs with NCCL (any CUDA GPUs; NVLink not required). Runtime: seconds. GPU memory: negligible. CPU-only: change <code>backend="nccl"</code> to <code>"gloo"</code>, use <code>device = torch.device("cpu")</code>, drop the <code>set_device</code> line, and run <code>torchrun --nproc_per_node=4 train.py</code> on a laptop — the code path is the same, only the transport changes.</p></div>
 
 Notice the relationship to **gradient accumulation** ([07.2](lessons/module-07/lesson-02.md)): accumulation sums micro-batch gradients *sequentially on one device* to fake a big batch; data parallelism computes shard gradients *simultaneously on many devices* and averages. Real runs combine both — `global batch = micro_batch × grad_accum_steps × world_size` — which is the identity you will use in every scaling estimate.
 
