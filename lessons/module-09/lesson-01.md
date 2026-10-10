@@ -317,7 +317,7 @@ NCCL knows about tensors and collective operations. It does not know what a trai
 
 The ring from section 3 is **one implementation of all-reduce**, not a requirement of the operation. NCCL can select different algorithms and transports. NVLink, PCIe, and network connections affect the available bandwidth; the mathematical result required by the collective remains the same, up to floating-point reduction order.
 
-<div class="hw"><p><strong>Hardware:</strong> the runnable example below uses one NVIDIA GPU per process and the NCCL backend. NVLink is not required. Communication is GPU work scheduled on CUDA streams and may overlap computation; it is not guaranteed to be a free transfer handled only by copy engines. The CPU simulation cannot measure that overlap or predict its speedup.</p></div>
+<div class="hw"><p><strong>Hardware:</strong> the runnable example below uses one NVIDIA GPU per process and the NCCL backend; without CUDA it runs on the CPU with Gloo (correct, not faster). NVLink is not required. Communication is GPU work scheduled on CUDA streams and may overlap computation; it is not guaranteed to be a free transfer handled only by copy engines. The CPU simulation cannot measure that overlap or predict its speedup.</p></div>
 
 For implementation details, see the [NCCL collective operations guide](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html).
 
@@ -384,8 +384,7 @@ from torch.utils.data.distributed import DistributedSampler
 log = logging.getLogger(__name__)
 
 
-def train(local_rank):
-    device = torch.device("cuda", local_rank)
+def train(device):
     rank = dist.get_rank()
     world_size = dist.get_world_size()
 
@@ -402,7 +401,8 @@ def train(local_rank):
     # DDP synchronizes the starting model across ranks by default.
     torch.manual_seed(0)
     model = torch.nn.Linear(16, 1).to(device)
-    model = DistributedDataParallel(model, device_ids=[local_rank])
+    device_ids = [device.index] if device.type == "cuda" else None
+    model = DistributedDataParallel(model, device_ids=device_ids)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     loss_fn = torch.nn.MSELoss(reduction="mean")
     model.train()
@@ -433,11 +433,16 @@ def main():
         if "LOCAL_RANK" not in os.environ:
             raise RuntimeError("Launch with torchrun, not python train.py.")
         local_rank = int(os.environ["LOCAL_RANK"])
-        if not torch.cuda.is_available() or local_rank >= torch.cuda.device_count():
-            raise RuntimeError("Each local process needs an available CUDA GPU.")
-        torch.cuda.set_device(local_rank)
-        dist.init_process_group(backend="nccl", timeout=timedelta(minutes=5))
-        train(local_rank)
+        if torch.cuda.is_available():
+            if local_rank >= torch.cuda.device_count():
+                raise RuntimeError("Each local process needs its own CUDA GPU.")
+            torch.cuda.set_device(local_rank)
+            device, backend = torch.device("cuda", local_rank), "nccl"
+        else:
+            # CPU fallback: same DDP code, Gloo instead of NCCL, no speedup.
+            device, backend = torch.device("cpu"), "gloo"
+        dist.init_process_group(backend=backend, timeout=timedelta(minutes=5))
+        train(device)
     except Exception:
         log.exception("Training failed on rank %s", os.environ.get("RANK", "unknown"))
         raise                                   # let the launcher report the failure
@@ -449,6 +454,14 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+**No GPU, or on Windows?** Without CUDA the script falls back to the CPU and the Gloo backend: the same DDP code and the same gradient averaging, with no speedup. On Windows, `torchrun` may be missing from `PATH` and, in current CPU builds, its launcher fails with a libuv error. Start the four processes yourself instead; this sets exactly the variables `torchrun` would set (PowerShell):
+
+```powershell
+$env:WORLD_SIZE=4; $env:MASTER_ADDR='127.0.0.1'; $env:MASTER_PORT=29500; 0..3 | % { $env:RANK=$_; $env:LOCAL_RANK=$_; Start-Process py train.py -NoNewWindow -PassThru } | Wait-Process
+```
+
+Rank 0 prints three `epoch=… mean_loss=…` lines with the loss falling. A `client socket has failed to connect` warning per process before that is Gloo probing the machine's hostname and is harmless.
 
 Trace the responsibilities: `torchrun` launches the processes; `init_process_group` connects them; `DistributedSampler` chooses each rank's data indices; DDP synchronizes the model and gradients; the optimizer updates the local replica. The final `all_reduce(loss_sum)` is only for logging a global loss. **DDP synchronizes gradients, not the Python `loss` variable.**
 
