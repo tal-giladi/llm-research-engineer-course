@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DDP • Compute while you communicate</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121e30;--line:#30415a;--text:#eef4fd;--muted:#adbbd0;--compute:#70b7ff;--comm:#f6be63;--done:#70dfb3}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:30px 24px}h1{font-size:clamp(25px,4vw,38px);line-height:1.15;margin:6px 0 12px;letter-spacing:-.04em}h2{font-size:17px;margin:0 0 12px}p{margin:8px 0;color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:.16em;color:var(--comm);font-weight:700}.controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:22px 0 12px}button,select{font:inherit;color:var(--text);background:#1c2b42;border:1px solid var(--line);border-radius:9px;padding:9px 13px;cursor:pointer}button:hover,select:hover{background:#293e59}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--compute);outline-offset:3px}button.primary{background:var(--text);color:var(--bg);font-weight:700}button:disabled{opacity:.4;cursor:default}.time{margin-left:auto;font:700 23px ui-monospace,monospace}.scrub{display:flex;gap:12px;align-items:center;color:var(--muted)}input[type=range]{width:100%;accent-color:var(--compute);cursor:pointer}.story{margin:18px 0;background:#172940;border-left:4px solid var(--compute);padding:16px 18px;min-height:110px;border-radius:0 10px 10px 0}.story strong{font-size:18px}.story p{margin:5px 0 0;color:var(--text)}.replicas{display:grid;grid-template-columns:1fr 1fr;gap:14px}.replica{background:var(--panel);border:1px solid var(--line);padding:16px;border-radius:13px}.replica header{display:flex;justify-content:space-between;gap:8px}.small{font-size:12px;color:var(--muted)}.direction{margin:12px 0;font-size:12px;color:var(--muted)}.layers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.layer{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:9px;padding:11px 9px;background:#0e1929;min-height:110px}.layer .name{font-size:23px;font-weight:700}.layer .state{font-size:12px;color:var(--muted);min-height:36px}.layer .value{font:14px ui-monospace,monospace;white-space:nowrap}.layer .fill{position:absolute;bottom:0;left:0;height:4px;background:var(--compute);width:0}.layer.compute{border-color:var(--compute);background:#172e47}.layer.reduce{border-color:var(--comm)}.layer.reduce .fill{background:var(--comm)}.layer.done .fill{background:var(--done)}.layer.done .state{color:var(--done)}.collective{display:grid;grid-template-columns:1fr 1.5fr;gap:20px;padding:18px;margin:14px 0 24px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}.collective h2{margin-bottom:5px}.packet-track{height:24px;position:relative;margin:8px 0;background:#243047;border-radius:5px;overflow:hidden}.packet{position:absolute;height:100%;width:12%;background:var(--comm);left:0;opacity:0;border-radius:5px}.math{font:14px/1.7 ui-monospace,monospace}.timeline-panel{border:1px solid var(--line);border-radius:13px;padding:18px;background:var(--panel)}.timeline-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}.legend span:before{content:'';display:inline-block;width:9px;height:9px;background:var(--compute);margin-right:5px;border-radius:2px}.legend span:nth-child(2):before{background:var(--comm)}.scroll{overflow-x:auto;padding-bottom:5px}.chart{min-width:590px;position:relative;margin-top:12px}.axis,.lane{display:grid;grid-template-columns:135px 1fr;gap:12px}.axis{margin-bottom:7px}.ticks{position:relative;height:24px;color:var(--muted);font:12px ui-monospace,monospace}.tick{position:absolute;transform:translateX(-50%)}.tick:first-child{transform:none}.tick:last-child{transform:translateX(-100%)}.lane{margin:7px 0;align-items:center;font-size:12px}.track{height:34px;position:relative;background:#1c2a3e;border-radius:5px;overflow:hidden}.block{position:absolute;top:0;height:100%;background:#294462;color:#dfeeff;display:flex;align-items:center;justify-content:center;overflow:hidden;font-weight:600}.block.comm{background:#50432d;color:#ffe2ae}.block .progress{position:absolute;inset:0;background:var(--compute);transform:scaleX(0);transform-origin:left;opacity:.4}.block.comm .progress{background:var(--comm)}.block b{position:relative;font-weight:600}.cursor{position:absolute;top:0;bottom:0;width:2px;background:#fff;pointer-events:none;z-index:2}.group-label{margin:14px 0 3px;font-weight:700;font-size:13px}.group-label span{font-weight:400;color:var(--muted)}.summary{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin-top:16px}.summary strong{color:var(--done)}details{margin-top:20px;color:var(--muted);font-size:13px}summary{cursor:pointer;color:var(--text)}li{margin:6px 0}a{color:var(--compute)}code{color:var(--text)}footer{margin-top:18px;color:var(--muted);font-size:12px}@media(max-width:650px){main{padding:20px 14px}.replicas{grid-template-columns:1fr}.collective{grid-template-columns:1fr;gap:6px}.time{font-size:18px}.story{min-height:145px}.replica{padding:12px}.layer{min-height:98px}.timeline-panel{padding:12px}.controls{gap:7px}button,select{padding:8px}}
+</style>
+</head>
+<body><main id="ddp-demo">
+<div class="eyebrow">PYTORCH / DISTRIBUTED DATA PARALLEL</div>
+<h1>Compute while you communicate.</h1>
+<p>Two GPUs. A full copy of A → B → C on each. Different data, different local gradients — then shared averages.</p>
+<div class="controls"><button class="primary" id="play" type="button">▶ Play</button><button id="next" type="button">Next event →</button><button id="reset" type="button">Restart</button><label class="small" for="speed">Speed</label><select id="speed"><option value="0.5">Slow</option><option value="1" selected>Normal</option><option value="2">Fast</option></select><output class="time" id="clock">0.0 ms</output></div>
+<label class="scrub"><span class="small">Time</span><input id="scrub" type="range" min="0" max="21" step="0.01" value="0" aria-label="Simulation time in milliseconds"><span class="small">21 ms</span></label>
+<section class="story" aria-live="polite" aria-atomic="true"><strong id="headline"></strong><p id="explanation"></p></section>
+<section class="replicas" aria-label="DDP model replicas" id="replicas"></section>
+<section class="collective"><div><h2 id="collective-title">All-reduce: idle</h2><div class="small">GPU 0 ⇄ collective ⇄ GPU 1</div><div class="packet-track" aria-hidden="true"><div class="packet" id="packet"></div></div><div class="small">Conceptual transfer, not a ring-algorithm animation.</div></div><div><div class="math" id="math"></div><div class="small" id="collective-note"></div></div></section>
+<section class="timeline-panel"><div class="timeline-head"><h2>Same work. Different schedules.</h2><div class="legend"><span>Gradient computation</span><span>All-reduce</span></div></div><div class="small">One shared time axis. Filled portions show work completed. The replica view above follows DDP.</div><div class="scroll"><div class="chart" id="chart"></div></div><div class="summary"><span>DDP: <strong>15 ms</strong></span><span>Afterward: 21 ms</span><span>Hidden communication: 6 ms</span><span>Exposed tail: 3 ms</span></div></section>
+<details><summary>What this example simplifies</summary><ul><li>The clock starts at backward. Forward A → B → C and loss calculation have already finished on each GPU. Backward computes gradients in C → B → A order.</li><li>One bucket per layer is a teaching simplification. A real bucket can contain multiple parameter tensors and can cross layer boundaries. All gradients in a bucket must be ready locally; ranks must issue collectives in matching order, and completion depends on all participating ranks.</li><li>Both ranks have equal timing here. Each layer's backward takes 4 ms; each collective takes 3 ms. We assume no compute/communication slowdown from resource contention. These are illustrative values, not benchmark results.</li><li>Numbers in the tiles are invented two-element gradient vectors, not weights or activations. For this ordinary, equal-weight two-rank example, each completed bucket contains the mean of the ranks' local gradients.</li><li>The after-backward schedule is a comparison, not a PyTorch DDP mode. Ordinary DDP starts reduction during backward; by the time <code>loss.backward()</code> returns, its gradient synchronization has completed. The optimizer step then runs independently on each rank using synchronized gradients.</li><li>No optimizer step is simulated. Matching starting weights, optimizer states and updates keep replicas aligned. DDP does not split the input data for you.</li></ul><p>Reference: <a href="https://docs.pytorch.org/docs/stable/notes/ddp.html" target="_blank" rel="noopener noreferrer">PyTorch DDP design notes</a>.</p></details>
+<footer>Self-contained HTML + JavaScript · No dependencies or network requests · Pause, scrub, or advance one event at a time.</footer>
+<noscript>This animation needs JavaScript. DDP computes C from 0–4, B from 4–8, A from 8–12 ms, and reduces C from 4–7, B from 8–11, A from 12–15 ms. Serial communication instead runs from 12–21 ms.</noscript>
+</main>
+<script>
+(() => {
+'use strict';
+// All times are simulated milliseconds. Wall-clock playback is deliberately slow.
+const root = document.getElementById('ddp-demo');
+const $ = id => root.querySelector('#' + id);
+const END = 21;
+const layers = [
+ {name:'A',start:8,ready:12,end:15,local:[[1,3],[5,7]],avg:[3,5]},
+ {name:'B',start:4,ready:8,end:11,local:[[2,4],[6,8]],avg:[4,6]},
+ {name:'C',start:0,ready:4,end:7,local:[[3,5],[7,9]],avg:[5,7]}
+];
+const events=[0,4,7,8,11,12,15,18,21];
+const stories=[
+ [0,'Backward begins with C.',"Neither GPU has a complete gradient bucket yet. Both compute C’s local gradients; communication has nothing to send."],
+ [4,'C is ready. Compute B and reduce C together.',"Each GPU’s C bucket is complete. DDP starts all-reduce for C while autograd continues computing B. C’s reduction does not need A’s gradients."],
+ [7,'C is synchronized; B is still computing.',"Both GPUs now hold C’s averaged gradients. Communication is idle from 7–8 ms because B’s bucket is not ready yet. The weights have not been updated."],
+ [8,'B is ready. Compute A and reduce B together.',"B’s bucket starts all-reduce while backward computes A. The compute and communication lanes are active at the same time again."],
+ [11,'B is synchronized; A is still computing.',"A is the last unfinished gradient bucket. Communication waits from 11–12 ms while A’s gradients are computed."],
+ [12,'Computation is finished. Synchronization is not.',"A’s bucket is finally ready and starts all-reduce. There is no backward computation left to hide these 3 ms. loss.backward() still waits for synchronization."],
+ [15,'DDP is finished. The comparison is still running.',"All three buckets are synchronized; backward can return and the optimizer can step. DDP took 15 ms. The after-backward schedule has only finished reducing C."],
+ [18,'The comparison still needs to reduce A.',"Without overlap, C reduced during 12–15 ms and B during 15–18 ms. A now takes another 3 ms. The DDP path has been finished since 15 ms."],
+ [21,'Same 12 ms of compute + 9 ms of communication.',"DDP hid 6 ms of communication behind computation: 21 − 6 = 15 ms. The remaining 3 ms for A was exposed. No work disappeared; some work happened concurrently."]
+];
+let time=0, playing=false, lastStamp=null, raf=0, storyIndex=-1;
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const vector=v=>'['+v.join(', ')+']';
+// Build once; animation only updates text, classes and transforms.
+for(let rank=0;rank<2;rank++){
+ const section=document.createElement('article'); section.className='replica';
+ section.innerHTML='<header><h2>GPU '+rank+' · rank '+rank+'</h2><span class="small">Data shard '+rank+'</span></header><div class="direction">Forward: A → B → C &nbsp; | &nbsp; Backward: A ← B ← C</div><div class="layers">'+layers.map(l=>'<div class="layer" id="r'+rank+l.name+'"><div class="name">'+l.name+'</div><div class="state"></div><div class="value">—</div><div class="fill"></div></div>').join('')+'</div>';
+ $('replicas').append(section);
+}
+const schedule=[
+ {label:'DDP · overlap',note:'done at 15 ms',rows:[['Backward',[[0,4,'C'],[4,8,'B'],[8,12,'A']]],['All-reduce',[[4,7,'C'],[8,11,'B'],[12,15,'A']]]]},
+ {label:'Communicate afterward',note:'done at 21 ms',rows:[['Backward',[[0,4,'C'],[4,8,'B'],[8,12,'A']]],['All-reduce',[[12,15,'C'],[15,18,'B'],[18,21,'A']]]]}
+];
+const blocks=[], cursors=[];
+$('chart').innerHTML='<div class="axis"><span class="small">Time (ms)</span><div class="ticks">'+[0,4,8,12,15,18,21].map(n=>'<span class="tick" style="left:'+n/END*100+'%">'+n+'</span>').join('')+'</div>';
+for(const group of schedule){
+ const label=document.createElement('div');label.className='group-label';label.textContent=group.label+' · '+group.note;$('chart').append(label);
+ for(const [name,items] of group.rows){
+  const row=document.createElement('div');row.className='lane';const title=document.createElement('span');title.textContent=name;const track=document.createElement('div');track.className='track';row.append(title,track);
+  for(const [start,end,label] of items){const b=document.createElement('div');b.className='block'+(name==='All-reduce'?' comm':'');b.style.left=start/END*100+'%';b.style.width=(end-start)/END*100+'%';b.title=label+': '+start+'–'+end+' ms';b.innerHTML='<span class="progress"></span><b>'+label+'</b>';track.append(b);blocks.push({el:b.firstElementChild,start,end});}
+  const cursor=document.createElement('div');cursor.className='cursor';track.append(cursor);cursors.push(cursor);$('chart').append(row);
+ }
+}
+function render(){
+ $('clock').textContent=time.toFixed(1)+' ms';$('scrub').value=String(time);
+ $('scrub').setAttribute('aria-valuetext',time.toFixed(1)+' milliseconds');
+ $('play').textContent=playing?'❚❚ Pause':time>=END?'↻ Replay':'▶ Play';$('next').disabled=time>=END;
+ const idx=stories.reduce((found,s,i)=>time>=s[0]?i:found,0);
+ if(idx!==storyIndex){storyIndex=idx;$('headline').textContent=stories[idx][1];$('explanation').textContent=stories[idx][2];}
+ for(const l of layers){
+  const phase=time<l.start?'waiting':time<l.ready?'compute':time<l.end?'reduce':'done';
+  const progress=phase==='waiting'?0:phase==='compute'?(time-l.start)/4:phase==='reduce'?(time-l.ready)/3:1;
+  for(let rank=0;rank<2;rank++){
+   const el=$('r'+rank+l.name);el.className='layer '+phase;
+   el.querySelector('.state').textContent=({waiting:'Waiting for backward',compute:'Computing gradients',reduce:'Bucket ready · reducing',done:'Averaged · synchronized'})[phase];
+   el.querySelector('.value').textContent=phase==='done'?vector(l.avg):phase==='reduce'?vector(l.local[rank]):'—';
+   el.querySelector('.fill').style.width=clamp(progress,0,1)*100+'%';
+  }
+ }
+ const active=layers.find(l=>time>=l.ready&&time<l.end);
+ const latest=[...layers].filter(l=>time>=l.end).sort((a,b)=>b.end-a.end)[0];
+ $('collective-title').textContent=active?'All-reduce: bucket '+active.name:time>=15?'All buckets synchronized':'All-reduce: idle';
+ const shown=active||latest;
+ $('math').textContent=shown?'('+vector(shown.local[0])+' + '+vector(shown.local[1])+') / 2 = '+vector(shown.avg):'Local gradients → sum across ranks → divide by 2';
+ $('collective-note').textContent=active?'Target average for '+active.name+'; available on both GPUs at '+active.end+' ms. Local values stay visible until completion.':latest?'Completed bucket '+latest.name+': both ranks received '+vector(latest.avg)+'.':'A bucket cannot start reducing before all of its local gradients are ready.';
+ $('packet').style.opacity=active?'1':'0';$('packet').style.left=active?((time-active.ready)/3*88)+'%':'0%';
+ for(const b of blocks)b.el.style.transform='scaleX('+clamp((time-b.start)/(b.end-b.start),0,1)+')';
+ for(const c of cursors)c.style.left='calc('+time/END*100+'% - 1px)';
+}
+function pause(){playing=false;lastStamp=null;cancelAnimationFrame(raf);render();}
+function frame(stamp){
+ if(!playing)return;
+ if(lastStamp!==null)time=clamp(time+Math.min(stamp-lastStamp,100)/1500*Number($('speed').value),0,END);
+ lastStamp=stamp;if(time>=END)playing=false;render();if(playing)raf=requestAnimationFrame(frame);
+}
+$('play').addEventListener('click',()=>{if(playing){pause();return;}if(time>=END)time=0;playing=true;lastStamp=null;render();raf=requestAnimationFrame(frame);});
+$('next').addEventListener('click',()=>{pause();time=events.find(e=>e>time+0.0001)??END;render();});
+$('reset').addEventListener('click',()=>{pause();time=0;render();});
+$('scrub').addEventListener('input',()=>{const nextTime=Number($('scrub').value);pause();time=clamp(nextTime,0,END);render();});
+// Pause when hidden so returning to the tab never skips the lesson.
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+window.addEventListener('pagehide',pause);
+render();
+})();
+</script></body></html>

@@ -358,6 +358,10 @@ Here is a deliberately simplified timing example with one bucket per layer. Supp
 
 Doing the same three communications only after backward would take `12 + 9 = 21 ms`. This illustrative overlap takes 15 ms. **The final 3 ms is still exposed communication time.** These numbers explain the schedule; they are not a benchmark or a promised speedup.
 
+Play the same schedule below, or step through it with **Next event**. The top shows both GPUs' A, B, C buckets moving from *computing* to *reducing* to *averaged*; the bottom timeline puts the DDP overlap and the communicate-afterward schedule on one time axis so you can see the 6 ms that get hidden and the 3 ms that stay exposed.
+
+<iframe src="assets/interactive/ddp-overlap.html" title="DDP overlap of all-reduce with backward, two GPUs" style="width:100%;height:1400px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,d=f.contentDocument,m=d.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);d.addEventListener('click',function(){setTimeout(s,0)},true);d.addEventListener('toggle',s,true);d.addEventListener('input',s,true)}catch(e){}"></iframe>
+
 Buckets also avoid paying collective-launch overhead separately for every tiny parameter tensor. Larger buckets can reduce overhead but become ready later; smaller buckets can start earlier but require more calls. Real performance depends on both the computation and the interconnect. The [PyTorch DDP design note](https://docs.pytorch.org/docs/main/notes/ddp.html) describes this scheduling.
 
 <div class="callout key"><p>DDP does not make all-reduce disappear. It starts communication for ready gradients while other gradients are still being computed. Any communication left at the end must finish before the optimizer can use those gradients.</p></div>
