@@ -107,7 +107,9 @@ $$
 w_0 = [1,\ 2,\ 3], \qquad w_1 = [4,\ 5,\ 6], \qquad w_2 = [7,\ 8,\ 9].
 $$
 
-The true sum is $[12,\ 15,\ 18]$. Watch the ring produce it.
+The true sum is $[12,\ 15,\ 18]$. Watch the ring produce it. Step through the animation with **Next** (each round is a *send* frame, where all three chunks are in flight at once, then a *received* frame showing the addition or copy), then check every number against the hand calculation below.
+
+<iframe src="assets/interactive/ring-all-reduce.html" title="Ring all-reduce animation, three workers" style="width:100%;height:520px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,m=f.contentDocument.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);f.contentDocument.addEventListener('click',s,true)}catch(e){}"></iframe>
 
 **Reduce-scatter, step 0.** Worker `i` sends chunk `i` to worker `i+1`, which adds it into its own chunk `i`:
 
