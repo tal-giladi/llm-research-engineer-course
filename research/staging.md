@@ -257,3 +257,87 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition to module 9's distributed-training material: a debugging-methodology sidebar on fingerprint-and-trace determinism checking, with the reported overhead numbers as a concrete cost/benefit example.
 - **Confidence:** medium — official NVIDIA engineering blog with real scale and concrete overhead numbers, but single source, and the headline tracing workflow is an unmerged PR rather than a shipped feature.
 - **Recommendation:** monitor; revisit once PR #7262 merges or a second lab/framework (e.g. a DeepSpeed or a major lab's training report) describes a comparable determinism effort.
+
+### C-20261010-01 · On-policy distillation teaches new skills but not new knowledge
+
+- **Class:** B
+- **Date discovered:** 2026-10-10
+- **Date published:** 2026-10-07
+- **Source:** https://arxiv.org/abs/2610.09639 (verified resolves; v1 "Wed, 7 Oct 2026 08:15:10 UTC")
+- **Organization/researchers:** Yixuan Tang, Yi Yang (affiliations not stated on the abstract page; appear to be an academic group)
+- **Category:** RL/post-training (on-policy distillation, taught in lesson 17.4)
+- **What changed:** Asks whether on-policy distillation (OPD) gives a student model new *factual knowledge* or only new *compositional reasoning skill*. Using a controlled synthetic framework across four models from three families, plus factual-QA and competition-math experiments, the authors report that reverse-KL OPD (the form the course already teaches) transfers compositional skill to unseen reasoning structures but transfers little factual knowledge; switching to forward KL restores factual transfer. Student rollouts mainly improve *how* the model executes multi-step reasoning over what it already knows, not what it knows.
+- **Technical summary:** Controlled synthetic framework isolates knowledge-transfer from skill-transfer by construction (so the finding isn't just "model got better on a benchmark"); the forward-KL vs. reverse-KL contrast is directly checkable against the forward/reverse-KL distinction lesson 17.4 already teaches as the core design choice in logit distillation. No code repository found linked from the abstract page.
+- **Why it might matter:** This is a precise, falsifiable characterization of *what on-policy distillation actually does* — directly testing the mechanism lesson 17.4 already teaches (reverse-KL OPD on a model's own rollouts) rather than proposing a new variant. If it holds up, it's exactly the kind of "what this technique does and doesn't do" caveat the lesson's existing forward/reverse-KL discussion should carry, and it's a different, complementary angle from the already-deferred OPD-variants thread (`research/deferred/on-policy-distillation-variants.md`, which tracks new OPD *mechanisms*, not characterizations of the existing one).
+- **Evidence of adoption:** None — single paper (2 authors), no independent reproduction, no code found.
+- **Major organizations using it:** None identified (academic).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.09639
+- **Code:** none found
+- **Relationship to existing course material:** Directly extends `lessons/module-17/lesson-04.md` (on-policy distillation / forward vs. reverse KL) with a characterization of what the taught mechanism does and doesn't transfer; distinct from the deferred `on-policy-distillation-variants.md` topic (new mechanisms, not characterization of the base one). Checked via `lookup "on-policy distillation knowledge skills"` — no match.
+- **Potential course lesson:** Not a new lesson; a candidate caveat/addition to 17.4's forward-vs-reverse-KL discussion ("reverse KL teaches skill, not knowledge; forward KL recovers knowledge transfer") if the weekly review judges a single controlled study sufficient to state as a caveat rather than a hedge.
+- **Confidence:** low-medium — single paper, no reproduction, but methodologically careful (controlled synthetic isolation plus two real-task confirmations across model families) and directly testable against the course's own existing framing.
+- **Recommendation:** monitor; if the weekly review wants to tighten 17.4's KL-direction discussion, this is the citation, but hold for a second source or author code before treating the "reverse KL = skill only" claim as settled.
+
+### C-20261010-02 · REMORY: learned residual memory tokens for agent context compaction
+
+- **Class:** B
+- **Date discovered:** 2026-10-10
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.11287 (verified resolves; v1 "Thu, 8 Oct 2026 05:50:50 UTC")
+- **Organization/researchers:** Hanchen Xia, Baoyou Chen, Yutang Ge, Naihao Deng, Senqiao Yang, Zilong Dong, Weihao Yuan, Siyu Zhu (affiliations not stated on the abstract page; academic/industrial group)
+- **Category:** agents/tools, adjacent to memory/retrieval (context compaction for long-horizon agents)
+- **What changed:** Long-horizon agents compact history into a text summary to fit the context window, but a summary alone can't support every later decision. REMORY appends a bounded sequence of *learned soft memory tokens* after the summary — generated by a small neural memory network, conditioned on the summary — so a frozen LLM's continuation approximates what it would have produced with the full history. This is a fourth, independent mechanism in the already-growing cluster of context-compaction approaches the registry is tracking (text-graph importance scoring, RL-trained compaction policy, belief-state tracking, and now learned soft-token residual memory).
+- **Technical summary:** On SummHay, improves source attribution with nearly unchanged insight coverage, approaching the full-context joint score using only 5.2% of input positions. On long-horizon agent benchmarks (BrowseComp, Terminal-Bench 2.1), Qwen3.8-27B and GLM-5.3-Flash both improve with residual memory and show fewer repeated tool outputs/tool errors. No code repository found linked from the abstract page.
+- **Why it might matter:** The deferred registry topic `agent-context-compaction.md` (WAIT, next review 2026-11-29) already tracks three single-paper mechanisms (ReCAP, AutoCompact, PoS) without convergence; REMORY is a fourth distinct mechanism (learned token-level residual memory rather than text/graph/belief-state) with concrete numbers on a named benchmark (SummHay) and two named real models, adding to — but not yet resolving — that still-fragmented picture.
+- **Evidence of adoption:** None — single paper, no independent reproduction, no code found.
+- **Major organizations using it:** None identified.
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.11287
+- **Code:** none found
+- **Relationship to existing course material:** New evidence for the deferred topic `research/deferred/agent-context-compaction.md` (a fourth independent mechanism; not yet enough convergence per that file's own "what would change the decision" bar). Checked via `lookup "context compaction memory agent"` — matched that deferred file and the still-staged ASCENT record, no exact-topic match otherwise.
+- **Potential course lesson:** None on its own; flag for the weekly review alongside the three already-tracked candidates when `agent-context-compaction.md` next comes up (2026-11-29).
+- **Confidence:** low — single paper, no reproduction, no code; real benchmark numbers but a fourth incompatible mechanism rather than convergence.
+- **Recommendation:** add as a fourth data point to the existing deferred topic at its next scheduled review; not independently actionable before then.
+
+### C-20261010-03 · U-Space: training-free, no-repeated-generation token-level uncertainty via a learned subspace
+
+- **Class:** B
+- **Date discovered:** 2026-10-10
+- **Date published:** 2026-10-06
+- **Source:** https://arxiv.org/abs/2610.09087 (verified resolves; v1 "Tue, 6 Oct 2026 20:40:29 UTC")
+- **Organization/researchers:** Tobias Braun, Nils Loose, Alexander Herzog, Virginia Ceccatelli, Marcus Rohrbach, Thomas Eisenbarth, Lorenzo Cavallaro (affiliations not stated on the abstract page; academic group)
+- **Category:** interpretability (uncertainty estimation / internal-state probing)
+- **What changed:** Most LLM uncertainty/confidence methods need repeated sampling (self-consistency-style) or a separately trained estimator, and collapse evidence to one scalar with no view of *where* in a reasoning trace uncertainty arose. U-Space derives "doubt" and "certainty" directions from a model's internal activations, combines them into an orthogonal basis (a low-dimensional subspace), and projects each token's hidden state onto it — producing a token-level uncertainty map that can be read directly or aggregated into a scalar, with no correctness labels, no repeated generations, and no training required.
+- **Technical summary:** Reports the resulting confidence score beats established baselines (self-consistency-style and supervised estimators, per the abstract) on reasoning benchmarks including length-controlled evaluation, and transfers more reliably across settings than supervised estimators. Code released and verified live at https://github.com/s2labres/U-Space, whose README states it reproduces the paper's Tables 1-2 (U-Lens vs. eight single-pass baselines: generation length, MSP, predictive entropy, max entropy, mean NLL, self-certainty, DeepConf, and an "A_cone" ablation) across three named models (Gemma-4-31B-it, Qwen3.5-27B, Magistral-Small-2507) and four benchmarks (MMLU-Pro, Omni-MATH, SuperGPQA, TriviaQA) with a runnable smoke-test config.
+- **Why it might matter:** A concrete, teachable mechanism-level technique (derive interpretable directions in activation space, project onto them for a free, token-level, no-training diagnostic) squarely in the "from-scratch implementation, numerical example, what PyTorch does under the hood" register this course's lesson template asks for, with real code reproducing a real table against several real open models — this course currently has no lesson on activation-space uncertainty/confidence estimation.
+- **Evidence of adoption:** None beyond the authors' own released, verified-live code; no independent reproduction or production adoption found.
+- **Major organizations using it:** None identified (academic).
+- **Open-source implementation:** https://github.com/s2labres/U-Space (verified live; README confirms reproduction pipeline, model list, and a runnable smoke-test config)
+- **Paper:** https://arxiv.org/abs/2610.09087
+- **Code:** https://github.com/s2labres/U-Space
+- **Relationship to existing course material:** New sub-topic — no existing lesson covers activation-space uncertainty/confidence estimation; closest existing material is the interpretability module's probing/circuit-discovery content (different question: what a representation encodes, not how confident the model is token-by-token). Checked via `lookup "uncertainty quantification subspace"` — no match.
+- **Potential course lesson:** Possible addition to the interpretability module: a from-scratch worked example of deriving doubt/certainty directions and projecting hidden states onto them, contrasted against self-consistency and predictive-entropy baselines the course may already mention.
+- **Confidence:** medium — single paper, no third-party reproduction, but a real, verified-live code release with a runnable reproduction pipeline against multiple named open models, which is stronger evidence than an abstract-only claim.
+- **Recommendation:** monitor; worth a closer look at the next weekly review given the working code and the gap in the interpretability module, but hold for independent confirmation of the reported baseline comparisons before considering ADD.
+
+### C-20261010-04 · Synthesis Through Simulation (STS): schema-free synthetic enterprise agent-training data from policy-enforcing simulated APIs (SAP)
+
+- **Class:** B
+- **Date discovered:** 2026-10-10
+- **Date published:** 2026-09-24
+- **Source:** https://arxiv.org/abs/2610.10549 (verified resolves; v1 "Thu, 24 Sep 2026 13:55:22 UTC")
+- **Organization/researchers:** Yipeng Li, Ashutosh Hathidara, Jane Lo, Harshavardhan Abichandani, Gunraj Singh, Atin Ghosh — SAP (named industrial lab, not academic)
+- **Category:** data (synthetic data generation / curation for agent training and evaluation)
+- **What changed:** Training and evaluating tool-calling agents for enterprise use is hard because business/legal restrictions block access to real enterprise systems, data and schemas. Synthesis Through Simulation (STS) is schema-free: an LLM agent (the "Generalist Populator", GP) generates training/eval data by running operations against *policy-enforcing simulated APIs* rather than a database schema, so the data's structural validity is guaranteed by the same environment that defines validity, instead of being checked after the fact against a schema the agent never had access to.
+- **Technical summary:** Reports 0.88 average marginal fidelity and 100% constraint satisfaction across ten simulated enterprise environments without any database-schema access for the generating agent; by contrast, schema-privileged agents (given direct schema access) reportedly failed 82% of trajectories in an airline environment with tightly coupled workflows — the paper's headline evidence that schema access can hurt rather than help when workflows are highly interdependent. The paper states the full framework, ten environments and generated datasets are open-sourced at github.com/SAP/synthesis-through-simulation, but that URL returned HTTP 404 as of this check (2026-10-10) — not confirmed live.
+- **Why it might matter:** A concrete, named-company (SAP, not a pure research group) contribution to synthetic data generation for agent training in a genuinely restricted domain — directly relevant to the course's data-curation/synthetic-data material — with a counterintuitive, teachable finding (schema access can actively hurt agents on tightly-coupled workflows) rather than only a benchmark number.
+- **Evidence of adoption:** None yet — single paper; the claimed open-source release is not independently confirmed (repo URL 404s as of this check).
+- **Major organizations using it:** SAP (authoring org only, so far).
+- **Open-source implementation:** Claimed at github.com/SAP/synthesis-through-simulation (per the paper text); **not confirmed live — returned 404 on this check.**
+- **Paper:** https://arxiv.org/abs/2610.10549
+- **Code:** claimed, not confirmed (see above)
+- **Relationship to existing course material:** New sub-topic — no existing lesson covers schema-free, simulation-grounded synthetic data generation for enterprise/agent training. Checked via `lookup "synthetic data enterprise agent"` — no match.
+- **Potential course lesson:** Possible addition/example to the data-curation module on simulation-grounded (vs. schema-validated) synthetic data generation, contingent on the code repo actually becoming live and on a second source or adoption signal.
+- **Confidence:** low-medium — single paper from a named industrial lab with concrete numbers and a genuinely different mechanism, but the claimed open-source release does not currently resolve, which weakens the evidence until it's checked again.
+- **Recommendation:** monitor; re-check the GitHub URL in a future run before treating "open-sourced" as confirmed, and look for a second source.
