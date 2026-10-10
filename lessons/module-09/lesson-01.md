@@ -6,7 +6,7 @@
 <p><strong>Why this matters for ML:</strong> data parallelism is the first and most common way runs get faster — it is how you turn one GPU into eight, or eight into thousands, with almost no change to the training loop you already wrote. Every larger parallelism strategy in this module (ZeRO, FSDP, tensor/pipeline parallelism) is built on top of the collective you meet here.</p>
 </div>
 
-<div class="callout warn"><p><strong>Single-CPU note.</strong> This machine has one CPU and no CUDA/NCCL, so we cannot run a real multi-GPU job. Every code sample here <strong>simulates</strong> data parallelism in one process — a Python <code>for</code> loop over the "workers", with all their tensors living in one list. That reproduces the exact <em>numbers</em> a real run would produce; what it cannot show is the wall-clock speedup. Real-hardware facts live in the <code>&lt;div class="hw"&gt;</code> boxes.</p></div>
+<div class="callout warn"><p><strong>Single-CPU note.</strong> The NumPy examples <strong>simulate</strong> data parallelism in one process — a Python loop plays all the workers. They demonstrate the arithmetic, not a multi-GPU speedup. Section 5 connects that simulation to the training loop; section 7 includes a separate runnable CUDA/NCCL example for a multi-GPU machine. Real-hardware requirements live in the <code>&lt;div class="hw"&gt;</code> boxes.</p></div>
 
 ## 1. Intuition: clone the model, split the batch, agree on the update
 
@@ -175,151 +175,373 @@ Two implementation details worth naming. We snapshot every chunk *before* the ro
 
 ## 5. Tying it back to the training loop: `data_parallel_grads`
 
-With the collective in hand, one data-parallel step is: split the batch, get each worker's mean-loss gradient, all-reduce-average them. That is `llmre/distributed/data_parallel.py`:
+So far, we have combined vectors. Now connect those vectors to something you already know: **the `.grad` tensors that `backward()` produces**. The ring does not combine training examples, predictions, or updated weights. In this lesson, it combines gradients *before* the optimizer changes the weights.
+
+### Follow one optimizer step, with actual numbers
+
+Suppose our model has just three parameters, initially `params = [10, 20, 30]`. Every worker starts with that same vector. Split the global batch into three equal shards, and suppose backward on those shards produces the vectors from section 3:
+
+| Moment | Worker 0 | Worker 1 | Worker 2 |
+| --- | --- | --- | --- |
+| Starting parameters | `[10, 20, 30]` | `[10, 20, 30]` | `[10, 20, 30]` |
+| Data used for forward/backward | Shard 0 | Shard 1 | Shard 2 |
+| Local gradient after backward | `[1, 2, 3]` | `[4, 5, 6]` | `[7, 8, 9]` |
+| Gradient after all-reduce **mean** | `[4, 5, 6]` | `[4, 5, 6]` | `[4, 5, 6]` |
+| Parameters after SGD, `lr = 0.1` | `[9.6, 19.5, 29.4]` | `[9.6, 19.5, 29.4]` | `[9.6, 19.5, 29.4]` |
+
+The last row comes from the familiar SGD update:
+
+$$
+\theta_{\text{new}} = \theta_{\text{old}} - \eta\,g_{\text{average}}
+= [10,20,30] - 0.1[4,5,6]
+= [9.6,19.5,29.4].
+$$
+
+The gradients differ initially because the workers saw different data. The weights still agree afterward because **all workers use the same averaged gradient**. Nobody needs to send the updated weights around after this step. With Adam, the same reasoning also requires matching optimizer state and settings on every worker.
+
+<div class="callout key"><p><code>backward()</code> computes gradients; it does <strong>not</strong> update parameters. All-reduce makes the gradients agree; it also does <strong>not</strong> update parameters. Only <code>optimizer.step()</code> changes the parameters. Keep those three actions separate in your head.</p></div>
+
+### Where the new operation goes
+
+Here is the familiar training step, written with the gradient reset before forward. Resetting immediately before backward would also work for this simple loop:
+
+```python
+# Single GPU — conceptual training-loop fragment
+optimizer.zero_grad(set_to_none=True)
+loss = loss_fn(model(x), y)
+loss.backward()                                # fill parameter.grad
+# Optional: clip the gradients here.
+optimizer.step()                               # consume parameter.grad
+```
+
+Manual data parallelism inserts synchronization **after local backward and before clipping or the optimizer step**:
+
+```python
+# Each worker runs this fragment on its OWN model and local batch.
+# Assumptions: identical initial models, equal-size shards, mean loss,
+# an initialized process group, and every parameter used in the loss.
+optimizer.zero_grad(set_to_none=True)
+loss = loss_fn(model(local_x), local_y)
+loss.backward()                                # local gradients only
+
+for parameter in model.parameters():
+    dist.all_reduce(parameter.grad, op=dist.ReduceOp.SUM)
+    parameter.grad.div_(world_size)             # replace sum with mean
+
+# Optional: clip the averaged gradients here.
+optimizer.step()                               # same update on every worker
+```
+
+`all_reduce` modifies the supplied tensor **in place**. For example, worker 0's `.grad` changes from `[1, 2, 3]` to the sum `[12, 15, 18]`; dividing by 3 changes it to `[4, 5, 6]`. The optimizer then reads that new `.grad` value. You do not need a different optimizer for data parallelism.
+
+The `for` loop above walks over **parameter tensors**, not workers. A linear layer has a weight tensor and a bias tensor, so it causes two collective calls. Each worker makes those calls in the same order: weights with weights, then biases with biases. The participants must agree on tensor shapes, types, and collective order.
+
+<div class="callout warn"><p>Do not call <code>optimizer.step()</code> on the local gradients and average afterward. The workers would already have made different updates. Also clip <em>after</em> averaging: clipping each local gradient first generally produces a different result because clipping is nonlinear.</p></div>
+
+### What the CPU simulation represents
+
+The helper in `llmre/distributed/data_parallel.py` compresses the gradient-producing part into three lines:
 
 ```python
 def data_parallel_grads(grad_fn, params, batch, world_size):
     shards = split_batch(batch, world_size)               # W equal shards
-    grads = [grad_fn(params, shard) for shard in shards]  # per-worker local grad
-    return ring_all_reduce(grads, op="mean")              # averaged == full-batch
+    grads = [grad_fn(params, shard) for shard in shards]  # one local gradient per shard
+    return ring_all_reduce(grads, op="mean")              # one averaged gradient
 ```
 
-This is a **single-process simulation**: one Python process plays all `W` workers, so the `for shard in shards` loop runs their `grad_fn` calls one after another. That loop stands in for `W` GPUs working in parallel. The returned gradient is what the optimizer consumes, exactly as in the single-GPU loop of [07.1](lessons/module-07/lesson-01.md); every worker gets the same averaged gradient and takes the same step.
+Read its inputs literally:
 
-### The same step on real GPUs
+- `params`: the current parameter values, shared as the starting point for all simulated workers.
+- `batch`: the full batch of inputs and targets.
+- `grad_fn(params, shard)`: compute the gradient of the **mean loss on this shard** at these parameters. The `mean_grad` function from section 2 is one example.
+- `world_size`: the number of workers being simulated.
 
-On real hardware there is no process that holds all the shards. You launch `W` copies of the same script, one per GPU, with `torchrun`. Each copy learns its **rank** (its worker id, `0 … W-1`), takes only its own shard, computes one local gradient, and joins a NCCL all-reduce with the other `W-1` processes:
+This function returns a gradient; **it does not update `params`**. For the NumPy regression example, a complete SGD step is:
 
 ```python
-# train.py — launch on one node with 4 GPUs:
-#   torchrun --nproc_per_node=4 train.py
-import os
-import torch
-import torch.distributed as dist
+# Continuing the NumPy setup from section 2:
+from llmre.distributed.data_parallel import data_parallel_grads
 
-dist.init_process_group(backend="nccl")        # join the group of W processes
-rank = dist.get_rank()                          # 0 .. W-1: which worker am I?
-W = dist.get_world_size()                       # 4 here
-local_rank = int(os.environ["LOCAL_RANK"])      # GPU index on this machine
-torch.cuda.set_device(local_rank)
-device = torch.device("cuda", local_rank)
-
-torch.manual_seed(0)                            # same seed on every rank -> identical starting weights
-model = torch.nn.Linear(16, 1).to(device)
-loss_fn = torch.nn.MSELoss()
-
-def data_parallel_grads(model, batch_x, batch_y):
-    # 1. take only MY shard: rank r gets rows [r*B/W, (r+1)*B/W)
-    x = batch_x.chunk(W)[rank].to(device)      # (B/W, 16) float32 cuda:local_rank
-    y = batch_y.chunk(W)[rank].to(device)      # (B/W, 1)  float32 cuda:local_rank
-    # 2. local gradient: runs on this GPU only, at the same time as the other W-1 GPUs
-    model.zero_grad()
-    loss_fn(model(x), y).backward()            # p.grad = mean-loss gradient of MY shard
-    # 3. average across GPUs: NCCL ring/tree all-reduce over NVLink / InfiniBand
-    for p in model.parameters():               # loop over parameter TENSORS, not over workers
-        dist.all_reduce(p.grad, op=dist.ReduceOp.SUM)   # every rank now holds the sum of W grads
-        p.grad /= W                                       # sum -> mean == full-batch gradient
-
-torch.manual_seed(1)                            # same seed -> every rank sees the same global batch
-batch_x, batch_y = torch.randn(32, 16), torch.randn(32, 1)   # B = 32 -> 8 rows per GPU
-data_parallel_grads(model, batch_x, batch_y)
-torch.optim.SGD(model.parameters(), lr=0.1).step()  # identical step on every rank
-
-dist.destroy_process_group()
+learning_rate = 0.1
+grad = data_parallel_grads(mean_grad, theta, (X, y), W)
+theta = theta - learning_rate * grad
 ```
 
-Map it line by line onto the simulation: `split_batch(batch, W)` became `batch.chunk(W)[rank]` (each process keeps one piece instead of a list of all of them); the list comprehension over shards became a single `backward()` per process, running on `W` GPUs at once; and `ring_all_reduce(grads, op="mean")` became `dist.all_reduce(..., SUM)` followed by `/ W`, where NCCL runs the ring from §3 across the GPUs. The only `for` loop left is over the model's parameter tensors (here a weight of shape `(1, 16)` and a bias of shape `(1,)`), and every rank runs that same loop in step, so each `all_reduce` call is matched on all `W` GPUs.
+One Python process computes each shard's gradient in turn. The ring helper returns just one copy of the final result because all simulated workers' final buffers agree. On real GPUs, each process keeps its own copy of the averaged gradient and updates its own model. **The simulation reproduces the arithmetic, not the parallel execution.**
 
-Two details that the simulation hid. First, the weights must start **identical** on every rank (here, the same seed); otherwise averaging gradients is meaningless. In production DDP broadcasts rank 0's weights at startup to guarantee it. Second, in real training each rank usually loads only its own rows from disk via a `DistributedSampler` rather than building the full batch and slicing it; the full batch here just keeps the mapping to `split_batch` obvious. Calling `all_reduce` once per parameter after backward finishes is the naive schedule; §7 shows how DDP buckets these calls and overlaps them with backward.
+### What “one process per GPU” actually means
 
-<div class="hw"><p><strong>Hardware:</strong> needs ≥ 2 NVIDIA GPUs with NCCL (any CUDA GPUs; NVLink not required). Runtime: seconds. GPU memory: negligible. CPU-only: change <code>backend="nccl"</code> to <code>"gloo"</code>, use <code>device = torch.device("cpu")</code>, drop the <code>set_device</code> line, and run <code>torchrun --nproc_per_node=4 train.py</code> on a laptop — the code path is the same, only the transport changes.</p></div>
+Imagine launching this command on a machine with four GPUs:
 
-Notice the relationship to **gradient accumulation** ([07.2](lessons/module-07/lesson-02.md)): accumulation sums micro-batch gradients *sequentially on one device* to fake a big batch; data parallelism computes shard gradients *simultaneously on many devices* and averages. Real runs combine both — `global batch = micro_batch × grad_accum_steps × world_size` — which is the identity you will use in every scaling estimate.
+```bash
+torchrun --standalone --nproc_per_node=4 train.py
+```
+
+It starts **four Python processes running the same file**. Each process has its own model, optimizer, Python variables, and assigned GPU. A worker is one of these processes.
+
+| Name | Meaning | Example on one four-GPU machine |
+| --- | --- | --- |
+| `world_size` | Total participating processes | `4` in every process |
+| `rank` | This process's ID in the whole group | `0`, `1`, `2`, or `3` |
+| `local_rank` | This process's GPU index on its machine | Also `0`, `1`, `2`, or `3` here |
+
+On multiple machines, global ranks remain unique, while local ranks start at zero on each machine. For a global batch of 32 examples and four equal shards, each process runs forward/backward on 8 examples. Those computations happen concurrently.
+
+There is no Python process looping over the other GPUs' `backward()` calls. There are four processes, each doing **one local backward** and participating in the matching collectives. Section 7 gives a runnable example using DDP to automate those collectives.
+
+### Combining this with gradient accumulation
+
+Accumulation and data parallelism answer two different questions: **how many micro-batches does each worker process before an update, and how many workers contribute?** If each worker processes `A` micro-batches of `b` examples, then:
+
+$$
+B_{\text{global}} = b \times A \times W.
+$$
+
+For `b = 2`, `A = 4`, and `W = 3`, each worker contributes 8 examples and one optimizer update covers 24 examples in total. For equal-size micro-batches with mean losses, divide each micro-batch loss by `A` before backward. That averages over the accumulation window; the worker average supplies the separate factor `1/W`.
+
+<div class="callout key"><p>Accumulation combines work done <strong>over time on each worker</strong>. Data parallelism combines work done <strong>across workers</strong>. In both cases, <code>optimizer.step()</code> runs only after the intended combined gradient is ready.</p></div>
 
 ## 6. NCCL: the collective library
 
-On NVIDIA GPUs, the collectives themselves are implemented by **NCCL** (the NVIDIA Collective Communications Library, pronounced "nickel"). You do not write the ring by hand in production; you call `torch.distributed.all_reduce(tensor)` and NCCL:
+You now know what must happen: each GPU supplies a gradient tensor, and each GPU must receive the same combined tensor. **NCCL** (NVIDIA Collective Communications Library, pronounced “nickel”) supplies the GPU communication operations used to accomplish that.
 
-- picks a topology-aware algorithm (ring, tree, or a hybrid) based on how the GPUs are wired — NVLink within a node, InfiniBand across nodes;
-- runs the transfers on the GPU's copy engines so they overlap with compute;
-- handles the different collectives (`all_reduce`, `all_gather`, `reduce_scatter`, `broadcast`) that the higher-level strategies (DDP here, FSDP in [09.2](lessons/module-09/lesson-02.md), tensor parallel in [09.3](lessons/module-09/lesson-03.md)) are built from.
+There are three levels to distinguish:
 
-Our `collectives.py` is the *pedagogical* version of what NCCL does: same result, same algorithm structure, none of the hardware.
+| Level | Responsibility |
+| --- | --- |
+| Your training loop | Choose data, compute the loss, request backward, and run the optimizer |
+| PyTorch distributed / DDP | Coordinate processes and request gradient collectives |
+| NCCL backend | Execute collectives across NVIDIA GPUs using the available connections |
+
+NCCL knows about tensors and collective operations. It does not know what a training example, loss, or learning rate means. If PyTorch asks it to sum three gradient vectors, it combines their corresponding entries. The interpretation as “training on a larger batch” comes from our loss definition and the averaging argument in section 2.
+
+The ring from section 3 is **one implementation of all-reduce**, not a requirement of the operation. NCCL can select different algorithms and transports. NVLink, PCIe, and network connections affect the available bandwidth; the mathematical result required by the collective remains the same, up to floating-point reduction order.
+
+<div class="hw"><p><strong>Hardware:</strong> the runnable example below uses one NVIDIA GPU per process and the NCCL backend. NVLink is not required. Communication is GPU work scheduled on CUDA streams and may overlap computation; it is not guaranteed to be a free transfer handled only by copy engines. The CPU simulation cannot measure that overlap or predict its speedup.</p></div>
+
+For implementation details, see the [NCCL collective operations guide](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html).
 
 ## 7. PyTorch DDP: overlapping the all-reduce with backward
 
-The obvious way to use the all-reduce is: finish the *entire* backward pass, then all-reduce the whole gradient. That works but wastes time — the network sits idle during backward, then compute sits idle during the all-reduce. PyTorch's **`DistributedDataParallel` (DDP)** removes that waste by **overlapping communication with computation**.
+The manual loop in section 5 waits for all local gradients, then communicates each parameter tensor. **`DistributedDataParallel` (DDP)** is a wrapper around your model that arranges gradient synchronization during backward.
 
-The key observation: backward computes gradients **layer by layer, from the output back to the input**. The last layer's gradient is ready long before the first layer's. DDP exploits this:
+### What changes in the training step?
 
-- It groups parameters into **buckets** (a few dozen MB each).
-- As soon as *all* gradients in a bucket are ready during backward, DDP fires off that bucket's all-reduce **in the background** (a NCCL call on a separate CUDA stream) while backward keeps computing gradients for earlier layers.
-- By the time backward reaches the first layer, most buckets' all-reduces are already done or in flight. The step ends when the last bucket's all-reduce finishes.
+After wrapping the model, the ordinary loop is enough:
 
-So the communication is hidden *underneath* the backward compute instead of happening after it. Bucketing (rather than one all-reduce per parameter) matters because each collective has a fixed launch overhead; batching many small gradients into one bucket amortizes it, and a bucket is the granularity at which overlap is triggered.
+```python
+# Fragment: process-group setup and data loading are shown below.
+model = DistributedDataParallel(model, device_ids=[local_rank])
 
-<div class="callout pt"><p>Using DDP is a three-line change to your existing loop: wrap the model in <code>DistributedDataParallel(model)</code>, use a <code>DistributedSampler</code> so each rank sees a different shard of the data, and launch <code>W</code> processes with <code>torchrun</code>. The forward/backward/step body is <em>unchanged</em> — DDP hooks into <code>backward()</code> to run the bucketed all-reduces automatically. This is the single most common way to scale training, and it is why the loop you wrote in Module 7 already "just works" on many GPUs.</p></div>
+optimizer.zero_grad(set_to_none=True)
+loss = loss_fn(model(local_x), local_y)
+loss.backward()                 # local backward + DDP's gradient synchronization
+optimizer.step()                # consumes averaged gradients
+```
 
-<div class="callout warn"><p>Because DDP overlaps the all-reduce with backward, anything that makes gradients ready in an <em>unpredictable</em> order breaks the overlap — most commonly a model where some parameters don't get a gradient every step (conditional branches, unused heads). DDP will hang waiting for an all-reduce that never comes, which is why it offers a <code>find_unused_parameters</code> flag. If a real DDP job mysteriously stalls at the first backward, an unused parameter is the first thing to check.</p></div>
+**Do not add the manual all-reduce loop from section 5 here.** Default DDP already averages the gradients. It does not shard your input batch or call the optimizer for you. See the [DDP API reference](https://docs.pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html) for the wrapper's contract.
+
+### Why communication can begin before backward finishes
+
+Think of a model with three layers: input layer A, middle layer B, and output layer C. Forward visits A, B, C. Backward typically produces C's gradients first, then B's, then A's.
+
+Once C's gradients exist, communicating them does not require waiting for A's gradients. DDP groups parameter gradients into **buckets** and arranges reduction when a bucket is ready, while backward continues. A bucket can contain several parameter tensors; it is not necessarily one layer.
+
+Here is a deliberately simplified timing example with one bucket per layer. Suppose each layer's backward takes 4 ms and each bucket's communication takes 3 ms:
+
+| Time | Gradient computation | Communication |
+| --- | --- | --- |
+| 0–4 ms | Compute C's gradients | Nothing ready yet |
+| 4–8 ms | Compute B's gradients | Reduce C's bucket during 4–7 ms |
+| 8–12 ms | Compute A's gradients | Reduce B's bucket during 8–11 ms |
+| 12–15 ms | Backward computation finished | Finish A's bucket |
+
+Doing the same three communications only after backward would take `12 + 9 = 21 ms`. This illustrative overlap takes 15 ms. **The final 3 ms is still exposed communication time.** These numbers explain the schedule; they are not a benchmark or a promised speedup.
+
+Buckets also avoid paying collective-launch overhead separately for every tiny parameter tensor. Larger buckets can reduce overhead but become ready later; smaller buckets can start earlier but require more calls. Real performance depends on both the computation and the interconnect. The [PyTorch DDP design note](https://docs.pytorch.org/docs/main/notes/ddp.html) describes this scheduling.
+
+<div class="callout key"><p>DDP does not make all-reduce disappear. It starts communication for ready gradients while other gradients are still being computed. Any communication left at the end must finish before the optimizer can use those gradients.</p></div>
+
+### A complete, small DDP training script
+
+Save this as `train.py` and run it with the four-GPU command from section 5. This is a runnable teaching example using synthetic regression data, full precision, and no accumulation. It includes process cleanup and failure logging; a real training application would additionally supply its dataset, checkpoints, and recovery policy.
+
+```python
+import logging
+import os
+from datetime import timedelta
+
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data.distributed import DistributedSampler
+
+log = logging.getLogger(__name__)
+
+
+def train(local_rank):
+    device = torch.device("cuda", local_rank)
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+
+    # Every rank refers to the same logical dataset. The sampler selects rows.
+    generator = torch.Generator().manual_seed(123)
+    x = torch.randn(256, 16, generator=generator)
+    y = x.sum(dim=1, keepdim=True)
+    dataset = TensorDataset(x, y)
+    sampler = DistributedSampler(dataset, shuffle=True, drop_last=True)
+    loader = DataLoader(dataset, batch_size=8, sampler=sampler, drop_last=True)
+    if len(loader) == 0:
+        raise ValueError("Not enough examples for one full batch per rank.")
+
+    # DDP synchronizes the starting model across ranks by default.
+    torch.manual_seed(0)
+    model = torch.nn.Linear(16, 1).to(device)
+    model = DistributedDataParallel(model, device_ids=[local_rank])
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    loss_fn = torch.nn.MSELoss(reduction="mean")
+    model.train()
+
+    for epoch in range(3):
+        sampler.set_epoch(epoch)                 # a new coordinated shuffle
+        loss_sum = torch.zeros((), device=device)
+
+        for local_x, local_y in loader:
+            local_x = local_x.to(device)
+            local_y = local_y.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            loss = loss_fn(model(local_x), local_y)
+            loss.backward()                     # DDP averages gradients here
+            optimizer.step()                    # every rank takes the same step
+            loss_sum += loss.detach()
+
+        # Separate collective for a reporting metric; not gradient synchronization.
+        dist.all_reduce(loss_sum, op=dist.ReduceOp.SUM)
+        if rank == 0:
+            mean_loss = (loss_sum / (len(loader) * world_size)).item()
+            log.info("epoch=%d mean_loss=%.6f", epoch, mean_loss)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    try:
+        if "LOCAL_RANK" not in os.environ:
+            raise RuntimeError("Launch with torchrun, not python train.py.")
+        local_rank = int(os.environ["LOCAL_RANK"])
+        if not torch.cuda.is_available() or local_rank >= torch.cuda.device_count():
+            raise RuntimeError("Each local process needs an available CUDA GPU.")
+        torch.cuda.set_device(local_rank)
+        dist.init_process_group(backend="nccl", timeout=timedelta(minutes=5))
+        train(local_rank)
+    except Exception:
+        log.exception("Training failed on rank %s", os.environ.get("RANK", "unknown"))
+        raise                                   # let the launcher report the failure
+    finally:
+        if dist.is_initialized():
+            dist.destroy_process_group()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Trace the responsibilities: `torchrun` launches the processes; `init_process_group` connects them; `DistributedSampler` chooses each rank's data indices; DDP synchronizes the model and gradients; the optimizer updates the local replica. The final `all_reduce(loss_sum)` is only for logging a global loss. **DDP synchronizes gradients, not the Python `loss` variable.**
+
+Here each local batch contains 8 examples, so four ranks contribute 32 examples per optimizer step. The two `drop_last=True` settings keep shard and batch sizes regular: the sampler can discard examples to divide the dataset among ranks, and the loader discards incomplete local batches. Without sampler dropping, it can pad with repeated indices. `set_epoch(epoch)` changes the shared shuffle each epoch; see the [sampler implementation and documentation](https://github.com/pytorch/pytorch/blob/main/torch/utils/data/distributed.py).
+
+### When accumulation or conditional branches enter the picture
+
+For accumulation over `A` equal micro-batches, use `model.no_sync()` around **both forward and backward** for the first `A-1` micro-batches. On the last one, use normal synchronization. Divide each mean loss by `A`, and call the optimizer once after the window. This avoids synchronizing every intermediate backward; the [PyTorch tuning guide](https://docs.pytorch.org/tutorials/recipes/recipes/tuning_guide.html) covers this pattern.
+
+<div class="callout warn"><p>All ranks must follow a compatible collective sequence. A rank that skips backward, crashes, or runs out of batches early can leave peers waiting. Unused parameters are a separate issue: models with branches may need <code>find_unused_parameters=True</code>, depending on their graph. This flag is not a general repair for mismatched loops. Investigate the first error across all ranks before retrying the job.</p></div>
 
 ## Exercise
 
-You scale a working single-GPU run to 8 GPUs with DDP. You keep the per-GPU (micro) batch size the same and change nothing else. Training is faster, but the model now converges to a noticeably worse loss than the single-GPU run at the same number of *steps*. What changed, and what is the standard fix?
+A single GPU trains with micro-batch size 8 and accumulates 4 micro-batches before each optimizer step. You move to 4 GPUs with DDP and keep both settings unchanged.
+
+1. How many examples contribute to each optimizer step before and after the change?
+2. How could you preserve the original global batch while keeping micro-batch size 8?
+3. If you keep the larger global batch, is comparing the runs after 1,000 steps a comparison at equal data exposure?
 
 <details><summary>Hint</summary>
-With 8 data-parallel workers, how many examples now contribute to each optimizer step, compared to before? What does that do to the <em>effective</em> batch size, and hence to how the learning rate should be set?
+Count examples per optimizer update using <code>micro_batch × grad_accum_steps × world_size</code>. DDP's gradient averaging controls the gradient's normalization; it does not cancel the extra examples processed by additional workers.
 </details>
 
 <details><summary>Stronger hint</summary>
-Global batch $=$ micro-batch $\times$ grad-accum $\times$ <code>world_size</code>. You multiplied the effective batch by 8 without touching the learning rate or the schedule length (measured in steps).
+The original global batch is <code>8 × 4 × 1</code>. The new one is <code>8 × 4 × 4</code>. To keep the original total, one of the other factors must shrink when the worker count grows.
 </details>
 
 <details><summary>Solution</summary>
 
-Going from 1 to 8 workers multiplied the **effective (global) batch size by 8** — each step now averages gradients over 8× as many examples. A larger batch gives a lower-variance gradient, which generally wants a **larger learning rate** (a common rule of thumb is to scale the LR roughly linearly, or by $\sqrt{8}$, with the batch size, plus a longer warmup), and it means each *step* consumes 8× as many tokens, so "same number of steps" is actually 8× more data — you may instead want the same *token* budget, i.e. fewer steps. The fix is to re-tune the learning rate and warmup for the new global batch and to compare runs at equal token budgets, not equal step counts. The subtlety that trips people up: DDP is *numerically exact* (section 2), so the worse result is **not** a bug in the averaging — it is a hyperparameter mismatch caused by silently changing the effective batch size.
+The global batch increases from **32 to 128 examples** per update. Set accumulation to **1** on the four-GPU run to retain a global batch of `8 × 1 × 4 = 32`.
+
+If you keep 128, then 1,000 updates process 128,000 examples instead of 32,000. For equal example exposure, compare 250 updates of the larger-batch run with 1,000 updates of the original. For language models, count valid training tokens as well.
+
+A changed global batch can change optimization behavior, so re-evaluate the learning rate, warmup, and schedule. There is no universally correct “multiply the learning rate by the GPU count” rule, and a larger batch does not automatically make convergence worse. First decide whether your goal is to preserve the original training setup or to tune a new, larger-batch setup.
 
 </details>
 
 ## Common mistakes
 
-- **Averaging a sum-reduced loss.** The averaging identity (section 2) assumes each worker computes a *mean* loss over its shard. If your loss sums instead of averages, or shards have unequal token counts, a plain gradient average is wrong — weight by tokens.
-- **Forgetting the effective batch grew by `W`.** Adding workers multiplies the global batch; the learning rate, warmup, and step budget must be re-tuned (see the exercise).
-- **Different data per worker, but not disjoint.** Each worker must see a *different* shard. If every worker draws the same batch (e.g. same RNG seed for the sampler and no rank offset), you have `W` copies of the same gradient — no variance reduction, wasted hardware.
-- **Non-identical replicas.** If the workers ever drift apart (a non-deterministic op, a per-worker random init not broadcast at startup), the "everyone applies the same update" invariant breaks and training silently diverges. DDP broadcasts the initial weights from rank 0 for exactly this reason.
+- **Confusing gradients with weights.** All-reduce combines gradients; the optimizer then updates each local copy of the weights.
+- **Synchronizing twice.** The manual all-reduce loop is an explanation of DDP's job, not extra code to add after DDP backward. An extra division by `W` incorrectly shrinks the gradient.
+- **Changing the global batch accidentally.** Adding workers while preserving the local micro-batch and accumulation count increases examples per update. Recalculate all three factors together.
+- **Assuming DDP splits the data.** The wrapper does not choose examples. Configure the input pipeline so workers contribute the intended different samples.
+- **Averaging equally when token counts differ.** Equal sequence counts do not guarantee equal valid-token counts. With local mean-loss gradients `g_w` and valid-token counts `n_w`, the global token-mean gradient is `sum(n_w * g_w) / sum(n_w)`. Default equal worker averaging only matches it when those counts agree. Accumulation windows need the same care.
+- **Using a sum loss without accounting for normalization.** Decide whether your intended objective is a global sum or a global mean, then scale consistently. Averaging local sums is not the same as either objective without the appropriate factor.
+- **Clipping local gradients before synchronization.** Average first, then clip the gradient the optimizer will actually use. With gradient scaling, unscale before clipping as well.
+- **Letting replica state differ.** Matching gradients are insufficient if ranks use different optimizer settings, restored optimizer states, or numbers of updates. Distinct local losses or dropout masks, however, are normal and do not by themselves break synchronization.
 
 ## Check yourself
 
-<details><summary>Why does the all-reduce average the gradients rather than sum them?</summary>
+<details><summary>In the three-worker example, why does every worker update to the same parameters even though its local gradient was different?</summary>
 
-Because the training loss is a <em>mean</em> over examples. The full-batch gradient is $\frac1B\sum_i \nabla\ell_i$; the average of the per-shard mean gradients reproduces exactly that (section 2). Summing would give $W\times$ the correct gradient, effectively multiplying the learning rate by $W$.
-
-</details>
-
-<details><summary>Ring all-reduce runs in $2(W-1)$ steps with each link carrying $1/W$ of the tensor per step. Roughly how much total data does each worker send over one all-reduce, and how does it depend on $W$?</summary>
-
-About $2(W-1)/W \approx 2$ tensors' worth — one tensor's worth during reduce-scatter and one during all-gather. It is essentially <em>independent of $W$</em>, which is why the ring scales to large worker counts. The naive "send everything to worker 0" instead loads $2(W-1)$ tensors onto worker 0's single link.
+Before the update, all-reduce replaces the local gradients with the common mean `[4, 5, 6]`. Starting from `[10, 20, 30]`, every worker's SGD update with learning rate 0.1 therefore gives `[9.6, 19.5, 29.4]`.
 
 </details>
 
-<details><summary>In the three-worker worked example, after reduce-scatter finishes, which single chunk value does each worker hold, and why isn't the collective done yet?</summary>
+<details><summary>Why average gradients instead of simply summing them?</summary>
 
-Worker 0 holds the finished chunk 1 ($=15$), worker 1 the finished chunk 2 ($=18$), worker 2 the finished chunk 0 ($=12$). Each worker has only <em>one</em> of the three summed entries — the sum is scattered. The all-gather phase is still needed to circulate all three finished chunks so every worker holds the complete $[12,15,18]$.
+For equal-size shards and local mean losses, the average reproduces the global mean-loss gradient. Using the sum instead gives a gradient `W` times larger. The identity is mathematical; different floating-point reduction orders can still cause small numerical differences from a single-device computation.
 
 </details>
 
-<details><summary>How does DDP hide the all-reduce cost, and what property of the backward pass makes it possible?</summary>
+<details><summary>After reduce-scatter in section 3, which finished chunk belongs to each worker, and what remains to be done?</summary>
 
-Backward produces gradients layer by layer from output to input, so later layers' gradients are ready first. DDP groups parameters into buckets and launches a bucket's all-reduce (on a background CUDA stream) as soon as that bucket's gradients are ready, while backward keeps computing earlier layers. The communication overlaps the remaining backward compute instead of following it.
+Worker 0 owns chunk 1 with value 15; worker 1 owns chunk 2 with value 18; worker 2 owns chunk 0 with value 12. All-gather distributes those finished chunks so all workers have `[12, 15, 18]`. Dividing by 3 gives the mean `[4, 5, 6]`.
+
+</details>
+
+<details><summary>How much does each worker send during ring all-reduce?</summary>
+
+For a tensor of size `S` bytes and equal chunks, it sends `2(W-1)S/W` bytes: `W-1` chunks in each of two phases. It also receives that amount. Each direction approaches `2S` as `W` grows; sent plus received approaches `4S`. This bandwidth accounting does not mean latency is constant: the ring still has `2(W-1)` rounds.
+
+</details>
+
+<details><summary>With DDP, what is ready for the optimizer after a normal synchronized backward?</summary>
+
+The averaged gradients are ready for subsequent optimizer operations. Forward and backward used each worker's local data, but DDP arranged the communication during backward. The optimizer still runs on every rank. The scalar loss remains local unless you explicitly aggregate it for reporting.
+
+</details>
+
+<details><summary>What does overlap save, and what can it not guarantee?</summary>
+
+It lets communication for ready gradient buckets run while backward computes other gradients. It can reduce the time spent waiting after gradient computation finishes. It cannot guarantee that all communication is hidden, that communication costs no GPU resources, or that adding workers gives a proportional speedup.
 
 </details>
 
 <div class="hw">
 <p><strong>Hardware track — data-parallel training.</strong></p>
-<p><strong>This lesson's code:</strong> pure single-CPU simulation — any laptop, instant, 0 GPU-hours, CPU-only entirely. <strong>A real data-parallel run</strong> needs <code>W</code> GPUs (e.g. 8×A100 in one node connected by NVLink, or many nodes over InfiniBand) and NCCL. Rule of thumb: DDP scales near-linearly in throughput while the all-reduce stays hidden under backward — typically until the gradient tensor is large relative to interconnect bandwidth or <code>W</code> spans many slow-linked nodes. Memory does <strong>not</strong> improve: every worker still holds a full copy of params + grads + optimizer state (the $16P$ bytes of <a href="#/lessons/module-07/lesson-04">07.4</a>), which is the limitation <a href="#/lessons/module-09/lesson-02">09.2</a> attacks. <strong>GPU-hours:</strong> data parallelism cuts wall-clock roughly by <code>W</code> but the <em>total</em> GPU-hours are unchanged (you use <code>W</code> GPUs for $1/W$ the time).</p>
+<p><strong>CPU path:</strong> sections 2–5 include arithmetic simulations that run on one CPU. <strong>GPU path:</strong> section 7 includes a real <code>torchrun</code> example for NVIDIA GPUs with NCCL; its runtime and memory use depend on the environment.</p>
+<p><strong>Memory:</strong> ordinary DDP keeps a full model, gradient tensors, and optimizer state on every worker, plus communication-related storage. Adding workers does not divide model-state memory by <code>W</code>. The <code>16P</code> estimate in <a href="#/lessons/module-07/lesson-04">07.4</a> applies to that lesson's particular mixed-precision Adam accounting, not to every optimizer or precision setup.</p>
+<p><strong>Speed and cost:</strong> for a fixed amount of work, ideal <code>W</code>-fold speedup would preserve total GPU-hours: <code>W</code> GPUs for <code>1/W</code> of the time. Real communication, input loading, and small local batches reduce scaling efficiency, so total GPU-hours can rise. Measure throughput and time to the desired training quality rather than assuming linear speedup.</p>
 </div>
 
 ## Next
 
-Data parallelism makes a run faster but not smaller — every worker still stores the full model, its gradients, and Adam's optimizer state, so a model that doesn't fit on one GPU still doesn't fit on eight. The next lesson attacks exactly that: **ZeRO and FSDP** shard the parameters, gradients, and optimizer state *across* the data-parallel workers, so per-worker memory falls with `W`.
+DDP distributes the examples while replicating the model state. That makes it useful when the model fits on one GPU and you want several GPUs to process training data together. It does not solve a model-state memory limit by itself.
+
+The next lesson changes what each worker stores: **ZeRO and FSDP** partition optimizer state, gradients, and/or parameters, depending on the strategy and stage. That is how data-parallel workers can share the memory burden as well as the computation.
 
 Continue to [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md).
