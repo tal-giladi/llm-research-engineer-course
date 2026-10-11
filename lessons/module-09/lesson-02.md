@@ -87,6 +87,10 @@ $$
 <strong>ZeRO-3</strong> (+ parameters): $\dfrac{16P}{W}$<br>
 As <code>W → ∞</code>, ZeRO-3 drives per-worker model memory to zero; stages 1 and 2 have a floor ($8P$ and $4P$) because they keep at least one full-model bucket resident.</p></div>
 
+Step through one training step below, stage by stage. Four GPUs each hold P (parameters), G (gradients) and O (optimizer state) tiles; switch between **DDP baseline** and **ZeRO 1/2/3** to see which tiles stay resident, which are only borrowed temporarily, and which collective (all-reduce, reduce-scatter, all-gather) moves them. The memory bars use the mixed-precision constants from the callout above (2 + 2 + 12 bytes per parameter), so the totals differ from the fp32 formulas here, but the sharding pattern is the same.
+
+<iframe src="assets/interactive/zero-stages.html" title="ZeRO stages 1-3 compared with DDP, one training step on four GPUs" style="width:100%;height:1600px;border:0;border-radius:14px" onload="try{var f=this,w=f.contentWindow,d=f.contentDocument,m=d.querySelector('main'),s=function(){f.style.height=(m.offsetHeight+4)+'px'};s();w.addEventListener('resize',s);d.addEventListener('click',function(){setTimeout(s,0)},true);d.addEventListener('toggle',s,true);d.addEventListener('input',s,true)}catch(e){}"></iframe>
+
 ## 4. Worked example: 7.5B parameters on 64 workers
 
 Take $P = 7.5\times 10^9$ and $W = 64$, fp32. Plug into the four formulas:
