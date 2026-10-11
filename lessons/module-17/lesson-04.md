@@ -379,6 +379,12 @@ When you only have the teacher's text (closed API), when the tokenizers differ, 
 
 </details>
 
+## Advanced extension: TRL's fused LM head (added 2026-10-11)
+
+Section 6 describes TRL's distillation loss as computed **in chunks** so the full `(B, T, V)` logits tensor is never in memory at once. That was the documented behavior when this lesson was written (TRL v1.14). In **TRL v1.15.0** (released 2026-10-08, [release notes](https://github.com/huggingface/trl/releases/tag/v1.15.0)) the SFT, DPO, KTO, GRPO, RLOO and Distillation trainers score tokens through a fused Triton LM head instead. It projects hidden states through the LM head in tiles and reduces them straight to per-token log-probs and entropy, so the logits tensor is never built. It is on by default **(publicly documented)**. The release also lists a separate change that computes the distillation divergence with a Triton kernel. The notes do not describe that kernel's internals, so we do not either.
+
+The goal is the same as chunking, with less memory. The mechanism is an online logsumexp over vocabulary tiles, the same recurrence as FlashAttention's online softmax. Lesson [08.5 · Fused linear cross-entropy](lessons/module-08/lesson-05.md) derives it, works it by hand and implements it from scratch, including the per-token entropy that RL trainers log. Everything in sections 2–5 of this lesson is unchanged: the divergences are the same, and only the way the logits are produced has changed.
+
 ## Next
 
 You can now distill a reasoning model three ways and say what each one gives up. The course turns from *how a model reasons* to *how a model acts*. Continue to [18.1 · Tool use](lessons/module-18/lesson-01.md).

@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none (the base technique is taught in lesson 17.4)
-- **Candidates:** C-20260928-02, C-20261001-02
+- **Candidates:** C-20260928-02, C-20261001-02, C-20261008-01, C-20261010-01, C-20261011-04
 
 ## Summary
 
@@ -14,6 +14,9 @@ Two specific extensions of on-policy distillation: a teacher that improves along
 
 - https://arxiv.org/abs/2609.30652 — DCE/SRCL, single paper; compared only against an on-policy self-distillation baseline, not GRPO/DAPO.
 - https://arxiv.org/abs/2609.32722 — same-family on-policy distillation scaling properties; single paper, no code confirmed.
+- https://arxiv.org/abs/2610.07874 — NP-OPD (NAVER AI Lab): negative-policy rollouts for OPD; single paper (C-20261008-01).
+- https://arxiv.org/abs/2610.09639 — 'on-policy distillation teaches new skills but not new knowledge'; bears on 17.4's KL-direction discussion; single paper, no code.
+- https://arxiv.org/abs/2610.11659 — DIAL-OPD: learned value-weighted token selection for OPD; single paper.
 
 ## What would change the decision
 
@@ -22,3 +25,4 @@ Independent reproduction of the teacher-scale saturation result, or adoption of 
 ## History
 
 - 2026-10-04 — WAIT — single-paper variants of a technique now taught in 17.4; no reproduction or adoption — weekly/2026-W40.md — candidates C-20260928-02, C-20261001-02
+- 2026-10-11 — WAIT — three more single-paper OPD variants this week confirm an active cluster, but none is reproduced or adopted; next review date unchanged — weekly/2026-W41.md — candidates C-20261008-01, C-20261010-01, C-20261011-04

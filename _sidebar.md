@@ -47,6 +47,7 @@
   - [08.2 · Arithmetic intensity, roofline, fusion](lessons/module-08/lesson-02.md)
   - [08.3 · Profiling & mixed precision](lessons/module-08/lesson-03.md)
   - [08.4 · FlashAttention & a Triton kernel; benchmark](lessons/module-08/lesson-04.md)
+  - [08.5 · Fused linear cross-entropy: the loss without the logits](lessons/module-08/lesson-05.md)
 - **9 · Distributed training**
   - [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md)
   - [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md)

@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-12-06
 - **Course change:** none
-- **Candidates:** C-20261004-03
+- **Candidates:** C-20261004-03, C-20261010-04
 
 ## Summary
 
@@ -13,6 +13,7 @@ Builds an evidence graph over a workspace of real files and derives both the tas
 ## Evidence
 
 - https://arxiv.org/abs/2609.38923 — single paper; data/models claimed on Hugging Face, not verified.
+- https://arxiv.org/abs/2610.10549 — Synthesis Through Simulation (STS, SAP): schema-free synthetic agent-training data from policy-enforcing simulated APIs; open-source repo URL not yet confirmed live.
 
 ## What would change the decision
 
@@ -21,3 +22,4 @@ Verified data release plus independent use, or a similar task-and-rubric synthes
 ## History
 
 - 2026-10-04 — WAIT — plausible technique, single paper, release unverified — weekly/2026-W40.md — candidates C-20261004-03
+- 2026-10-11 — WAIT — a second, independent synthetic agent-data pipeline (STS) adds signal but no reproduction or adoption; next review date unchanged — weekly/2026-W41.md — candidates C-20261010-04

@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none
-- **Candidates:** C-20260930-01, C-20260930-02
+- **Candidates:** C-20260930-01, C-20260930-02, C-20261008-02
 
 ## Summary
 
@@ -14,6 +14,7 @@ Two independent same-day papers quantize the recurrent state taught in 12.5: Lea
 
 - https://arxiv.org/abs/2609.38166 — LeapQuant, no code yet.
 - https://arxiv.org/abs/2609.38169 — STEPQuant, no code yet.
+- https://arxiv.org/abs/2609.38169 — STEPQuant (C-20261008-02) reported as integrated into SGLang; integration not yet confirmed against SGLang's upstream repo/release notes.
 
 ## What would change the decision
 
@@ -22,3 +23,4 @@ Public code for either, or recurrent-state quantization landing in vLLM/SGLang o
 ## History
 
 - 2026-10-04 — WAIT — two independent groups on the same problem is a real signal, but both are days old with no code or adoption — weekly/2026-W40.md — candidates C-20260930-01, C-20260930-02
+- 2026-10-11 — WAIT — claimed SGLang integration of STEPQuant is not yet verified upstream; next review date unchanged — weekly/2026-W41.md — candidates C-20261008-02

@@ -66,6 +66,7 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 - After **6 (GPT-2)**: GPT-2, GPT-3.
 - After **7–10 (systems/scaling)**: Scaling Laws, Chinchilla, Megatron-LM, ZeRO.
 - After **8 (GPU)**: FlashAttention.
+- After **8.5 (fused linear cross-entropy, added 2026-10-11)**: Cut Cross-Entropy (Cut Your Losses in Large-Vocabulary Language Models), Liger Kernel; TRL v1.15.0 fused LM head as the production default. Lesson [8.5](lessons/module-08/lesson-05.md) depends on 1.4, 6.1, 8.2 and 8.4; code `training/fused_ce.py`.
 - After **12 (architectures)**: RoPE/RoFormer, LLaMA, Llama 3, OLMo 2, Switch Transformers, DeepSeekMoE, DeepSeek-V3.
 - After **12.5 (linear/hybrid attention, added 2026-09-27)**: Transformers are RNNs (linear attention), DeltaNet parallelization, Gated DeltaNet, Kimi Linear. Lesson [12.5](lessons/module-12/lesson-05.md) depends on 5.2 and 12.3; code `attention/gated_deltanet.py`.
 - After **14 (SFT)**: FLAN, Self-Instruct.

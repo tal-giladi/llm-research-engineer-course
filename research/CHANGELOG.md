@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W41 (2026-10-11)
+
+- Added **[08.5 · Fused linear cross-entropy: the loss without the logits](lessons/module-08/lesson-05.md)**: computing the LM-head cross-entropy, its gradients, and per-token log-probs and entropy without ever building the $(B, T, V)$ logits tensor. Two schemes: row-chunked with gradients in the forward pass (Liger Kernel) and vocabulary-tiled with an online logsumexp (Cut Cross-Entropy). With `llmre/training/fused_ce.py` and `tests/test_fused_ce.py`. Extends 08.4's online softmax; the plain `lm_head` + `F.cross_entropy` loss of 06.1 stays the reference. [17.4](lessons/module-17/lesson-04.md) gains a dated extension noting that TRL v1.15.0 now uses a fused LM head by default. [Review](research/weekly/2026-W41.md).
+
 ## 2026-W40 (2026-10-04)
 
 - Added **[17.4 · Logit distillation: forward vs reverse KL & on-policy distillation](lessons/module-17/lesson-04.md)**: matching the teacher's full next-token distribution (forward KL covers modes, reverse KL seeks one, generalized JSD in between) and on-policy distillation, where the student generates and the teacher grades every token. With `llmre/reasoning/distill.py` and `tests/test_distill.py`. Extends 17.3's sequence-level distillation; nothing replaced. [Review](research/weekly/2026-W40.md).
