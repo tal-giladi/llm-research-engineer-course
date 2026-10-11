@@ -341,3 +341,88 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition/example to the data-curation module on simulation-grounded (vs. schema-validated) synthetic data generation, contingent on the code repo actually becoming live and on a second source or adoption signal.
 - **Confidence:** low-medium — single paper from a named industrial lab with concrete numbers and a genuinely different mechanism, but the claimed open-source release does not currently resolve, which weakens the evidence until it's checked again.
 - **Recommendation:** monitor; re-check the GitHub URL in a future run before treating "open-sourced" as confirmed, and look for a second source.
+
+### C-20261011-01 · Rounding in Preconditioner Space: redesigning 4-bit AdamW optimizer-state quantization (ZIP-SR / ZE-EDEN)
+
+- **Class:** B
+- **Date discovered:** 2026-10-11
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.12444 (verified resolves; v1 "Thu, 8 Oct 2026 17:58:09 UTC")
+- **Organization/researchers:** Hanyang Li, Shao Tang, Daniel Thomas Braithwaite, Gregory Dexter, Leonardo Neves, Aman Gupta, Hiroto Udagawa, Abhishek Shivanna, Daniel Silva, Rohan Ramanath (affiliations not stated on the abstract page; names and topic are consistent with an industrial ML-infra team, not confirmed)
+- **Category:** quantization (optimizer-state quantization for training, not inference)
+- **What changed:** Existing 4-bit AdamW optimizer-state quantization (e.g. TorchAO's) rounds in *state space* (minimizing error in the stored second moment directly). The paper shows with a 1-D quadratic example that a small state-space rounding error does not bound the error in the *preconditioner* actually used in the next update step, so state-space rounding and preconditioner-space rounding produce different optimization trajectories. It proposes rounding directly in preconditioner space instead, via two variants: ZIP-SR (keeps zero in the second-moment codebook, computes stochastic-rounding probabilities in preconditioner space) and ZE-EDEN (drops zero from the codebook and rescales the quantized block to correct the resulting positive-floor bias). Both pair with 4-bit NF4 for the first moment, with stochastic rounding applied to the LM-head's first moment during the final 10% of training.
+- **Technical summary:** Across GPT- and Llama-style pretraining from 130M to 2.7B parameters, both ZIP-SR and ZE-EDEN shrink the validation-loss gap to full 32-bit AdamW relative to TorchAO's 4-bit AdamW at every tested scale, with the largest reduction reported at 70%. In full-parameter SFT, both beat TorchAO and stay close to 32-bit AdamW on downstream tasks. No code repository linked from the abstract page.
+- **Why it might matter:** A precise, falsifiable mechanism-level fix (identify *which space* you round in, not just how many bits) for a technique already standard practice in memory-constrained training (4-bit optimizer states) — directly extendable as a from-scratch worked example in the course's optimizer/quantization material, with a concrete 1-D failure case that's easy to teach and a measured, scale-swept improvement over a named, widely-used baseline implementation (TorchAO).
+- **Evidence of adoption:** None — single paper, no independent reproduction, no code found, no production adoption identified.
+- **Major organizations using it:** None identified; compared against TorchAO's 4-bit AdamW as baseline but not confirmed adopted by it.
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.12444
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "optimizer state quantization AdamW"`, which only matched an unrelated lesson (14.3, loss masking); no existing lesson covers low-bit optimizer-state quantization specifically (as distinct from weight/activation quantization). Closest existing material would be wherever the course teaches AdamW itself and any existing quantization lesson (not checked exhaustively here — flag for weekly review to confirm placement).
+- **Potential course lesson:** Possible addition to a training-efficiency/quantization lesson: the preconditioner-space-vs-state-space rounding distinction as a numerical example, contrasted with naive 4-bit state quantization.
+- **Confidence:** medium — single paper, no reproduction or code, but a careful, falsifiable mechanism (not just a benchmark number) with a scale sweep (130M-2.7B) against a named real-world baseline.
+- **Recommendation:** monitor; worth a closer look at the next weekly review for the quantization/training-efficiency material, but hold for a second source, released code, or TorchAO/bitsandbytes adoption before considering ADD.
+
+### C-20261011-02 · Attic-KV: query-aware "rehearse what will be read" KV-cache compression under tight budgets
+
+- **Class:** B
+- **Date discovered:** 2026-10-11
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.12133 (verified resolves; v1 "Thu, 8 Oct 2026 15:22:50 UTC")
+- **Organization/researchers:** Zhiyun Shi (sole author; affiliation not stated on the abstract page — likely academic/independent given single authorship)
+- **Category:** long-context / attention (KV-cache compression)
+- **What changed:** The standard way to compress a KV cache before the eventual query is known (cached retrieval documents, shared prompt prefixes, long conversation memory) is "rehearsal": have the model reread the whole context and keep whichever entries it attends to. The paper argues this backfires under tight budgets because rereading spreads attention across the entire context, so the entries actually needed for a later specific answer survive at roughly chance level — at a 3% keep ratio, full-context rehearsal keeps only 31.5 of 96.5 RULER points, and underperforms methods that rehearse nothing at all on LongBench's natural-text tasks. Attic-KV instead has the model quiz itself with synthetic question-answer pairs drawn from the context (plus a content-adaptive amount of anchor tokens) before compressing, so the scoring targets what a plausible future query would actually need, not everything equally.
+- **Technical summary:** Training-free; built as a plug-in scoring signal that improves three different host compression methods it was tested against. On its own, it is reported as the best training-free method across all eight tested RULER/LongBench settings; combined with a gradient-based method (KVgrad) and a trained method (RestoreKV+) it raises their scores by up to 17.1 and 28.1 points respectively. Its advantage grows as the budget shrinks — reaching +41.9 points over full-context rehearsal at a 3% keep ratio — and it compresses faster than rereading the whole context. No code repository linked from the abstract page.
+- **Why it might matter:** A sharp, teachable counterexample to the "just reread the context" intuition for KV-cache compression, with a specific, falsifiable mechanism (query-conditioned scoring via self-generated QA pairs) and large, clearly-stated numbers at the extreme-compression end — relevant to the course's existing KV-cache/long-context material and complementary to (not overlapping with) the cross-layer value-cache-sharing angle in a same-day arXiv paper (VFold, see C below, which targets a different axis: redundancy across layers rather than relevance to an unknown future query).
+- **Evidence of adoption:** None — single-author paper, no independent reproduction, no code found.
+- **Major organizations using it:** None identified (independent/academic).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.12133
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "KV cache rehearsal query-aware"`, no match; closest existing material is the KV-cache/memory concepts in the attention/long-context lessons, which (per the lookup) don't yet cover compression-before-query-is-known strategies specifically.
+- **Potential course lesson:** Possible addition to the attention/long-context module: a worked contrast between "rehearse everything" and "rehearse what will be read" as KV-cache compression strategies, with the RULER keep-ratio numbers as a concrete example.
+- **Confidence:** low-medium — single-author paper, no reproduction, no code, but a specific and falsifiable claim (not a vague benchmark win) with numbers across eight named settings.
+- **Recommendation:** monitor; hold for a second source, code, or independent reproduction before considering ADD. Worth flagging alongside VFold (C) as two independent angles on KV-cache compression from the same arXiv day.
+
+### C-20261011-03 · Elastic Expert Routing: smoothing the top-k exposure boundary for sparse Mixture-of-Experts
+
+- **Class:** B
+- **Date discovered:** 2026-10-11
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.11575 (verified resolves; v1 "Thu, 8 Oct 2026 09:31:19 UTC")
+- **Organization/researchers:** Yunkai Chai, Tong Zhu, Xiaoye Qu, Xuyang Hu, Guanjie Chen, Qipeng Guo, Yu Cheng (affiliations not stated on the abstract page; academic/industrial group)
+- **Category:** architecture / MoE
+- **What changed:** Standard sparse-MoE training selects a fixed top-k set of experts per token, turning a continuous routing-score distribution into a hard cutoff; experts with nearly identical scores can land on opposite sides of that boundary and receive full gradient signal or none at all. Elastic Expert Routing samples the *number* of active experts per token from a discrete distribution centered on k (symmetric around k, so expected compute matches deterministic top-k and the inference-time budget is unchanged), softening the hard threshold during training without changing the deployed inference cost.
+- **Technical summary:** In supervised fine-tuning, reports macro-average improvements of +0.84 points on OLMoE-1B-7B and +2.02 points on Qwen3-30B-A3B over standard top-k routing. In from-scratch pretraining, beats the static top-k baseline by 1.6 points on average across downstream tasks. No code repository linked from the abstract page.
+- **Why it might matter:** A concrete, mechanism-level fix to a specific, nameable pathology (discontinuous gradient exposure at the routing boundary) in an architecture already taught/referenced in the course's MoE material, tested on two real named open MoE models (OLMoE, Qwen3-MoE) rather than only a toy setup, and — notably — free at inference time (the change is training-only), which makes it an easy "what changes, what doesn't" teaching example.
+- **Evidence of adoption:** None — single paper, no independent reproduction, no code found, no production adoption identified.
+- **Major organizations using it:** None identified; evaluated against (not adopted by) OLMoE and Qwen3-MoE.
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.11575
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "MoE top-k routing smoothing"`, no match. Related to but distinct from the course's existing Gated DeltaNet/hybrid-attention MoE-adjacent material (a different axis: routing-boundary gradient exposure, not attention mechanism).
+- **Potential course lesson:** Possible addition to the MoE architecture material: a worked example contrasting hard top-k routing's gradient-exposure discontinuity with stochastic-k sampling, using the reported OLMoE/Qwen3-MoE deltas.
+- **Confidence:** low-medium — single paper, no reproduction or code, but a specific, falsifiable mechanism tested on two real named open MoE models with a training-only cost (clean to teach and to verify independently).
+- **Recommendation:** monitor; revisit if a second group reproduces the gradient-exposure framing or a major open MoE training stack (e.g. Megatron-Core MoE support) adopts stochastic-k routing.
+
+### C-20261011-04 · DIAL-OPD: learned value-weighted token selection for on-policy distillation (new evidence for deferred OPD-variants topic)
+
+- **Class:** B
+- **Date discovered:** 2026-10-11
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.11659 (verified resolves; v1 "Thu, 8 Oct 2026 10:36:00 UTC")
+- **Organization/researchers:** Anhao Zhao, Haoran Xin, Junlong Tong, Yingqi Fan, Xuan Lu, Ping Nie, Wenjie Li, Xiaoyu Shen (affiliations not stated on the abstract page; academic group)
+- **Category:** RL/post-training (on-policy distillation — base technique taught in lesson 17.4)
+- **What changed:** Finds that training on-policy distillation (OPD) on *fewer* tokens can outperform training on the full token stream — more supervision isn't always better, because some tokens contribute little useful signal. DIAL-OPD selects tokens with a learned value score weighting each token's reward magnitude by the log-mean of teacher and student probability (a tunable beta), specifically to avoid existing disagreement-based selection methods' tendency to overweight "low-low" tokens (both teacher and student assign them negligible probability). This is a third, independent sub-mechanism in the already-deferred `on-policy-distillation-variants.md` topic, which currently tracks a co-evolving-teacher loop (DCE/SRCL) and a teacher-scale saturation scaling law — DIAL-OPD is neither; it's a token-selection/retention-ratio mechanism operating on a fixed (non-evolving) teacher.
+- **Technical summary:** Across 4 teacher-student model pairs and 7 math-reasoning benchmarks, against 9 baselines, keeping only 40% of tokens yields up to 5.25 points higher mean accuracy than vanilla full-token OPD, raises AIME25 Pass@16 from 13.33% to 26.67%, and beats the strongest token-selection baseline by up to 18% relative mean-accuracy improvement at matched retention ratios. A 4B teacher using DIAL-OPD outperforms the strongest full-token baseline that uses an 8B teacher. No code repository linked from the abstract page.
+- **Why it might matter:** Directly testable against the course's existing lesson 17.4 framing of OPD (which currently presents the token stream as used in full); if it holds up, token-level selective supervision is a teachable refinement with a clear ablation (beta sweep) and a striking result (smaller teacher + selection beats larger teacher + no selection).
+- **Evidence of adoption:** None — single paper, no independent reproduction, no code found.
+- **Major organizations using it:** None identified (academic).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.11659
+- **Code:** none found
+- **Relationship to existing course material:** New evidence for the deferred topic `research/deferred/on-policy-distillation-variants.md` — a third independent sub-mechanism (token selection) distinct from the two already tracked (co-evolving teacher; teacher-scale scaling law). Checked via `lookup "on-policy distillation token selection"` — no exact match, confirms this is new. Base technique remains taught in `lessons/module-17/lesson-04.md`.
+- **Potential course lesson:** Not a new lesson; a candidate addition to the deferred topic file as a third data point, for the weekly/next-scheduled review of that topic (2026-11-29) alongside DCE/SRCL and the scaling-law paper.
+- **Confidence:** low-medium — single paper, no reproduction, no code, but concrete numbers across multiple model pairs/benchmarks and a striking (if unverified) smaller-teacher-beats-bigger-teacher result.
+- **Recommendation:** add as a third data point to the existing deferred `on-policy-distillation-variants.md` topic at its next scheduled review (2026-11-29); not independently actionable before then.
+
