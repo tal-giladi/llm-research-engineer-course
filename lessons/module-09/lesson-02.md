@@ -52,6 +52,8 @@ ZeRO shards the three buckets one at a time. Each stage keeps the previous stage
 
 The optimizer state ($m$ and $v$, $8P$ bytes) is only touched *inside* `optimizer.step()`. Between steps it just sits there. So ZeRO-1 gives each worker only $1/W$ of it: worker `w` owns the $m,v$ for parameters $w\cdot P/W \ldots (w{+}1)\cdot P/W$. During the step, worker `w` updates *only its slice* of the parameters (the ones it holds the optimizer state for), then an all-gather shares the updated parameters so everyone again has the full weights for the next forward pass.
 
+<div class="callout"><p><strong>"But every worker works on all the parameters — how can it own only a slice?"</strong> Split one training step into two phases. <em>Forward + backward</em>: unchanged from plain DP — every worker holds the full weights, runs the whole model on its own micro-batch, and the all-reduce leaves every worker with the same full averaged gradient. <em>Optimizer step</em>: in plain DP all $W$ workers now run the identical Adam update on identical inputs and get identical new weights — the same work done $W$ times, with $W$ identical copies of $m,v$. ZeRO-1 removes only that duplication: worker <code>w</code> runs Adam on its $1/W$ slice (so it needs $m,v$ only for that slice), and the all-gather rebuilds the full updated weights on everyone. Tiny example, $P=4$, $W=2$: both workers compute all 4 gradients; worker 0 updates $\theta_0,\theta_1$, worker 1 updates $\theta_2,\theta_3$; after the all-gather both hold all 4 new values — exactly what plain DP would give. "Owns a slice" refers only to who does the update and stores $m,v$, not to forward/backward.</p></div>
+
 Per worker: full params + full grads + sharded optimizer state.
 
 $$
