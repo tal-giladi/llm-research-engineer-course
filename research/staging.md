@@ -89,3 +89,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition to module 17's test-time-scaling material contrasting best-of-N/self-consistency (resample + rerank) with iterative generate-verify-refine (GenCorrect), using the IOI 2025 progression numbers as a worked before/after example.
 - **Confidence:** medium-high — code, checkpoints, and (for IMO) externally-graded results, but still a single organization's own technical report for the overall system (company claim for the IOI "beats top human" framing specifically, flagged as such on NVIDIA's own page as an unofficial run).
 - **Recommendation:** monitor for the next weekly review as a possible module-17 extension; the IMO external grading and released code/checkpoints make this stronger than a typical single-source company claim, but still single-source for the method's generality beyond these two competitions.
+
+### C-20261013-01 · Elastic Latent Recurrence (ELR): removing the "one-loop tax" in looped/recurrent-depth language models
+
+- **Class:** B
+- **Date discovered:** 2026-10-13
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.12582 (verified resolves; v1 "Thu, 8 Oct 2026")
+- **Organization/researchers:** Faisal Ladhak, Shantanu Acharya, Santiago Akle Serano, Simeng Sun, Boris Ginsburg, Krishna C Puvvada — no institutional affiliation is stated on the abstract page (Boris Ginsburg and Krishna Puvvada are names associated with NVIDIA Research in prior publications, but this is not confirmed on this paper's page, so treated as unconfirmed).
+- **Category:** architecture (looped/recurrent-depth language models)
+- **What changed:** Looped/recurrent-depth models (reusing a shared block of layers several times per token) normally underperform a non-recurrent model of the same size when run for only one loop — the "one-loop tax" — which limits their practicality as a single checkpoint that trades inference compute for accuracy. ELR is a training recipe meant to remove that penalty via three elements: a gated state update with a learned step size, mixing loop counts within each optimizer update, and conditioning each forward pass on its loop index and compute budget. Mixed depths can be introduced late in pretraining to cut training cost; for MoE variants, reusing first-loop expert routing on later loops cuts update time 11.7% with no measurable accuracy change; at inference, keeping only the last loop's attention KV cache keeps attention memory at one-loop levels while retaining most of the gains.
+- **Technical summary:** On 4B-dense and 30B-A3B-MoE hybrid models, ELR reports ~7 points of gain at four loops on a ten-task average versus one loop. The resulting model, Koi-4B, reportedly scores ~18 on the Artificial Analysis Intelligence Index at one loop (matching Qwen3.5-4B) and ~29 at four loops. No code or model-weight link is present on the abstract page.
+- **Why it might matter:** Directly addresses the central open question in the course's already-deferred looped-recurrent-depth cluster — "does any recipe make one-loop performance match a dense model of the same size, so the same checkpoint is usable at variable test-time compute without a penalty." If reproduced, this would be the first recipe in that cluster to claim the one-loop-tax problem is solved rather than merely mitigated.
+- **Evidence of adoption:** None yet — single paper, no released code or weights, no independent reproduction. The reported numbers are the authors' own (company/author claim).
+- **Major organizations using it:** None confirmed (see affiliation note above).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.12582
+- **Code:** none found
+- **Relationship to existing course material:** New evidence for the already-deferred `research/deferred/looped-recurrent-depth-lms.md` (WAIT, next review 2026-11-29) — a fourth independent sub-mechanism in that cluster, and the first to directly target the one-loop-tax framing. Checked via `lookup "looped language model recurrent depth"`, which matched that file.
+- **Potential course lesson:** Not a new lesson; a data point for the deferred topic's 2026-11-29 review, specifically on whether the "same checkpoint, variable test-time compute, no one-loop penalty" claim holds up.
+- **Confidence:** low-medium — single paper, no code/weights, no reproduction, but concrete named-model numbers (Koi-4B) and a plausible mechanism (gated step size + mixed loop-count training) distinct from the cluster's other three approaches.
+- **Recommendation:** add as a fourth data point to `looped-recurrent-depth-lms.md` at its 2026-11-29 review; not independently actionable before then.
+
+### C-20261013-02 · Semi-OPD: offline-student-rollout distillation often beats on-policy distillation
+
+- **Class:** B
+- **Date discovered:** 2026-10-13
+- **Date published:** 2026-10-08
+- **Source:** https://arxiv.org/abs/2610.11291 (verified resolves; v1 "Thu, 8 Oct 2026")
+- **Organization/researchers:** Siyan Zhao, Yonggan Fu, Jindong Jiang, Shih-Yang Liu, Song Bian, Byung-Kwan Lee, Sharath Turuvekere Sreenivas, Wenliang Dai, Hanrong Ye, Aditya Grover, Pavlo Molchanov — no institutional affiliation is stated on the abstract page (Pavlo Molchanov is a name associated with NVIDIA Research in prior publications, but this is not confirmed on this paper's page, so treated as unconfirmed).
+- **Category:** RL/post-training (on-policy distillation — base technique taught in lesson 17.4)
+- **What changed:** Tests whether on-policy sampling is actually necessary for logit/policy distillation. Proposes Semi-OPD: distill from offline rollouts generated once by the initial student, rather than resampling on-policy from the current student throughout training. Reports Semi-OPD beats standard OPD in 14 of 17 teacher-student pairs spanning 1.5B-235B parameters, with accuracy gains up to 13.6% and an 11.4x training-time speedup. The paper's explanation: OPD's advantage depends on how aligned the initial teacher and student already are (measured by output-token overlap); for well-aligned pairs OPD helps, but for misaligned pairs the student's on-policy rollouts drift further off-distribution from the teacher as context length grows, degrading the distillation signal — Semi-OPD avoids this by training on shorter contexts while still covering full trajectories.
+- **Technical summary:** No code repository is linked from the abstract page; results are the authors' own reported benchmarks across 17 teacher-student pairs, not independently reproduced.
+- **Why it might matter:** This is a direct, falsifiable challenge to a premise embedded in the course's already-taught lesson 17.4 (that on-policy sampling is generally worth its extra infrastructure cost for distillation). If the teacher/student-alignment framing holds up, it's a teachable refinement of *when* OPD is worth it — paralleling the already-staged C-20261012-02 finding about when a stronger teacher transfers well.
+- **Evidence of adoption:** None — single paper, no code, no independent reproduction. Numbers are the authors' own.
+- **Major organizations using it:** None confirmed (see affiliation note above).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.11291
+- **Code:** none found
+- **Relationship to existing course material:** Directly bears on `lessons/module-17/lesson-04.md` (17.4 · Logit distillation: forward vs reverse KL & on-policy distillation) — checked via `lookup "on-policy distillation offline student rollouts"`, which matched that lesson. Distinct from the already-staged `staging.md` C-20261012-02 (which concerns *which reference/expert pair* transfers well) — this paper instead asks whether on-policy sampling itself is necessary at all. Also related to, but a different angle from, the deferred `research/deferred/on-policy-distillation-variants.md` cluster (co-evolving teacher, teacher-scale laws); flag together at the next weekly review.
+- **Potential course lesson:** Possible update to 17.4 contrasting "always resample on-policy" with "offline-rollout distillation when teacher/student are already poorly aligned," using the token-overlap alignment metric as the deciding factor.
+- **Confidence:** medium — single paper, no code/reproduction, but directly tests an assumption in already-taught material with concrete numbers across a wide 1.5B-235B parameter range.
+- **Recommendation:** review at the next weekly cycle specifically as a possible 17.4 amendment (not just a deferred-cluster data point), alongside C-20261012-02.
+
+### C-20261013-03 · The causal role of weight decay in the life cycle of massive activations
+
+- **Class:** B
+- **Date discovered:** 2026-10-13
+- **Date published:** 2026-09-30 (v1); v2 2026-10-05
+- **Source:** https://arxiv.org/abs/2610.00423 (verified resolves; v2 "Mon, 5 Oct 2026")
+- **Organization/researchers:** S. Aaron McClendon, Jorge Gallego-Feliciano, Antonios Saravanos — no institutional affiliation stated on the abstract page.
+- **Category:** interpretability
+- **What changed:** Studies massive activations — very-large-magnitude residual-stream values linked to attention sinks — and tracks how they emerge, grow, and stabilize over training. Main finding: weight decay causally controls the turnover of this activation scale. Removing weight decay near the activation's peak lets it keep growing; keeping decay active makes it decline even at a constant learning rate. The authors propose a balance model in which AdamW-style preconditioned growth opposes weight decay; sweeping the decay coefficient shifts the peak's timing roughly log-linearly and its peak magnitude scales roughly as (decay coefficient)^(-1/2).
+- **Technical summary:** A mechanistic/causal account (ablating weight decay mid-training) rather than only a correlational observation, with a quantitative scaling law for peak timing and magnitude as a function of the weight-decay coefficient. No code repository linked from the abstract page.
+- **Why it might matter:** Massive activations/attention sinks already matter for the course's quantization and long-context material (outlier activations are a known obstacle to low-bit quantization and KV-cache compression). This paper offers a specific, testable training-dynamics lever (weight decay) rather than just describing the phenomenon — a clean candidate for a from-scratch numerical/toy-training demonstration (the six-pass lesson structure's "numerical example" and "from-scratch implementation" passes would fit this well: train a tiny transformer with/without decay and watch the activation's trajectory).
+- **Evidence of adoption:** None — single academic paper, no code, no independent reproduction.
+- **Major organizations using it:** None identified.
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.00423
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "attention sink outlier activation quantization"` and `lookup "massive activation interpretability"`, no matches in either the course or registry. Not previously covered.
+- **Potential course lesson:** Possible addition to the interpretability module (or a cross-reference from the quantization module) on massive activations/attention sinks, with weight decay as the causal lever — a good candidate for a small from-scratch toy experiment given the course's six-pass lesson template.
+- **Confidence:** low-medium — single paper, no code/reproduction, but a clear causal claim (ablation, not just correlation) with a concrete quantitative scaling relationship.
+- **Recommendation:** monitor for the next weekly review as a possible new interpretability topic (first entry in this sub-area, so likely WAIT pending independent reproduction) rather than an extension of an existing deferred cluster.
