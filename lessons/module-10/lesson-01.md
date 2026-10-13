@@ -16,7 +16,7 @@ You have a `GPTConfig` — a handful of integers fixing the shape of every weigh
 
 Module 7 introduced the $6N$ rule and the four memory buckets in the context of *one running loop*. Here we lift them to *planning*: given only a config and a token budget, compute all three, and get each right to within a few percent by hand.
 
-<div class="callout key"><p>The whole lesson is three formulas: <strong>$N \approx VC + 12\,n_{\text{layer}}\,C^2$</strong> (parameters), <strong>$C \approx 6ND$</strong> (training FLOPs), and <strong>memory $\approx 16N$ bytes + activations</strong> (fp32). Everything else is naming the terms and plugging in numbers.</p></div>
+<div class="callout key"><p>The whole lesson is three formulas: <strong>$N \approx VC + 12\,n_{\text{layer}}\,C^2$</strong> (parameters), <strong>$C \approx 6ND$</strong> (training FLOPs), and <strong>memory $\approx 16N$ bytes + activations</strong> (fp32). Everything else is naming the terms and plugging in numbers.</p><p><strong>Watch the letter $C$:</strong> it means two different things here, both by convention. In the parameter formula, $C$ is the <em>embedding width</em> (<code>n_embd</code>, the number of channels per token — e.g. 768). In $C pprox 6ND$, $C$ is the <em>total training compute</em> in FLOPs (e.g. $8.67	imes 10^{17}$). Model-shape code uses $C$ for channels; the scaling-law papers use $C$ for compute. Context always tells you which: a width is a few hundred to a few thousand, a compute budget is $10^{17}$ and up.</p></div>
 
 ## 2. Closed-form parameter count
 
