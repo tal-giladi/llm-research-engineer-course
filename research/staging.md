@@ -152,3 +152,108 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition to the interpretability module (or a cross-reference from the quantization module) on massive activations/attention sinks, with weight decay as the causal lever — a good candidate for a small from-scratch toy experiment given the course's six-pass lesson template.
 - **Confidence:** low-medium — single paper, no code/reproduction, but a clear causal claim (ablation, not just correlation) with a concrete quantitative scaling relationship.
 - **Recommendation:** monitor for the next weekly review as a possible new interpretability topic (first entry in this sub-area, so likely WAIT pending independent reproduction) rather than an extension of an existing deferred cluster.
+
+### C-20261014-01 · ReplaySSM: cache SSM inputs, not state — removing the state read/write bottleneck in hybrid-attention decoding
+
+- **Class:** A
+- **Date discovered:** 2026-10-14
+- **Date published:** 2026-10-09 (v1)
+- **Source:** https://arxiv.org/abs/2610.13778 (verified resolves; v1 "Fri, 9 Oct 2026"). Also published as an NVIDIA technical blog post, https://developer.nvidia.com/blog/replayssm-rethinking-state-storage-for-faster-hybrid-model-decoding/ (verified loads, dated 2026-10-12), and as a personal blog post by Tri Dao, https://tridao.me/blog/2026/replayssm/ (verified exists via search; content cross-checked against the arXiv abstract and NVIDIA post).
+- **Organization/researchers:** Ze-Wei Liou, Harris Nover, Amey Naik, Andrii Skliar, Igor Shovkun, Ido Shahaf, Tri Dao — per the GitHub README, Princeton University and NVIDIA (Tri Dao is the FlashAttention/Mamba co-author; affiliation not independently re-confirmed beyond the README's own statement).
+- **Category:** serving / attention / efficiency (hybrid SSM + attention decoding)
+- **What changed:** In hybrid models (SSM layers interleaved with attention, e.g. Mamba-2, Gated DeltaNet), every decode step must read and write the full fixed-size recurrent state — a memory-bandwidth-bound operation with little arithmetic. This also makes speculative-decoding rollback expensive (a state snapshot per draft token) and lets state quantization error compound through the recurrence (unlike a KV cache, which is never written back into itself). ReplaySSM represents the state as a periodically-updated checkpoint plus a buffer of recent inputs: most decode steps just append to the buffer and compute output from checkpoint+buffer without writing a new state; a buffer-fill triggers one flush that folds the buffer into the checkpoint. Speculative-decoding rollback becomes a pointer move (no snapshots). A high-precision checkpoint can be kept for the recurrence while a separate low-precision copy serves reads, which prevents quantization error from feeding back on itself.
+- **Technical summary:** Implemented for Mamba-2 and Gated DeltaNet in vLLM. At batch size 256: kernel speedups of 1.46x-1.80x and end-to-end decode-step speedups of 1.20x-1.47x across four hybrid models vs. a tuned vLLM baseline (no speedup at batch size 1). Speculative decoding (T=4, batch 512, two 120B-class models): 1.85x-2.10x vLLM's speculative-decoding throughput with matched acceptance lengths. Quantization: on Qwen3.5-4B at 128K generated tokens, KL divergence from FP32 fell from 0.136 to 0.0038 when reading NVFP4 with an FP32 recurrence checkpoint; on GPQA-Diamond, a single shared NVFP4 checkpoint lost 3-31 points vs. FP32, while separate read/recurrence precisions kept 3 of 4 models within ~2 points of FP32.
+- **Why it might matter:** Directly extends the course's already-accepted hybrid-linear-attention material (`lessons/module-12/lesson-05.md`, 12.5) from "how hybrid attention works" into "how to serve it efficiently" — a concrete, adopted serving-side technique for the KV/state-cache memory and quantization problems that 12.5's hybrid stacks create. The combination of real stack adoption, a named-author credibility signal (Tri Dao), and direct production use makes this unusually strong for a single week's finding.
+- **Evidence of adoption:** Independently verified, not a company claim alone — the GitHub README documents merged pull requests landing the technique in TensorRT-LLM, vLLM, SGLang, and FlashInfer (the paper authors contributed the listed PRs, except one TensorRT-LLM GDN PR credited to NVIDIA independently). The NVIDIA blog post states production use in GLM-5.3-Flash and Kimi-K3 (this specific claim is sourced to NVIDIA's own post and not independently re-verified against those models' own release notes this run). A NeurIPS 2026 follow-on paper, SketchSSM (https://neurips.cc/virtual/2026/173791), explicitly builds on and extends ReplaySSM's input-buffering idea — independent academic engagement, not just the original authors.
+- **Major organizations using it:** NVIDIA/Princeton (originators); merged into vLLM, SGLang, TensorRT-LLM, FlashInfer; reported production use in Zhipu's GLM-5.3-Flash and Moonshot's Kimi-K3.
+- **Open-source implementation:** https://github.com/Johnny-Liou/ReplaySSM (Apache-2.0), plus the merged PRs in vLLM/SGLang/TensorRT-LLM/FlashInfer themselves.
+- **Paper:** https://arxiv.org/abs/2610.13778
+- **Code:** https://github.com/Johnny-Liou/ReplaySSM
+- **Relationship to existing course material:** Extends `lessons/module-12/lesson-05.md` (12.5 · Linear attention, Gated DeltaNet & hybrid stacks, already ADDed per `research/accepted/hybrid-linear-attention-gated-deltanet.md`) and touches the course's quantization material (state/KV-cache quantization). Checked via `lookup "SSM state caching decoding"` and `lookup "hybrid linear attention gated deltanet"` — the latter matched the existing accepted topic and lesson, confirming this is a serving-layer extension of already-taught material rather than a wholly new topic.
+- **Potential course lesson:** Extend 12.5 (or a serving/inference-memory lesson) with a from-scratch worked example of checkpoint+buffer state representation vs. naive per-step state read/write, plus the mixed-precision read/recurrence quantization trick — fits the course's existing "implement the mechanism from scratch before the production framework" rule well, since vLLM/TensorRT-LLM/SGLang/FlashInfer all now ship it.
+- **Confidence:** high — paper + released code + merged PRs in four major serving stacks + independent academic follow-on work + a highly credible co-author, all pointing the same direction in one week.
+- **Recommendation:** review for ADD at the next weekly cycle, most likely as an extension of lesson 12.5 (hybrid attention serving/decoding) and/or the quantization module (mixed-precision state read vs. recurrence).
+
+### C-20261014-02 · DoSA (Dots Sparse Attention): conditional, certificate-based Top-K scoring for production sparse-attention indexers
+
+- **Class:** B
+- **Date discovered:** 2026-10-14
+- **Date published:** 2026-09-26 (v1)
+- **Source:** https://arxiv.org/abs/2610.13990 (verified resolves; v1 "Sat, 26 Sep 2026")
+- **Organization/researchers:** Fanxu Meng, Taosong Fang, and one other author — affiliations not stated on the abstract page.
+- **Category:** attention / efficiency / serving (sparse-attention indexer, e.g. DeepSeek-V3.2/GLM-5.2-style lightning indexer)
+- **What changed:** Native sparse-attention indexers (as used in DeepSeek-V3.2 and GLM-5.2) score every candidate key to pick the Top-K set to attend to, but a Top-K selection only needs enough evidence to reject a losing candidate, not its exact score. DoSA introduces a certificate: a seed subset gives a lower bound on the winning threshold, and bounds on each head's positive/negative contribution determine which remaining candidates still need full scoring — a lossless method (exact same Top-K set as full scoring) that makes the scoring step conditional instead of exhaustive. Exact-score filtering also cuts downstream writeback/selection work.
+- **Technical summary:** Reports the GPU implementation speeds up the full Indexer by up to 2.74x over SGLang's and 1.69x over LiteTopK's implementations, with end-to-end time-to-first-token speedups of 1.94x on GLM-5.2 and 1.50x on DeepSeek-V3.2 against their respective baselines — i.e. benchmarked against production serving-framework baselines (SGLang) and a named prior top-k method (LiteTopK), not just a naive reference implementation.
+- **Why it might matter:** A concrete, production-relevant efficiency technique for the sparse-attention indexer architecture already shipping in two named frontier open-weight models, with real baseline comparisons rather than only self-comparison. Relates to (but is mechanistically distinct from) the course's existing deferred sparse-attention cluster (`block-sparse-attention-pisa.md`, `sparse-attention-decoding-ffd.md`), which target block-sparse/training-free retrofits rather than the specific lightning-indexer Top-K-certificate problem.
+- **Evidence of adoption:** None yet beyond the benchmark comparison itself — single paper, no code or model-weight link found on the abstract page, no independent reproduction. Reported speedups are the authors' own.
+- **Major organizations using it:** None confirmed (no stated affiliation); benchmarked against, but not adopted by, SGLang.
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.13990
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic within the existing sparse-attention cluster — checked via `lookup "lightning indexer DeepSeek sparse attention"` and `lookup "DSA sparse attention top-k scoring"`, no matches; checked against `research/deferred/block-sparse-attention-pisa.md` and `research/deferred/sparse-attention-decoding-ffd.md`, both of which are related but address a different mechanism (block-level scoring / training-free decode retrofits vs. this paper's certificate-based native-indexer scoring).
+- **Potential course lesson:** Possible addition to module 12's attention material (or the sparse-attention-decoding cluster if/when it is ever ADDed) specifically on native sparse-attention indexer architectures (DeepSeek-V3.2-style) and how Top-K selection can be made conditional without approximation.
+- **Confidence:** medium — concrete numbers against real serving-framework baselines (SGLang) and a named prior method, but no code, no reproduction, and unstated author affiliation.
+- **Recommendation:** monitor; flag alongside the existing block-sparse-attention-pisa and sparse-attention-decoding-ffd deferred topics at the next weekly review as a third, architecturally distinct entry in the "efficient sparse-attention scoring" space.
+
+### C-20261014-03 · PR-OPD: hidden-state alignment, not token-probability shift, explains why privileged self-distillation works in agentic RL
+
+- **Class:** B
+- **Date discovered:** 2026-10-14
+- **Date published:** 2026-09-29 (v1)
+- **Source:** https://arxiv.org/abs/2609.36642 (verified resolves; v1 "Tue, 29 Sep 2026")
+- **Organization/researchers:** Muyang Li, Jie Yang, Zhengyu Fang, Junchao Zhu, Zhengkun Xiao, Ruining Deng, Zhe Jiang, Shigang Chen — affiliations not stated on the abstract page.
+- **Category:** RL/post-training (on-policy/privileged self-distillation — base technique taught in lesson 17.4)
+- **What changed:** Privileged self-distillation gives an agent's skill-conditioned policy as a teacher to its own skill-free version via token-probability matching. The paper reports two findings that complicate the usual "the teacher's token distribution carries the signal" story: (1) "Invisible Advantage" — a skill in context raises WebShop success from 42.2% to 56.2% while changing the sampled-token probabilities of fewer than a quarter of tokens; (2) "Much to Align" — the same skill changes the hidden states of over 80% of response tokens, and linear probes can trace these hidden-state changes back to the specific skill. I.e. the useful signal lives mostly in hidden representations, not in the output token distribution the standard method distills from.
+- **Technical summary:** Proposes PR-OPD: after a GRPO warm start, the policy writes a hindsight skill per trajectory, rereads its own response with that skill as a stop-gradient teacher, and aligns projected hidden states with the teacher's at every layer alongside the RL reward objective — no external skill library, separate teacher model, or extra inference cost. On ALFWorld and WebShop with two backbones, reports the best overall results in every setting: up to +4.7 points ALFWorld success and +14.0 points WebShop accuracy over GRPO. Code is linked from the abstract page.
+- **Why it might matter:** A mechanistic explanation (not just another variant) for *why* self-distillation signals transfer in agentic RL, directly relevant to the course's on-policy-distillation material (17.4) and its growing deferred-variants cluster — the hidden-state-vs-token-probability distinction is a sharp, teachable finding (and a plausible numerical/from-scratch demonstration: probe hidden states vs. token probabilities on a toy skill-conditioning task).
+- **Evidence of adoption:** None — single paper; code released but no independent reproduction or adoption by another training stack.
+- **Major organizations using it:** None confirmed (no stated affiliation).
+- **Open-source implementation:** Linked from the abstract page (GitHub; exact URL not independently re-verified beyond the abstract-page link in this run).
+- **Paper:** https://arxiv.org/abs/2609.36642
+- **Code:** linked from abstract page (see above)
+- **Relationship to existing course material:** Bears on `lessons/module-17/lesson-04.md` (17.4) and the already-deferred `research/deferred/on-policy-distillation-variants.md` cluster. Checked via `lookup "privileged self-distillation skill hidden state"`, no match; this is a mechanistic/explanatory angle distinct from the cluster's existing variants (co-evolving teacher, teacher-scale laws, negative rollouts, token-selection, offline rollouts, relative-policy-difference transfer).
+- **Potential course lesson:** A short addition to 17.4 contrasting token-probability-level distillation signal with hidden-state-level signal, using the "Invisible Advantage"/"Much to Align" framing and a small linear-probe exercise.
+- **Confidence:** medium — code released and a concrete, falsifiable mechanistic claim, but single paper, no reproduction, no stated affiliation.
+- **Recommendation:** flag at the next weekly review alongside the existing on-policy-distillation-variants cluster, specifically as a mechanistic (not just empirical) data point; also note today's second OPD variant, BranchOPD (C class, see below), so the review sees the cluster's continued growth this week.
+
+### C-20261014-04 · Uncertainty-guided progressive data contraction: 450x less SFT data for reasoning post-training via Monte Carlo reasoning trees
+
+- **Class:** B
+- **Date discovered:** 2026-10-14
+- **Date published:** 2026-10-09 (v1)
+- **Source:** https://arxiv.org/abs/2610.12933 (verified resolves; v1 "Fri, 9 Oct 2026")
+- **Organization/researchers:** Suorong Yang, Jiaxin Wang, Jiaming Su, Chentao Yue, Furao Shen, Peng Ye, Soujanya Poria — affiliations not stated on the abstract page.
+- **Category:** data / reasoning / efficiency (SFT data curation for reasoning post-training)
+- **What changed:** Rather than treating a teacher model's chain-of-thought as a single fixed path to imitate, the authors build Monte Carlo reasoning trees around intermediate reasoning states to expose process-level uncertainty, then use that to progressively contract the training corpus in two stages: an offline teacher-informed pool-shrinking stage, followed by a learner-aware stage that routes examples online during SFT based on the student's own evolving state.
+- **Technical summary:** Reports using as little as 0.22% of the optimization budget of full-data SFT (>450x less training exposure) while maintaining or improving reasoning performance, and claims the approach generalizes across student model families, black-box teachers, and weak-to-strong transfer settings.
+- **Why it might matter:** If the 450x figure holds up under scrutiny, this is a sharp, teachable result for the course's data-curation/efficient-training material — a concrete, falsifiable claim about how much of standard reasoning-SFT data is actually redundant, and a worked mechanism (uncertainty from sampled reasoning trees, not just loss or length heuristics) suitable for the six-pass lesson template's numerical/from-scratch passes.
+- **Evidence of adoption:** None — single paper, no code link found on the abstract page, no independent reproduction. The 450x figure is the authors' own.
+- **Major organizations using it:** None confirmed (no stated affiliation).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.12933
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "uncertainty guided data pruning reasoning SFT"` and `lookup "Monte Carlo reasoning tree uncertainty teacher"`, no matches in course or registry.
+- **Potential course lesson:** Possible addition to the data-curation/synthetic-data material (or a reasoning-module cross-reference) on uncertainty-guided data selection, if reproduced — the specific 450x claim is extraordinary enough to warrant independent replication before any course commitment.
+- **Confidence:** low-medium — a single, very strong, unreplicated claim; no code to check it against.
+- **Recommendation:** monitor; this is exactly the kind of outsized single-paper claim the weekly review should treat with extra skepticism (WAIT pending reproduction or code release), despite being a clean, teachable mechanism if true.
+
+### C-20261014-05 · HyperThink: replacing visible chain-of-thought with a single-forward-pass hypernetwork parameter update (COLM 2026)
+
+- **Class:** B
+- **Date discovered:** 2026-10-14
+- **Date published:** 2026-10-02 (v1)
+- **Source:** https://arxiv.org/abs/2610.03039 (verified resolves; v1 "Fri, 2 Oct 2026"; accepted at COLM 2026 per the Comments field)
+- **Organization/researchers:** Donggyun Kim, Jack Lu, Chanwoo Kim, Mengye Ren, Seunghoon Hong — affiliations not stated on the abstract page.
+- **Category:** reasoning / efficiency (test-time-compute alternative to visible chain-of-thought)
+- **What changed:** Standard long-reasoning LLMs pay a latency cost dominated by sequential decoding of a long visible trace. HyperThink instead uses a lightweight hypernetwork that reads the question and, in a single forward pass, predicts updates to a small subset of the base model's parameters; a vector-quantized decoder restricts these updates to a finite set of reusable patterns. Trained on the base model's own outputs, the adapted model then answers with a concise step-by-step solution and no intermediate visible trace — i.e. the "reasoning" is encoded as a one-shot parameter edit rather than as tokens the model must decode.
+- **Technical summary:** Reports better accuracy-latency trade-offs than baselines on math and general reasoning tasks, with the largest gains in near-non-thinking (low-token-budget) settings. Peer-reviewed and accepted at COLM 2026, which is a modest independent-validation signal beyond a self-published preprint, though still a single paper/single venue.
+- **Why it might matter:** A genuinely distinct mechanism from the course's existing test-time-compute material (best-of-N/self-consistency, process rewards, GenCorrect-style iterative generate-verify-refine already staged as C-20261012-04) — instead of spending more decode tokens, it spends one hypernetwork forward pass to edit parameters. If it holds up, it's a sharp contrast case for a lesson on "where does reasoning compute go: tokens vs. weights."
+- **Evidence of adoption:** None — single paper, no code link found on the abstract page, no reproduction beyond peer review. Results are the authors' own.
+- **Major organizations using it:** None confirmed (no stated affiliation).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.03039
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "hypernetwork parameter update reasoning"` and `lookup "hypernetwork latent reasoning"`, no matches. Distinct from the course's existing test-time-scaling material (best-of-N/self-consistency, process rewards) and from the already-staged GenCorrect generate-verify-refine candidate (C-20261012-04, in `staging.md`) — both avoid visible CoT token cost but via opposite mechanisms (parameter edit vs. iterative token-level refinement).
+- **Potential course lesson:** Possible addition to module 17's test-time-compute material contrasting token-space reasoning (CoT, best-of-N, iterative refinement) with parameter-space "reasoning" (HyperThink's single-shot hypernetwork edit), if independently reproduced.
+- **Confidence:** low-medium — peer-reviewed (COLM 2026) but single paper, no code, no reproduction beyond that review.
+- **Recommendation:** monitor for the next weekly review as a possible module-17 contrast case; peer-review acceptance nudges confidence slightly above a typical unreviewed preprint but not to A.
