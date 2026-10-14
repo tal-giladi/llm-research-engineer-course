@@ -6,61 +6,277 @@
 <p><strong>Why this matters for ML:</strong> scaling laws are how labs <em>predict the future</em>. Fit the power law on cheap small runs, then extrapolate the straight line to say what loss a 100× bigger model will reach — <em>before</em> building it. This is the empirical backbone of every modern pretraining decision, and the tool that makes 10.3's compute-optimal allocation possible.</p>
 </div>
 
-## 1. Intuition: a straight line in the right coordinates
+## 1. Intuition: what are we trying to predict?
 
-Train a language model, plot its final loss against how many parameters it has, and you get a curve that keeps dropping but bends — big early gains, diminishing returns. That curve looks hopeless to extrapolate. But plot the *same data* with **both axes on a log scale**, and it straightens into a line you can extend with a ruler. That straightening is the signature of a **power law**: loss falls as a fixed *fraction* every time you *multiply* the resource by a fixed factor.
+Suppose you can afford to train a few small language models, but you are deciding whether to train a much larger one. **How much better will its predictions be?** A scaling law tries to answer that question from measurements of the small models.
 
-Kaplan et al. (2020) measured this across seven orders of magnitude of model size, data, and compute and found the same clean straight line every time. The remarkable empirical fact is not that bigger is better — everyone expected that — but that the improvement is *so regular* you can write it as a two-parameter formula and trust the extrapolation.
+### 1.1 First, understand one dot on the plot
 
-<div class="callout key"><p>A power law $L = c\,x^{-\alpha}$ is a straight line in log-log coordinates with slope $-\alpha$. "Loss drops by a constant factor per constant multiplicative increase in $N$" — that is what makes small-scale runs predictive of large-scale ones.</p></div>
+For each model, record two numbers:
 
-## 2. Mathematics: the power law and its log-log line
+- **Model size $N$:** the number of non-embedding parameters, counted as in [10.1](lessons/module-10/lesson-01.md). For example, $N = 10^6$ means one million parameters, written **1M**.
+- **Loss $L$:** average cross-entropy on held-out text. Lower is better: the model assigns more probability to the tokens that actually occur. Loss 3.0 is better than loss 4.0; it does **not** mean "3% wrong" or "75% accuracy."
 
-Kaplan's laws, in the *decay* convention (loss falls as a positive power of the resource):
+A dot at $(N, L) = (1\text{M}, 4.0)$ therefore means: "We trained a 1M-parameter model and measured held-out loss 4.0." Each dot represents a **separate trained model**, rather than another training step of the same model.
+
+To compare sizes meaningfully, use the same tokenizer and held-out text. Also give each model enough data and training to make model size the main limitation. A larger model stopped too early may perform worse; that would tell us about its training, rather than its potential at that size.
+
+### 1.2 The pattern: multiply size, multiply loss
+
+Imagine the following **made-up example**. The numbers illustrate a power law; they are not measurements from Kaplan's paper. We will use the first and last rows again in section 3.
+
+| Non-embedding parameters $N$ | Held-out loss $L$ | Change from the previous row |
+|---|---:|---|
+| 1M | 4.000 | Starting point |
+| 10M | 3.464 | Size ×10; loss ×0.866 |
+| 100M | 3.000 | Size ×10; loss ×0.866 |
+
+The model gets **10 times bigger** on each row. The loss becomes about **86.6% of its previous value**, so each jump reduces loss by about **13.4%**.
+
+Notice what stays constant: the **fractional reduction**, rather than the amount subtracted. The first jump removes about 0.536 loss units; the second removes about 0.464. That is why the improvement slows down in absolute terms even though the proportional rule stays the same. A relationship with this behavior is called a **power law**.
+
+### 1.3 Why change the axes?
+
+On an ordinary axis, equal distances mean equal **additions**: 10M, 20M, 30M. On a logarithmic axis, equal distances mean equal **multiplications**: 1M, 10M, 100M. The latter gives our two ×10 jumps the same amount of horizontal space.
+
+Changing the loss axis to a log scale also gives equal loss ratios equal vertical distances. Now each "size ×10, loss ×0.866" jump moves the same distance right and the same distance down. Repeated identical moves form a straight line.
+
+![The same illustrative power law on two plots. Ordinary axes show a falling curve, with 1M and 10M crowded near the left. Log-log axes space 1M, 10M and 100M equally and turn losses 4.000, 3.464 and 3.000 into a straight descending line.](../../assets/img/m10-02-power-law-axes.svg)
+
+**Read the figure:** all three dots retain their original model sizes and losses. We have changed their positions on the page, not trained different models or improved their predictions. Both axes must be logarithmic for a power law to become a straight line.
+
+**Publicly documented result:** [Kaplan et al. (2020), Figure 1 and section 1.2](https://arxiv.org/abs/2001.08361), found approximate power laws in held-out language-model loss versus model size, dataset size, and well-allocated training compute. This lesson teaches that historical result and how to fit its mathematical form. The exponents describe their experimental setup; they are not universal constants for every corpus or model.
+
+<div class="callout key"><p>The useful claim is more specific than "bigger models are better": over a suitable range, multiplying a resource by a fixed factor produces an approximately fixed proportional change in loss. That regularity lets us make predictions. It must be checked against data before extrapolating.</p></div>
+
+## 2. Mathematics: turn the proportional rule into a line
+
+### 2.1 The formula, one piece at a time
+
+Start with model size alone:
 
 $$
-L(N) = \left(\frac{N_c}{N}\right)^{\alpha_N}, \qquad
-L(D) = \left(\frac{D_c}{D}\right)^{\alpha_D}, \qquad
+L(N) = c\,N^{-\alpha_N}.
+$$
+
+| Symbol | Meaning | How to read it |
+|---|---|---|
+| $N > 0$ | Non-embedding parameter count | The resource we increase |
+| $L(N) > 0$ | Predicted held-out cross-entropy, in nats/token | The loss we want to decrease |
+| $c > 0$ | Fitted coefficient | Sets the vertical level of the curve |
+| $\alpha_N > 0$ | Fitted scaling exponent, pronounced "alpha sub N" | Controls how quickly loss falls as size grows |
+
+The parentheses in $L(N)$ mean "loss **as a function of** model size." They do not mean multiply $L$ by $N$.
+
+The negative exponent means **divide by a power of $N$**. For a simple numerical example, choose $c = 8$ and $\alpha_N = 0.5$. Since raising a number to $0.5$ takes its square root:
+
+$$
+L(4) = 8\cdot 4^{-0.5} = \frac{8}{\sqrt{4}} = 4,
+\qquad
+L(16) = \frac{8}{\sqrt{16}} = 2.
+$$
+
+In this deliberately simple example, making the resource four times larger halves the loss. These tiny numbers demonstrate the arithmetic, not realistic language-model sizes.
+
+### 2.2 What the exponent tells you
+
+Let $k > 1$ be the factor by which we grow the model: $k = 10$ means ten times as many parameters. Divide the prediction at the larger size by the prediction at the starting size:
+
+$$
+\frac{L(kN)}{L(N)}
+= \frac{c\,(kN)^{-\alpha_N}}{c\,N^{-\alpha_N}}
+= k^{-\alpha_N}.
+$$
+
+The coefficient and starting size cancel. **The loss ratio depends only on the size multiplier and the exponent.**
+
+For example, with $k = 10$ and $\alpha_N = 0.06247$, the multiplier is $10^{-0.06247} \approx 0.866$. Starting from loss 4.0 gives $4.0\times 0.866 \approx 3.464$; starting from 3.464 gives approximately 3.0. This recovers the pattern in section 1.
+
+A larger positive exponent means faster improvement. With the same ×10 size increase, $\alpha_N = 0.1$ gives a loss multiplier of about 0.794, while $\alpha_N = 0.5$ gives about 0.316. **An exponent of 0.1 does not mean a 10% loss reduction**: the reduction also depends on how much you grow the resource.
+
+### 2.3 Kaplan's notation: the same curve written another way
+
+Kaplan writes the model-size law as:
+
+$$
+L(N) = \left(\frac{N_c}{N}\right)^{\alpha_N}
+= N_c^{\alpha_N}\,N^{-\alpha_N}.
+$$
+
+$N_c$ ("N sub c") is a fitted scale with the same units as $N$, not the size of the model you are training. The right-hand side shows that this is the same formula as before, with $c = N_c^{\alpha_N}$.
+
+For a numerical check, let $N_c = 64$ and $\alpha_N = 0.5$. Then $c = \sqrt{64} = 8$, and at $N = 4$ both forms give $L(4) = \sqrt{64/4} = 8/\sqrt{4} = 4$. Substituting $N = N_c = 64$ gives loss 1. That is the meaning of this scale parameter, even when it lies far outside the fitted range.
+
+The analogous laws for dataset size and compute are:
+
+$$
+L(D) = \left(\frac{D_c}{D}\right)^{\alpha_D},
+\qquad
 L(C) = \left(\frac{C_c}{C}\right)^{\alpha_C}.
 $$
 
-Every symbol:
-- $N$ — non-embedding parameter count (10.1); $D$ — training tokens; $C$ — compute in FLOPs.
-- $L$ — the cross-entropy loss (nats/token), the quantity we minimise.
-- $\alpha_N, \alpha_D, \alpha_C > 0$ — the **scaling exponents**. Larger $\alpha$ = steeper improvement. Kaplan reports small values, e.g. $\alpha_N \approx 0.076$.
-- $N_c, D_c, C_c$ — constants with units of the resource; $N_c$ is the scale at which the fitted $L(N)$ would hit $1$.
+Here $D$ is **dataset size in tokens**; $D_c$ is its fitted scale; and $\alpha_D$ is its exponent. $C$ is **training compute**, measured in FLOPs here; $C_c$ uses the same compute unit; and $\alpha_C$ is its exponent. Lowercase $c$, the coefficient in our fitting function, is different from uppercase $C$, the compute budget.
 
-Each law holds "all else abundant" — $L(N)$ is measured with enough data that data is not the bottleneck, and vice versa.
+As an arithmetic example, if $D_c/D = 100$ and $\alpha_D = 0.1$, the data law predicts loss $100^{0.1} \approx 1.585$. If $C_c/C = 100$ and $\alpha_C = 0.05$, the compute law predicts $100^{0.05} \approx 1.259$. These chosen numbers illustrate how to evaluate each formula; they are not reported measurements.
 
-**Why log-log is a line.** Take a general power law $L = c\,x^{-\alpha}$ (here $c = N_c^{\alpha}$ folds the constant in). Take logs of both sides:
+These are **different experimental relationships**, not three terms to add together:
 
-$$
-\log L = \log c - \alpha \log x.
-$$
+- For $L(N)$, provide enough data and training that model capacity is the main limitation.
+- For $L(D)$, use a sufficiently large model and select training duration to avoid overfitting the limited dataset.
+- For $L(C)$, use sufficient data and choose the model size and training allocation well. Giving an arbitrary model extra FLOPs does not automatically place it on this curve.
 
-Read that as $\underbrace{\log L}_{y} = \underbrace{(-\alpha)}_{\text{slope}} \underbrace{\log x}_{X} + \underbrace{\log c}_{\text{intercept}}$. Plotting $\log L$ against $\log x$ gives a straight line whose **slope is $-\alpha$** and whose **intercept is $\log c$**. Fitting the power law is therefore just fitting a line to log-transformed data — ordinary least squares.
+The paper denotes the compute-efficient case by $C_{\min}$; we use $C$ as shorthand here. It reports $\alpha_N \approx 0.076$ for its model-size fit. For perspective, doubling size then predicts a loss multiplier $2^{-0.076} \approx 0.949$, about a 5.1% decrease. See [Kaplan et al., equations 1.1–1.3](https://arxiv.org/pdf/2001.08361). The lesson's FLOP estimate from 10.1 counts **processed training tokens**, which can include repeated passes; that count differs from dataset size $D$ when tokens are reused.
 
-## 3. Numerical example: fit an exponent from two points by hand
+### 2.4 Logs translate multiplication into addition
 
-Suppose a sweep gives two measurements: a $1\text{M}$-parameter model reaches loss $4.0$, and a $100\text{M}$-parameter model reaches loss $3.0$. Assume $L(N) = c\,N^{-\alpha_N}$ and solve for the exponent from just these two points.
+We will use base-10 logarithms. $\log_{10} a$ asks: **"10 raised to what power equals $a$?"** For example, $\log_{10}(10^6) = 6$ and $\log_{10}(10^8) = 8$. The increase from 1M to 100M becomes a horizontal change of $8 - 6 = 2$: two successive ×10 increases.
 
-The slope in log-log space is rise over run. Using base-10 logs (any base works — the exponent is base-independent):
+Two log rules do the work:
 
 $$
-\text{slope} = \frac{\log_{10} L_2 - \log_{10} L_1}{\log_{10} N_2 - \log_{10} N_1}
-= \frac{\log_{10} 3.0 - \log_{10} 4.0}{\log_{10}(10^{8}) - \log_{10}(10^{6})}
-= \frac{0.4771 - 0.6021}{8 - 6} = \frac{-0.1249}{2} = -0.0625.
+\log_{10}(ab) = \log_{10} a + \log_{10} b,
+\qquad
+\log_{10}(a^r) = r\log_{10} a.
 $$
 
-The slope is $-\alpha_N$, so $\alpha_N \approx 0.0625$. Now the coefficient $c$, from $L_1 = c\,N_1^{-\alpha_N}$ at $N_1 = 10^6$:
+Here $a,b > 0$ are numbers and $r$ is an exponent. For example, $\log_{10}(10\times 100) = 3 = 1 + 2$, and $\log_{10}(100^{-0.5}) = \log_{10}(0.1) = -1 = -0.5\times 2$.
+
+Apply those rules to the power law:
 
 $$
-(10^6)^{-0.0625} = 10^{-0.375} = 0.4217, \qquad c = \frac{L_1}{0.4217} = \frac{4.0}{0.4217} \approx 9.48.
+\begin{aligned}
+\log_{10} L
+&= \log_{10}\left(c\,N^{-\alpha_N}\right) \\
+&= \log_{10} c + \log_{10}\left(N^{-\alpha_N}\right) \\
+&= \log_{10} c - \alpha_N\log_{10} N.
+\end{aligned}
 $$
 
-So the fitted law is $L(N) \approx 9.48\,N^{-0.0625}$. Sanity check at $N_2 = 10^8$: $9.48 \cdot (10^8)^{-0.0625} = 9.48 \cdot 10^{-0.5} = 9.48 \cdot 0.316 = 3.00$. ✓
+Now compare it with the familiar equation of a line, $Y = mX + b$:
 
-Running `fit_power_law([1e6, 1e8], [4.0, 3.0])` returns `(0.06247, 9.4815)` — matching the hand computation. With only two points the "fit" is exact (a line through two points); with more points, least squares finds the best line through the scatter, which is the real use.
+| Line quantity | In the scaling-law fit | Example from sections 1 and 3 |
+|---|---|---|
+| Horizontal coordinate $X$ | $\log_{10} N$ | A 1M model has $X = 6$ |
+| Vertical coordinate $Y$ | $\log_{10} L$ | Loss 4.0 has $Y \approx 0.60206$ |
+| Slope $m$ | $-\alpha_N$ | About $-0.06247$ |
+| Intercept $b$ | $\log_{10} c$ | About $0.97688$ |
+
+For a concrete substitution, $Y = -0.06247\times 6 + 0.97688 \approx 0.60206$. Converting back gives $L = 10^{0.60206} \approx 4.0$.
+
+This is why fitting a power law can be simple: **take logs of the positive measurements, fit a straight line, then translate its slope and intercept back.** Natural logs give the same exponent; section 4 uses `np.log` and reverses it with `np.exp`.
+
+<div class="callout"><p>Keep the sign straight: the plotted line slopes downward, so $m$ is negative. The scaling exponent is $\alpha_N = -m$, so it is positive. The intercept controls the level of the line; the exponent controls its rate of decline.</p></div>
+
+## 3. Numerical example: fit the curve and use it to predict
+
+We now have only **two hypothetical measurements**:
+
+| Quantity | Small model | Large model |
+|---|---:|---:|
+| Parameters $N$ | $10^6$ (1M) | $10^8$ (100M) |
+| Measured loss $L$ | 4.0 | 3.0 |
+| $X = \log_{10} N$ | 6 | 8 |
+| $Y = \log_{10} L$ | 0.60206 | 0.47712 |
+
+The unknowns are the exponent $\alpha_N$ and coefficient $c$. We will find the exponent first, anchor the curve to the small model, and then recover the coefficient used by the code in section 4. A calculator with `log10` is enough to follow along.
+
+### 3.1 Find the slope: change in log loss divided by change in log size
+
+Slope is "vertical change divided by horizontal change." The subscripts 1 and 2 below label the small and large measurements:
+
+$$
+m = \frac{Y_2 - Y_1}{X_2 - X_1}
+= \frac{0.47712 - 0.60206}{8 - 6}
+= \frac{-0.12494}{2}
+\approx -0.06247.
+$$
+
+The horizontal change is **2**, not 100: the size ratio is 100, but the difference between its logs is $\log_{10}(100) = 2$. The vertical change is negative because loss improved.
+
+![A line through log coordinates (6, 0.60206) and (8, 0.47712). A dashed right triangle shows a horizontal change of plus 2 and a vertical change of minus 0.12494. Their ratio is the slope minus 0.06247, so the positive scaling exponent is 0.06247. A hollow dot halfway along the line marks the predicted 10M model.](../../assets/img/m10-02-fit-slope.svg)
+
+Since $m = -\alpha_N$, we obtain **$\alpha_N \approx 0.06247$**. That means each ×10 increase in size multiplies predicted loss by $10^{-0.06247} \approx 0.866$.
+
+### 3.2 Predict relative to a model we already measured
+
+We do not need $c$ yet. Use the small model as an anchor:
+
+$$
+L(N) = 4.0\left(\frac{N}{10^6}\right)^{-0.06247}.
+$$
+
+Everything is easy to read: start at loss **4.0**, divide the target size by **1M** to get the size multiplier, then raise that multiplier to the negative exponent.
+
+At 10M parameters, the size multiplier is 10:
+
+$$
+L(10^7) = 4.0\times 10^{-0.06247}
+\approx 4.0\times 0.86603
+\approx 3.464.
+$$
+
+This fills in the middle row from section 1. It is **interpolation**: a prediction between the two measured sizes. It is a prediction to test, not an additional measurement.
+
+Check the large model, where the size multiplier is 100:
+
+$$
+L(10^8) = 4.0\times 100^{-0.06247}
+\approx 4.0\times 0.75000
+= 3.0.
+$$
+
+That agrees with the second measurement, as it must for a line fitted through exactly two points.
+
+### 3.3 Recover the coefficient that `fit_power_law` returns
+
+Section 4's function returns the unanchored form $L(N) = c\,N^{-\alpha_N}$. Substitute the small model and solve for $c$:
+
+$$
+\begin{aligned}
+4.0 &= c\,(10^6)^{-0.06247}, \\
+c &= 4.0\,(10^6)^{0.06247} \\
+  &= 4.0\times 10^{0.37482} \\
+  &\approx 9.4815.
+\end{aligned}
+$$
+
+So the same fitted curve is:
+
+$$
+L(N) \approx 9.4815\,N^{-0.06247}.
+$$
+
+Here $N$ must be the **raw parameter count**: use `1e6`, not `1` to mean "one million." Changing the unit changes the coefficient, although it leaves the exponent unchanged. The anchored form avoids this trap because $N/10^6$ explicitly states the size ratio.
+
+The code call `fit_power_law([1e6, 1e8], [4.0, 3.0])` returns approximately `(0.06247, 9.4815)`: **exponent first, coefficient second**. In the line form, the intercept is $b = \log_{10}(9.4815) \approx 0.97688$, matching section 2.4. Small discrepancies in the last digits come from rounding; the code uses full precision.
+
+### 3.4 Try one prediction beyond the measurements
+
+**Practice — about 2 minutes, calculator only.** Before opening the worked calculation, predict the loss at **1B parameters**. Start from the measured 100M model with loss 3.0 and make one more ×10 size jump. Your result should be below 3.0 but nowhere near zero.
+
+<details><summary>Hint</summary>
+
+The size multiplier is 10, so multiply loss 3.0 by $10^{-0.06247}$.
+
+</details>
+
+<details><summary>Worked calculation</summary>
+
+$$
+L(10^9) = 3.0\times 10^{-0.06247}
+\approx 3.0\times 0.86603
+\approx 2.598.
+$$
+
+Using the small-model anchor gives the same answer: $4.0\times 1000^{-0.06247} \approx 2.598$.
+
+</details>
+
+This is **extrapolation**: 1B lies beyond the largest measured model, 100M. The number is what the fitted formula predicts, not a guarantee of what a new training run will achieve. We must check that the training setup remains comparable and that the curve has not started flattening toward the data's irreducible loss, discussed in section 6.
+
+Two points always define a straight line in log space. They cannot establish that a power law is a good model of the real relationship. With several measurements, look for an approximately straight pattern and fit a line through the scatter; that is what the implementation does next.
+
+*Source check: the Kaplan notation and experimental conditions above were checked against the original 2020 paper on 2026-10-14. The example values and diagrams are illustrative, rather than reproductions of the paper's measurements.*
 
 ## 4. From scratch: `fit_power_law` via log-log least squares
 
