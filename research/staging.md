@@ -257,3 +257,88 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition to module 17's test-time-compute material contrasting token-space reasoning (CoT, best-of-N, iterative refinement) with parameter-space "reasoning" (HyperThink's single-shot hypernetwork edit), if independently reproduced.
 - **Confidence:** low-medium — peer-reviewed (COLM 2026) but single paper, no code, no reproduction beyond that review.
 - **Recommendation:** monitor for the next weekly review as a possible module-17 contrast case; peer-review acceptance nudges confidence slightly above a typical unreviewed preprint but not to A.
+
+
+### C-20261015-01 · LatentLoop: asymmetric compute allocation across passes in looped MoE models (new evidence for deferred looped-recurrent-depth-lms topic)
+
+- **Class:** B
+- **Date discovered:** 2026-10-15
+- **Date published:** 2026-10-14 (v1)
+- **Source:** https://arxiv.org/abs/2610.19975 (verified resolves; v1 "Wed, 14 Oct 2026")
+- **Organization/researchers:** Zefeng He, Yunkai Chai, Xiaoyang Chen, Tong Zhu, Zongliang Wu, Yun Luo, Yafu Li, Yu Cheng — affiliations not stated on the abstract page.
+- **Category:** architecture (looped/recurrent-depth language models, MoE variant)
+- **What changed:** In looped MoE models (a shared block of layers reused across passes with sparse MoE computation), the authors find the first pass through the shared block has a smaller residual-update scale than later passes: shrinking the first pass's effective compute preserves or improves performance, while shrinking the second/later pass hurts it. LatentLoop exploits this asymmetry — it compresses the sequence seen by the first pass, keeps full resolution on the second, reallocates the saved compute to a larger hidden size, learns how strongly the first pass updates the full sequence, shares MoE weights across passes, and uses separate attention parameters per pass.
+- **Technical summary:** Across 15 configurations from 1.3B to 7B parameters (largest training budget above 10^21 FLOPs), LatentLoop lowers validation NLL versus both a vanilla (non-looped) MoE baseline and a symmetric looped-MoE baseline; at a fitted validation NLL of 1.988 the authors project 19.0% compute savings vs. vanilla MoE and 7.9% vs. the symmetric-looped baseline, plus improved average 0-shot/5-shot scores across nine benchmarks. No code repository found linked from the abstract page.
+- **Why it might matter:** A concrete, scaling-law-backed sub-mechanism (where in a loop the compute should go) for the course's already-tracked looped/recurrent-depth cluster (`research/deferred/looped-recurrent-depth-lms.md`), and the first entry in that cluster specifically about combining looping with MoE sparsity rather than a dense shared block.
+- **Evidence of adoption:** None — single paper, no code, no independent reproduction.
+- **Major organizations using it:** None identified (no stated affiliation).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.19975
+- **Code:** none found
+- **Relationship to existing course material:** New evidence for `research/deferred/looped-recurrent-depth-lms.md` (next review 2026-11-29) — checked via `lookup "looped recurrent depth MoE"`, which matched the deferred topic and the already-staged `C-20261013-01` (Elastic Latent Recurrence) entry. A fourth/fifth independent angle on the cluster, and the first that is MoE-specific rather than dense.
+- **Potential course lesson:** Not a new lesson; a data point for the deferred topic's 2026-11-29 review, specifically on the interaction between looping and MoE sparsity (relevant if Module 12's MoE lesson and a future looped-models lesson are ever combined).
+- **Confidence:** medium — rigorous scaling-law-style evaluation (15 configs, >10^21 FLOPs budget) but single paper, no code, no reproduction.
+- **Recommendation:** add as a new data point to `looped-recurrent-depth-lms.md` at its 2026-11-29 review; not independently actionable before then.
+
+### C-20261015-02 · The COUNT: n-gram count embeddings in host (CPU) memory as a cheap, training-free-adaptable pretraining addition
+
+- **Class:** B
+- **Date discovered:** 2026-10-15
+- **Date published:** 2026-10-14 (v1)
+- **Source:** https://arxiv.org/abs/2610.20456 (verified resolves; v1 "Wed, 14 Oct 2026")
+- **Organization/researchers:** Ian Magnusson, Noah A. Smith, Pang Wei Koh — affiliations not stated on the abstract page, but these authors are established academics (UW/Ai2-affiliated in prior published work; not independently re-confirmed on this paper's own page).
+- **Category:** data / efficiency (pretraining architecture using host memory)
+- **What changed:** COUNT builds n-gram "embeddings" with no learned parameters: it precomputes n-gram counts and stores the count table in ordinary host (CPU) system memory — cheap and otherwise underused relative to GPU memory — then at each step uses corpus frequencies to combine the language model's own output embeddings for likely next tokens into an n-gram feature, added into the model. Because the count table lives off-GPU and can be swapped, a model can be adapted to a new domain at inference time just by swapping the table, with no additional training.
+- **Technical summary:** At a fixed compute budget, adding COUNT to pretraining of 1B-parameter models improves validation loss by about as much as giving the baseline model 57% more compute. Under GPU memory constraints, COUNT outperforms splitting the same memory budget with learned n-gram embeddings (the obvious alternative that competes for the same scarce GPU memory). No code repository found linked from the abstract page.
+- **Why it might matter:** A clean, mechanistically simple (non-parametric, frequency-based) idea that directly targets the course's efficient-training/memory-hierarchy material — it reframes host (CPU) memory, usually idle during GPU-bound pretraining, as a cheap place to store a useful signal, and the training-free domain-adaptation-via-table-swap property is a sharp, teachable contrast with learned-embedding approaches.
+- **Evidence of adoption:** None — single paper, no code, no independent reproduction. The 57%-compute-equivalent figure is the authors' own.
+- **Major organizations using it:** None confirmed (no stated affiliation on this paper).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.20456
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "n-gram embedding host memory pretraining"`, no match in course or registry. Distinct from the course's existing data-curation and distributed-training material (this is a model-side architecture/memory-hierarchy trick, not a data-curation or multi-GPU technique).
+- **Potential course lesson:** Possible small addition to the training/efficiency material: a from-scratch worked example of a non-parametric n-gram feature stored off-GPU, contrasted with a learned embedding table, plus the training-free domain-swap property as an exercise.
+- **Confidence:** medium — reputable-looking author line, clean falsifiable mechanism and concrete compute-equivalence numbers, but single paper, no code, no reproduction.
+- **Recommendation:** monitor for the next weekly review as a possible small addition to the efficient-training material; the "idle host memory as a cheap feature store" framing is worth flagging even before any reproduction, given how directly it maps to a real systems constraint (GPU memory scarcity) the course already discusses.
+
+### C-20261015-03 · Ares: spectral-driven adaptive-rank optimizer exploiting gradient-subspace collapse specific to RLVR
+
+- **Class:** B
+- **Date discovered:** 2026-10-15
+- **Date published:** 2026-10-12 (v1)
+- **Source:** https://arxiv.org/abs/2610.16533 (verified resolves; v1 "Mon, 12 Oct 2026")
+- **Organization/researchers:** Zhipeng Chen, Wayne Xin Zhao, Ji-Rong Wen — RUCAIBox (Renmin University of China); Wayne Xin Zhao and Ji-Rong Wen are established authors associated with that lab in prior published work (not independently re-confirmed on this paper's own page beyond the linked GitHub org `RUCAIBox`).
+- **Category:** RL/post-training (optimizer design specific to RLVR)
+- **What changed:** The authors ask whether RLVR needs an optimizer distinct from the ones (e.g. Adam/AdamW) built for supervised training. They find that during RLVR, gradient energy increasingly concentrates into a small subspace as training progresses — a pattern that is absent during supervised fine-tuning and largely disappears when rewards are randomized (i.e. it is specific to learning from verifiable rewards, not an artifact of any policy-gradient update). The number of directions needed to capture a fixed share of gradient energy also shrinks over training. Ares estimates this effective update rank directly from the gradient's spectral energy, tracks how it changes step to step, and restricts optimizer updates to that low-rank subspace.
+- **Technical summary:** Reports accuracy improvements over widely used optimizers across multiple model sizes, RLVR algorithms, and tasks (exact baseline deltas not independently re-tabulated in this run). Code released at the linked GitHub repository.
+- **Why it might matter:** Directly extends the course's RLVR material (`lessons/module-16/lesson-02.md`) with a mechanistic finding about *why* RLVR training dynamics differ from supervised training at the optimizer level, plus a working, code-released optimizer built on that finding — a good candidate for a from-scratch numerical demonstration of gradient-subspace collapse under verifiable vs. random rewards.
+- **Evidence of adoption:** None beyond the paper's own released code — single paper, no third-party adoption or reproduction yet.
+- **Major organizations using it:** RUCAIBox (originator); no other named adopters.
+- **Open-source implementation:** https://github.com/RUCAIBox/Ares
+- **Paper:** https://arxiv.org/abs/2610.16533
+- **Code:** https://github.com/RUCAIBox/Ares
+- **Relationship to existing course material:** New sub-topic bearing on `lessons/module-16/lesson-01.md` (16.1 · From PPO to GRPO) and `lessons/module-16/lesson-02.md` (16.2 · RLVR & verifiable rewards) — checked via `lookup "low-rank gradient subspace RLVR optimizer"` and `lookup "Muon optimizer"`, no matches; this is a new optimizer-design angle on RLVR, not yet covered.
+- **Potential course lesson:** Possible addition to Module 16 (or the optimizer material in Module 08) contrasting standard AdamW-style updates with a verifiable-reward-specific low-rank update, using the random-vs-verifiable-reward gradient-energy comparison as the key numerical illustration.
+- **Confidence:** medium-high — code released, a well-known lab, and a concrete, falsifiable mechanistic claim (gradient-subspace collapse specific to verifiable rewards), but still single-paper, no independent reproduction or third-party adoption.
+- **Recommendation:** monitor for the next weekly review as a possible Module 16 extension; the released code makes an independent sanity-check (reproduce the gradient-energy-concentration plot on a toy RLVR task) feasible before any lesson decision.
+
+### C-20261015-04 · "More Methods, Better Agents?" — a 132-run, ~12,124-GPU-hour reality check finding no self-distillation method consistently beats GRPO in agentic RL
+
+- **Class:** B
+- **Date discovered:** 2026-10-15
+- **Date published:** 2026-10-14 (v1)
+- **Source:** https://arxiv.org/abs/2610.19789 (verified resolves; v1 "Wed, 14 Oct 2026")
+- **Organization/researchers:** Linhao Zhong, Bozhen Fang, Xuehao Wang, Duochao Shi, Zekai Luo, Guangming Yao, Yi Yuan, Hao Chen, Jingdong Chen, Chunhua Shen — affiliations not stated on the abstract page; Chunhua Shen is an established computer-vision/ML researcher in prior published work (not independently re-confirmed on this paper's own page).
+- **Category:** RL/post-training (evaluation methodology for self-distillation in agentic RL)
+- **What changed:** The paper argues that self-distillation methods for agentic RL have proliferated faster than rigorous comparison: prior papers often reuse published baseline numbers under inconsistent conditions, rarely compare methods head-to-head, and pay little attention to training stability or compute cost. The authors benchmark ten representative self-distillation methods against plain GRPO on ALFWorld, ScienceWorld, Search-QA, and WebShop, across three model sizes, with 132 training runs totaling roughly 12,124 H800 GPU-hours and repeated evaluation over eight rollout seeds.
+- **Technical summary:** Three headline findings: (1) gains over GRPO are limited and no method consistently outperforms it across settings; (2) strong final-performance numbers can mask unstable training along the way; (3) additional training cost does not reliably translate into better final performance. Project page (no GitHub code repository found linked): https://aim-uofa.github.io/Self-Distillation-AgentRL/.
+- **Why it might matter:** This is exactly the kind of rigorous, compute-heavy negative/cautionary result the weekly review should weigh against the fast-growing on-policy-distillation/self-distillation-variants cluster the daily runs have been feeding all week (`research/deferred/on-policy-distillation-variants.md`, plus this week's new OPD-variant papers logged as C items below) — it directly questions whether that proliferation of single-paper variants represents real progress or mostly noise/inconsistent baselines, which is a load-bearing input for how much weight the next weekly review should give any individual variant.
+- **Evidence of adoption:** Not an adoption signal itself — it's a benchmark/evaluation study. Evidentiary strength comes from its own methodological rigor (large, controlled, multi-seed comparison) rather than external adoption.
+- **Major organizations using it:** None confirmed (no stated affiliation).
+- **Open-source implementation:** Project page only (https://aim-uofa.github.io/Self-Distillation-AgentRL/); no GitHub repository found.
+- **Paper:** https://arxiv.org/abs/2610.19789
+- **Code:** none found (project page only)
+- **Relationship to existing course material:** Directly bears on `research/deferred/on-policy-distillation-variants.md` (next review 2026-11-29) and the accepted `research/accepted/on-policy-distillation.md` / `lessons/module-17/lesson-04.md` (17.4) — checked via `lookup "self-distillation agentic RL benchmark reality check"`, no match (new methodological angle, not a new variant). Flag together with this week's and prior weeks' growing OPD-variant pile (PR-OPD, relative-policy-difference OPD, BranchOPD, and today's CriticOPD, C item below) at the next weekly review.
+- **Potential course lesson:** Not a new lesson on its own; strong supporting evidence for treating the on-policy-distillation-variants cluster conservatively at its next review, and a possible "how to benchmark post-training methods rigorously" cautionary example/exercise in the evaluation module.
+- **Confidence:** medium-high — unusually large, controlled, multi-seed compute investment for a single paper, but still single-source (no independent replication of its own findings) and no code to verify its own setup.
+- **Recommendation:** flag prominently at the next weekly review alongside the on-policy-distillation-variants cluster — this paper is evidence for treating that whole cluster's claims with more skepticism, not a reason to add anything to the course itself.
