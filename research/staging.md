@@ -342,3 +342,87 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Not a new lesson on its own; strong supporting evidence for treating the on-policy-distillation-variants cluster conservatively at its next review, and a possible "how to benchmark post-training methods rigorously" cautionary example/exercise in the evaluation module.
 - **Confidence:** medium-high — unusually large, controlled, multi-seed compute investment for a single paper, but still single-source (no independent replication of its own findings) and no code to verify its own setup.
 - **Recommendation:** flag prominently at the next weekly review alongside the on-policy-distillation-variants cluster — this paper is evidence for treating that whole cluster's claims with more skepticism, not a reason to add anything to the course itself.
+
+### C-20261016-01 · Beyond Downstream QA: a benchmark isolating agent-memory correctness from retrieval/generation error (FEB-30)
+
+- **Class:** B
+- **Date discovered:** 2026-10-16
+- **Date published:** 2026-10-15 (v1)
+- **Source:** https://arxiv.org/abs/2610.22209 (verified resolves; v1 "Thu, 15 Oct 2026")
+- **Organization/researchers:** Sebastian-Antonio Toma, Jean de Kernier, Mike Ply, Oliviu Matei — affiliations not stated on the abstract page; the paper's own code link points to a GitHub org named `amazon-science`, suggesting at least Amazon involvement, not independently confirmed from the paper text itself.
+- **Category:** evaluation (agent memory)
+- **What changed:** The paper argues that grading agent memory systems by downstream question-answering accuracy conflates memory correctness with retrieval and generation errors, producing false positives (a correct final answer hiding broken memory) and false negatives (correct memory blamed for a retrieval failure). FEB-30 instead generates 30 fact-evolution trajectories (documents, emails, conversations with facts that create/update/reinforce/supersede each other) across 6 diagnostic categories and 3 difficulty levels, with deterministic ground truth from the generation process itself (no human annotation needed), so the memory store can be inspected after each ingestion step.
+- **Technical summary:** On a representative memory system, intrinsic (direct memory-store inspection) and extrinsic (downstream-QA) evaluation diverged by an average of 16 percentage points, with 44% of trajectories exceeding a meaningful-divergence threshold; the system correctly classified memory operations (create/update/reinforce/supersede) only 20% of the time — a failure invisible to downstream-QA grading alone. Comments field claims "code and data" at https://github.com/amazon-science/feb-30-benchmark, but that URL returned HTTP 404 at verification time today — not yet actually available, despite the claim.
+- **Why it might matter:** Directly bears on the course's memory/retrieval and agent-evaluation material: a concrete methodological argument (with numbers) that downstream-task accuracy is a poor proxy for *memory* correctness specifically, parallel to (but distinct from) the already-staged Thinkingbox/OSWorld-Pro "don't trust self-report/transcript grading" cluster.
+- **Evidence of adoption:** None yet — single paper, and the claimed code/data release is not actually live (404 as of today).
+- **Major organizations using it:** Possibly Amazon (via GitHub org name only); not confirmed from the paper itself.
+- **Open-source implementation:** Claimed at https://github.com/amazon-science/feb-30-benchmark — returns 404 as of 2026-10-16, i.e. not yet released despite the claim.
+- **Paper:** https://arxiv.org/abs/2610.22209
+- **Code:** claimed, not live (see above)
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "agent memory evaluation benchmark"`, no match (only the unrelated Thinkingbox agent-evaluation B candidate from 10-12 surfaced, which grades task completion via backend state, not memory specifically). New and distinct.
+- **Potential course lesson:** Possible addition to a memory/retrieval evaluation lesson: intrinsic (memory-store) vs. extrinsic (downstream-task) evaluation as a teachable distinction, once the benchmark code is actually available to verify.
+- **Confidence:** medium — plausible, concrete methodology and numbers, but single paper, affiliation unconfirmed, and the one external-verification hook (the code repo) does not yet resolve.
+- **Recommendation:** monitor; re-check the GitHub link in a future run before any weekly-review action, since the paper's central practical contribution (a usable benchmark) is not yet actually available.
+
+### C-20261016-02 · Linear readability of a fact in pretrained representations predicts whether fine-tuning on it generalizes
+
+- **Class:** B
+- **Date discovered:** 2026-10-16
+- **Date published:** 2026-10-15 (v1)
+- **Source:** https://arxiv.org/abs/2610.22300 (verified resolves; v1 "Thu, 15 Oct 2026")
+- **Organization/researchers:** Faridoun Mehri, Hinrich Schütze — affiliations not stated on the abstract page; Hinrich Schütze is an established, widely-published computational-linguistics professor (LMU Munich) in prior published work, not independently re-confirmed on this paper's own page.
+- **Category:** interpretability (bearing on fine-tuning/generalization)
+- **What changed:** The authors distinguish "active" facts (recallable *and* support generalization to related held-out facts after fine-tuning) from "inert" facts (recallable but don't generalize). They construct relabeled relations (e.g. map each continent to an arbitrary animal label) and fine-tune on a subset, then test whether the model applies the new label to held-out entities sharing the same original answer. The key finding: how linearly readable the *original* relation is in the pretrained model's representations (before any fine-tuning) strongly predicts this post-fine-tuning generalization, not whether the fact can simply be recalled.
+- **Technical summary:** Across 11 models and 70 relations, linear readability correlates with generalization at Pearson r = 0.87–0.92 within each model; the relationship holds after controlling for several confounds and across different label assignments, random seeds, and semantic categories. No code repository found linked from the abstract page.
+- **Why it might matter:** A mechanistic, falsifiable account of *why* some fine-tuned knowledge generalizes and some doesn't, tying the course's interpretability material (linear probing of representations) directly to practical fine-tuning behavior — a strong candidate for a from-scratch numerical demonstration (probe linearity vs. held-out generalization after a toy fine-tune).
+- **Evidence of adoption:** None — single paper, no code, no independent reproduction.
+- **Major organizations using it:** None (academic, no stated lab affiliation).
+- **Open-source implementation:** None found linked from the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.22300
+- **Code:** none found
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "linear probe generalization fine-tuning"`, no match (only an unrelated massive-activations staging entry surfaced). New.
+- **Potential course lesson:** Possible addition to the interpretability module: a worked example contrasting recall vs. linear readability as predictors of fine-tuning generalization, with the relabeled-relation construction as a teachable toy experiment.
+- **Confidence:** medium — large within-paper evidence base (11 models × 70 relations, high correlations, confound checks) but single paper, no code, no independent reproduction.
+- **Recommendation:** monitor for the next weekly review as a possible interpretability-module addition; the method is simple enough (linear probe + relabeled-relation fine-tune) that an independent from-scratch sanity check is feasible before any lesson decision.
+
+### C-20261016-03 · No single intrinsic tokenizer metric reliably predicts downstream LM performance (EMNLP 2026 Findings)
+
+- **Class:** B
+- **Date discovered:** 2026-10-16
+- **Date published:** 2026-10-15 (v1)
+- **Source:** https://arxiv.org/abs/2610.21679 (verified resolves; v1 "Thu, 15 Oct 2026"; accepted to Findings of EMNLP 2026)
+- **Organization/researchers:** Antonio Lopardo, Luis Frentzen Salim, Shikhar Srivastava, Kevin Jiang, Mridul Sharma, Catherine Arnett — affiliations not stated on the abstract page.
+- **Category:** tokenization (evaluation methodology)
+- **What changed:** The authors test whether any existing intrinsic tokenizer metric (computable without a full training run) reliably predicts a trained model's downstream performance. Analyzing roughly 200 language models and their tokenizers across nine languages and a range of benchmarks, they find no existing metric does so consistently across model families, tasks, and languages, and propose a new linguistically-grounded metric that captures something existing metrics miss, with predictive power that itself varies by family/language/task.
+- **Technical summary:** Large-scale (≈200 models, 9 languages), peer-reviewed (EMNLP 2026 Findings) negative/cautionary result: the field currently lacks a trustworthy proxy for "will this tokenizer produce a good model," so any single-metric tokenizer claim should be treated skeptically.
+- **Why it might matter:** Directly useful for the course's tokenizer-evaluation material as a documented caution against over-trusting any one intrinsic tokenizer metric (compression ratio, fertility, etc.) as a stand-in for actual downstream quality — a good "what NOT to over-claim" teaching point with real empirical backing.
+- **Evidence of adoption:** Peer-reviewed (EMNLP 2026 Findings acceptance is independent validation of the methodology, not of a technique being adopted elsewhere — this is a negative/methodological result, not a technique to adopt).
+- **Major organizations using it:** None (academic).
+- **Open-source implementation:** Not stated on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.21679
+- **Code:** none confirmed
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "tokenizer evaluation metrics"`, no match. New.
+- **Potential course lesson:** A cautionary note/exercise for the tokenization module: compute 2-3 intrinsic tokenizer metrics on a small corpus and show they don't rank-correlate with actual downstream eval scores on a toy trained model.
+- **Confidence:** medium-high — large scale, peer-reviewed, but still a single study (the "if unsure, choose B" default applies since there's no independent reproduction and no adoption signal).
+- **Recommendation:** monitor for the next weekly review as a possible small tokenization-module addition (a cautionary methodological point, not a new technique to teach).
+
+### C-20261016-04 · NVIDIA/AI4Bharat translate-judge-repair synthetic data pipeline for Indic pretraining, adopted in a production model
+
+- **Class:** B
+- **Date discovered:** 2026-10-16
+- **Date published:** 2026-10-16 (NVIDIA/Hugging Face blog post; companion report and Nemotron 3.5 Super VL technical report both referenced)
+- **Source:** https://huggingface.co/blog/nvidia/scaling-indic-pretraining (verified resolves, published today); companion report https://huggingface.co/datasets/nvidia/nemotron-indic-pretraining-report/resolve/main/Scaling%20Synthetic%20Pre-training%20Data%20and%20Evaluation%20for%20Indic%20LLMs.pdf (verified resolves); Nemotron 3.5 Super/Lightning technical report https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3.5-Super-and-Lightning-Technical-Report.pdf (verified resolves)
+- **Organization/researchers:** NVIDIA, with IIT Madras / AI4Bharat.
+- **Category:** data (synthetic data curation for pretraining)
+- **What changed:** A GPU-accelerated pipeline (built on NVIDIA NeMo Data Designer) that translates English source documents (from 15 Nemotron-CC-v2 subsets: web, Q&A, math, code, specialized content) into 22 Indian languages/34 language-script configurations, judges each translation against its English source with an LLM-as-judge (Gemma-4-31B-it, MQM-inspired rubric), repairs and re-judges low-scoring translations using the judge's own feedback, and produces romanized (Latin-script) versions for some languages. All the individual components (LLM translation, LLM-judge scoring, feedback-driven repair) are familiar; the contribution is the document-level (not sentence-level) translate-then-romanize pipeline at scale, plus releasing the generation recipe.
+- **Technical summary:** Produced ~2.8T tokens total (2,601.0B native-script, 224.6B romanized, Gemma-4 tokenizer count) across 22 languages. 10B tokens of this corpus (mixed with natural Indic text, as part of a 100B-token continued-pretraining budget) were used in the released Nemotron 3.5 Super VL model, improving scores 4.98–9.82 points across five Indic benchmarks (MILU, Indic MMLU-Pro, Indic ARC-Challenge/Easy, Indic GSM8K) versus the prior Nemotron 3 Super; IFEval dropped 2.04 points in the same comparison. The full 2.8T-token corpus itself is "releasing soon," not yet available; only a GitHub plugin (translation code) is live now.
+- **Why it might matter:** A concrete, production-adopted (not just proposed) case study for the course's data-curation/synthetic-data material: a real "translate → LLM-judge → repair" loop at trillion-token scale, with a named production model (Nemotron 3.5 Super VL) and measured downstream deltas, including a documented regression (IFEval) alongside the gains — a good source for teaching both the technique and the honest tradeoff reporting around it.
+- **Evidence of adoption:** Used in the released Nemotron 3.5 Super VL model's continued-pretraining stage (10B of a 100B-token budget) — real production use by a major organization (NVIDIA), though the claim that this specific corpus (vs. natural Indic text in the same mix) drove the reported gains is the authors' own attribution, not independently isolated.
+- **Major organizations using it:** NVIDIA (originator and production user), IIT Madras / AI4Bharat (co-developer).
+- **Open-source implementation:** Translation plugin: https://github.com/NVIDIA-NeMo/DataDesignerPlugins/tree/main/plugins/data-designer-nemotron-bharat-translation. The 2.8T-token corpus itself is not yet released ("releasing soon").
+- **Paper:** companion report linked above (not an arXiv paper); Nemotron 3.5 Super VL technical report linked above.
+- **Code:** https://github.com/NVIDIA-NeMo/DataDesignerPlugins (translation plugin only; full corpus not yet released)
+- **Relationship to existing course material:** New sub-topic — checked via `lookup "synthetic data translation judge repair pipeline"` and `lookup "Nemotron"` (the latter matched only the unrelated GenCorrect staging entry), no match. New.
+- **Potential course lesson:** Possible addition to the data-curation/synthetic-data module: a from-scratch small-scale demonstration of the translate → LLM-judge → feedback-repair loop (e.g. on a toy bilingual corpus), with the Nemotron case study as the real-world grounding and the IFEval regression as a discussion point on tradeoffs in synthetic-data mixes.
+- **Confidence:** medium — real production adoption and concrete reported numbers from a major organization, but the corpus itself isn't yet released for independent inspection, and the benchmark gains are attributed to a mixed-data stage rather than isolated to the synthetic corpus alone.
+- **Recommendation:** monitor for the next weekly review; worth revisiting once the full corpus and companion report are both actually downloadable, to check the isolated-contribution claim and get concrete pipeline parameters for a lesson.
