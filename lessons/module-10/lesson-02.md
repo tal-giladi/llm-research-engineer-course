@@ -352,23 +352,126 @@ Loss falls monotonically as width grows, and the six points lie close to a log-l
 
 ## Exercise
 
-A sweep of three models gives: $N = 10^6 \to L = 3.60$; $N = 10^7 \to L = 3.00$; $N = 10^8 \to L = 2.50$. **(a)** Using the first and last points, estimate $\alpha_N$ by the two-point log-log slope. **(b)** Predict the loss of a $10^9$-parameter model by extrapolating the line. **(c)** Why should you distrust that prediction?
+Use three small-model runs to predict the loss of a larger model. Work through the steps below before opening the hints or solution.
 
-<details><summary>Hint</summary>
-(a) slope $= (\log_{10}L_{\text{last}} - \log_{10}L_{\text{first}})/(\log_{10}N_{\text{last}} - \log_{10}N_{\text{first}})$, then $\alpha_N = -\text{slope}$. (b) each 10× in $N$ multiplies $L$ by $10^{-\alpha_N}$; you are going one more decade. (c) think about the irreducible loss.
+**Time:** about 10–15 minutes. **You need:** a calculator with `log10` and exponentiation; no model training or GPU is needed. **Your result:** an estimated scaling exponent, a loss prediction, and a short explanation of its limits.
+
+### Setup: what was measured?
+
+These are **hypothetical measurements** from three separately trained models. Assume they use the same tokenizer and held-out text, and that each received enough data and training for a model-size comparison to be meaningful.
+
+| Model | Non-embedding parameters $N$ | Held-out loss $L$ |
+|---|---:|---:|
+| Small | $10^6$ (1M) | 3.60 |
+| Medium | $10^7$ (10M) | 3.00 |
+| Large | $10^8$ (100M) | 2.50 |
+
+Read each row as one point on the plots from section 1. Moving down one row multiplies model size by **10**. Lower loss means better next-token predictions.
+
+Assume the relationship can be approximated over this range by $L(N) = c\,N^{-\alpha_N}$, where $c$ is the coefficient and $\alpha_N$ is the positive scaling exponent. You can solve this exercise without finding $c$.
+
+### A. Estimate the exponent from the endpoints
+
+Use the **small and large models only** for the fit. Save the medium model for a check in part B.
+
+1. Convert the two parameter counts to base-10 logs: find $\log_{10}(10^6)$ and $\log_{10}(10^8)$.
+2. Find $\log_{10}(3.60)$ and $\log_{10}(2.50)$ with your calculator.
+3. Calculate the slope using **large minus small in both numerator and denominator**:
+
+$$
+m = \frac{\log_{10}(2.50) - \log_{10}(3.60)}{\log_{10}(10^8) - \log_{10}(10^6)}.
+$$
+
+4. Convert the slope to the exponent: $\alpha_N = -m$.
+
+**Check the sign:** your slope should be negative because loss falls as size grows; your exponent should be positive. Keep at least four decimal places for the next steps.
+
+### B. Turn the exponent into a rule you can use
+
+Let $r$ mean "the fraction of the previous loss left after a ×10 increase in size." Calculate $r = 10^{-\alpha_N}$.
+
+Starting from the small model's loss 3.60, multiply by $r$ to predict the **10M model's loss**. Compare your prediction with the measured value 3.00 in the table.
+
+This is **interpolation**: the size you predict lies between the two sizes used for fitting. Agreement is a useful check, although one matching point does not establish that the law will hold at larger scales.
+
+### C. Predict a 1B-parameter model
+
+A 1B-parameter model has $N = 10^9$ parameters. It is **10 times larger than the measured 100M model**.
+
+Start from loss **2.50** and apply your multiplier $r$ once more. Report the predicted loss to two decimal places. Is this prediction interpolation or extrapolation?
+
+**Check the direction:** your answer should be positive and below 2.50. Apply the same *fractional reduction* as before; do not subtract a fixed number of loss units.
+
+### D. Decide how much to trust the prediction
+
+A teammate says: "The three points agree with a power law, so the 1B model will definitely reach our predicted loss."
+
+Write two sentences explaining why that conclusion is too strong. Include both:
+
+- A reason the real training run could differ from the setup assumed by the fit.
+- Why a pure power law cannot describe loss forever as model size increases. Use the irreducible loss from section 6 in your explanation.
+
+<details><summary>Hint — connect each part to the worked example</summary>
+
+**A:** Repeat section 3.1 with this exercise's losses. The parameter counts are the same as in that example, but the losses and fitted exponent are different.
+
+**B:** Use the rule from section 2.2: increasing size by a factor $k$ multiplies loss by $k^{-\alpha_N}$. Here $k = 10$.
+
+**C:** Move one row beyond the table: 100M → 1B. That requires one more application of the same loss multiplier.
+
+**D:** A fit describes measurements under particular conditions. Think about insufficient training, limited data, and a lower bound on achievable loss.
+
 </details>
 
-<details><summary>Stronger hint</summary>
-(a) $(\log_{10} 2.50 - \log_{10} 3.60)/(8 - 6)$. (b) $L(10^9) = L(10^8)\cdot 10^{-\alpha_N}$. (c) a pure power law predicts loss $\to 0$ as $N\to\infty$, but text has nonzero entropy.
+<details><summary>Stronger hint — set up the calculations</summary>
+
+**A:** The log-size difference is $8 - 6 = 2$. The log losses are approximately 0.55630 and 0.39794. Subtract the small-model log loss from the large-model log loss, divide by 2, then reverse the sign to obtain $\alpha_N$.
+
+**B:** Calculate $r = 10^{-\alpha_N}$, then calculate $3.60\times r$. As an independent arithmetic check, compare the two observed ratios, $3.00/3.60$ and $2.50/3.00$.
+
+**C:** Calculate $2.50\times r$. This uses the measured large model as the anchor, just as section 3.2 used the measured small model.
+
+**D:** The formula $c\,N^{-\alpha_N}$ approaches zero as $N$ grows without bound. Real held-out text has uncertainty that increasing model size alone cannot remove.
+
 </details>
 
-<details><summary>Solution</summary>
+<details><summary>Worked solution — open after attempting A–D</summary>
 
-**(a)** $\log_{10} 2.50 = 0.3979$, $\log_{10} 3.60 = 0.5563$. Slope $= (0.3979 - 0.5563)/(8 - 6) = -0.1584/2 = -0.0792$, so $\alpha_N \approx 0.079$.
+### A. The slope is negative; the exponent is positive
 
-**(b)** Going from $10^8$ to $10^9$ is one more decade, multiplying loss by $10^{-0.0792} = 0.833$. So $L(10^9) \approx 2.50 \cdot 0.833 \approx 2.08$. (`fit_power_law` on all three points gives a very similar slope, since they are near-collinear in log-log.)
+$$
+m \approx \frac{0.39794 - 0.55630}{8 - 6}
+= \frac{-0.15836}{2}
+\approx -0.07918.
+$$
 
-**(c)** The pure power law implies loss keeps falling toward $0$ forever, but language has an **irreducible entropy** $E > 0$ that no model can beat. As $N$ grows the true curve flattens toward $E$ and bends below the straight line, so a single-power-law extrapolation over-predicts the gains. This is precisely why Chinchilla (10.3) fits $L(N,D) = E + A/N^\alpha + B/D^\beta$ with an explicit floor $E$, instead of a bare power law.
+Therefore $\alpha_N = -m \approx 0.07918$. Using the course's `fit_power_law` on the two endpoints gives the same exponent to this precision.
+
+### B. Each ×10 in size leaves about 83.3% of the loss
+
+$$
+r = 10^{-0.07918} \approx 0.83333.
+$$
+
+The predicted medium-model loss is $3.60\times 0.83333 \approx 3.00$, matching the table.
+
+Both observed loss ratios equal $5/6$: $3.00/3.60 = 2.50/3.00 \approx 0.83333$. The numbers were chosen to follow an exact power law; real measurements usually have scatter. Here the loss drops by about **16.7% per ×10 increase in size**. The absolute drops differ: 3.60 → 3.00 removes 0.60, while 3.00 → 2.50 removes 0.50.
+
+### C. The predicted loss is about 2.08
+
+$$
+L(10^9) \approx 2.50\times 0.83333 \approx 2.08333 \approx 2.08.
+$$
+
+This is **extrapolation** because 1B parameters lies beyond the largest measured model, 100M. It is a prediction from the fitted formula, rather than a measured result.
+
+### D. A matching fit is evidence, not a guarantee
+
+A larger model could be undertrained, run out of useful data, or need different optimization settings, so its measured loss may differ from the prediction. Even with good training, loss eventually approaches an **irreducible floor** $E > 0$: uncertainty in the held-out text that the available context cannot resolve.
+
+The pure power law keeps decreasing toward zero. Once it predicts below that floor, it is too optimistic; the real curve must flatten and lie **above** those predictions. On a log-log plot, that means bending upward relative to the continued downward straight line.
+
+The practical conclusion is to treat 2.08 as a forecast to validate, while checking data availability, training quality, and whether the scaling trend remains approximately straight. The next lesson introduces a scaling model with an explicit loss floor.
 
 </details>
 
