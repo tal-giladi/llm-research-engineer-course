@@ -30,62 +30,262 @@ Every symbol:
 
 The structure is the whole idea: loss is a floor $E$ plus two independently vanishing penalties, one for too few parameters and one for too few tokens. Fit $E, A, B, \alpha, \beta$ once (from many training runs) and you can predict the loss of any $(N, D)$ — including ones you have not run.
 
-## 3. Derivation: the compute-optimal allocation
+## 3. From training measurements to the compute-optimal allocation
 
-We minimise $L(N, D)$ subject to the budget constraint $C = 6ND$. Since $E$ is a constant it does not affect where the minimum is; only the two penalties matter.
+The headline you already know is **roughly 20 training tokens per parameter**: a 1B-parameter model would be trained on about 20B tokens. How did the researchers get there, and why do we need $A$, $B$, $\alpha$ and $\beta$?
 
-**Step 1 — use the constraint to eliminate $D$.** From $C = 6ND$, $D = C/(6N)$. Substitute:
+There are two separate jobs:
+
+1. **Fit a loss predictor from experiments.** Learn which values of $E, A, B, \alpha, \beta$ make the formula match measured losses.
+2. **Use that predictor to plan a training run.** Given a compute budget $C$, calculate the model size $N$ and training-token count $D$ with the lowest predicted loss.
+
+The constants come from the first job. The derivative comes in the second job. The 20-token rule is an approximate result of the analysis, rather than an assumption used to choose the constants.
+
+### 3.1 What do the experiments actually give us?
+
+Imagine a spreadsheet in which each row records one training run:
+
+| Quantity | Where it comes from | Example |
+|---|---|---|
+| $N_i$ | Count the model's parameters | 1 billion parameters |
+| $D_i$ | Count the tokens processed during training | 20 billion tokens |
+| $L_i$ | Measure the resulting cross-entropy loss | 2.5 nats/token |
+
+The subscript $i$ labels the run; the example row is illustrative. Train other configurations with different model sizes and token budgets, and collect more rows. Compare them using a consistent data distribution, tokenizer and loss measurement. Here $D$ means **tokens processed during training**, rather than the vocabulary size or number of documents.
+
+**Publicly documented:** Chinchilla used over 400 training runs, varying both model size and training tokens. Its parametric approach fitted the runs' final losses. The paper used smoothed training loss as an estimate of test loss in its abundant-data setting. See [Hoffmann et al., sections 3 and 3.3](https://arxiv.org/html/2203.15556v1#S3).
+
+At this point we have observations $(N_i,D_i,L_i)$. The experiment has not directly measured an "$A$" or an "$\alpha$". Those are numbers we will infer from the pattern across runs.
+
+### 3.2 Why introduce these five constants?
+
+We choose the following *family of possible loss predictors*:
 
 $$
-L(N) = E + \frac{A}{N^{\alpha}} + B\left(\frac{6N}{C}\right)^{\beta}
-     = E + A\,N^{-\alpha} + B\,6^{\beta} C^{-\beta}\, N^{\beta}.
+\widehat L(N,D)=E+\frac{A}{N^\alpha}+\frac{B}{D^\beta}.
 $$
 
-Now $L$ depends on the single variable $N$ (the budget $C$ is fixed). As $N$ grows the first penalty $A N^{-\alpha}$ falls (bigger model) but the second $\propto N^{\beta}$ rises (fewer tokens left) — the trade-off made explicit.
+The hat on $\widehat L$ means **predicted loss**; $L_i$ is a measured loss. This is a modelling assumption whose usefulness must be checked against experiments.
 
-**Step 2 — set the derivative to zero.**
+| Unknown constant | What changing it does to the prediction |
+|---|---|
+| $E$ | Raises or lowers the floor approached when both resources become very large |
+| $A$ | Scales the loss penalty associated with limited model size |
+| $\alpha$ (alpha) | Controls how quickly that model-size penalty falls as $N$ increases |
+| $B$ | Scales the loss penalty associated with limited training tokens |
+| $\beta$ (beta) | Controls how quickly that training-token penalty falls as $D$ increases |
+
+For example, doubling $A$ doubles the model penalty at every $N$. With $\alpha=0.5$, multiplying $N$ by four halves that penalty, because $4^{-0.5}=1/2$. The same reasoning applies to $B$, $D$ and $\beta$.
+
+These five numbers describe the **loss predictor**. They are different from the billions of learned weights inside a language model. We fit them after training the experimental models, using the losses those models produced. They also depend on the experimental setup and units: section 4's constants expect raw counts, so a 1B model means $N=10^9$, not $N=1$.
+
+### 3.3 A tiny example: recover every constant by hand
+
+To make "fit the constants" concrete, use these **invented, noise-free observations**. The tiny $N,D$ values are for arithmetic practice, not realistic language models or Chinchilla measurements.
+
+| Run | Parameters $N$ | Training tokens $D$ | Measured loss $L$ |
+|---|---:|---:|---:|
+| 1 | 4 | 4 | 7.0 |
+| 2 | 16 | 4 | 6.0 |
+| 3 | 64 | 4 | 5.5 |
+| 4 | 4 | 16 | 5.0 |
+| 5 | 4 | 64 | 4.0 |
+
+**First recover $\alpha$ and $A$.** Compare runs 1, 2 and 3. Only $N$ changes; $D=4$ stays fixed. Therefore $E+B/4^\beta$ is the same unknown offset in all three losses. Subtracting successive losses cancels that offset.
+
+Each step multiplies $N$ by four. The loss decreases are $7-6=1$ and $6-5.5=0.5$: the second decrease is half the first. For a power law, equal resource multipliers produce equal penalty multipliers; successive decreases have that same multiplier. Thus the model penalty is multiplied by $0.5$ whenever $N$ is multiplied by four:
 
 $$
-\frac{dL}{dN} = -\alpha A\,N^{-\alpha-1} + \beta B\,6^{\beta} C^{-\beta}\,N^{\beta-1} = 0.
-$$
-
-Move the negative term over and multiply through by $N^{\alpha+1}$:
-
-$$
-\alpha A = \beta B\,6^{\beta} C^{-\beta}\,N^{\alpha+\beta}
+4^{-\alpha}=0.5
 \quad\Longrightarrow\quad
-N^{\alpha+\beta} = \frac{\alpha A}{\beta B}\left(\frac{C}{6}\right)^{\beta}.
+\alpha=\frac{\log 2}{\log 4}=0.5.
 $$
 
-**Step 3 — solve for $N^\*$, then $D^\*$.**
+Now use the first loss decrease to recover $A$:
 
 $$
-\boxed{\,N^\* = \left[\frac{\alpha A}{\beta B}\left(\frac{C}{6}\right)^{\beta}\right]^{\frac{1}{\alpha+\beta}}, \qquad D^\* = \frac{C}{6\,N^\*}.\,}
+7-6=A\left(\frac{1}{\sqrt4}-\frac{1}{\sqrt{16}}\right)
+=A\left(\frac12-\frac14\right)=\frac A4
+\quad\Longrightarrow\quad A=4.
 $$
 
-**Reading the exponents: how does the best allocation change as the budget grows?**
-
-The boxed formula gives the best model size $N^{*}$ and training-token count $D^{*}$ for one particular compute budget $C$. Now ask a different question: **if we increase that budget, how should the best model size and token count grow?**
-
-To answer this, keep the fitted constants $A$, $B$, $\alpha$ and $\beta$ fixed and look at the powers of $C$ in the solution. We can write:
+**Next recover $\beta$ and $B$.** Compare runs 1, 4 and 5. Now $N=4$ stays fixed and $D$ multiplies by four. The decreases are $7-5=2$ and $5-4=1$. Again the second is half the first, so $4^{-\beta}=0.5$ and $\beta=0.5$. Then:
 
 $$
-N^{*} \propto C^a, \qquad D^{*} \propto C^b,
+7-5=B\left(\frac{1}{\sqrt4}-\frac{1}{\sqrt{16}}\right)
+=\frac B4
+\quad\Longrightarrow\quad B=8.
+$$
+
+**Finally recover $E$.** Substitute run 1 and the four constants we just found:
+
+$$
+7=E+\frac4{\sqrt4}+\frac8{\sqrt4}=E+2+4
+\quad\Longrightarrow\quad E=1.
+$$
+
+We have recovered the complete predictor:
+
+$$
+\widehat L(N,D)=1+\frac4{\sqrt N}+\frac8{\sqrt D}.
+$$
+
+Check run 5: $1+4/\sqrt4+8/\sqrt{64}=1+2+1=4$, exactly its measured loss. **This is where constants come from: choose them so the formula reproduces the observed relationship between resources and loss.**
+
+### 3.4 How does fitting work with real, noisy measurements?
+
+Real losses do not line up this perfectly. Instead of solving five exact equations, a fitting program adjusts all five constants together to reduce prediction errors across many runs.
+
+For each trial set of constants, it predicts each row's loss and compares it with the measured value. For example, predicting 6.8 for a row whose measured loss is 7.0 gives an error of $6.8-7.0=-0.2$. The program combines errors into a fitting objective, updates the constants, and repeats.
+
+**The paper's fitting method:** it compared predicted and observed **log losses**, used a Huber objective to limit the influence of outliers, and used L-BFGS with multiple starting guesses to search for good constants. See [Hoffmann et al., section 3.3, equation 3](https://arxiv.org/html/2203.15556v1#S3.SS3).
+
+This extends the curve fitting in lesson 10.2. We cannot simply take the log of the full prediction and fit one straight line: the logarithm of a **sum** does not split into a sum of logarithms. We need a joint nonlinear fit.
+
+For the rest of this lesson, use the following fitted values:
+
+$$
+A=482.01,\qquad B=2085.43,\qquad
+\alpha=0.3478,\qquad\beta=0.3658,\qquad E\approx1.82.
+$$
+
+**Source of these particular numbers:** they are the revised estimates from [Besiroglu et al. (2024), Table 1](https://arxiv.org/html/2404.10102v2#S3), which refitted data reconstructed from Chinchilla's plots. They are not the constants originally printed in the 2022 paper. Section 6 explains the discrepancy. We are using a published fit here; the small example above teaches how fitting works.
+
+There are also **two different objectives** to keep separate. Fitting minimises the predictor's errors by changing $E,A,B,\alpha,\beta$. Planning minimises the predicted language-model loss by changing $N,D$, with those fitted constants held fixed. We now move to planning.
+
+### 3.5 Turn the compute budget into a trade-off
+
+Suppose the available training compute is $C$ FLOPs. Using lesson 10.1's approximation:
+
+$$
+C=6ND
+\quad\Longrightarrow\quad
+D=\frac{C}{6N}.
+$$
+
+For example, a toy budget of $C=1536$ allows $ND=256$. It can pay for $(N,D)=(4,64)$, $(8,32)$ or $(16,16)$. Doubling model size halves the affordable tokens.
+
+Use our **toy fitted predictor** to compare those choices:
+
+| Parameters $N$ | Tokens $D=256/N$ | Predicted loss $1+4/\sqrt N+8/\sqrt D$ |
+|---:|---:|---:|
+| 4 | 64 | $1+2+1=4.000$ |
+| 8 | 32 | $1+1.414+1.414\approx3.828$ |
+| 16 | 16 | $1+1+2=4.000$ |
+
+The middle choice is better than its neighbours. The calculus below locates the minimum without having to try every possible model size.
+
+### 3.6 Substitute the constraint, then differentiate
+
+Return to the general formula. Keep $C,E,A,B,\alpha,\beta$ fixed and replace $D$ by $C/(6N)$:
+
+$$
+\begin{aligned}
+\widehat L_C(N)
+&=E+\frac{A}{N^\alpha}+\frac{B}{[C/(6N)]^\beta}\\
+&=E+A N^{-\alpha}+B\left(\frac{6N}{C}\right)^\beta\\
+&=E+A N^{-\alpha}+B\left(\frac6C\right)^\beta N^\beta.
+\end{aligned}
+$$
+
+The subscript $C$ reminds us that we are considering one fixed budget. Increasing $N$ makes the model penalty fall, but makes the training-token penalty rise because fewer tokens are affordable. In the toy case, substituting $D=256/N$ gives $1+4/\sqrt N+\sqrt N/2$; at $N=8$ this is again about 3.828.
+
+Use the power rule: the derivative of $kN^p$ is $kpN^{p-1}$ when $k$ is constant. The derivative of the constant $E$ is zero. Therefore:
+
+$$
+\frac{d\widehat L_C}{dN}
+=-\alpha A N^{-\alpha-1}
++\beta B\left(\frac6C\right)^\beta N^{\beta-1}.
+$$
+
+At the optimum, increasing $N$ a little provides exactly as much benefit from capacity as it costs through reduced training tokens. Set the derivative to zero and move the negative term to the other side:
+
+$$
+\alpha A N^{-\alpha-1}
+=\beta B\left(\frac6C\right)^\beta N^{\beta-1}.
+$$
+
+Multiplying both sides by $N$ makes the meaning easier to see:
+
+$$
+\boxed{\alpha\frac{A}{N^\alpha}
+=\beta\frac{B}{D^\beta}.}
+$$
+
+**The exponent-weighted penalties balance.** The penalties themselves are equal only when $\alpha=\beta$. For the toy optimum $(8,32)$, each penalty is about 1.414, and each weighted penalty is $0.5\times1.414\approx0.707$. These are the two opposing effects that cancel in the derivative.
+
+### 3.7 Solve that balance for the best model size and tokens
+
+Starting from the derivative equation, multiply both sides by $N^{\alpha+1}$:
+
+$$
+\alpha A
+=\beta B\left(\frac6C\right)^\beta N^{\alpha+\beta}.
+$$
+
+Divide by the constant on the right:
+
+$$
+N^{\alpha+\beta}
+=\frac{\alpha A}{\beta B}\left(\frac C6\right)^\beta.
+$$
+
+Finally take the power $1/(\alpha+\beta)$ of both sides. A star means **the optimal choice**:
+
+$$
+\boxed{
+N^{*}=
+\left[\frac{\alpha A}{\beta B}
+\left(\frac C6\right)^\beta\right]^{1/(\alpha+\beta)},
 \qquad
-a = \frac{\beta}{\alpha+\beta}, \qquad b = \frac{\alpha}{\alpha+\beta}.
+D^{*}=\frac{C}{6N^{*}}.
+}
 $$
 
-The symbol $\propto$ means "is proportional to": each expression leaves out a fixed multiplicative constant. Here **$a$ describes how the optimal parameter count grows with compute**, and **$b$ describes how the optimal training-token count grows with compute**. A larger exponent means faster growth in that quantity as the budget increases.
+Check every step on the toy problem: $\alpha+\beta=1$, $\alpha A/(\beta B)=2/4=1/2$, and $(C/6)^\beta=\sqrt{256}=16$. Thus $N^{*}=[(1/2)\times16]^1=8$ and $D^{*}=256/8=32$, matching the table.
 
-Keep the two pairs of exponents separate. **$\alpha$ and $\beta$ belong to the loss function**: they describe how the model and data penalties decrease when their respective resources increase. **$a$ and $b$ belong to the allocation rule**: they describe how to increase those resources together to stay compute-optimal. The derivation tells us how to obtain $a$ and $b$ from the fitted $\alpha$ and $\beta$.
+Why is this a minimum? With positive constants, the model penalty grows without bound as $N$ approaches zero; the token penalty grows without bound as $N$ becomes very large at fixed $C$. The equation above has exactly one positive solution, where the derivative changes from negative to positive. This establishes the minimum **of the fitted formula**; its accuracy for actual models still depends on the fit.
 
-**Why must $a+b=1$?** The budget constraint requires $N^{*}D^{*} = C/6$, so the product of the two optimal resource amounts must be proportional to $C$. Multiplying $C^a$ by $C^b$ gives $C^{a+b}$; therefore their exponents must add to one. This is a consistency requirement imposed by the compute budget. It does not, by itself, tell us whether model size or token count should grow faster.
+### 3.8 Where does "scale model and data together" come from?
 
-**Why do both grow at roughly the same rate?** When the fitted loss exponents $\alpha$ and $\beta$ are close, the fractions above put both $a$ and $b$ close to $1/2$. Chinchilla's original parametric analysis reported $a \approx 0.46$ and $b \approx 0.54$: the optimal token count grows slightly faster than the optimal parameter count, but the overall recommendation is to scale both approximately together. These are the original paper's estimates; section 4 uses the replication constants discussed in section 6, which give somewhat different exponents with the same near-equal scaling pattern. See [Hoffmann et al., equation 4 and Table 2](https://arxiv.org/pdf/2203.15556).
+The boxed formula chooses a configuration at one budget. Now imagine comparing the best configurations at several increasing budgets, keeping the fitted constants fixed.
 
-The distinction from the earlier trade-off is important. **At a fixed budget**, increasing model size forces the token count down. **Across increasing budgets**, we compare the best allocation for each budget, and both optimal quantities can rise. That is what "scale model size and training tokens together" means.
+The power of $C$ in $N^{*}$ is $\beta/(\alpha+\beta)$. Since $D^{*}=C/(6N^{*})$, its power is $1-\beta/(\alpha+\beta)=\alpha/(\alpha+\beta)$. Write:
 
-These exponents describe the *rate of growth*. The remaining constants in the boxed formula determine the actual parameter and token counts for a particular budget. Section 4 works through that calculation.
+$$
+N^{*}\propto C^a,\qquad D^{*}\propto C^b,
+\qquad
+a=\frac{\beta}{\alpha+\beta},\qquad
+b=\frac{\alpha}{\alpha+\beta}.
+$$
+
+Here $\propto$ means "is proportional to," leaving out a fixed multiplier. **$\alpha,\beta$ describe how penalties fall; $a,b$ describe how the optimal resource amounts grow with compute.** We calculate $a,b$ from the fitted exponents, rather than fitting five constants and then arbitrarily choosing two more.
+
+Using this lesson's revised fit gives $a=0.3658/0.7136\approx0.513$ and $b=0.3478/0.7136\approx0.487$. Both are near $1/2$. With exactly $a=b=1/2$, four times the compute means twice the model size and twice the training tokens: $4^{1/2}=2$, and $2\times2=4$.
+
+The original paper's parametric approach reported $a\approx0.46$, $b\approx0.54$; these differ from the revised fit used here, while still suggesting approximately equal scaling. See [Hoffmann et al., equation 4 and Table 2](https://arxiv.org/html/2203.15556v1#S3.SS4).
+
+The exponents must sum to one because $N^{*}D^{*}=C/6$. For the revised fit, $0.513+0.487=1$. That requirement alone would also permit $a=0.9,b=0.1$; the **measurements** are what put both exponents near one half.
+
+At one fixed budget, a bigger model forces fewer tokens. Across growing budgets, both optimal quantities can grow. Keep those two comparisons separate.
+
+### 3.9 Where does the specific ratio of about 20 come from?
+
+Near-equal scaling rates do not determine the actual ratio. To see this, suppose for a moment that $\alpha=\beta=p$. The optimum's balance condition becomes:
+
+$$
+\frac{A}{(N^{*})^p}=\frac{B}{(D^{*})^p}
+\quad\Longrightarrow\quad
+\frac{D^{*}}{N^{*}}=\left(\frac BA\right)^{1/p}.
+$$
+
+Our toy fit has $p=0.5$, $A=4$ and $B=8$, so its optimal ratio is $(8/4)^2=4$ tokens per parameter, matching $32/8=4$. It has equal scaling, but a ratio of four. **The coefficient values matter as well as the exponents.**
+
+For the actual revised fit, $\alpha$ and $\beta$ are close but unequal, so the ratio varies slowly with the budget. Section 4 substitutes the fitted constants and $C=10^{21}$ into the boxed formula. It gives about 2.78B parameters and 60B tokens: $60/2.78\approx21.6$ tokens per parameter. We did not insert 20 anywhere in that calculation.
+
+The original Chinchilla model used 70B parameters and 1.4T tokens, giving $1400/70=20$. The paper also examined training-curve minima and fixed-compute loss curves, alongside its parametric fit. These supported its approximate equal-scaling recommendation. See [Hoffmann et al., sections 3.1–3.4 and Table 1](https://arxiv.org/html/2203.15556v1#S3).
+
+> **The complete chain:** train models with different $N,D$ → measure their losses → fit $E,A,B,\alpha,\beta$ → impose $C=6ND$ → minimise predicted loss → obtain $N^{*},D^{*}$ → calculate their ratio. "About 20 tokens per parameter" is the practical headline; the fit and optimisation explain how we get it and why it is approximate.
 
 ## 4. Numerical example: allocate a budget of $C = 10^{21}$ FLOPs
 
