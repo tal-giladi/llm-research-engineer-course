@@ -426,3 +426,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** Possible addition to the data-curation/synthetic-data module: a from-scratch small-scale demonstration of the translate → LLM-judge → feedback-repair loop (e.g. on a toy bilingual corpus), with the Nemotron case study as the real-world grounding and the IFEval regression as a discussion point on tradeoffs in synthetic-data mixes.
 - **Confidence:** medium — real production adoption and concrete reported numbers from a major organization, but the corpus itself isn't yet released for independent inspection, and the benchmark gains are attributed to a mixed-data stage rather than isolated to the synthetic corpus alone.
 - **Recommendation:** monitor for the next weekly review; worth revisiting once the full corpus and companion report are both actually downloadable, to check the isolated-contribution claim and get concrete pipeline parameters for a lesson.
+
+### C-20261017-01 · HF TRL v1.16.0 ships tree attention for AsyncGRPO — shared-prefix rollout packing merged into a major RL post-training library
+
+- **Class:** B
+- **Date discovered:** 2026-10-17
+- **Date published:** 2026-10-15 (TRL v1.16.0 release; PR #7328)
+- **Source:** https://github.com/huggingface/trl/releases/tag/v1.16.0 (verified resolves); PR https://github.com/huggingface/trl/pull/7328 (verified resolves)
+- **Organization/researchers:** Hugging Face (TRL maintainers); PR authored by @AmineDiro.
+- **Category:** RL/post-training (GRPO rollout efficiency)
+- **What changed:** AsyncGRPO rollouts that share a prompt or prefix (e.g. multiple completions sampled from the same prompt, or branching rollouts) are now packed as a prefix tree instead of a flat sequence: chains without forks collapse into segments, and a single FlashAttention-3 varlen call computes attention over each root-to-segment path's K/V once, instead of once per full duplicated sequence — no mask tensor, no opt-in flag (it applies automatically).
+- **Technical summary:** Benchmarked on Qwen3-1.7B at 32K tokens/rollout, forward+backward. Shared-prompt layout: packing ratio 2.29 gives 8266ms→4341ms (1.90x), peak memory 35.2→18.0 GiB; ratio 3.37 gives 8179ms→2755ms (2.97x), memory 35.2→13.6 GiB. Nested-fork layout at ratio 3.56 gives 8172ms→2635ms (3.10x), memory 35.2→13.5 GiB. Overhead when nothing is shared (ratio 1.00) is about 1% (8677ms→8737ms).
+- **Why it might matter:** Directly extends the course's already-taught GRPO material (module 16, which references TRL elsewhere in the course as the production framework) with a concrete, shipped technique for the rollout-cost problem GRPO itself creates whenever many completions share a prompt — a clean "implement the mechanism from scratch, then see the production version" case: naive flat attention over duplicated shared tokens vs. prefix-tree packing.
+- **Evidence of adoption:** Merged and shipped as default (non-opt-in) behavior in TRL v1.16.0, a major, widely-used post-training library the course already references — this is adoption, not a proposal.
+- **Major organizations using it:** Hugging Face (TRL maintainers and the library's broad user base).
+- **Open-source implementation:** https://github.com/huggingface/trl (feature); https://github.com/huggingface/trl/pull/7328 (the merging PR)
+- **Paper:** none (engineering release, no accompanying paper)
+- **Code:** https://github.com/huggingface/trl/pull/7328
+- **Relationship to existing course material:** Extends module 16's GRPO lessons' use of TRL as the reference framework. Checked via `lookup "tree attention shared prefix rollout"`, `lookup "AsyncGRPO"`, and `lookup "prefix tree packing GRPO rollout"` — no matches in course or registry; new sub-topic.
+- **Potential course lesson:** Possible addition to module 16 (GRPO) or a training-efficiency lesson: a from-scratch demo contrasting duplicated-prefix flat attention against prefix-tree packing for same-prompt rollout batches, using TRL's shipped benchmarks as the production-scale confirmation.
+- **Confidence:** medium-high — actually merged and shipped (not just proposed) in a major library the course already references, with concrete benchmarks published in the release notes, but single-source (TRL's own release notes only; no independent benchmark yet).
+- **Recommendation:** review for ADD at the next weekly cycle as a possible module-16 extension (RL-rollout efficiency) or a small code/exercise addition demonstrating prefix-tree attention packing.
+
+### C-20261017-02 · Source-Judged Compaction (SJC): removing environment-unsupported summary entries in long-horizon agents (new evidence for deferred agent-context-compaction topic)
+
+- **Class:** B
+- **Date discovered:** 2026-10-17
+- **Date published:** 2026-10-14 (v1)
+- **Source:** https://arxiv.org/abs/2610.20927 (verified resolves; v1 "Wed, 14 Oct 2026")
+- **Organization/researchers:** Guanghui Min, Chen Chen — affiliations not stated on the abstract page.
+- **Category:** agents/tools (long-horizon context/memory compaction)
+- **What changed:** Long-horizon agents that compact overflowing history into natural-language summaries mix environment-verified facts with the compressor's own unverified reasoning, and the agent cannot later tell which is which; the authors trace 83% of failed runs in one structured compressor to summary-driven actions lacking environment support. SJC is a training-free post-compaction step: a lightweight non-generative "source judge" model (Jev) checks each summary entry for support in the raw environment outputs or the prior summary and returns a calibrated probability; unsupported entries are removed, at the cost of one inexpensive extra request per compaction.
+- **Technical summary:** On AppWorld and OfficeBench with two agent models, SJC improves cross-run reliability by 2.1-8.9 percentage points without increasing token usage. Code released at github.com/GuanghuiMin/sjc.
+- **Why it might matter:** A sixth, independent mechanism for the course's already-deferred agent-context-compaction cluster, and the first to target *provenance* (is this summary entry grounded in the environment?) rather than *what to keep* (importance, staleness, or externalization) — a sharp, teachable angle: a compacted summary can look plausible and still be unsupported hallucination the agent silently acts on later.
+- **Evidence of adoption:** None yet beyond the released code — single paper, no third-party adoption or reproduction.
+- **Major organizations using it:** None identified (no stated affiliation).
+- **Open-source implementation:** https://github.com/GuanghuiMin/sjc
+- **Paper:** https://arxiv.org/abs/2610.20927
+- **Code:** https://github.com/GuanghuiMin/sjc
+- **Relationship to existing course material:** New evidence for the already-deferred `research/deferred/agent-context-compaction.md` (WAIT, next review 2026-11-29) — checked via `lookup "agent context compaction"`, which matched that file; a sixth independent mechanism (provenance-checking) distinct from ReCAP (importance graphs), AutoCompact (RL-trained compaction policy), PoS (belief-state/stagnation tracking), REMORY (learned residual memory tokens), and the already-staged Stateless Language Agents (externalize-and-rebuild).
+- **Potential course lesson:** Not a new lesson; a sixth data point for the deferred topic's 2026-11-29 review — flag the provenance-checking angle as a candidate teachable failure mode (ungrounded summary entries) even if the broader cluster stays WAIT.
+- **Confidence:** medium — code released and concrete numbers on two established agent benchmarks, but single paper, no independent reproduction, authors' own evaluation only.
+- **Recommendation:** add as a sixth data point to `agent-context-compaction.md` at its 2026-11-29 review; not independently actionable before then.
+
+### C-20261017-03 · Reliability and cost audit of RLVR training-data decontamination policies across 16 math corpora
+
+- **Class:** B
+- **Date discovered:** 2026-10-17
+- **Date published:** 2026-10-15 (v1)
+- **Source:** https://arxiv.org/abs/2610.21229 (verified resolves; v1 "Thu, 15 Oct 2026")
+- **Organization/researchers:** Esther Xin (sole author) — affiliation not stated on the abstract page.
+- **Category:** data (RLVR training-data decontamination; extends the course's pretraining-contamination material into the RL stage)
+- **What changed:** Audits 16 open math corpora used for reinforcement learning with verifiable rewards against six benchmarks, comparing eight cleaning policies (exact, lexical, and semantic matching at various thresholds) against human-reviewed labels of whether each flagged-and-removed example was actually contaminated. Semantic-threshold policies perform poorly in practice — at a cosine-similarity threshold of 0.80, most sampled removals were false positives (clean data wrongly discarded) — while an existing judge-adjudicated policy achieved high precision and recall, but only within its own candidate set; recall figures don't capture contamination the method's candidate-generation step misses entirely.
+- **Technical summary:** A measurement/methodology paper, not a new cleaning technique; released labels and per-policy decisions (github.com/ethxin0011/rlvr_data_contamination) let the precision/recall figures be independently checked.
+- **Why it might matter:** Directly extends the course's existing pretraining-contamination material (`lessons/module-11/lesson-03.md`, `lessons/module-13/lesson-02.md`) into the RLVR training stage specifically — a documented, quantified caution that a common and cheap contamination-removal heuristic (embedding-similarity threshold) silently discards legitimate training data at a high rate, in the same "what NOT to over-trust" spirit as the tokenizer-metrics caution already staged 2026-10-16.
+- **Evidence of adoption:** None — single-author paper; the released labels/code let others check the claim but no third party has yet done so.
+- **Major organizations using it:** None identified (no stated affiliation).
+- **Open-source implementation:** https://github.com/ethxin0011/rlvr_data_contamination
+- **Paper:** https://arxiv.org/abs/2610.21229
+- **Code:** https://github.com/ethxin0011/rlvr_data_contamination
+- **Relationship to existing course material:** Extends `lessons/module-11/lesson-03.md` (11.3 · Contamination, mixing, curriculum) and `lessons/module-13/lesson-02.md` (13.2 · Contamination, calibration, task eval) into the RLVR stage specifically — checked via `lookup "data decontamination"` and `lookup "contamination benchmark training data"`, both matched the existing pretraining-contamination lessons but not an RLVR-stage-specific treatment; new sub-topic, not a duplicate.
+- **Potential course lesson:** Possible small addition to module 16's RLVR material (or a cross-reference from 11.3/13.2): a worked example showing a semantic-similarity contamination filter's false-positive rate on a toy corpus, using this paper's threshold-sensitivity finding as the motivating case.
+- **Confidence:** medium — concrete methodology with human-reviewed ground truth and released code/data, but sole author, single paper, no independent reproduction.
+- **Recommendation:** monitor for the next weekly review as a possible small module-11/13/16 cross-reference; the released labels make independent verification unusually easy for a future review cycle.
