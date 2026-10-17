@@ -63,13 +63,29 @@ $$
 \boxed{\,N^\* = \left[\frac{\alpha A}{\beta B}\left(\frac{C}{6}\right)^{\beta}\right]^{\frac{1}{\alpha+\beta}}, \qquad D^\* = \frac{C}{6\,N^\*}.\,}
 $$
 
-Reading the exponents: $N^\* \propto C^{a}$ and $D^\* \propto C^{b}$ with
+**Reading the exponents: how does the best allocation change as the budget grows?**
+
+The boxed formula gives the best model size $N^{*}$ and training-token count $D^{*}$ for one particular compute budget $C$. Now ask a different question: **if we increase that budget, how should the best model size and token count grow?**
+
+To answer this, keep the fitted constants $A$, $B$, $\alpha$ and $\beta$ fixed and look at the powers of $C$ in the solution. We can write:
 
 $$
-a = \frac{\beta}{\alpha+\beta}, \qquad b = \frac{\alpha}{\alpha+\beta}, \qquad a + b = 1.
+N^{*} \propto C^a, \qquad D^{*} \propto C^b,
+\qquad
+a = \frac{\beta}{\alpha+\beta}, \qquad b = \frac{\alpha}{\alpha+\beta}.
 $$
 
-Because $a + b = 1$ and both are near $\tfrac12$, **$N$ and $D$ grow at almost the same rate** as the budget grows — double the compute and you make the model $\approx\!1.4\times$ bigger *and* train on $\approx\!1.4\times$ more tokens, not one at the expense of the other. Chinchilla reports $a \approx 0.46$, $b \approx 0.54$: roughly equal scaling. That is the headline finding in one line of algebra.
+The symbol $\propto$ means "is proportional to": each expression leaves out a fixed multiplicative constant. Here **$a$ describes how the optimal parameter count grows with compute**, and **$b$ describes how the optimal training-token count grows with compute**. A larger exponent means faster growth in that quantity as the budget increases.
+
+Keep the two pairs of exponents separate. **$\alpha$ and $\beta$ belong to the loss function**: they describe how the model and data penalties decrease when their respective resources increase. **$a$ and $b$ belong to the allocation rule**: they describe how to increase those resources together to stay compute-optimal. The derivation tells us how to obtain $a$ and $b$ from the fitted $\alpha$ and $\beta$.
+
+**Why must $a+b=1$?** The budget constraint requires $N^{*}D^{*} = C/6$, so the product of the two optimal resource amounts must be proportional to $C$. Multiplying $C^a$ by $C^b$ gives $C^{a+b}$; therefore their exponents must add to one. This is a consistency requirement imposed by the compute budget. It does not, by itself, tell us whether model size or token count should grow faster.
+
+**Why do both grow at roughly the same rate?** When the fitted loss exponents $\alpha$ and $\beta$ are close, the fractions above put both $a$ and $b$ close to $1/2$. Chinchilla's original parametric analysis reported $a \approx 0.46$ and $b \approx 0.54$: the optimal token count grows slightly faster than the optimal parameter count, but the overall recommendation is to scale both approximately together. These are the original paper's estimates; section 4 uses the replication constants discussed in section 6, which give somewhat different exponents with the same near-equal scaling pattern. See [Hoffmann et al., equation 4 and Table 2](https://arxiv.org/pdf/2203.15556).
+
+The distinction from the earlier trade-off is important. **At a fixed budget**, increasing model size forces the token count down. **Across increasing budgets**, we compare the best allocation for each budget, and both optimal quantities can rise. That is what "scale model size and training tokens together" means.
+
+These exponents describe the *rate of growth*. The remaining constants in the boxed formula determine the actual parameter and token counts for a particular budget. Section 4 works through that calculation.
 
 ## 4. Numerical example: allocate a budget of $C = 10^{21}$ FLOPs
 
