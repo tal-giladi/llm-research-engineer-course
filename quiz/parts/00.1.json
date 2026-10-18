@@ -1,0 +1,1064 @@
+[
+  {
+    "id": "00.1-001",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which three properties should you be able to read off every PyTorch tensor?",
+    "options": [
+      ".shape, .grad and .stride",
+      ".size, .rank and .names",
+      ".shape, .dtype and .device",
+      ".dtype, .layout and .requires_grad"
+    ],
+    "answer_index": 2,
+    "explanation": "Every tensor carries a shape (how many numbers and how they are arranged), a dtype (what kind of number each element is) and a device (whether its memory is in CPU RAM or on a GPU). These three answer 'how big, what kind of number, and where'. Stride and requires_grad exist too, but they are not the three core properties you check on every tensor."
+  },
+  {
+    "id": "00.1-002",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "According to the PyTorch foundations material, what are the three categories that account for roughly ninety percent of bugs when training a language model?",
+    "options": [
+      "Bad learning-rate schedules, mislabelled training data, and poor weight initialisation",
+      "Memory leaks in the data loader, race conditions, and off-by-one errors",
+      "Overfitting, underfitting, and vanishing or exploding gradients in deep stacks",
+      "Shape mismatches, dtype surprises, and tensors on the wrong device"
+    ],
+    "answer_index": 3,
+    "explanation": "The claim is that most training bugs are shape mismatches, dtype surprises, or a tensor sitting on the wrong device — exactly the three properties every tensor has. That is why fluency with .shape, .dtype and .device is taught first. Learning-rate or data problems are real, but they are not the framing given for why tensor properties matter."
+  },
+  {
+    "id": "00.1-003",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In a neural network, which of the following values are represented as tensors?",
+    "options": [
+      "Only the weights; inputs are plain Python lists",
+      "Inputs, weights, activations, gradients and the loss",
+      "Only inputs and outputs; weights are stored separately",
+      "Only gradients; everything else is a NumPy array"
+    ],
+    "answer_index": 1,
+    "explanation": "A neural network is nothing but tensors flowing through operations: weights, inputs, activations, gradients and the loss are all tensors. Even the scalar loss is a rank-0 tensor so it can carry the graph for backpropagation. No part of the model is held as plain lists or NumPy arrays."
+  },
+  {
+    "id": "00.1-004",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "In PyTorch, what does the word 'tensor' mean?",
+    "options": [
+      "An n-dimensional array of numbers all of one type",
+      "A physics object that transforms under rotations",
+      "A matrix that is always square and invertible",
+      "A Python list that may hold mixed element types"
+    ],
+    "answer_index": 0,
+    "explanation": "Although the word is borrowed from physics, in PyTorch a tensor means exactly an n-dimensional array: a rectangular grid of numbers, all the same type, with a fixed number of axes. There is nothing more mystical about it. It need not be square, and unlike a Python list it cannot mix element types."
+  },
+  {
+    "id": "00.1-005",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "What is the 'rank' of a tensor, and which attribute reports it in PyTorch?",
+    "options": [
+      "The number of axes, reported by .ndim",
+      "The total element count, reported by .numel()",
+      "The matrix rank (independent rows), reported by .rank",
+      "The length of the first axis, reported by .shape[0]"
+    ],
+    "answer_index": 0,
+    "explanation": "Rank is the number of axes (dimensions) a tensor has, which PyTorch reports as .ndim. A scalar has rank 0, a vector rank 1, a matrix rank 2. This is not the linear-algebra matrix rank, and it is not the element count, which is .numel()."
+  },
+  {
+    "id": "00.1-006",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "Which tensor rank corresponds to a single number such as 3.0 with no axes?",
+    "options": [
+      "Rank 1, a vector",
+      "Rank 2, a matrix",
+      "Rank 0, a scalar",
+      "Rank 1, a length-1 vector"
+    ],
+    "answer_index": 2,
+    "explanation": "A scalar is rank 0: one number and no axes, shape (). A vector like [1, 2, 3] is rank 1 with one axis, and a matrix is rank 2. A length-1 vector, shape (1,), is still rank 1 because it has one axis."
+  },
+  {
+    "id": "00.1-007",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "A tensor holds 2 rows and 3 columns of numbers. What is its rank?",
+    "options": [
+      "6, because it holds six numbers",
+      "2, because it has two axes",
+      "3, because the longest axis has length 3",
+      "1, because it is a single object"
+    ],
+    "answer_index": 1,
+    "explanation": "Rank counts axes, not elements. A 2-by-3 grid has two axes (rows and columns), so it is rank 2 — a matrix. Six is its element count (numel), and 3 is just the length of its second axis."
+  },
+  {
+    "id": "00.1-008",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "Why do neural network libraries use tensors instead of nested Python lists?",
+    "options": [
+      "Tensors can hold any mix of Python objects in one container, which makes them more flexible than lists",
+      "Nested Python lists cannot represent more than two dimensions, so higher-rank data needs a tensor type",
+      "Tensors store each element as a separately boxed object behind a pointer, which makes random indexing faster",
+      "Tensors store one numeric type in one contiguous block and run ops as compiled or GPU-parallel code"
+    ],
+    "answer_index": 3,
+    "explanation": "A tensor stores its numbers in one flat, contiguous block of memory of a single type, and every operation runs as tight compiled code — or as thousands of parallel arithmetic units on a GPU. A Python list of lists can hold anything and is stored as scattered pointers, which is slow. The tensor is the disciplined, fast version; it is the list, not the tensor, that is flexible and pointer-based."
+  },
+  {
+    "id": "00.1-009",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "1. Intuition: a tensor is a typed, n-dimensional array",
+    "question": "How does a nested Python list of numbers differ physically in memory from a tensor of the same numbers?",
+    "options": [
+      "The list is one flat buffer; the tensor is scattered pointers to objects",
+      "Both are flat typed buffers; only the API differs",
+      "Both are scattered pointers; the tensor just caches them on the GPU",
+      "The list is scattered pointers to objects; the tensor is one flat typed buffer"
+    ],
+    "answer_index": 3,
+    "explanation": "A Python list of lists holds pointers to separately allocated Python objects scattered across memory and can hold anything. A tensor puts all its elements, one numeric type, into a single contiguous block. That layout is what lets compiled and GPU kernels process it quickly."
+  },
+  {
+    "id": "00.1-010",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "What does torch.tensor([[1., 2., 3.], [4., 5., 6.]]) create?",
+    "options": [
+      "A 2x3 float tensor whose shape is taken from how the data is nested",
+      "A 1-D tensor of length 6, because torch.tensor flattens nested lists before storing them",
+      "A 3x2 float tensor, because torch.tensor reads the nested lists column by column",
+      "An uninitialised 2x3 tensor whose values are random until you overwrite them"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.tensor takes the actual data, and the shape comes from how the data is nested: two inner lists of three numbers give shape (2, 3). Because the literals have decimal points, the dtype is float32. It does not flatten the data and does not reorder axes."
+  },
+  {
+    "id": "00.1-011",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "What is the key difference between how torch.tensor and torch.zeros are called?",
+    "options": [
+      "torch.tensor takes the shape; torch.zeros takes a list of zero values",
+      "torch.tensor takes the actual data; torch.zeros takes only the shape",
+      "Both take the data, but torch.zeros then overwrites every element with zeros",
+      "Both take the shape, but torch.tensor fills it with random values"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.tensor([...]) is given the actual numbers and infers the shape from the nesting. torch.zeros(2, 3), torch.ones and torch.randn are given the shape, usually as separate positional arguments. Mixing these up — passing data to zeros or a shape to tensor — is a common newcomer trip-up."
+  },
+  {
+    "id": "00.1-012",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "Which call is the conventional way you will see a 2x3 tensor of zeros created in PyTorch code?",
+    "options": [
+      "torch.zeros((2, 3), (0, 0))",
+      "torch.tensor(2, 3, fill=0)",
+      "torch.zeros(2, 3)",
+      "torch.zeros[2][3]"
+    ],
+    "answer_index": 2,
+    "explanation": "torch.zeros takes the shape as separate positional arguments, so torch.zeros(2, 3) is a 2x3 grid of 0.0. torch.zeros([2, 3]) also works, but the positional form is what you will read everywhere. The other forms are not valid PyTorch constructors."
+  },
+  {
+    "id": "00.1-013",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "What does torch.arange(6) return?",
+    "options": [
+      "tensor([0, 1, 2, 3, 4, 5]), an integer range like Python's range()",
+      "tensor([1, 2, 3, 4, 5, 6]), a range that includes the endpoint like linspace",
+      "A 6x6 identity matrix of floats, the same as calling torch.eye(6)",
+      "Six random integers drawn uniformly from the half-open range 0 to 6"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.arange works like Python's range() but returns a tensor: arange(6) gives the integers 0 through 5, excluding 6. Because they are integers, its dtype is int64. It is not inclusive of the endpoint and does not produce a matrix or random values."
+  },
+  {
+    "id": "00.1-014",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "From what distribution does torch.randn draw each element?",
+    "options": [
+      "Independently and uniformly between 0 and 1, like torch.rand",
+      "From a normal with mean 0 and variance equal to the number of elements in the tensor",
+      "Uniformly between -1 and 1, then normalised to unit length",
+      "Independently from the standard normal: mean 0, standard deviation 1"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.randn draws every element independently from the standard normal (Gaussian) distribution, a bell curve centred at 0 with standard deviation 1. That is why its values can be negative and occasionally exceed 2 in magnitude. Uniform samples on [0, 1) come from torch.rand, not randn."
+  },
+  {
+    "id": "00.1-015",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "What two main uses does torch.randn have in ML code examples?",
+    "options": [
+      "Computing gradients numerically and clipping them during backprop",
+      "Shuffling datasets and splitting them into batches",
+      "Initialising weights and fabricating fake data for demos",
+      "Encoding tokens into integer IDs and decoding model outputs into text"
+    ],
+    "answer_index": 2,
+    "explanation": "randn appears in almost every code example because it is how weights get initialised with random values and how fake input data is produced for demonstrations and tests. It does not compute gradients or shuffle datasets; those are separate mechanisms."
+  },
+  {
+    "id": "00.1-016",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "2. Creating tensors",
+    "question": "What does calling torch.manual_seed(0) before torch.randn(2, 3) achieve?",
+    "options": [
+      "It makes every value generated afterwards exactly zero until the seed is changed",
+      "It fixes the random number generator so the same values come out every run",
+      "It forces randn to return consecutive integers starting from the seed value 0",
+      "It seeds only the GPU generator, leaving CPU results different on every run"
+    ],
+    "answer_index": 1,
+    "explanation": "manual_seed fixes the state of the random number generator, so the 'random' values are identical every run — with seed 0, randn(2, 3) always gives the same six numbers (starting 1.5410, -0.2934, ...). That reproducibility is essential for examples and unit tests. It does not make values zero or integer."
+  },
+  {
+    "id": "00.1-017",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "3. Property one — .shape",
+    "question": "What does a tensor's .shape represent?",
+    "options": [
+      "A tuple giving the length of each axis, outermost first",
+      "A tuple giving the byte offset of each axis in memory",
+      "The total number of elements in the tensor, as one integer",
+      "The number of axes the tensor has, as a single integer"
+    ],
+    "answer_index": 0,
+    "explanation": ".shape is a torch.Size tuple with the length of each axis, outermost first; for a 2x3 matrix it is torch.Size([2, 3]). The byte-step information is the stride, the element count is numel(), and the number of axes is ndim."
+  },
+  {
+    "id": "00.1-018",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "3. Property one — .shape",
+    "question": "For a tensor with shape torch.Size([2, 3]), what do .ndim and .numel() return?",
+    "options": [
+      ".ndim is 6 and .numel() is 2",
+      ".ndim is 3 and .numel() is 5",
+      ".ndim is 2 and .numel() is 5",
+      ".ndim is 2 and .numel() is 6"
+    ],
+    "answer_index": 3,
+    "explanation": ".ndim is the number of axes, which is the length of the shape tuple: 2. .numel() is the total element count, the product of the shape entries: 2 x 3 = 6. A common slip is adding the entries (5) instead of multiplying them."
+  },
+  {
+    "id": "00.1-019",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "3. Property one — .shape",
+    "question": "How is a tensor's total element count related to its shape?",
+    "options": [
+      "It is the sum of all the shape entries",
+      "It is the largest shape entry",
+      "It is the product of all the shape entries",
+      "It is the first shape entry times the number of axes"
+    ],
+    "answer_index": 2,
+    "explanation": "numel() equals the product of the shape entries — for shape (2, 3) that is 6, for (4, 8) it is 32. This product is also what you multiply by bytes-per-element to get memory size. Summing the entries gives a meaningless number."
+  },
+  {
+    "id": "00.1-020",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "3. Property one — .shape",
+    "question": "What is described as the usual first step of almost every PyTorch debugging session?",
+    "options": [
+      "Lowering the learning rate and rerunning the failing step",
+      "Printing .shape and checking it matches what you expected",
+      "Restarting the Python kernel to clear any stale CUDA state",
+      "Converting every tensor to float64 to rule out precision"
+    ],
+    "answer_index": 1,
+    "explanation": "Because so many bugs are shape mismatches, almost every debugging session starts with printing .shape of the relevant tensors and checking each matches expectations. Changing hyperparameters or dtypes before you know the shapes are right is premature."
+  },
+  {
+    "id": "00.1-021",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "For a 2x3 tensor a, what does a[0] return?",
+    "options": [
+      "The first row, a tensor of shape (3,)",
+      "The first column, a tensor of shape (2,)",
+      "The first element as a Python float",
+      "A tensor of shape (1, 3)"
+    ],
+    "answer_index": 0,
+    "explanation": "Indexing works like nested arrays, one index per axis. A single index selects along the first axis, so a[0] is the first row, shape (3,) — the indexed axis disappears. It is still a tensor, not a Python number, and it does not keep a length-1 axis."
+  },
+  {
+    "id": "00.1-022",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "For a 2-D float tensor a, what is the type and shape of a[0, 2]?",
+    "options": [
+      "A plain Python float value",
+      "A rank-1 tensor with shape (1,)",
+      "A NumPy float32 scalar value",
+      "A rank-0 tensor with shape ()"
+    ],
+    "answer_index": 3,
+    "explanation": "Indexing every axis gives back a rank-0 (scalar) tensor such as tensor(3.), with shape (). It is still a tensor with a dtype and a device. It is not a Python float; to get one you must call .item()."
+  },
+  {
+    "id": "00.1-023",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "How do you extract the plain Python number from a scalar tensor like a[0, 2]?",
+    "options": [
+      "Call .numpy()[0] on the scalar tensor",
+      "Call .float() on the scalar tensor",
+      "Call .item(), e.g. a[0, 2].item()",
+      "Call .detach() on the scalar tensor"
+    ],
+    "answer_index": 2,
+    "explanation": ".item() pulls the plain Python number out of a single-element tensor, so a[0, 2].item() returns 3.0. .float() just changes dtype and still returns a tensor; .detach() still returns a tensor too. This is also how training loops log the loss value."
+  },
+  {
+    "id": "00.1-024",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "Why does the distinction between a rank-0 tensor and a Python float matter in deep learning?",
+    "options": [
+      "A Python float can carry a gradient; a scalar tensor cannot",
+      "A scalar tensor can carry a gradient; a Python float cannot",
+      "Python floats are always more precise than tensors",
+      "Scalar tensors cannot be used in arithmetic with other tensors"
+    ],
+    "answer_index": 1,
+    "explanation": "A rank-0 tensor still has a dtype, a device, and can be part of the autograd graph, so it can carry a gradient — the loss is exactly such a tensor. A Python float has no connection to the graph. Converting to a float with .item() is fine for logging but cuts any gradient path."
+  },
+  {
+    "id": "00.1-025",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "In the (B, T, C) shape convention used for language-model activations, what do B, T and C stand for?",
+    "options": [
+      "Bytes per element, tokens per batch, and context window size",
+      "Batch size, time/sequence length, channels/features per token",
+      "Batch size, number of tensors in the graph, and output classes",
+      "Blocks, threads, and cores of the GPU kernel launch grid"
+    ],
+    "answer_index": 1,
+    "explanation": "B is the batch (how many sequences processed at once), T is time or sequence length (tokens per sequence), and C is channels or features (the size of each token's vector). Every activation inside the language model is a rank-3 (B, T, C) tensor. 'Classes' and 'cores' are distractors."
+  },
+  {
+    "id": "00.1-026",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Indexing and what an index gives back",
+    "question": "What habit does the (B, T, C) convention encourage whenever you read a tensor shape?",
+    "options": [
+      "Assuming the last axis is always the batch",
+      "Flattening every tensor to 1-D before use",
+      "Ignoring shapes until the loss misbehaves",
+      "Asking which axis is which"
+    ],
+    "answer_index": 3,
+    "explanation": "The advice is: every time you read a shape, ask 'which axis is which?' — that habit is the whole game. Knowing that axis 0 is batch, axis 1 is position and axis 2 is features is what lets you reason about reductions, broadcasts and reshapes. The batch axis is first, not last."
+  },
+  {
+    "id": "00.1-027",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What two things does a tensor's dtype decide that matter enormously at scale?",
+    "options": [
+      "Which device the tensor lives on and the order of its axes in memory",
+      "Whether the tensor is contiguous and how large its stride is per axis",
+      "How many bytes each element takes and how much precision it carries",
+      "Whether the tensor requires gradients and how many axes it has"
+    ],
+    "answer_index": 2,
+    "explanation": "dtype determines bytes per element (memory) and precision (how many significant digits and what range). Device, shape and contiguity are separate properties. Because models have hundreds of millions of elements, the bytes-per-element choice dominates memory."
+  },
+  {
+    "id": "00.1-028",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "How many bytes per element do float32, float16, bfloat16, int64 and bool use?",
+    "options": [
+      "4, 2, 2, 8, 1",
+      "4, 2, 4, 4, 1",
+      "8, 4, 2, 8, 1",
+      "4, 1, 2, 8, 0.125"
+    ],
+    "answer_index": 0,
+    "explanation": "float32 is 4 bytes, float16 and bfloat16 are both 2 bytes, int64 (long) is 8 bytes, and bool is 1 byte per element in PyTorch. bfloat16 is the same size as float16 — it just spends its 16 bits differently. Bools are not bit-packed."
+  },
+  {
+    "id": "00.1-029",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What distinguishes bfloat16 from float16?",
+    "options": [
+      "bfloat16 uses 4 bytes per element while float16 uses 2",
+      "bfloat16 has more mantissa bits but a narrower range than float16",
+      "bfloat16 is an integer format used for token IDs",
+      "bfloat16 keeps float32's exponent range but has fewer mantissa bits"
+    ],
+    "answer_index": 3,
+    "explanation": "bfloat16 ('brain float') has the same exponent range as float32, so it will not overflow, but fewer mantissa bits, so its steps are coarser. float16 has a much narrower range and can overflow to infinity or underflow to zero. Both use 2 bytes per element."
+  },
+  {
+    "id": "00.1-030",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "Which dtype is described as the standard for training large models?",
+    "options": [
+      "float16",
+      "bfloat16",
+      "float64",
+      "float8_e4m3fn"
+    ],
+    "answer_index": 1,
+    "explanation": "bfloat16 has become the default training dtype because it halves memory relative to float32 while keeping float32's exponent range, so values do not overflow. float16 halves memory too but its narrow range causes overflow/underflow trouble. float64 doubles memory and is rarely used for training."
+  },
+  {
+    "id": "00.1-031",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "Which dtype must token IDs and indices use?",
+    "options": [
+      "int64 (long)",
+      "float32 (float)",
+      "float16 (half)",
+      "uint8 (byte)"
+    ],
+    "answer_index": 0,
+    "explanation": "Token IDs are indices into the vocabulary, not measurements, so they must stay int64, also called long. int64 is PyTorch's default integer dtype. Converting them to a float type is a common error that breaks embedding lookups."
+  },
+  {
+    "id": "00.1-032",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What is the bool dtype typically used for in language models?",
+    "options": [
+      "Storing token IDs compactly in a single byte each",
+      "Holding weights in quantised one-bit form",
+      "Masks, such as the causal attention mask",
+      "Accumulating gradients across micro-batches"
+    ],
+    "answer_index": 2,
+    "explanation": "bool tensors hold true/false values and show up as masks — for example the causal mask that prevents a token from attending to future positions. Token IDs use int64, and weights and gradients use floating-point dtypes."
+  },
+  {
+    "id": "00.1-033",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What dtype does torch.tensor([1., 2.]) have, and what about torch.tensor([1, 2])?",
+    "options": [
+      "float64 for the first, int32 for the second",
+      "float32 for the first, int64 for the second",
+      "float32 for both, since the data is numeric",
+      "int64 for both, since the values are whole numbers"
+    ],
+    "answer_index": 1,
+    "explanation": "With decimal points, torch.tensor infers float32 (PyTorch's default float). Without decimal points it infers int64. This difference is a silent-surprise default: integer tensors cannot carry gradients, so a forgotten decimal point can break training."
+  },
+  {
+    "id": "00.1-034",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What are the default dtypes of torch.zeros(...), torch.randn(...) and torch.arange(6)?",
+    "options": [
+      "int64, float32 and int64",
+      "float32, float64 and float32",
+      "float32, float32 and float32",
+      "float32, float32 and int64"
+    ],
+    "answer_index": 3,
+    "explanation": "zeros, ones and randn produce float32 unless told otherwise. arange(6) with integer arguments produces int64 because it is a range of integers. Assuming arange gives floats is a classic surprise when you then try to use it in gradient computations."
+  },
+  {
+    "id": "00.1-035",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "Why is it a problem if a tensor you want to train has an integer dtype?",
+    "options": [
+      "Integer tensors cannot carry gradients",
+      "Integer tensors cannot be moved to a GPU",
+      "Integer tensors cannot be indexed",
+      "Integer tensors use more memory than any float type"
+    ],
+    "answer_index": 0,
+    "explanation": "Autograd only works on floating-point (and complex) tensors; integer tensors cannot have gradients. Anything the network does arithmetic and gradients on must be a float dtype. Integer tensors can live on GPUs and be indexed normally."
+  },
+  {
+    "id": "00.1-036",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "4. Property two — .dtype",
+    "question": "What does h = a.to(torch.float16) do when a is float32?",
+    "options": [
+      "Converts a to half precision in place and returns None",
+      "Moves a to the GPU and keeps its dtype",
+      "Returns a copy of a in half precision; a itself is unchanged",
+      "Returns a view of a that reinterprets its bytes as float16"
+    ],
+    "answer_index": 2,
+    "explanation": "x.to(dtype) returns a new tensor with the values converted to that dtype; the original stays float32. It does not modify in place, so you must assign the result. It does not reinterpret raw bytes, and it does not change device unless you pass one."
+  },
+  {
+    "id": "00.1-037",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "How is a tensor's memory footprint computed?",
+    "options": [
+      "ndim times bytes per element",
+      "Sum of the shape entries times 4",
+      "numel times bytes per element",
+      "numel times ndim"
+    ],
+    "answer_index": 2,
+    "explanation": "Memory = numel() x element_size(). A 2x3 float32 tensor is 6 x 4 = 24 bytes; the same in float16 is 12 bytes. ndim and summed shapes play no role. element_size() reports bytes per element directly."
+  },
+  {
+    "id": "00.1-038",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "Which PyTorch method reports the number of bytes per element of a tensor?",
+    "options": [
+      ".element_size()",
+      ".numel()",
+      ".nbytes_per_elem()",
+      ".storage_offset()"
+    ],
+    "answer_index": 0,
+    "explanation": ".element_size() returns bytes per element — 4 for float32, 2 for float16. Multiplying it by .numel() gives the total bytes of data. .numel() is the element count and .stride() describes memory steps, not sizes."
+  },
+  {
+    "id": "00.1-039",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "Converting a float32 tensor to float16 changes its memory use how?",
+    "options": [
+      "It quarters it, because float16 stores two values per byte",
+      "It leaves it unchanged, because only precision changes",
+      "It doubles it, because float16 stores extra exponent bits",
+      "It halves it, because each element goes from 4 bytes to 2"
+    ],
+    "answer_index": 3,
+    "explanation": "float16 uses 2 bytes per element versus float32's 4, so the same numbers take exactly half the memory — 12 bytes instead of 24 for a 2x3 tensor. That factor of two is the entire reason mixed precision exists. The cost is reduced precision and, for float16, a narrower range."
+  },
+  {
+    "id": "00.1-040",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "Roughly how much memory do the weights of a ~124-million-parameter GPT-2-scale model take in float32?",
+    "options": [
+      "About 124 MB",
+      "About 496 MB",
+      "About 248 MB",
+      "About 992 MB"
+    ],
+    "answer_index": 1,
+    "explanation": "124,000,000 parameters x 4 bytes = about 496 MB just for the weights. In bfloat16 or float16 it would be about 248 MB. Training needs several more copies of this size for gradients and optimizer state, which is why bytes per element decides whether a model fits on a GPU."
+  },
+  {
+    "id": "00.1-041",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "Why does training need much more memory than just the model's weights?",
+    "options": [
+      "It also holds gradients and optimizer state, each about weight-sized",
+      "It must keep a float64 master copy of the whole training dataset in memory",
+      "Every forward pass duplicates the weights onto the CPU as a backup",
+      "The weights are replicated once per GPU core so each can read them"
+    ],
+    "answer_index": 0,
+    "explanation": "Beyond the weights, training keeps a gradient per parameter and, depending on the optimizer, extra per-parameter state — several more copies of the weight-sized footprint. That is why halving bytes per element can be the difference between fitting on a GPU or not. The dataset and CPU copies are not the reason."
+  },
+  {
+    "id": "00.1-042",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "What precision risk does float16 carry that bfloat16 largely avoids?",
+    "options": [
+      "Values silently become integers once they exceed 1000 in magnitude",
+      "It cannot represent negative numbers, so signed activations are clipped to zero",
+      "It rounds every value to two decimal places, losing small gradient updates",
+      "Values can overflow to infinity or underflow to zero due to its narrow range"
+    ],
+    "answer_index": 3,
+    "explanation": "float16 has a much narrower exponent range, so large values overflow to inf and tiny values underflow to zero. bfloat16 keeps float32's exponent range, so it does not overflow, at the cost of coarser steps. Neither format is restricted to positives or fixed decimals."
+  },
+  {
+    "id": "00.1-043",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "What is the overall takeaway about dtype in large-scale training?",
+    "options": [
+      "dtype only matters for integer data such as token IDs and attention masks",
+      "dtype is a memory-versus-precision dial that takes real engineering effort",
+      "Always use float64 everywhere, because precision problems outweigh memory cost",
+      "dtype choice affects throughput but never the memory a model occupies"
+    ],
+    "answer_index": 1,
+    "explanation": "dtype trades memory for precision: fewer bytes per element lets bigger models fit, but costs significant digits and possibly range. Managing that trade-off (mixed precision) is real engineering work. float64 would double memory and is not the answer; dtype directly sets memory."
+  },
+  {
+    "id": "00.1-044",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Why dtype decides memory and precision",
+    "question": "What happens if you convert token IDs to a float tensor and pass them to an embedding lookup?",
+    "options": [
+      "It works but rounds the IDs to the nearest vocabulary entry",
+      "It works and also lets gradients flow back into the token IDs themselves",
+      "The embedding lookup raises, because it needs a long (int64) tensor",
+      "It silently returns zero vectors for every token whose ID is fractional"
+    ],
+    "answer_index": 2,
+    "explanation": "Token IDs are indices into the vocabulary and the embedding layer requires a long tensor; handing it floats raises an error. Indices are not measurements, so there is nothing to round or differentiate. Keep token IDs int64."
+  },
+  {
+    "id": "00.1-045",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "What does a tensor's .device tell you?",
+    "options": [
+      "Which CPU core or thread will execute operations on it",
+      "Whether its elements are laid out contiguously in host memory",
+      "Which dtypes the underlying hardware natively supports",
+      "Whether its memory lives in CPU RAM or on a specific GPU"
+    ],
+    "answer_index": 3,
+    "explanation": ".device reports where the tensor's bytes physically live: device(type='cpu') for ordinary RAM or cuda:N for a GPU's memory. It is not about cores, contiguity or dtype support."
+  },
+  {
+    "id": "00.1-046",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "What is the idiomatic way to choose a device that works whether or not a GPU is present?",
+    "options": [
+      "device = \"cuda\" if torch.cuda.is_available() else \"cpu\"",
+      "device = torch.device(\"gpu\"), which maps to any GPU",
+      "device = \"cuda\" always, since PyTorch falls back silently",
+      "device = torch.cuda.current_device() or \"cpu\""
+    ],
+    "answer_index": 0,
+    "explanation": "Picking 'cuda' only if torch.cuda.is_available() and otherwise 'cpu' gives one device variable that works everywhere. PyTorch does not silently fall back from cuda to cpu; asking for cuda without a GPU raises. 'gpu' is not a valid device string."
+  },
+  {
+    "id": "00.1-047",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "What causes 'RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!'?",
+    "options": [
+      "A dtype mismatch between a float32 tensor and a float16 tensor in one op",
+      "An operation between a tensor in GPU memory and a tensor in CPU memory",
+      "Running out of GPU memory, so PyTorch spills one tensor back to the CPU",
+      "Calling .backward() twice on the same graph without retain_graph"
+    ],
+    "answer_index": 1,
+    "explanation": "Operations between two tensors require them to be on the same device, because their bytes are in physically different memories. Mixing a cuda:0 tensor with a cpu tensor raises this error — the single most common runtime error in real training code. Dtype mismatch and out-of-memory produce different errors."
+  },
+  {
+    "id": "00.1-048",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "What is the standard defence against device-mismatch errors?",
+    "options": [
+      "Call torch.cuda.synchronize() before each operation so all tensors agree on device",
+      "Convert all tensors to NumPy arrays before combining them, then convert back",
+      "Pick one device variable at the top and .to(device) the model, inputs and targets",
+      "Wrap every operation in torch.no_grad() so no cross-device graph is built"
+    ],
+    "answer_index": 2,
+    "explanation": "Define a single device variable once and move everything — model, inputs, targets — to it with .to(device). That also lets the same code run on GPU later by flipping one variable. Synchronising, NumPy conversion or no_grad do not address where tensors live."
+  },
+  {
+    "id": "00.1-049",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "What is the main benefit of the .to(device) habit even when running on CPU only?",
+    "options": [
+      "The same code later runs on a GPU unchanged by flipping one variable",
+      "It makes CPU computation faster by pinning the tensors in page-locked memory",
+      "It automatically converts tensors to bfloat16 so they match GPU kernels",
+      "It prevents gradients from accumulating between training steps"
+    ],
+    "answer_index": 0,
+    "explanation": "Writing x.to(device) everywhere means the code is device-agnostic: when a GPU becomes available you change one variable and nothing else. On CPU it costs nothing because .to returns the same tensor when nothing needs to move. It does not change dtype or affect gradients."
+  },
+  {
+    "id": "00.1-050",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "Which statement about x.to(...) is correct?",
+    "options": [
+      "It modifies x in place and returns None, like other trailing-underscore methods do",
+      "It always allocates a copy, even when the dtype and device already match",
+      "It returns a (possibly new) tensor that must be assigned, e.g. x = x.to(device)",
+      "It can change the device or the dtype of x, but never both in a single call"
+    ],
+    "answer_index": 2,
+    "explanation": ".to is overloaded: x.to(torch.float16) changes dtype, x.to('cuda') changes device, and x.to('cuda', torch.float16) does both. It returns a new tensor when something actually changes, and the same tensor when nothing needs to move. It never modifies in place, so you must assign the result."
+  },
+  {
+    "id": "00.1-051",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "5. Property three — .device",
+    "question": "You call x.to(\"cuda\") on a line by itself without assigning the result. What happens to x?",
+    "options": [
+      "x is moved to the GPU in place, and later ops on x run on CUDA",
+      "x is freed on the CPU and must be recreated from the original data",
+      "x becomes a unified-memory view shared between the CPU and the GPU",
+      "Nothing: x stays on the CPU because .to does not modify in place"
+    ],
+    "answer_index": 3,
+    "explanation": ".to returns a new tensor and does not modify the original. Without x = x.to('cuda'), the GPU copy is discarded and x remains a CPU tensor, which will later trigger a device-mismatch error. Forgetting to assign is a classic mistake."
+  },
+  {
+    "id": "00.1-052",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "How are a tensor's numbers stored in memory?",
+    "options": [
+      "As one separate heap allocation per row, linked together through a row-pointer table",
+      "In one flat 1-D array, with shape and stride describing how to read it as a grid",
+      "As a tree of pointers with one level per axis, like nested Python lists",
+      "In a hash map keyed by each element's index tuple, so lookups are O(1)"
+    ],
+    "answer_index": 1,
+    "explanation": "All elements live in one flat 1-D buffer. The shape and a second tuple, the stride, are metadata telling PyTorch how to interpret that buffer as an n-D grid. There are no per-row allocations or pointer trees."
+  },
+  {
+    "id": "00.1-053",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "What does a tensor's stride tell you?",
+    "options": [
+      "For each axis, how many elements to skip in the flat buffer to move one step along it",
+      "For each axis, how many bytes that axis occupies in total across the whole buffer",
+      "How many elements each GPU thread processes when a kernel runs over the tensor",
+      "The step size between consecutive values, as used by torch.arange's step argument"
+    ],
+    "answer_index": 0,
+    "explanation": "The stride says, per axis, 'to move one step along this axis, skip this many elements in the flat array'. For a row-major 2x3 tensor it is (3, 1): jump 3 to go down a row, 1 to go right a column. Stride is measured in elements, not total bytes, and is unrelated to GPU threads."
+  },
+  {
+    "id": "00.1-054",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "For x = torch.arange(6).view(2, 3), what is x.stride() and what does it mean?",
+    "options": [
+      "(1, 3): moving down a row skips 1 element, moving right a column skips 3",
+      "(2, 3): the same as the shape, since a contiguous view mirrors it",
+      "(6, 1): the total element count, then the step between neighbours",
+      "(3, 1): moving down a row skips 3 elements, moving right a column skips 1"
+    ],
+    "answer_index": 3,
+    "explanation": "Stored row by row, moving down one row in [[0,1,2],[3,4,5]] goes from 0 to 3 in the flat buffer (skip 3), and moving right one column goes from 0 to 1 (skip 1). So the stride is (3, 1). (1, 3) is what you get after transposing it."
+  },
+  {
+    "id": "00.1-055",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "What does it mean for a tensor to be contiguous (row-major / C-contiguous)?",
+    "options": [
+      "All its elements share one value, so it can be stored as a single number",
+      "It is stored entirely on a single GPU rather than split across several",
+      "Its flat memory order matches reading the grid left-to-right, top-to-bottom",
+      "Its shape has no length-1 axes, so no dimension needs to be squeezed out"
+    ],
+    "answer_index": 2,
+    "explanation": "A contiguous tensor's flat buffer order matches reading the logical grid row by row, left to right and top to bottom. This is the default layout, and many fast operations assume it. It has nothing to do with values, devices or size-1 axes."
+  },
+  {
+    "id": "00.1-056",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "Why can PyTorch hand you a differently-shaped view of a tensor without copying the data?",
+    "options": [
+      "Because PyTorch copies data lazily, only when the view is printed or written to disk",
+      "Because shape and stride are metadata over a shared buffer, so a new (shape, stride) label suffices",
+      "Because views are stored compressed, so the reshaped copy costs almost no extra memory",
+      "Because reshaping rewrites the one buffer in place, so the original layout no longer exists"
+    ],
+    "answer_index": 1,
+    "explanation": "Since the numbers live in one flat buffer and shape/stride merely describe how to read it, a view is just a new (shape, stride) label pointing at the same memory. No numbers move, so reshaping is nearly free. The flip side is that the view and its parent share storage."
+  },
+  {
+    "id": "00.1-057",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "6. Under the hood — contiguous memory and strides",
+    "question": "What surprising behaviour follows from views sharing a flat buffer with their parent?",
+    "options": [
+      "Views always have a different dtype from the parent",
+      "Views cannot be indexed or sliced any further",
+      "Mutating the view also changes the parent tensor",
+      "Views double the memory used by the parent tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "Because a view and its parent are two labels on the same memory, writing through one changes the other — the 'views share storage' surprise. Views use no extra data memory and share the parent's dtype."
+  },
+  {
+    "id": "00.1-058",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Check yourself",
+    "question": "How many bytes does a float32 tensor of shape (4, 8) occupy, and how many in bfloat16?",
+    "options": [
+      "32 bytes in float32 and 16 bytes in bfloat16",
+      "128 bytes in float32 and 64 bytes in bfloat16",
+      "128 bytes in both, since bfloat16 has float32's range",
+      "256 bytes in float32 and 128 bytes in bfloat16"
+    ],
+    "answer_index": 1,
+    "explanation": "numel = 4 x 8 = 32 elements. At 4 bytes each, float32 takes 128 bytes; at 2 bytes each, bfloat16 takes 64 bytes — exactly half. Having the same exponent range as float32 does not make bfloat16 the same size."
+  },
+  {
+    "id": "00.1-059",
+    "chapter": "00.1",
+    "chapter_name": "Tensors: shape, dtype, device",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-01.md",
+    "section": "Check yourself",
+    "question": "You write ids = torch.tensor([5, 17, 42]) for token IDs. What is the dtype, and is it right?",
+    "options": [
+      "float32, which the embedding layer will reject",
+      "int32, which must be cast to long first",
+      "float32, which is correct because embeddings are floats",
+      "int64 (long), which is correct for token IDs"
+    ],
+    "answer_index": 3,
+    "explanation": "Integer literals without decimal points give int64 (long), which is exactly right: token IDs are indices into the vocabulary and the embedding lookup needs long. Writing [5., 17., 42.] would have produced float32, which the embedding layer would reject."
+  }
+]

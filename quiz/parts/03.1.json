@@ -1,0 +1,1550 @@
+[
+  {
+    "id": "03.1-001",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How do later optimization techniques such as Adam, warmup/cosine schedules and the LLM pretraining loop relate to plain gradient descent, SGD and momentum?",
+    "options": [
+      "They are refinements built on top of the plain update rule, minibatch gradients and momentum",
+      "They replace first-order gradient steps with second-order Newton steps that use the full Hessian",
+      "They are separate methods that search parameter space without using the gradient of the loss",
+      "They target small models only, while LLM pretraining still relies on exact full-batch gradient descent"
+    ],
+    "answer_index": 0,
+    "explanation": "Training a language model is running an update rule like theta <- theta - eta*g millions of times. Adam adds per-parameter scaling, schedules vary eta over time, and the pretraining loop just repeats the step. None of these abandon the gradient or switch to second-order methods; they are bookkeeping on top of the basic ideas."
+  },
+  {
+    "id": "03.1-002",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "1. Intuition: walking downhill on the loss surface",
+    "question": "Why is a neural network's loss minimized by iterative small steps rather than by solving directly for the best parameters?",
+    "options": [
+      "Because the loss of a deep network has no usable gradient, so only random search over parameters is possible",
+      "Because the loss depends on huge numbers of parameters through a deep nonlinear network, so there is no closed form",
+      "Because the loss is linear in the parameters, so any fixed step size eventually reaches the exact minimum",
+      "Because solving for the optimum directly would return parameters that overfit the held-out test set by construction"
+    ],
+    "answer_index": 1,
+    "explanation": "The loss L(theta) depends on an enormous number of parameters wired through nonlinear layers, so there is no way to solve for the optimum analytically. What is cheap is computing which direction is downhill at the current point, so training takes a small step that way and repeats, often hundreds of thousands of times."
+  },
+  {
+    "id": "03.1-003",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "1. Intuition: walking downhill on the loss surface",
+    "question": "In which direction does the negative gradient, -grad L(theta), point?",
+    "options": [
+      "The direction of steepest increase of the loss",
+      "A direction orthogonal to the loss contours that keeps the loss constant",
+      "The direction of steepest decrease of the loss",
+      "Directly toward the global minimum of the loss"
+    ],
+    "answer_index": 2,
+    "explanation": "The gradient grad L points in the direction of steepest increase, so its negative points in the direction of steepest decrease. That is only a local statement: it does not point straight at the global minimum, which is why gradient descent must recompute the gradient after each step."
+  },
+  {
+    "id": "03.1-004",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "1. Intuition: walking downhill on the loss surface",
+    "question": "What is the core question every deep-learning optimizer answers?",
+    "options": [
+      "Which layers of the network should be frozen and which should keep receiving updates during training",
+      "How many training examples should be held out for validation so the loss estimate stays unbiased",
+      "Which loss function the model should minimize, given the task and the format of the labels",
+      "Given the current gradient (and memory of past ones), how the parameters should change"
+    ],
+    "answer_index": 3,
+    "explanation": "Every optimizer maps the current gradient, plus possibly state built from past gradients, to a parameter update. Plain gradient descent gives the simplest answer: step straight downhill by a fixed fraction of the gradient. Momentum and Adam differ only in how they use the gradient and their memory."
+  },
+  {
+    "id": "03.1-005",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.1 The update rule",
+    "question": "In the gradient-descent update theta <- theta - eta * grad L(theta), what does the arrow '<-' mean?",
+    "options": [
+      "Overwrite theta with the right-hand side; an in-place update repeated every step",
+      "theta converges to the right-hand side only in the limit of infinitely many training steps",
+      "theta is compared with the right-hand side and the smaller of the two values is kept",
+      "The right-hand side is a constraint that theta must satisfy once it reaches the optimum"
+    ],
+    "answer_index": 0,
+    "explanation": "The arrow is assignment: the parameter vector is overwritten with theta - eta*grad L, and this is repeated each training step. It is not a limit, comparison, or constraint; it is the concrete in-place mutation an optimizer's step() performs."
+  },
+  {
+    "id": "03.1-006",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.1 The update rule",
+    "question": "What is the shape of the gradient grad L(theta) relative to the parameter vector theta?",
+    "options": [
+      "It is a scalar: the value of the loss evaluated at the current parameters theta",
+      "It has the same shape as theta, with entry i equal to dL/d theta_i",
+      "It is a square matrix of size len(theta) x len(theta) holding all pairwise derivatives",
+      "It has the shape of one minibatch of inputs, one derivative per input feature"
+    ],
+    "answer_index": 1,
+    "explanation": "The gradient has one entry per parameter: entry i is the partial derivative of the loss with respect to theta_i, i.e. how much the loss rises per unit increase in that parameter. It therefore has exactly the shape of theta. The square matrix of second derivatives would be the Hessian, which gradient descent never forms."
+  },
+  {
+    "id": "03.1-007",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.1 The update rule",
+    "question": "In PyTorch, where does the gradient that gradient descent uses come from?",
+    "options": [
+      "It is computed by the optimizer's step() method from the current parameter values alone",
+      "It is approximated by finite differences inside torch.optim, one perturbed parameter at a time",
+      "loss.backward() computes it and stores it in each parameter's .grad attribute",
+      "It is read from the DataLoader along with each batch, precomputed when the dataset is built"
+    ],
+    "answer_index": 2,
+    "explanation": "loss.backward() runs backpropagation and fills each leaf parameter's .grad with dL/d(param). The optimizer's step() only reads .grad and applies the update; it does not compute derivatives itself, and no finite differences are involved."
+  },
+  {
+    "id": "03.1-008",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.1 The update rule",
+    "question": "What does the learning rate eta set in the gradient-descent update?",
+    "options": [
+      "The number of training examples averaged into the gradient estimate on each step",
+      "The direction of the update, chosen independently of the gradient at the current point",
+      "The number of optimizer steps taken before training stops and the model is saved",
+      "The step size: parameters move a fraction eta along the negative gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "eta is a small positive scalar (e.g. 0.1 or 3e-4) that multiplies the negative gradient. It scales how far each step moves but not the direction, which comes from the gradient. Batch size and number of steps are separate hyperparameters."
+  },
+  {
+    "id": "03.1-009",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.1 The update rule",
+    "question": "What does 'full-batch' gradient descent mean?",
+    "options": [
+      "The gradient is the average of per-example gradients over the entire training set",
+      "The gradient is computed on one randomly chosen example per step and used directly for the update",
+      "The model is trained with the largest batch that fits in GPU memory, reshuffled every epoch",
+      "Every layer of the network is updated together in a single step instead of one layer at a time"
+    ],
+    "answer_index": 0,
+    "explanation": "Full-batch descent uses L(theta) = (1/N) * sum over all N examples of the per-example loss, so its gradient is the average of all N per-example gradients. That is the true gradient of the training loss. Using one example would be stochastic gradient descent, and 'largest batch that fits' is still a minibatch."
+  },
+  {
+    "id": "03.1-010",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.2 What the learning rate controls",
+    "question": "Which hyperparameter is described as the single most important one in training?",
+    "options": [
+      "The momentum coefficient mu",
+      "The learning rate eta",
+      "The number of epochs",
+      "The random seed for shuffling"
+    ],
+    "answer_index": 1,
+    "explanation": "The learning rate controls step size, and getting it wrong either wastes enormous compute (too small) or makes training oscillate or diverge (too large). That outsized effect is why it is called the most important hyperparameter, and why a whole lesson (03.3) is devoted to scheduling it."
+  },
+  {
+    "id": "03.1-011",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.2 What the learning rate controls",
+    "question": "What happens when the learning rate is too small?",
+    "options": [
+      "The loss diverges to inf",
+      "The loss oscillates wildly between two values",
+      "Training is correct but crawls, wasting compute",
+      "The gradient becomes zero and training stops immediately"
+    ],
+    "answer_index": 2,
+    "explanation": "With a tiny eta each step barely moves the parameters. The direction is still right, so the loss decreases, but very slowly, burning compute for little progress. Oscillation and divergence are the symptoms of a learning rate that is too large."
+  },
+  {
+    "id": "03.1-012",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.2 What the learning rate controls",
+    "question": "What happens when the learning rate is too large?",
+    "options": [
+      "The steps become smaller near the minimum, so training merely slows down without other harm",
+      "Each step lands exactly on the minimum, so training converges in one or two iterations",
+      "The optimizer automatically lowers eta until the updates become stable again",
+      "A step can overshoot the valley and land higher, so loss oscillates or diverges"
+    ],
+    "answer_index": 3,
+    "explanation": "A large eta takes a step that jumps across the downhill valley and can end at a higher loss than before. Repeating that makes the loss oscillate or blow up to inf. Plain gradient descent has no mechanism to lower eta by itself; that is the job of a schedule."
+  },
+  {
+    "id": "03.1-013",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.3 Worked example: minimize f(x) = x^2",
+    "question": "For gradient descent on f(x) = x^2 with learning rate 0.1, the update is x <- x - 0.1*2x. What single operation does each step perform on x?",
+    "options": [
+      "Multiplies x by 0.8",
+      "Subtracts a constant 1 from x",
+      "Multiplies x by 0.2",
+      "Divides x by 2"
+    ],
+    "answer_index": 0,
+    "explanation": "x - 0.1*2x = x - 0.2x = 0.8x, so every step multiplies x by 0.8. From 5 this gives 4.0, 3.2, 2.56. The subtraction is not constant: the step size 0.2x shrinks as x shrinks."
+  },
+  {
+    "id": "03.1-014",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.3 Worked example: minimize f(x) = x^2",
+    "question": "Why do gradient-descent steps on f(x) = x^2 get smaller as x approaches the minimum at 0, even with a fixed learning rate?",
+    "options": [
+      "Because the learning rate is automatically decayed each step",
+      "Because the gradient 2x itself shrinks as x approaches 0",
+      "Because floating-point rounding truncates small updates",
+      "Because the loss becomes negative near the minimum"
+    ],
+    "answer_index": 1,
+    "explanation": "The step is eta times the gradient, and the gradient 2x goes to zero as x goes to zero. So even with constant eta the steps naturally shrink near the bottom of a smooth loss. This automatic slowdown is a property of gradient descent on smooth functions, not of any schedule."
+  },
+  {
+    "id": "03.1-015",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.3 Worked example: minimize f(x) = x^2",
+    "question": "In a manual PyTorch gradient-descent loop, why is the update 'x -= eta * x.grad' wrapped in 'with torch.no_grad():'?",
+    "options": [
+      "To make the update run on the GPU instead of the CPU, where autograd cannot see the tensor",
+      "To convert x to a lower precision for the duration of the update so the step runs faster",
+      "Because the update is not part of the forward pass, so autograd must not record it",
+      "To automatically zero x.grad after the update so the next backward() starts from a clean slate"
+    ],
+    "answer_index": 2,
+    "explanation": "The parameter update is not part of the model's computation, so it must not be added to the autograd graph. torch.no_grad() turns off recording for that block. It does not change device or dtype, and it does not clear .grad; that must be done separately."
+  },
+  {
+    "id": "03.1-016",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.3 Worked example: minimize f(x) = x^2",
+    "question": "Why must x.grad be reset to None (or zeroed) after each gradient-descent step in PyTorch?",
+    "options": [
+      "Because backward() raises an error whenever .grad already holds a value from the previous step",
+      "Because the optimizer reads .grad only when it is None and otherwise skips the parameter entirely",
+      "Because a non-None .grad prevents the next forward pass from running until it is cleared",
+      "Because backward() adds into .grad, so it would accumulate the sum of all past gradients"
+    ],
+    "answer_index": 3,
+    "explanation": "backward() accumulates: it adds the new gradient to whatever is already in .grad. If you never clear it, step k uses the sum of all k gradients so far. That is why every optimizer has a zero_grad() method. backward() does not raise an error on a populated .grad, which is exactly why the bug is silent."
+  },
+  {
+    "id": "03.1-017",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "2.4 Why not just use full-batch descent forever?",
+    "question": "Why is full-batch gradient descent impractical for training a real LLM?",
+    "options": [
+      "One gradient would need a forward and backward pass over billions of tokens per step",
+      "The full-batch gradient is biased, so with enough steps it points systematically away from the minimum",
+      "Full-batch gradients cannot be computed with backpropagation once the model exceeds a few layers",
+      "Full-batch descent requires a learning rate larger than 1, which makes deep networks diverge"
+    ],
+    "answer_index": 0,
+    "explanation": "The true gradient averages over the whole dataset, which for an LLM is billions of tokens. You would wait for a pass over all of it before each step, taking only a handful of steps a day. The full-batch gradient is the exact gradient of the training loss, not biased, and backprop computes it fine; it is simply far too expensive."
+  },
+  {
+    "id": "03.1-018",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "In minibatch SGD, how is the gradient estimate g computed?",
+    "options": [
+      "As the gradient of the single example in the batch that currently has the largest loss",
+      "As the average of per-example gradients over a random minibatch B",
+      "As the sum of all per-example gradients across the full dataset, recomputed every step",
+      "As the difference between the current loss and the previous loss, divided by the step size"
+    ],
+    "answer_index": 1,
+    "explanation": "g = (1/|B|) * sum over n in B of grad l(theta; x_n). Because the true gradient is an average over all N examples, an average over a random subset estimates it. Using the worst example or the full sum would not be the minibatch estimate."
+  },
+  {
+    "id": "03.1-019",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "Why is the minibatch gradient g described as 'unbiased'?",
+    "options": [
+      "Because it is exactly equal to the true full-dataset gradient on every single step",
+      "Because it is computed in float64, so no rounding error can shift its value",
+      "Because a random subset's average has the same expected value as the full average",
+      "Because each batch contains every class of example in equal proportion by construction"
+    ],
+    "answer_index": 2,
+    "explanation": "Unbiased means the expected value of g, over the random choice of batch, equals the true gradient. Any particular batch still deviates from it, which is why g is also noisy. Unbiasedness comes from random sampling, not from precision or stratified class balance."
+  },
+  {
+    "id": "03.1-020",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "Why is the minibatch gradient estimate described as 'noisy'?",
+    "options": [
+      "Because GPUs add small random noise to floating-point results during matrix multiplication",
+      "Because the learning rate is randomly perturbed by the optimizer on each step",
+      "Because dropout is applied during the backward pass, randomly zeroing gradient entries",
+      "Because any particular small sample deviates from the expected (true) gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "A finite random sample's average differs from the full-dataset average by some random amount; that deviation is the noise. It is a statistical property of sampling, not hardware noise or a randomized learning rate."
+  },
+  {
+    "id": "03.1-021",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "Where does the randomness in stochastic gradient descent actually live?",
+    "options": [
+      "In which examples end up in each batch, produced by shuffling the data",
+      "In the optimizer's update rule, which adds random noise to each step",
+      "In a random scaling of the learning rate at each step",
+      "In random initialization of the velocity buffer"
+    ],
+    "answer_index": 0,
+    "explanation": "The update theta <- theta - eta*g and the SGD class are fully deterministic. The randomness comes from the data pipeline, which randomly permutes example indices each epoch before chopping them into batches. So which examples share a batch, and therefore every g, is random."
+  },
+  {
+    "id": "03.1-022",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "Why is batching alone, with examples always fed in the same fixed order (e.g. sorted by topic or length), not true SGD?",
+    "options": [
+      "Because fixed-order batches cannot be processed in parallel on a GPU without reshuffling first",
+      "Because each batch is then a biased sample, so g points toward what that slice wants",
+      "Because fixed-order batches make the averaged gradient exactly zero after one full epoch",
+      "Because the optimizer then requires a separately tuned learning rate for each fixed batch"
+    ],
+    "answer_index": 1,
+    "explanation": "SGD's justification is that each batch is a random sample, so its average gradient is an unbiased estimate of the full gradient. With a fixed sorted order, consecutive batches come from one slice of the data, and g is biased toward that slice. Shuffling before each epoch restores randomness."
+  },
+  {
+    "id": "03.1-023",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "What is an epoch in minibatch training?",
+    "options": [
+      "One optimizer step on one minibatch, followed by zeroing the gradients",
+      "The time it takes to compute one forward pass over a single batch of inputs",
+      "One full pass over the training data, after which indices are reshuffled",
+      "The number of optimizer steps between two consecutive learning-rate changes"
+    ],
+    "answer_index": 2,
+    "explanation": "An epoch is one pass in which every example is used once. Before each epoch the example indices are randomly permuted and sliced into consecutive batches, so every example is seen once per epoch but the batch groupings change."
+  },
+  {
+    "id": "03.1-024",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "What does PyTorch's DataLoader(dataset, batch_size=2, shuffle=True) do at the start of each epoch?",
+    "options": [
+      "Sorts the dataset by example length to reduce padding",
+      "Samples examples with replacement so some repeat within an epoch",
+      "Keeps the same batch groupings as the previous epoch",
+      "Draws torch.randperm(N) and slices the permutation into batches"
+    ],
+    "answer_index": 3,
+    "explanation": "With shuffle=True the DataLoader draws a fresh random permutation of the N indices each epoch and slices it into consecutive batches of size 2. Every example is used exactly once per epoch, but which examples share a batch is random and changes between epochs."
+  },
+  {
+    "id": "03.1-025",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "How does LLM pretraining apply shuffling for SGD?",
+    "options": [
+      "Documents are shuffled and seen about once, so each batch mixes sources like web, code and books",
+      "Documents are grouped by source so each batch contains only one source, such as all code or all books",
+      "Documents are sorted by quality score so the cleanest data is seen last, after the noisy web text",
+      "Shuffling is skipped because web-scale LLM datasets are already in an effectively random order"
+    ],
+    "answer_index": 0,
+    "explanation": "Pretraining does the same thing as DataLoader shuffling at a larger scale: documents are shuffled and typically seen about once, so each batch is a random mix of web pages, code, books and so on. Grouping or sorting by source would bias each batch's gradient."
+  },
+  {
+    "id": "03.1-026",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.1 The gradient as an average, and a cheap estimate of it",
+    "question": "What is the strict meaning of 'stochastic' gradient descent versus 'minibatch SGD', and what does 'SGD' usually mean in practice?",
+    "options": [
+      "Stochastic strictly means full-batch, minibatch means one example, and 'SGD' in practice means full-batch",
+      "Stochastic strictly means one example, minibatch SGD means many, and 'SGD' usually means minibatch",
+      "Stochastic strictly means momentum is used, minibatch means no momentum, and 'SGD' means the momentum one",
+      "Both strictly mean a batch of one example, and practitioners reserve 'SGD' for that single-example case"
+    ],
+    "answer_index": 1,
+    "explanation": "Strictly, stochastic gradient descent uses a single example per step and minibatch SGD uses many. In practice everyone calls the minibatch version 'SGD'. Momentum is a separate addition and has nothing to do with the name."
+  },
+  {
+    "id": "03.1-027",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.2 Why noisy-but-cheap wins",
+    "question": "Why does noisy minibatch SGD beat exact full-batch gradient descent for a fixed compute budget?",
+    "options": [
+      "Because the minibatch gradient is a more accurate estimate of the true gradient than the full average",
+      "Because minibatch steps automatically use a larger learning rate than full-batch steps would",
+      "Because you can take thousands of approximate steps instead of a few exact ones",
+      "Because minibatch SGD needs no backward pass, only forward passes on each small batch"
+    ],
+    "answer_index": 2,
+    "explanation": "Each SGD step only roughly points downhill, but it costs |B| examples instead of N. For the same compute you take vastly more steps, and many approximate steps beat a few exact ones by a huge margin. The minibatch gradient is less accurate, not more."
+  },
+  {
+    "id": "03.1-028",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.2 Why noisy-but-cheap wins",
+    "question": "What benefit can the noise in SGD gradients provide beyond cheapness?",
+    "options": [
+      "It guarantees convergence to the global minimum of the loss",
+      "It removes the need to choose or tune a learning rate at all",
+      "It makes the minibatch gradient exactly unbiased on every step",
+      "It can help training escape flat regions and poor sharp minima"
+    ],
+    "answer_index": 3,
+    "explanation": "A little randomness in the gradient can push the parameters out of flat regions and poor sharp minima that an exact gradient might stay stuck in. It does not guarantee a global minimum, and unbiasedness comes from random sampling, not from the noise itself."
+  },
+  {
+    "id": "03.1-029",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.2 Why noisy-but-cheap wins",
+    "question": "How does the variance of the minibatch gradient estimate change with batch size |B|?",
+    "options": [
+      "It falls like 1/|B|",
+      "It grows like |B|",
+      "It falls like 1/|B|^2",
+      "It is independent of batch size"
+    ],
+    "answer_index": 0,
+    "explanation": "Averaging over more independent samples reduces the variance of the mean like 1/|B|. Larger batches therefore give less noisy gradients but cost proportionally more per step, making batch size a compute-versus-noise trade-off."
+  },
+  {
+    "id": "03.1-030",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.2 Why noisy-but-cheap wins",
+    "question": "What is the trade-off when choosing a larger batch size for SGD?",
+    "options": [
+      "Larger batches give noisier gradients but are cheaper to compute per step",
+      "Larger batches give less noisy gradients but cost proportionally more per step",
+      "Larger batches change the expected value of the gradient toward the largest examples",
+      "Larger batches remove the need for shuffling since every batch covers the data"
+    ],
+    "answer_index": 1,
+    "explanation": "A larger batch averages more samples, lowering gradient variance, but each step processes more examples and so costs more. The expected value is unchanged either way (both are unbiased), and shuffling is still needed for randomness."
+  },
+  {
+    "id": "03.1-031",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.2 Why noisy-but-cheap wins",
+    "question": "Does anyone compute a full-dataset gradient when training an LLM?",
+    "options": [
+      "Yes, once per epoch, to recalibrate the learning rate against the true gradient",
+      "Yes, but only for the final step of training, to polish the converged weights",
+      "No; LLMs are trained with cheap random-minibatch estimates",
+      "Only when using momentum, to initialize the velocity buffer before the first step"
+    ],
+    "answer_index": 2,
+    "explanation": "Every LLM is trained with SGD-style minibatch gradient estimates; nobody computes the full-dataset gradient. The update is the same theta <- theta - eta*g, just with g as an affordable random-minibatch estimate."
+  },
+  {
+    "id": "03.1-032",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.3 The from-scratch SGD optimizer",
+    "question": "In the from-scratch SGD optimizer's step() method, what does p.add_(g, alpha=-self.lr) do?",
+    "options": [
+      "Adds the learning rate to every parameter",
+      "Returns a new tensor p + lr*g without modifying p",
+      "Sets the gradient to -lr * g",
+      "Updates p in place to p - lr * g"
+    ],
+    "answer_index": 3,
+    "explanation": "Tensor.add_(other, alpha=a) computes p += a*other in place. With alpha = -lr this is p <- p - lr*g, the SGD update. The trailing underscore means in-place, so no new tensor is returned as a separate copy and .grad is not touched."
+  },
+  {
+    "id": "03.1-033",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.3 The from-scratch SGD optimizer",
+    "question": "Why does the from-scratch SGD step() skip parameters whose p.grad is None?",
+    "options": [
+      "Because those parameters got no gradient (e.g. unused this pass), so nothing to apply",
+      "Because a None gradient means the parameter has already converged and should be frozen from now on",
+      "Because None gradients are produced only by bias terms, which plain SGD deliberately leaves untouched",
+      "Because skipping them speeds up the next backward pass by pruning those nodes from the graph"
+    ],
+    "answer_index": 0,
+    "explanation": "A parameter whose .grad is None did not receive a gradient, for example because it was not used in the loss computation. There is no update to apply, so step() continues to the next parameter. It says nothing about convergence or about biases specifically."
+  },
+  {
+    "id": "03.1-034",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.3 The from-scratch SGD optimizer",
+    "question": "Why are the from-scratch optimizer's step() and zero_grad() methods decorated with @torch.no_grad()?",
+    "options": [
+      "To run them on the CPU even when the model and gradients live on the GPU",
+      "So that the in-place parameter updates are not recorded by autograd",
+      "To make the methods run asynchronously on a separate CUDA stream from the forward pass",
+      "So that the gradients they read are promoted to double precision before use"
+    ],
+    "answer_index": 1,
+    "explanation": "Optimizer updates mutate leaf parameters, and autograd must not track that arithmetic as part of the graph. The decorator disables gradient recording within those methods, the same reason a manual loop wraps the update in torch.no_grad()."
+  },
+  {
+    "id": "03.1-035",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "3.3 The from-scratch SGD optimizer",
+    "question": "How is the from-scratch SGD optimizer verified to be correct?",
+    "options": [
+      "By checking that the training loss reaches exactly zero on a small synthetic dataset",
+      "By comparing its final weights to a closed-form least-squares solution and nothing else",
+      "By a test that it reproduces torch.optim.SGD step-for-step on small linear regression",
+      "By visually inspecting the loss curve and confirming it decreases smoothly over time"
+    ],
+    "answer_index": 2,
+    "explanation": "The test test_sgd_plain_matches_torch runs both optimizers on a small linear-regression problem and checks that every step matches. Matching the reference implementation step by step is a stronger check than looking at a loss curve or only the final result."
+  },
+  {
+    "id": "03.1-036",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "Why is plain SGD slow on a loss surface shaped like a long narrow valley?",
+    "options": [
+      "Because the gradient there is zero almost everywhere, so the updates stall completely",
+      "Because the valley floor has higher loss than the walls, so steps are pushed up the sides",
+      "Because the minibatch noise is largest in narrow valleys and swamps the true gradient",
+      "Because it zig-zags across the steep walls while creeping along the gentle floor"
+    ],
+    "answer_index": 3,
+    "explanation": "In a narrow valley the gradient mostly points across the valley (the steep direction), so SGD bounces between the walls while making little progress along the floor toward the minimum. Plain SGD has no memory, so it cannot exploit the consistent along-valley direction."
+  },
+  {
+    "id": "03.1-037",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "In a long narrow valley, why can't plain SGD simply use a larger learning rate to speed up progress along the gentle direction?",
+    "options": [
+      "Because the steep direction limits eta: too large and it diverges across the valley",
+      "Because a larger eta would make the minibatch gradient biased toward the steep walls",
+      "Because a larger eta requires a proportionally larger batch size to remain stable at all",
+      "Because the gentle direction has no gradient, so no learning rate can move along it"
+    ],
+    "answer_index": 0,
+    "explanation": "The steep direction has high curvature and is stable only for small eta. Raising eta to help the gentle direction makes the steep direction overshoot more each step and diverge. So the steep direction sets the speed limit and starves the gentle direction of progress."
+  },
+  {
+    "id": "03.1-038",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "For plain gradient descent on f(x, y) = 0.5*(x^2 + 20*y^2), what is the stability limit on the learning rate, and which direction sets it?",
+    "options": [
+      "eta < 2, set by the gentle x-direction with curvature 1",
+      "eta < 2/20 = 0.1, set by the steep y-direction",
+      "eta < 1/20 = 0.05, set by the x-direction's slow progress",
+      "eta < 20, set by the y-direction's curvature of 20"
+    ],
+    "answer_index": 1,
+    "explanation": "For a quadratic with curvature L along a direction, gradient descent is stable for eta < 2/L. The y-direction has curvature 20, giving eta < 0.1; x has curvature 1, allowing eta < 2. The steepest direction sets the limit for the whole problem."
+  },
+  {
+    "id": "03.1-039",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "Running plain SGD with eta = 0.095 on f(x, y) = 0.5*(x^2 + 20*y^2), the y-coordinate is multiplied by 1 - 0.095*20 = -0.9 each step. What does this mean for the y-motion?",
+    "options": [
+      "y moves monotonically toward zero from one side, shrinking by 90% on each step",
+      "y grows by 90% each step and diverges to infinity after a few dozen iterations",
+      "y flips sign every step and shrinks only 10% each time: wasted oscillation",
+      "y stays constant at its starting value because the multiplier cancels the gradient"
+    ],
+    "answer_index": 2,
+    "explanation": "A negative multiplier means each step jumps to the opposite wall, and |-0.9| = 0.9 means it shrinks by only 10% per step. That is oscillation across the valley that contributes little progress. Meanwhile x is multiplied by 0.905, a tiny move along the floor."
+  },
+  {
+    "id": "03.1-040",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "In the narrow-valley example f(x, y) = 0.5*(x^2 + 20*y^2), what happens to the y-oscillation if eta is raised above 0.1?",
+    "options": [
+      "The y-multiplier rises above 1, so y drifts slowly away from the valley floor",
+      "The oscillation vanishes because y reaches zero exactly in a single step",
+      "The x-direction becomes unstable first and diverges before y does anything",
+      "The y-multiplier falls below -1, so the bounce grows instead of shrinking"
+    ],
+    "answer_index": 3,
+    "explanation": "The y-multiplier is 1 - 20*eta. At eta > 0.1 it is below -1, so each step flips sign and increases |y|, which diverges. The x-direction, with curvature 1, is still far from its own limit of 2, so it is not the first to fail."
+  },
+  {
+    "id": "03.1-041",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.1 The problem momentum solves",
+    "question": "How does momentum fix the zig-zag behaviour of SGD in a narrow valley?",
+    "options": [
+      "Across the valley gradients alternate and cancel in the running average; along it they add up",
+      "It computes the exact Hessian at each step and rescales every direction by its own curvature",
+      "It lowers the learning rate in the steep direction only, leaving the gentle direction unchanged",
+      "It detects gradients that point across the valley and discards them before applying the update"
+    ],
+    "answer_index": 0,
+    "explanation": "Momentum steps along a running average of recent gradients. The oscillating across-valley components alternate sign and cancel, while the consistent along-valley component adds up and builds speed. It does not compute curvature or use per-direction learning rates; that per-parameter scaling is Adam's idea."
+  },
+  {
+    "id": "03.1-042",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "What are the two update equations of SGD with momentum (coefficient mu, learning rate eta, gradient g, velocity v)?",
+    "options": [
+      "v <- g - mu*v; theta <- theta + eta*v",
+      "v <- mu*v + g; theta <- theta - eta*v",
+      "v <- mu*g; theta <- theta - eta*(v + g)",
+      "v <- (1 - mu)*v; theta <- theta - eta*g"
+    ],
+    "answer_index": 1,
+    "explanation": "Momentum keeps a velocity v of the same shape as theta, updates it with v <- mu*v + g (keep a fraction mu of the old velocity and add the new gradient), then steps theta <- theta - eta*v. Setting mu = 0 makes v = g and recovers plain SGD."
+  },
+  {
+    "id": "03.1-043",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "What is the typical value and allowed range of the momentum coefficient mu?",
+    "options": [
+      "Typically 0.1, in the range (1, 2)",
+      "Typically 1.0, exactly",
+      "Typically 0.9, in the range [0, 1)",
+      "Typically 0.5, in the range [-1, 1]"
+    ],
+    "answer_index": 2,
+    "explanation": "mu lies in [0, 1) and is typically 0.9, meaning keep 90% of the accumulated velocity and add the new gradient. mu = 1 would never forget old gradients, and values at or above 1 make the velocity grow without bound."
+  },
+  {
+    "id": "03.1-044",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "What does setting the momentum coefficient mu = 0 do?",
+    "options": [
+      "It makes the velocity never change after the first step",
+      "It makes the update diverge",
+      "It doubles the effective learning rate",
+      "It recovers plain SGD, since v = g every step"
+    ],
+    "answer_index": 3,
+    "explanation": "With mu = 0, v <- 0*v + g = g, so the step theta <- theta - eta*v is exactly plain SGD. The velocity carries no memory. This is why torch.optim.SGD's default momentum=0 gives plain SGD."
+  },
+  {
+    "id": "03.1-045",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "How is the momentum velocity initialized on the very first step?",
+    "options": [
+      "So that v = g, since there is no history yet",
+      "To a vector of ones with the same shape as the parameter",
+      "To the learning rate times g, so the first step is pre-scaled",
+      "To a random vector with the same norm as the first gradient g"
+    ],
+    "answer_index": 0,
+    "explanation": "On the first step there are no past gradients, so the velocity is set equal to the current gradient, v = g. That is what torch.optim.SGD does, and it is why plain SGD and momentum produce identical first steps."
+  },
+  {
+    "id": "03.1-046",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "Unrolling the momentum recursion v <- mu*v + g, how much does a gradient from k steps ago contribute to the current velocity?",
+    "options": [
+      "k * g, so older gradients count linearly more the longer they stay in the buffer",
+      "mu^k * g, fading geometrically with age",
+      "g / k, fading harmonically so the weights sum to a fixed constant over time",
+      "Exactly g, regardless of age, because the velocity is a running sum of gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "Each step multiplies all old contributions by mu, so a gradient from k steps ago carries weight mu^k. This makes the velocity an exponential moving average: recent gradients dominate and older ones fade geometrically."
+  },
+  {
+    "id": "03.1-047",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "With momentum coefficient mu = 0.9, roughly how often does a past gradient's influence on the velocity halve?",
+    "options": [
+      "Every step, because 0.9 is close to one half",
+      "Every 2 steps, since 0.9^2 is about 0.5",
+      "Roughly every 7 steps",
+      "Roughly every 100 steps, since 1/(1-0.9)^2 = 100"
+    ],
+    "answer_index": 2,
+    "explanation": "A gradient from k steps ago is weighted by 0.9^k, and 0.9^7 is about 0.48, so the weight halves roughly every 7 steps. That gives momentum a memory of a few tens of steps."
+  },
+  {
+    "id": "03.1-048",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "What two effects does the momentum velocity have on the gradient signal?",
+    "options": [
+      "It amplifies per-step noise while cancelling out any consistent gradient direction",
+      "It reverses the gradient direction every other step to damp oscillation across valleys",
+      "It normalizes every incoming gradient to unit length before adding it to the buffer",
+      "It smooths per-step noise and accumulates any consistent gradient component"
+    ],
+    "answer_index": 3,
+    "explanation": "Because the velocity is an exponential moving average, random fluctuations average out while a consistent direction adds up across steps. Consistent directions get acceleration; oscillating ones get damped. It does not normalize gradient magnitudes."
+  },
+  {
+    "id": "03.1-049",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.2 The mathematics: an exponential moving average of gradients",
+    "question": "What extra state and hyperparameter does momentum add on top of plain SGD?",
+    "options": [
+      "One velocity buffer v per parameter and one hyperparameter mu",
+      "Two parameter-sized buffers per parameter and two separate decay hyperparameters",
+      "No extra buffers at all, only one additional scalar hyperparameter for the decay",
+      "One scalar per layer plus a separate schedule that varies eta across training"
+    ],
+    "answer_index": 0,
+    "explanation": "Momentum stores one extra buffer v, the same size as each parameter, and introduces one hyperparameter, the coefficient mu. Adam (03.2) is the one that stores two buffers per parameter."
+  },
+  {
+    "id": "03.1-050",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.3 The from-scratch update",
+    "question": "In the from-scratch momentum update, what does buf.mul_(self.momentum).add_(g) compute?",
+    "options": [
+      "v <- mu*(v + g), written into a freshly allocated tensor each step",
+      "v <- mu*v + g, in place: scale the buffer by mu, then add the gradient",
+      "v <- v + mu*g, in place: add the momentum-scaled gradient to the buffer",
+      "v <- g - mu*v, written into a new tensor that then replaces the old buffer"
+    ],
+    "answer_index": 1,
+    "explanation": "mul_ scales the existing buffer by mu in place, then add_ adds g in place, giving v <- mu*v + g. Both trailing-underscore operations modify buf directly, so no new tensor is allocated and the stored velocity is updated."
+  },
+  {
+    "id": "03.1-051",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.3 The from-scratch update",
+    "question": "Why does the from-scratch momentum implementation set buf = g.clone() on the first step instead of starting from a zero buffer and blending?",
+    "options": [
+      "Because clone() is faster than allocating a zero buffer and then blending into it",
+      "Because a zero buffer would make the very first update diverge on steep losses",
+      "Because that is what torch.optim.SGD does, so the result matches it (to ~1e-6)",
+      "Because the gradient must be detached from the autograd graph before any blending"
+    ],
+    "answer_index": 2,
+    "explanation": "Initializing the velocity to a copy of the first gradient reproduces torch.optim.SGD's behaviour, which is why the test test_sgd_momentum_matches_torch matches to about 1e-6. It encodes the rule that on the first step there is no history, so v = g exactly. The choice is about matching the reference, not about speed, stability, or autograd."
+  },
+  {
+    "id": "03.1-052",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.3 The from-scratch update",
+    "question": "Why does the from-scratch momentum code use g.clone() rather than simply storing g as the velocity buffer?",
+    "options": [
+      "clone() casts the gradient to float64 so the velocity accumulates without rounding error",
+      "clone() moves the gradient to the CPU so the velocity buffer does not consume GPU memory",
+      "clone() detaches the gradient from the autograd graph, which is required inside no_grad",
+      "Storing g directly would alias p.grad, so in-place mul_/add_ would corrupt the gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "The velocity is modified in place each step. If it were the same tensor as p.grad, scaling the buffer would also overwrite the gradient, and resetting .grad would affect the velocity. clone() makes an independent copy with the same shape, dtype and device."
+  },
+  {
+    "id": "03.1-053",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "What is the condition number of the quadratic f(x, y) = 0.5*(x^2 + 100*y^2)?",
+    "options": [
+      "100, the ratio of largest to smallest curvature",
+      "1, since the function is convex and has one minimum",
+      "10, the square root of the ratio of the curvatures",
+      "101, the sum of the curvatures along the two axes"
+    ],
+    "answer_index": 0,
+    "explanation": "The curvatures are 1 in x and 100 in y, and the condition number is their ratio, 100. A large condition number means a stretched, ill-conditioned bowl where one direction is much steeper than another."
+  },
+  {
+    "id": "03.1-054",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "On f(x, y) = 0.5*(x^2 + 100*y^2), why are plain SGD and SGD with momentum both run with eta = 0.0198?",
+    "options": [
+      "Because momentum requires exactly half the plain-SGD learning rate, and 0.0198 is that half",
+      "For a fair comparison: same step just below the limit 2/100 = 0.02, so only momentum differs",
+      "Because 0.0198 is the optimal learning rate for momentum and plain SGD also converges best there",
+      "Because the gentle x-direction becomes unstable above 0.0198 and that limits both optimizers"
+    ],
+    "answer_index": 1,
+    "explanation": "The steep y-direction (curvature 100) makes plain gradient descent stable only for eta < 0.02. Using 0.0198 for both optimizers keeps everything else equal, so any speed difference comes from momentum alone."
+  },
+  {
+    "id": "03.1-055",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "On the ill-conditioned quadratic f(x, y) = 0.5*(x^2 + 100*y^2) with eta = 0.0198, roughly how much faster does SGD with momentum (mu = 0.9) reach loss below 1e-3 than plain SGD?",
+    "options": [
+      "About the same speed, because both are bounded by the same stability limit",
+      "About 1.5 times faster, since momentum only helps the gentle direction",
+      "About 4.7 times faster (57 versus 269 steps)",
+      "About 100 times faster, matching the condition number of the quadratic"
+    ],
+    "answer_index": 2,
+    "explanation": "Plain SGD needs 269 steps and momentum needs 57, about 4.7 times faster with the same learning rate. Momentum accumulates the small consistent gradient in the slow x-direction while damping the oscillating y-direction."
+  },
+  {
+    "id": "03.1-056",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "On f(x, y) = 0.5*(x^2 + 100*y^2), why do plain SGD and SGD with momentum have exactly the same loss after the first step?",
+    "options": [
+      "Because momentum is switched off for the first 10 steps while the buffer warms up",
+      "Because both optimizers use a learning rate of zero on the first step by convention",
+      "Because the gradient is zero at the chosen starting point, so neither one moves",
+      "Because v is initialized to g, so the first momentum step equals the plain step"
+    ],
+    "answer_index": 3,
+    "explanation": "With v = g on the first step, the momentum update theta - eta*v is identical to theta - eta*g. Both runs therefore start at the same loss (48.50 in this example), and differences only appear once the velocity carries history."
+  },
+  {
+    "id": "03.1-057",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "On a log-scale plot of loss versus step for plain SGD on an ill-conditioned quadratic, why does the curve look like a straight line?",
+    "options": [
+      "Because every step multiplies the loss by the same factor, set by the slow direction",
+      "Because the loss decreases by the same constant amount on every step of the run",
+      "Because the gradient stays constant along the whole trajectory toward the minimum",
+      "Because the learning rate is decayed linearly, which appears straight on a log axis"
+    ],
+    "answer_index": 0,
+    "explanation": "On a quadratic, each gradient-descent step multiplies each coordinate by a fixed factor; asymptotically the slow x-direction (factor 0.9802 here) dominates, so the loss shrinks by a constant ratio. Constant-ratio decay is a straight line on a log scale. A constant decrement would curve on a log plot."
+  },
+  {
+    "id": "03.1-058",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "Why is the loss curve of SGD with momentum on an ill-conditioned quadratic wavy rather than smoothly decreasing?",
+    "options": [
+      "Because fresh minibatch noise is added to the quadratic's gradient on every step",
+      "Because the velocity carries the point past the valley floor and back before settling",
+      "Because the learning rate itself oscillates between two values under the momentum rule",
+      "Because momentum resets the velocity buffer to zero every few steps, restarting progress"
+    ],
+    "answer_index": 1,
+    "explanation": "Like a ball rolling downhill, the accumulated velocity carries the iterate past the minimum, then back, so the loss rises and falls. Even so, the peaks stay well below the plain-SGD curve. Momentum is not monotone; it is faster on average. The example uses exact gradients, so there is no minibatch noise."
+  },
+  {
+    "id": "03.1-059",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "Is SGD with momentum guaranteed to decrease the loss at every step?",
+    "options": [
+      "Yes, because the velocity only accumulates downhill gradients and so only moves downhill",
+      "Yes, as long as mu is strictly below 1 and eta is below the stability limit",
+      "No; it can overshoot and briefly raise the loss, but is faster on average",
+      "No; by design it increases the loss on every second step to escape local minima"
+    ],
+    "answer_index": 2,
+    "explanation": "Momentum's velocity can carry the parameters past the valley floor, so the loss is not monotone. On the ill-conditioned quadratic its curve is wavy, but it still reaches the target far sooner than plain SGD. The overshoots are a side-effect, not a fixed alternating pattern."
+  },
+  {
+    "id": "03.1-060",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "What does torch.optim.SGD(params, lr=eta, momentum=0.9) implement, and what does its default momentum value give?",
+    "options": [
+      "Nesterov momentum by default; setting momentum=0 switches the optimizer to Adam",
+      "A dampened update v <- 0.9*v + 0.1*g; setting momentum=0 makes the step a no-op",
+      "Momentum applied to the loss, not the gradient; momentum=0 gives full-batch descent",
+      "v <- mu*v + g, theta <- theta - eta*v; the default momentum=0 gives plain SGD"
+    ],
+    "answer_index": 3,
+    "explanation": "With dampening=0 and nesterov=False (the defaults), torch.optim.SGD uses v <- mu*v + g and theta <- theta - eta*v, the same update as the from-scratch class. Its default momentum=0 reduces it to plain SGD."
+  },
+  {
+    "id": "03.1-061",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "Which torch.optim.SGD settings does the from-scratch momentum class match?",
+    "options": [
+      "dampening=0 and nesterov=False, the common setting in practice",
+      "dampening=0.9 and nesterov=True, the PyTorch defaults for momentum",
+      "dampening=1 and nesterov=False, so the gradient is fully averaged",
+      "Any dampening value, as long as nesterov=True is also enabled"
+    ],
+    "answer_index": 0,
+    "explanation": "PyTorch's SGD also offers nesterov=True (a lookahead variant) and a dampening factor. The from-scratch class implements the common case, dampening=0 and nesterov=False, which is what practitioners actually use."
+  },
+  {
+    "id": "03.1-062",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "4.4 Worked example: momentum converges faster on an ill-conditioned quadratic",
+    "question": "What is the nesterov=True option of torch.optim.SGD?",
+    "options": [
+      "A way to decay the learning rate with a cosine schedule",
+      "A lookahead variant of momentum",
+      "A per-parameter adaptive scaling like RMSProp",
+      "A form of gradient clipping"
+    ],
+    "answer_index": 1,
+    "explanation": "nesterov=True selects Nesterov momentum, a lookahead variant of the standard momentum update. It is not a schedule, adaptive scaling, or clipping. The from-scratch class does not implement it, matching the common nesterov=False setting."
+  },
+  {
+    "id": "03.1-063",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device",
+    "question": "For a parameter tensor p of any shape, what are the shape, dtype and device of p.grad and of the momentum velocity buffer?",
+    "options": [
+      "p.grad matches p, but the velocity is always a flat float64 CPU vector",
+      "Both are scalars on the CPU",
+      "Both have the same shape, dtype and device as p",
+      "p.grad is float16 on the GPU, and the velocity matches p"
+    ],
+    "answer_index": 2,
+    "explanation": "There is one gradient number and one velocity number per parameter number, so both tensors have exactly the shape of p, with the same dtype (float32 in normal training) and on the same device. The optimizer never reshapes or moves them."
+  },
+  {
+    "id": "03.1-064",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device",
+    "question": "Why can SGD and momentum be applied to any parameter tensor without knowing whether it is a matrix or a vector?",
+    "options": [
+      "Because the optimizer first flattens all parameters into one long vector before updating",
+      "Because PyTorch converts every parameter to a 2-D matrix before the optimizer sees it",
+      "Because they update only the bias vectors and leave the weight matrices untouched",
+      "Because the updates are elementwise: no shape changes, reductions or broadcasts"
+    ],
+    "answer_index": 3,
+    "explanation": "The update p.add_(v, alpha=-lr) acts on each element independently. Since nothing is reduced or broadcast and shapes never change, a (768, 768) weight and a (768,) bias are handled identically. No flattening is needed."
+  },
+  {
+    "id": "03.1-065",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device",
+    "question": "How much optimizer state beyond parameters and gradients do plain SGD and SGD with momentum store?",
+    "options": [
+      "Plain SGD stores nothing extra; momentum stores one parameter-sized velocity",
+      "Both store two parameter-sized tensors: a velocity and a running squared gradient",
+      "Plain SGD stores one parameter-sized tensor; momentum stores two of them",
+      "Both store only a single scalar per layer, used to rescale that layer's step"
+    ],
+    "answer_index": 0,
+    "explanation": "Plain SGD needs no state beyond params and grads. Momentum adds one velocity tensor the size of the parameters, roughly doubling the optimizer's memory beyond params+grads. Adam, in contrast, stores two such buffers."
+  },
+  {
+    "id": "03.1-066",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device",
+    "question": "Compared with SGD with momentum, how many parameter-sized optimizer buffers does Adam store?",
+    "options": [
+      "Zero",
+      "Two",
+      "One",
+      "Four"
+    ],
+    "answer_index": 1,
+    "explanation": "Momentum stores one parameter-sized buffer (the velocity), while Adam stores two (first and second moment estimates). Optimizer state like this is a major memory cost, and Module 9 is largely about which GPU holds these buffers when the model is split."
+  },
+  {
+    "id": "03.1-067",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "6. Under the hood: what one step() costs",
+    "question": "What is the compute cost of one optimizer step with momentum for a parameter tensor of P elements?",
+    "options": [
+      "O(P^2), because it forms the outer product of the gradient with itself",
+      "O(P^3), because it inverts a P x P curvature matrix on every step",
+      "O(P): a few elementwise passes, negligible next to forward/backward",
+      "O(1), independent of the number of parameters, since it is one fused kernel"
+    ],
+    "answer_index": 2,
+    "explanation": "A momentum step is one scale, one add for the velocity, and one fused multiply-add for the parameters: a handful of elementwise passes, so O(P). That is tiny compared with the forward and backward pass, which for a Transformer is dominated by large matrix multiplies."
+  },
+  {
+    "id": "03.1-068",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "6. Under the hood: what one step() costs",
+    "question": "What limits the speed of an optimizer step on a GPU?",
+    "options": [
+      "The number of matrix multiplications it performs per parameter tensor",
+      "The time it takes to recompute the loss before each parameter update",
+      "The magnitude of the learning rate, since larger steps need more passes",
+      "Memory bandwidth: it streams parameter, gradient and velocity tensors once"
+    ],
+    "answer_index": 3,
+    "explanation": "The optimizer does very little arithmetic per byte: it reads params, grads and the velocity and writes updated values. Its speed is therefore memory-bandwidth-bound rather than compute-bound. It performs no large matrix multiplies."
+  },
+  {
+    "id": "03.1-069",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "6. Under the hood: what one step() costs",
+    "question": "Why do optimizers use in-place operations like mul_, add_ and addcdiv_?",
+    "options": [
+      "Fresh buffers every step on a billion-parameter model would thrash memory; in-place keeps it flat",
+      "In-place operations are the only operations that autograd is able to differentiate through",
+      "In-place operations automatically zero the gradients as a side effect of the update",
+      "In-place operations run in higher precision than out-of-place ones on the same hardware"
+    ],
+    "answer_index": 0,
+    "explanation": "Modifying tensors in place avoids allocating new parameter-sized tensors each step. On models with billions of parameters, repeated allocation would churn memory; in-place updates keep the optimizer's footprint constant across training. They are actually done under no_grad, not differentiated."
+  },
+  {
+    "id": "03.1-070",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "6. Under the hood: what one step() costs",
+    "question": "What does optimizer.step() in any deep-learning framework actually do?",
+    "options": [
+      "It recomputes the forward pass with the new weights to check the loss went down",
+      "It performs the elementwise update arithmetic, looped over parameter tensors",
+      "It computes the gradients via backpropagation and then writes them into .grad",
+      "It selects the next minibatch from the dataset and moves it to the device"
+    ],
+    "answer_index": 1,
+    "explanation": "There is no hidden magic: step() loops over the parameter tensors and applies the update rule (plus any state updates like the velocity). Gradients come from backward(), and batches come from the data pipeline, not from step()."
+  },
+  {
+    "id": "03.1-071",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For gradient descent on f(x) = x^2, the update is x_{t+1} = (1 - 2*eta)*x_t. What condition on the step multiplier r = 1 - 2*eta determines convergence?",
+    "options": [
+      "r > 0",
+      "r < -1",
+      "|r| < 1",
+      "|r| > 1"
+    ],
+    "answer_index": 2,
+    "explanation": "Since r does not depend on x, x_t = r^t * x_0, and r^t goes to zero exactly when |r| < 1. A negative r with |r| < 1 still converges, just by jumping to the other side each step. r = 1 means no movement at all."
+  },
+  {
+    "id": "03.1-072",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For gradient descent on f(x) = x^2, which range of learning rates converges?",
+    "options": [
+      "0 < eta < 2",
+      "0 < eta < 0.5",
+      "eta > 1",
+      "0 < eta < 1"
+    ],
+    "answer_index": 3,
+    "explanation": "Convergence needs |1 - 2*eta| < 1, i.e. -1 < 1 - 2*eta < 1. The right side gives eta > 0 and the left gives eta < 1. eta = 1 is the boundary. The general rule is eta < 2/L with curvature L = 2 for x^2."
+  },
+  {
+    "id": "03.1-073",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "Running gradient descent on f(x) = x^2 from x = 5 with learning rate eta = 1.0 gives what behaviour?",
+    "options": [
+      "The iterates bounce 5, -5, 5, -5 forever, never approaching the minimum",
+      "The iterates reach 0 in exactly one step, since the multiplier is zero",
+      "The iterates diverge to infinity, doubling in magnitude on every step",
+      "The iterates converge smoothly to 0 from one side, halving each step"
+    ],
+    "answer_index": 0,
+    "explanation": "With eta = 1 the multiplier is r = 1 - 2 = -1, so x flips sign each step without shrinking. The step size equals twice the distance to the minimum, overshooting by exactly the same distance, and the loss stays at 25 forever. That is the stability boundary."
+  },
+  {
+    "id": "03.1-074",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For gradient descent on f(x) = x^2, which learning rate lands exactly on the minimum in one step?",
+    "options": [
+      "eta = 0.1",
+      "eta = 0.5",
+      "eta = 0.9",
+      "eta = 1.0"
+    ],
+    "answer_index": 1,
+    "explanation": "eta = 0.5 gives r = 1 - 2*0.5 = 0, so x_1 = 0 regardless of x_0. Smaller eta slides toward 0 gradually, eta = 0.9 overshoots but converges, and eta = 1.0 oscillates forever."
+  },
+  {
+    "id": "03.1-075",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For gradient descent on f(x) = x^2 with eta = 0.9 (multiplier r = -0.8), what do the iterates do?",
+    "options": [
+      "Slide smoothly toward 0 from the same side, shrinking 20% each step",
+      "Diverge to plus or minus infinity, growing by 80% on every step",
+      "Overshoot to the other side each step but still converge",
+      "Stay stuck at the starting value because the multiplier cancels out"
+    ],
+    "answer_index": 2,
+    "explanation": "A negative multiplier means each step jumps past the minimum to the other side, and |r| = 0.8 < 1 means each landing is closer: 5, -4, 3.2, -2.56. Overshooting alone is not divergence; divergence needs |r| > 1."
+  },
+  {
+    "id": "03.1-076",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For gradient descent on f(x) = x^2 with eta = 1.1, what happens?",
+    "options": [
+      "The iterates converge, but slowly, shrinking by about 10% each step",
+      "The iterates reach 0 in exactly two steps by overshooting once",
+      "The iterates oscillate with constant amplitude between 5 and -5",
+      "They overshoot by more each step and diverge (5, -6, 7.2, -8.64, ...)"
+    ],
+    "answer_index": 3,
+    "explanation": "eta = 1.1 gives r = 1 - 2.2 = -1.2. |r| > 1 means each step lands farther from the minimum on the opposite side, so the iterates grow without bound. Constant-amplitude oscillation happens only at exactly eta = 1."
+  },
+  {
+    "id": "03.1-077",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "For a quadratic f = 0.5*L*x^2 with curvature L, what is the largest stable learning rate for gradient descent?",
+    "options": [
+      "eta < 2/L",
+      "eta < L/2",
+      "eta < 1/L^2",
+      "eta < 2L"
+    ],
+    "answer_index": 0,
+    "explanation": "The multiplier is r = 1 - eta*L, and |r| < 1 requires 0 < eta < 2/L. For x^2 (L = 2) this gives eta < 1. Steeper directions (larger L) allow a smaller maximum learning rate."
+  },
+  {
+    "id": "03.1-078",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "In a multi-dimensional quadratic with different curvatures along different directions, which direction sets the maximum stable learning rate for gradient descent?",
+    "options": [
+      "The flattest direction, since it needs the most progress and so tolerates the largest step",
+      "The steepest direction (largest curvature); it sets the limit for every direction",
+      "The direction along which parameters were initialized farthest from the minimum",
+      "The average curvature across all directions, weighted by how far each is from the minimum"
+    ],
+    "answer_index": 1,
+    "explanation": "Each direction needs eta < 2/L_i, and a single learning rate must satisfy all of them, so the binding constraint is the largest curvature. That is why the steep y-direction forced eta < 0.1 for curvature 20 and eta < 0.02 for curvature 100."
+  },
+  {
+    "id": "03.1-079",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Exercise",
+    "question": "What does the sign and magnitude of the step multiplier r tell you about a gradient-descent step on a 1-D quadratic?",
+    "options": [
+      "The sign says whether the loss increases after the step; the magnitude says by how much",
+      "The sign says whether eta is positive; the magnitude equals the loss after the step",
+      "Negative r jumps past the minimum; |r| < 1, = 1 or > 1 says closer, same or farther",
+      "A negative r always means divergence, and any positive r means guaranteed convergence"
+    ],
+    "answer_index": 2,
+    "explanation": "A negative multiplier sends x to the opposite side of the minimum. Its absolute value compares the new distance to the old one: below 1 converges, equal to 1 is stuck, above 1 diverges. A negative r alone does not imply divergence, as eta = 0.9 on x^2 shows."
+  },
+  {
+    "id": "03.1-080",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A training loop calls loss.backward() and opt.step() every iteration but never opt.zero_grad(). What goes wrong?",
+    "options": [
+      "Nothing; PyTorch clears the gradients automatically as part of every step() call",
+      "The forward pass raises an error on the second iteration because .grad is already set",
+      "The learning rate is silently set to zero, so the parameters stop moving entirely",
+      "backward() accumulates into .grad, so step k uses the sum of all k gradients"
+    ],
+    "answer_index": 3,
+    "explanation": "backward() adds the new gradient into .grad. Without zero_grad(), the gradient on step k is the sum of all previous batches' gradients, making the effective step erratic and often far too large, compounded by momentum. Neither step() nor backward() clears .grad automatically."
+  },
+  {
+    "id": "03.1-081",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "Where should opt.zero_grad() be called in a standard training iteration?",
+    "options": [
+      "At the start of each iteration, before the forward pass and backward()",
+      "Between loss.backward() and opt.step(), so the step sees clean gradients",
+      "Only once, before the training loop begins, since step() clears it afterward",
+      "Only at the end of each epoch, after the last batch has been processed"
+    ],
+    "answer_index": 0,
+    "explanation": "Gradients must be cleared before each new backward() so that .grad holds only the current batch's gradient. Calling it between backward() and step() would erase the gradient before it is used, and calling it once or per epoch would still let gradients accumulate across iterations."
+  },
+  {
+    "id": "03.1-082",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why is there a minus sign in the gradient-descent update theta <- theta - eta*grad L?",
+    "options": [
+      "Because the learning rate is defined as a negative number and the sign makes the step positive",
+      "Because grad L points toward steepest increase, so we step the opposite way",
+      "Because the loss is always negative, so the minus sign turns its gradient back into a descent step",
+      "Because backpropagation returns the gradient with its sign flipped, and the minus sign undoes it"
+    ],
+    "answer_index": 1,
+    "explanation": "The gradient points uphill, in the direction of steepest increase. Subtracting it turns that into a step downhill, which is what minimizing the loss requires. The learning rate is positive and backprop returns the true gradient."
+  },
+  {
+    "id": "03.1-083",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Check yourself",
+    "question": "With momentum coefficient mu = 0.9, approximately what fraction of its original weight does a gradient from 10 steps ago still carry in the velocity?",
+    "options": [
+      "About 90%",
+      "About 10%",
+      "About 35%",
+      "Essentially 0%"
+    ],
+    "answer_index": 2,
+    "explanation": "Its weight is mu^10 = 0.9^10, about 0.349, so roughly 35%: still non-trivial. This long memory is what lets momentum accumulate consistent directions and average away noise."
+  },
+  {
+    "id": "03.1-084",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Check yourself",
+    "question": "For a model with P parameters, how much extra memory does SGD with momentum need compared with plain SGD?",
+    "options": [
+      "None; the velocity is stored inside .grad, overwriting the gradient each step",
+      "P^2 numbers for the curvature matrix that momentum uses to rescale the steps",
+      "Two tensors of P numbers: a velocity buffer and a copy of the previous gradient",
+      "One tensor of P numbers: the velocity, same shape/dtype/device as the params"
+    ],
+    "answer_index": 3,
+    "explanation": "Momentum adds exactly one parameter-sized buffer, the velocity. Plain SGD needs nothing beyond params and grads. The velocity is a separate tensor; reusing .grad would be overwritten by the next backward pass."
+  },
+  {
+    "id": "03.1-085",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Check yourself",
+    "question": "On an ill-conditioned quadratic with curvatures 1 and 100, why can't plain SGD be made faster simply by raising its learning rate above 0.02?",
+    "options": [
+      "Because the steep direction (curvature 100) diverges for eta >= 2/100 = 0.02",
+      "Because the slow direction (curvature 1) diverges first once eta passes 0.02",
+      "Because learning rates above 0.02 make the gradient estimate biased toward the steep axis",
+      "Because torch.optim.SGD silently clips learning rates above 0.02 for quadratic losses"
+    ],
+    "answer_index": 0,
+    "explanation": "Gradient descent is stable along a direction with curvature L only for eta < 2/L. The steep direction fixes eta < 0.02 for the whole problem, so raising eta to help the slow direction blows up the steep one. Momentum gains speed in the slow direction without raising eta."
+  },
+  {
+    "id": "03.1-086",
+    "chapter": "03.1",
+    "chapter_name": "Gradient descent, SGD, momentum",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-01.md",
+    "section": "Next",
+    "question": "What limitation of momentum motivates per-parameter adaptive optimizers like RMSProp and Adam?",
+    "options": [
+      "Momentum cannot be combined with minibatch gradients, so it fails once the data no longer fits",
+      "One global learning rate for all parameters, though large-gradient ones need smaller steps",
+      "Momentum requires computing the full Hessian, which is impossible at billions of parameters",
+      "Momentum is only guaranteed to work for convex losses, and transformer losses are non-convex"
+    ],
+    "answer_index": 1,
+    "explanation": "Momentum smooths the gradient direction but still scales every parameter by the same eta. Parameters with large gradients and those with tiny gradients would benefit from different effective step sizes. RMSProp adds that per-parameter scaling; Adam combines it with momentum and bias correction, and AdamW fixes weight decay."
+  }
+]

@@ -1,0 +1,686 @@
+[
+  {
+    "id": "01.P34-001",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "How much uncertainty, in bits, does a fair coin $p = (0.5, 0.5)$ carry?",
+    "options": [
+      "Exactly 0.5 bits (half a bit for each of the two equally likely faces)",
+      "Exactly 2 bits (one bit for each of the coin's two possible outcomes)",
+      "Exactly 1 nat (equivalently $\\ln 2 \\approx 0.6931$ bits)",
+      "Exactly 1 bit (equivalently $\\ln 2 \\approx 0.6931$ nats)"
+    ],
+    "answer_index": 3,
+    "explanation": "$H = -\\ln 0.5 = \\ln 2$ nats; dividing by $\\ln 2$ converts to exactly 1 bit. A fair coin carrying one bit of uncertainty is essentially the definition of a bit. The swapped-unit option gets the conversion direction backwards."
+  },
+  {
+    "id": "01.P34-002",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "Over 4 outcomes, which distribution has the highest entropy and which has the lowest?",
+    "options": [
+      "Uniform is highest at 4 nats, one per outcome; any one-hot is lowest at 1 nat",
+      "Uniform $(0.25, 0.25, 0.25, 0.25)$ is highest at $\\ln 4$; one-hot is lowest at 0",
+      "One-hot is highest at $\\ln 4$, since it is the most certain; uniform is lowest at 0",
+      "Every distribution over 4 outcomes has the same entropy, $\\ln 4 \\approx 1.386$ nats"
+    ],
+    "answer_index": 1,
+    "explanation": "Uniform is maximally uncertain, with entropy $\\ln V = \\ln 4 \\approx 1.386$. A one-hot distribution has $H = -1\\cdot\\ln 1 = 0$ since zeros drop out by $0\\ln 0 = 0$. The maximum is $\\ln 4$ nats, not 4."
+  },
+  {
+    "id": "01.P34-003",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "A true distribution $p = (0.8, 0.2)$ is modeled by a uniform $q = (0.5, 0.5)$. Why does $H(p, q)$ equal $\\ln 2$ regardless of the values in $p$?",
+    "options": [
+      "Because KL is zero whenever $q$ is uniform, so $H(p,q)$ collapses to $\\ln 2$",
+      "Both logs are $\\ln 0.5$ and the weights $p(x)$ sum to 1",
+      "Because $H(p)$ is always $\\ln 2$ for any distribution over two outcomes",
+      "Because cross-entropy ignores the weights $p(x)$ and only reads $q$"
+    ],
+    "answer_index": 1,
+    "explanation": "With uniform $q$, every term has the same log, so the sum is $-\\ln 0.5 \\cdot \\sum_x p(x) = \\ln 2$. $H(p)$ for $(0.8, 0.2)$ is about 0.5004, not $\\ln 2$, and KL is about 0.19, not zero."
+  },
+  {
+    "id": "01.P34-004",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "For $p = (0.8, 0.2)$ and $q = (0.5, 0.5)$, $H(p) \\approx 0.5004$, $\\mathrm{KL}(p\\parallel q) \\approx 0.1927$, $H(p,q) \\approx 0.6931$. How should these be read?",
+    "options": [
+      "The data has 0.6931 nats of uncertainty and the uniform model removes 0.1927 of it, leaving 0.5004",
+      "The data's uncertainty is 0.6931 nats and the model adds 0.5004 nats of avoidable extra cost on top",
+      "The data has 0.5004 nats no model can remove; the uniform model wastes another 0.1927 nats",
+      "The 0.1927-nat KL term is the irreducible part and the 0.5004-nat $H(p)$ is the model's fault"
+    ],
+    "answer_index": 2,
+    "explanation": "$H(p)$ is the irreducible uncertainty of the data and the KL term is the extra cost of the model being uniform when the truth is 80/20. The tempting swap reverses which part is irreducible."
+  },
+  {
+    "id": "01.P34-005",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "In $\\mathrm{KL}(q\\parallel p)$ versus $\\mathrm{KL}(p\\parallel q)$, which distribution supplies the weights in each?",
+    "options": [
+      "The second argument: $p$ weights $\\mathrm{KL}(q\\parallel p)$ and $q$ weights $\\mathrm{KL}(p\\parallel q)$",
+      "Always the true distribution $p$, regardless of argument order, since $q$ is only a model",
+      "Always the uniform one, since KL is measured against a uniform baseline over the outcomes",
+      "The first argument: $q$ weights $\\mathrm{KL}(q\\parallel p)$, $p$ weights $\\mathrm{KL}(p\\parallel q)$"
+    ],
+    "answer_index": 3,
+    "explanation": "The first argument always supplies the weights. With different weights on different log-ratios the two numbers differ (e.g. 0.1927 vs 0.2231 for $p = (0.8, 0.2)$, $q = (0.5, 0.5)$), which is why KL is not a distance."
+  },
+  {
+    "id": "01.P34-006",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "Given that $\\mathrm{KL}\\ge 0$, what is the smallest value the cross-entropy loss $H(p, q)$ can reach, and when?",
+    "options": [
+      "$\\ln 2$, reached when $q$ is one-hot",
+      "$-\\mathrm{KL}(p\\parallel q)$, reached when the model overfits",
+      "$H(p)$, reached exactly when $q = p$",
+      "0, reached when $q$ is uniform"
+    ],
+    "answer_index": 2,
+    "explanation": "Since $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ and KL is non-negative, the loss can never go below the data's entropy, and it equals it only when KL is zero, i.e. $q = p$. It reaches 0 only if $p$ itself has zero entropy."
+  },
+  {
+    "id": "01.P34-007",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part A — Entropy, cross-entropy, KL",
+    "question": "In deriving $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$, after substituting $\\ln q = \\ln p - \\ln(p/q)$, which two steps finish the proof?",
+    "options": [
+      "Differentiate the sum with respect to $q$, then set the derivative to zero",
+      "Swap $p$ and $q$ inside the log ratio, then take the exponential of both sides",
+      "Take the max over $x$ of each term, then add the entropy of $q$",
+      "Distribute $p(x)$ over the bracket, then split one sum into two"
+    ],
+    "answer_index": 3,
+    "explanation": "$-\\sum p[\\ln p - \\ln(p/q)] = -\\sum p\\ln p + \\sum p\\ln(p/q)$: distributing and splitting the sum gives entropy plus KL. No swapping, calculus or maxima are involved."
+  },
+  {
+    "id": "01.P34-008",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part B — Zeros and infinities",
+    "question": "For $p = (0.5, 0.5, 0)$ and a model $q = (0.5, 0.4, 0.1)$, what role does the model's $q_3 = 0.1$ play in $H(p, q)$?",
+    "options": [
+      "It makes the cross-entropy infinite, because $p_3 = 0$ forces a $\\ln 0$ term into the sum",
+      "It adds $-0.1\\ln 0.1 \\approx 0.23$ nats directly to the cross-entropy, as a third term",
+      "It is the largest single contributor to the KL divergence, since it is the only place $p$ and $q$ disagree",
+      "No direct role (weight $p_3 = 0$); it matters only because that 0.1 was taken from outcomes that happen"
+    ],
+    "answer_index": 3,
+    "explanation": "The third term is weighted by $p_3 = 0$ and vanishes in entropy, cross-entropy and KL. The indirect effect is that probability spent on an impossible outcome lowers $q$ on the outcomes that occur."
+  },
+  {
+    "id": "01.P34-009",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part B — Zeros and infinities",
+    "question": "If $p = (0.5, 0.5, 0)$ and the model is $q = (0.6, 0.4, 0)$, is $H(p,q)$ finite?",
+    "options": [
+      "No; any zero entry in $q$ makes the cross-entropy infinite, whatever the weights in $p$ are",
+      "Yes, but only when measured in bits, since base-2 logs handle the zero entry",
+      "Yes; the model says outcome 3 is impossible and it truly is, so its term has weight 0",
+      "No; the term $0\\cdot\\ln 0$ evaluates to $-\\infty$, so the sum is infinite"
+    ],
+    "answer_index": 2,
+    "explanation": "The term for outcome 3 is $0\\cdot\\ln 0$, which is 0 by convention because its weight is zero. The model is never punished for an outcome that never happens. Units do not matter."
+  },
+  {
+    "id": "01.P34-010",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part B — Zeros and infinities",
+    "question": "For $p = (0.5, 0.3, 0.2)$ and $q = (0.6, 0.4, 0)$, why is $H(p,q) = +\\infty$?",
+    "options": [
+      "The model gave outcome 3 probability 0 but it occurs 20% of the time: $-0.2\\ln 0 = +\\infty$",
+      "Because the convention $0\\ln 0 = 0$ leaves the third term undefined rather than zero",
+      "Because $p$ and $q$ have different entropies, and the gap between them diverges here",
+      "Because $q = (0.6, 0.4, 0)$ does not sum to 1, so it is not a valid distribution"
+    ],
+    "answer_index": 0,
+    "explanation": "The weight $p_3 = 0.2$ is nonzero, so no convention rescues $-0.2\\ln 0$. Infinite surprise means infinite loss, which is why a language model must never output exactly $q = 0$ for any token. $q$ does sum to 1."
+  },
+  {
+    "id": "01.P34-011",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part B — Zeros and infinities",
+    "question": "Why does `-(p * p.log()).sum()` for `p = [0.5, 0.5, 0.0]` not give 0.6931 in PyTorch?",
+    "options": [
+      "`p.log()` gives `-inf` for the zero entry and `0 * -inf` is `nan`",
+      "Because PyTorch's `log` is base 2, so the sum comes out as exactly 1.0 instead",
+      "Because float32 cannot represent 0.6931 exactly, so the result is rounded to 0",
+      "Because `.sum()` skips zero entries and also drops the term next to each one"
+    ],
+    "answer_index": 0,
+    "explanation": "The $0\\ln 0 = 0$ convention exists on paper, not in hardware: PyTorch computes the log first, then the product $0\\times(-\\infty)$ = `nan`. `torch.xlogy(p, p)` returns exactly 0 where `p == 0` and implements the convention."
+  },
+  {
+    "id": "01.P34-012",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "After subtracting the row max from logits $z$, how do the gaps between the resulting log-probabilities compare with the gaps between the logits?",
+    "options": [
+      "They are exponentiated, since log-softmax maps each gap $d$ between two logits to $e^d$",
+      "They are identical; log-probabilities are the shifted logits minus one shared constant",
+      "They all become equal to 1, since the row max is subtracted from every entry",
+      "They are halved, since logsumexp averages each logit with the row max before subtracting"
+    ],
+    "answer_index": 1,
+    "explanation": "Log-softmax is $z' - \\operatorname{logsumexp}(z')$, a single shared constant subtracted from every entry, so differences are preserved. For $z = (3, 1, 0)$ the log-probabilities $(-0.1698, -2.1698, -3.1698)$ have gaps 2 and 1, like the logits."
+  },
+  {
+    "id": "01.P34-013",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "What does naive float32 softmax return for logits $(1000, 999)$?",
+    "options": [
+      "$(1, 0)$, because the larger logit dominates and the other exponential underflows",
+      "`nan` for both, because both exponentials overflow to `inf` and `inf/inf` is `nan`",
+      "An exact $(0.7311, 0.2689)$, because the overflow cancels in the ratio",
+      "$(0.5, 0.5)$, because both exponentials overflow to the same `inf` value"
+    ],
+    "answer_index": 1,
+    "explanation": "$e^{1000}$ is far above float32's maximum ($\\approx 3.4\\times 10^{38}$), so both are `inf` and the ratio is `nan`. Subtracting the max fixes it: softmax$(0, -1) = (0.7311, 0.2689)$."
+  },
+  {
+    "id": "01.P34-014",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "Why does $\\operatorname{softmax}(1000, 999) = \\operatorname{softmax}(0, -1) = \\operatorname{softmax}(1, 0)$?",
+    "options": [
+      "Softmax depends only on differences between logits, which are equal in all three",
+      "They are not equal; larger logits give sharper distributions even at the same gap",
+      "Because float32 clips large logits, so all three saturate to probabilities 1 and 0",
+      "Because softmax divides every logit by the max logit before exponentiating"
+    ],
+    "answer_index": 0,
+    "explanation": "Shifting every logit by the same constant leaves softmax unchanged, so only the gap of 1 matters. Sharpness depends on gaps, not absolute size."
+  },
+  {
+    "id": "01.P34-015",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "For a two-token vocabulary with logits $(a, 0)$, how is the logit gap $a$ related to the probability $q_0$?",
+    "options": [
+      "The gap equals the log-odds: $a = \\ln\\frac{q_0}{1 - q_0}$",
+      "The gap equals the probability itself: $a = q_0$",
+      "The gap equals the loss on token 0: $a = -\\ln q_0$",
+      "The gap equals the exponentiated probability: $a = e^{q_0}$"
+    ],
+    "answer_index": 0,
+    "explanation": "From $q_0 = e^a/(e^a + 1)$, solving gives $e^a = q_0/(1-q_0)$, so $a = \\ln$ of the odds. For $q_0 = 0.9$, $a = \\ln 9 \\approx 2.197$. $-\\ln q_0$ is the loss, not the gap."
+  },
+  {
+    "id": "01.P34-016",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "Why can the per-token loss be written as $\\ell = \\ln\\sum_j e^{z_j} - z_t$?",
+    "options": [
+      "Because the per-token loss is defined as the max logit minus the true logit $z_t$",
+      "Because $-\\ln\\frac{e^{z_t}}{\\sum_j e^{z_j}} = \\ln\\sum_j e^{z_j} - z_t$ by the log rules",
+      "Because the true logit $z_t$ is always the largest, so it bounds the logsumexp",
+      "Because $\\ln\\sum_j e^{z_j} = \\sum_j z_j$, so the log and exponential cancel"
+    ],
+    "answer_index": 1,
+    "explanation": "Start from $\\ell = -\\ln q(t)$, substitute softmax, split the log of the fraction and undo the exponential. Logsumexp is not the sum of logits, and the true logit need not be the largest."
+  },
+  {
+    "id": "01.P34-017",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "Using $\\ell = \\ln\\sum_j e^{z_j} - z_t$, why can the loss for every possible true token in a row be found from one logsumexp?",
+    "options": [
+      "Because each candidate true token still requires its own softmax over the row",
+      "Because the loss is the same for every true token once the row is normalized",
+      "Because the logsumexp term itself depends on the true token, so it changes each time",
+      "The logsumexp is shared by the whole row; only $z_t$ changes with the true token"
+    ],
+    "answer_index": 3,
+    "explanation": "Compute the row's logsumexp once and subtract each candidate logit. Each 1-unit drop in the true token's logit costs exactly 1 more nat. The loss differs by token; the shared term does not."
+  },
+  {
+    "id": "01.P34-018",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part C — Softmax and log-softmax",
+    "question": "Why is $c = \\max_j z_j$ preferred over $c = 0$ or $c = $ the mean for the shift in stable softmax?",
+    "options": [
+      "With the max, all shifted logits are $\\le 0$ (no overflow) and one is 0 (sum $\\ge 1$); the mean can leave big positive values",
+      "The max is the only shift that leaves softmax unchanged; $c = 0$ and the mean both alter the resulting probabilities",
+      "$c = 0$ causes underflow on every entry, while subtracting the mean can cause a division by zero in the normalizer",
+      "The mean would change the probabilities because it depends on all logits, while the max depends on only one of them"
+    ],
+    "answer_index": 0,
+    "explanation": "Every constant leaves softmax unchanged mathematically. Only the max guarantees all exponents are non-positive with one equal to 0. For $(1000, 0)$ the mean is 500 and $e^{500}$ overflows; $c = 0$ leaves $e^{1000}$."
+  },
+  {
+    "id": "01.P34-019",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part D — The loss over many positions",
+    "question": "How does the perplexity of a sentence relate to its likelihood?",
+    "options": [
+      "Perplexity equals $\\text{likelihood}^{-1/N}$, a per-token inverse geometric mean",
+      "Perplexity equals $1 - $ likelihood, the probability the model got the sentence wrong",
+      "Perplexity equals the likelihood raised to the power $N$, one factor per token",
+      "Perplexity equals the likelihood divided by $N$, an arithmetic per-token average"
+    ],
+    "answer_index": 0,
+    "explanation": "$e^{\\mathcal{L}} = e^{-\\frac{1}{N}\\sum\\ln q_i} = (\\prod q_i)^{-1/N}$. It is the inverse geometric mean of the true-token probabilities, not an arithmetic division."
+  },
+  {
+    "id": "01.P34-020",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part D — The loss over many positions",
+    "question": "A model outputs equal logits at every position over $V = 4$. Does its loss depend on which tokens are true?",
+    "options": [
+      "No; the loss is always 0 for equal logits, since no token is preferred",
+      "Yes; the first token is always free, so sequences with rare first tokens score better",
+      "Yes; frequent tokens give lower loss, since the model has seen them more often",
+      "No; every position has $q(t) = 0.25$, so the loss is always $\\ln 4$"
+    ],
+    "answer_index": 3,
+    "explanation": "Equal logits give a uniform softmax, so every true token has probability $1/V$ and loss $\\ln V$. That is the loss of a model that knows nothing."
+  },
+  {
+    "id": "01.P34-021",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part D — The loss over many positions",
+    "question": "What loss does a freshly initialized language model start near?",
+    "options": [
+      "About $\\ln V$ (for GPT-2's vocabulary, $\\ln 50257 \\approx 10.82$)",
+      "About $\\ln 2 \\approx 0.69$, the loss of a fair binary guess at each position",
+      "About 0, since random logits are near zero and so is the initial loss",
+      "About $V$ (for GPT-2's vocabulary, 50257), one nat per possible token"
+    ],
+    "answer_index": 0,
+    "explanation": "An untrained model is close to uniform over the vocabulary, giving loss near $\\ln V$ and perplexity near $V$. $V$ itself is the perplexity, not the loss."
+  },
+  {
+    "id": "01.P34-022",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part D — The loss over many positions",
+    "question": "Model A reports a mean loss of 2.0 nats over 100 tokens; model B reports a summed loss of 150 nats over 60 tokens. Which predicts better per token?",
+    "options": [
+      "They cannot be compared, since one reports a mean and the other a sum",
+      "A, because B's mean is $150/60 = 2.5$ nats per token, above A's 2.0",
+      "B, because it was evaluated on fewer tokens and so has less noise per token",
+      "B, because a summed loss of 150 nats over 60 tokens beats a mean of 2.0"
+    ],
+    "answer_index": 1,
+    "explanation": "Sums are not comparable across different token counts; convert to means first. A's perplexity is $e^{2.0} \\approx 7.39$ and B's is $e^{2.5} \\approx 12.18$, so A is better."
+  },
+  {
+    "id": "01.P34-023",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "For a batch `tokens` of shape `(2, 4)`, how many predictions (loss rows) does next-token training produce?",
+    "options": [
+      "6, since inputs and targets are each `(2, 3)`",
+      "8, one per token, since every token is a target",
+      "4, one per column, shared across the two rows",
+      "2, one per sequence, scored at its final token"
+    ],
+    "answer_index": 0,
+    "explanation": "Shifting gives `inputs = tokens[:, :-1]` and `targets = tokens[:, 1:]`, each `(2, 3)`, so $2\\times 3 = 6$ predictions. A sequence of length $T+1$ yields $T$ predictions."
+  },
+  {
+    "id": "01.P34-024",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "In a training batch, which tokens are never a target, and which are never used as context?",
+    "options": [
+      "The first token of each row is never a target; the last is never context",
+      "Only padding tokens are excluded; every real token plays both roles in a row",
+      "The first token of each row is never context; the last is never a target",
+      "Every token is both a target and context, because the batch wraps around"
+    ],
+    "answer_index": 0,
+    "explanation": "Nothing precedes the first token to predict it, and nothing follows the last token to use it as context. Every other token is both a target and context."
+  },
+  {
+    "id": "01.P34-025",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "A GPT-2-style batch loads $B = 8$ sequences of 129 tokens with $V = 50257$. What are the shapes of `inputs`, `targets` and `logits`?",
+    "options": [
+      "`inputs` `(8, 129)`, `targets` `(8, 129)`, `logits` `(8, 129, 50257)`",
+      "`inputs` `(1024,)`, `targets` `(1024,)`, `logits` `(50257,)`",
+      "`inputs` and `targets` `(8, 128)` int64; `logits` `(8, 128, 50257)` float",
+      "`inputs` `(8, 128)`, `targets` `(8, 128, 50257)`, `logits` `(8, 128)`"
+    ],
+    "answer_index": 2,
+    "explanation": "Shifting 129 tokens gives 128 inputs and 128 targets per sequence, and the model outputs one $V$-length logit vector per input position. Targets are integer indices, not vocabulary-sized tensors."
+  },
+  {
+    "id": "01.P34-026",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "Why is the output layer one of the biggest memory costs in language-model training?",
+    "options": [
+      "Because the output layer keeps every token id and every logit in float64 for exact softmax",
+      "Because the output layer has more parameters than all the attention layers combined",
+      "Because a separate copy of the logits must be stored for each attention head",
+      "Its logits have a vocabulary-sized axis, and backward needs a gradient of the same size"
+    ],
+    "answer_index": 3,
+    "explanation": "For $8\\times 128\\times 50257$ floats, float32 logits take about 196 MiB (about 98 MiB in bf16) before gradients, which double it. The cause is the large $V$ axis, not float64 or per-head storage."
+  },
+  {
+    "id": "01.P34-027",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "In a hand-written log-softmax, `m = logits.max(dim=-1).values` is used without `keepdim=True` on `(4, 3)` logits. What happens?",
+    "options": [
+      "It silently subtracts each column's max from the wrong rows, with no error",
+      "It works correctly, since `max` already keeps the reduced dimension",
+      "A shape error: `(4, 3) - (4,)` cannot broadcast, so it fails at once",
+      "It returns `nan` values once the misaligned exponentials overflow"
+    ],
+    "answer_index": 2,
+    "explanation": "Broadcasting aligns the last axes, comparing 3 with 4, so PyTorch raises an error. Annoying but safe: you see the bug immediately."
+  },
+  {
+    "id": "01.P34-028",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part E — Shapes",
+    "question": "The same missing-`keepdim` bug is applied to square `(3, 3)` logits. Why is this case worse than the `(4, 3)` case?",
+    "options": [
+      "It only slows training down, since broadcasting a `(3,)` vector costs extra memory traffic, without changing results",
+      "`(3, 3) - (3,)` broadcasts silently, subtracting `m[j]` from column `j` instead of each row's own max",
+      "It produces `inf` values in every row whose max was subtracted from the wrong column, which are easy to spot",
+      "It raises a shape error at a later layer instead, once the corrupted log-probs reach the loss"
+    ],
+    "answer_index": 1,
+    "explanation": "With matching sizes, broadcasting succeeds but along the wrong axis. Row `[2, 1, 0]` becomes `[0, 1, -2]`, now preferring token 1. `keepdim=True` makes `m` a `(3, 1)` column so each row subtracts its own max."
+  },
+  {
+    "id": "01.P34-029",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "Computing mean cross-entropy from scratch on `(2, 3, 4)` logits, what is the shape trail?",
+    "options": [
+      "`(2, 3, 4)` → `(6, 4)` → `(4,)` picked per column → `()` mean over vocabulary",
+      "`(2, 3, 4)` → `(6, 4)` → `(6, 4)` log-probs → `(6,)` picked → `()` mean",
+      "`(2, 3, 4)` → `(2, 12)` flattened → `(12,)` log-probs → `()` summed then mean",
+      "`(2, 3, 4)` → `(2, 3)` logsumexp → `(2,)` per-sequence → `()` mean"
+    ],
+    "answer_index": 1,
+    "explanation": "Flatten batch and time to 6 rows, keep the vocabulary axis through log-softmax, remove it by indexing the target, then remove the row axis by averaging. Averaging over rows would never produce a `(4,)` vocabulary-sized result."
+  },
+  {
+    "id": "01.P34-030",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "Why use `torch.xlogy` when checking $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ for a $p$ with a zero entry?",
+    "options": [
+      "It computes the log in base 2, so the identity can be checked directly in bits",
+      "It removes zero entries from the tensor, so only the nonzero-weight terms remain",
+      "It returns exactly 0 where the first argument is 0, so zero-weight terms give no `nan`",
+      "It adds a small epsilon to every entry before the log, so $\\ln 0$ never appears"
+    ],
+    "answer_index": 2,
+    "explanation": "`xlogy(x, y)` = $x\\ln y$ and 0 when $x = 0$. Writing KL as $\\sum p\\ln p - \\sum p\\ln q$ with `xlogy` avoids dividing by zero or taking $\\ln 0$ with nonzero weight. It does not change the base, add epsilon, or reshape."
+  },
+  {
+    "id": "01.P34-031",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "Why is direct indexing `logp[rows, t]` preferred over multiplying by `F.one_hot(t, V)` and summing, though both give equal per-row losses?",
+    "options": [
+      "The one-hot version sums over the batch axis instead of the vocabulary axis, so it reduces the wrong dimension",
+      "Indexing gives a more accurate loss, since multiplying by one-hot rows accumulates rounding error over $V$ terms",
+      "Indexing reads the one surviving term without building an `(N, V)` tensor of mostly zeros",
+      "The one-hot version cannot be differentiated, since `F.one_hot` returns an integer tensor with no gradient"
+    ],
+    "answer_index": 2,
+    "explanation": "The one-hot row is $p$ in $-\\sum p\\ln q$; all but one term are 0. Indexing gives the same numbers directly, saving a large mostly-zero tensor when $V = 50257$."
+  },
+  {
+    "id": "01.P34-032",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "For uniform (all-zero) logits of shape `(16, V)` and random targets, what are the loss and perplexity for any $V$?",
+    "options": [
+      "Loss $\\ln V$ and perplexity $\\ln V$, since perplexity is the loss in nats",
+      "Loss $V$ and perplexity $e^V$, since every logit contributes one nat",
+      "Loss 0 and perplexity 1, since all-zero logits contribute nothing",
+      "Loss $\\ln V$ and perplexity $V$, whatever the targets are"
+    ],
+    "answer_index": 3,
+    "explanation": "Every token gets probability $1/V$, so the loss is $\\ln V$ and $e^{\\ln V} = V$. For $V = 50257$ the loss is about 10.82. A perplexity of $V$ means the model has learned nothing."
+  },
+  {
+    "id": "01.P34-033",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "After `F.cross_entropy` on `z = [[2., 1., 0.]]` with target 0 and `.backward()`, what does `z.grad` equal?",
+    "options": [
+      "`softmax(z) - one_hot(target)`, about `[-0.3348, 0.2447, 0.0900]`",
+      "`one_hot(target) - softmax(z)`, about `[0.3348, -0.2447, -0.0900]`",
+      "`-log(softmax(z))`, about `[0.4076, 1.4076, 2.4076]` per entry",
+      "`softmax(z)` alone, about `[0.6652, 0.2447, 0.0900]` per entry"
+    ],
+    "answer_index": 0,
+    "explanation": "The gradient of cross-entropy with respect to logits is $q - p$. The true token's entry is negative and the wrong tokens' entries are positive. The reversed sign would point the wrong way."
+  },
+  {
+    "id": "01.P34-034",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part F — PyTorch",
+    "question": "What does the sign of each entry of the cross-entropy gradient $q - p$ tell gradient descent to do?",
+    "options": [
+      "Positive (true token): raise that logit; negative (wrong tokens): lower those logits, in proportion to their probability",
+      "Negative entries are clipped to zero by the optimizer, so only the wrong tokens' positive entries move their logits",
+      "The sign is irrelevant; only the magnitude matters, since every logit is pushed toward zero by the same rule",
+      "Negative (true token): raise that logit; positive (wrong tokens): lower them, in proportion to the probability taken"
+    ],
+    "answer_index": 3,
+    "explanation": "Gradient descent moves each logit against its gradient. When $q = p$ the gradient is 0 and training stops pushing."
+  },
+  {
+    "id": "01.P34-035",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part G — Debugging",
+    "question": "For logits `[[2., 1., 0.]]` and target 0, `F.cross_entropy(logits.softmax(-1), targets)` returns about 0.797 instead of 0.4076. Why is the wrong value closer to $\\ln 3$?",
+    "options": [
+      "Because the target index is shifted by one, so the loss is computed on token 1, whose share is close to a third",
+      "Because the second softmax overflows on the small probabilities and falls back to a uniform output of $1/3$ each",
+      "The probabilities lie in $[0, 1]$ with small gaps, so a second softmax is near uniform, pulling the loss toward $\\ln 3$",
+      "Because softmax applied to any probability vector is exactly uniform, so the loss is $\\ln 3$ up to rounding"
+    ],
+    "answer_index": 2,
+    "explanation": "`F.cross_entropy` treats the probabilities as logits and softmaxes them again. Small gaps mean a nearly flat second softmax, so the loss approaches the uniform value $\\ln 3$. It is not exactly uniform and there is no overflow."
+  },
+  {
+    "id": "01.P34-036",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part G — Debugging",
+    "question": "Why does passing probabilities to `F.cross_entropy` hurt training even though no error is raised?",
+    "options": [
+      "It only affects the reported number, not gradients, so training proceeds normally underneath",
+      "The loss can never go near 0 and gradients are squashed, so training stalls at a wrong value",
+      "It makes the loss go to 0 too quickly, because probabilities are already normalized once",
+      "It makes the gradients explode, because the double softmax amplifies every logit gap"
+    ],
+    "answer_index": 1,
+    "explanation": "Even a perfect model's second softmax of $(1, 0, 0)$ gives $q(0) = e/(e+2) \\approx 0.576$, loss about 0.551. The squashed gradients slow and misdirect learning. Shapes and dtypes are legal, so nothing errors."
+  },
+  {
+    "id": "01.P34-037",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part G — Debugging",
+    "question": "If targets are built with `tokens[:, :-1]` (the same slice as inputs), training loss drops near 0 within a few steps. What did the model learn?",
+    "options": [
+      "Nothing; the loss is computed incorrectly but the model's weights are fine",
+      "To predict the previous token, since the targets now lag the inputs by one",
+      "To copy the token it is currently reading, which says nothing about what comes next",
+      "To predict the next token unusually well, since the causal mask now lines up"
+    ],
+    "answer_index": 2,
+    "explanation": "With targets equal to inputs, position $i$'s target is the token at position $i$ itself, which the model can see. It learns to copy and just repeats at generation time. The shift `tokens[:, 1:]` makes the target token $i+1$, the one the causal mask hides."
+  },
+  {
+    "id": "01.P34-038",
+    "chapter": "01.P34",
+    "chapter_name": "01.3–01.4 Practice set",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/practice-03-04.md",
+    "section": "Part G — Debugging",
+    "question": "For `z = [0.0, -200.0]`, `z.softmax(0).log()` gives `[0, -inf]` while `z.log_softmax(0)` gives `[0, -200]`. Which must the training loss use?",
+    "options": [
+      "Neither; the logits must be clipped to a safe range like $[-50, 50]$ first",
+      "The log-softmax path, which never builds the underflowing probability",
+      "Either, since they are mathematically equal and differ only in display",
+      "The softmax-then-log path, because it is mathematically exact for any $z$"
+    ],
+    "answer_index": 1,
+    "explanation": "Softmax forms $e^{-200} \\approx 10^{-87}$, which underflows to 0, then $\\log 0 = -\\infty$. Log-softmax computes $z' - \\operatorname{logsumexp}(z')$ directly. `F.cross_entropy` uses this path internally when given logits."
+  }
+]

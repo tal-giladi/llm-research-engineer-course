@@ -1,0 +1,902 @@
+[
+  {
+    "id": "15.2-001",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which algorithm is the 'RL' in classic RLHF as used by InstructGPT and the first ChatGPT?",
+    "options": [
+      "PPO (Proximal Policy Optimization)",
+      "DPO (Direct Preference Optimization)",
+      "GRPO (Group Relative Policy Optimization)",
+      "Q-learning with a replay buffer"
+    ],
+    "answer_index": 0,
+    "explanation": "InstructGPT and the first ChatGPT used PPO to turn a reward model into a better policy. DPO and GRPO came later and are best understood by contrast with PPO's clipped objective and KL term. Q-learning is not the standard LLM RLHF algorithm."
+  },
+  {
+    "id": "15.2-002",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The causal story: a reward is not a loss",
+    "question": "Why can't an LLM be improved with RLHF by simply calling reward.backward() on the reward-model score?",
+    "options": [
+      "Sampling a token from the policy is not differentiable, so the reward has no gradient path back to the weights",
+      "The reward model is frozen during PPO, so its parameters block any gradient from reaching the policy weights",
+      "The reward is one scalar per sequence, and autograd can only backpropagate from per-token losses, not sequence scores",
+      "Backpropagating through both the reward model and the policy would double activation memory and exceed GPU capacity"
+    ],
+    "answer_index": 0,
+    "explanation": "The policy produces tokens by sampling from its distribution, and there is no derivative of 'which token got drawn' with respect to the weights. So the reward's dependence on the policy parameters cannot be traced by autograd. RL's policy gradient instead uses the reward value times the gradient of the log-probability of the action taken."
+  },
+  {
+    "id": "15.2-003",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The causal story: a reward is not a loss",
+    "question": "What is the key difference between the training signal in SFT and in RLHF?",
+    "options": [
+      "SFT optimizes a scalar reward from a learned critic; RLHF optimizes cross-entropy against a gold token sequence",
+      "SFT must sample completions from the model before each update; RLHF trains on a fixed dataset with no sampling",
+      "SFT updates only the value head on top of a frozen backbone; RLHF updates every weight of the whole model",
+      "SFT has a differentiable target (the gold token); RLHF has only a scalar reward on a sampled output"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT minimizes cross-entropy against known gold tokens, which is ordinary backprop. RLHF only receives a number from the reward model after the model has sampled a completion, and the sampling step blocks the gradient. The policy gradient is the trick that recovers a usable gradient from the reward value."
+  },
+  {
+    "id": "15.2-004",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The language model as a policy",
+    "question": "When viewing a language model as an RL policy, what are the state, action, and policy?",
+    "options": [
+      "State: the reward-model score so far; action: one optimizer gradient step; policy: the Adam update rule",
+      "State: the full vocabulary embedding table; action: choosing the next prompt; policy: the reward model",
+      "State: the context so far; action: the next token; policy: the model's softmax over the next token",
+      "State: the final hidden vector; action: which attention head fires next; policy: the KL penalty term"
+    ],
+    "answer_index": 2,
+    "explanation": "In RL vocabulary, the state s is the tokens generated so far, the action a is the next emitted token, and the policy pi_theta(a | s) is exactly the softmax over logits the model already computes. Nothing new is added; it is a renaming. The reward model supplies the reward, not the policy."
+  },
+  {
+    "id": "15.2-005",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The language model as a policy",
+    "question": "In LLM RLHF, when is the reward given during a generation?",
+    "options": [
+      "After every token, because the reward model scores each prefix and adds that score to the token's return",
+      "Once, at the end of the full generation (a terminal reward); intermediate tokens get no reward of their own",
+      "Only for the first generated token, since that token conditions the rest and the reward model scores it alone",
+      "At positions chosen by the value head, wherever its predicted value changes by more than the clip epsilon"
+    ],
+    "answer_index": 1,
+    "explanation": "The reward model scores the completed sequence, so the reward is terminal. Intermediate tokens receive no separate reward. With a single terminal reward, the return attributed to every action in the sequence is that same R."
+  },
+  {
+    "id": "15.2-006",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The language model as a policy",
+    "question": "With a single terminal reward R per sequence, what is the return for each action (token) in that sequence?",
+    "options": [
+      "R divided by the sequence length, shared equally across tokens",
+      "The same value R for every action in the sequence",
+      "Zero for every action except the last token, which gets R",
+      "R discounted geometrically by distance from the start"
+    ],
+    "answer_index": 1,
+    "explanation": "The return is the total reward attributed to the trajectory, and with one terminal reward and no intermediate rewards, every action's return is that one R. This is what makes the simple advantage R - V exact in the single-terminal-reward case."
+  },
+  {
+    "id": "15.2-007",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "What does the REINFORCE policy gradient intuitively do?",
+    "options": [
+      "Copies the highest-reward sample as a new SFT target",
+      "Backpropagates the reward model's gradient through the sampled tokens into the policy weights",
+      "Lowers the temperature of sampling whenever reward increases",
+      "Nudges each action's log-probability up in proportion to the reward that followed it"
+    ],
+    "answer_index": 3,
+    "explanation": "REINFORCE pushes up the log-probabilities of tokens in good outcomes and down in bad outcomes, scaled by how good or bad. It moves the derivative off the non-differentiable sample onto the differentiable log-probability. It never differentiates through the reward model."
+  },
+  {
+    "id": "15.2-008",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "What is the REINFORCE policy-gradient identity for J(theta) = E_{y~pi_theta}[R(y)]?",
+    "options": [
+      "grad J = E_{y~pi_theta}[ grad R(y) · pi_theta(y) ]",
+      "grad J = E_{y~pi_theta}[ log pi_theta(y) · grad R(y) ]",
+      "grad J = E_{y~pi_theta}[ grad log pi_theta(y) · R(y) ]",
+      "grad J = grad E_{y~pi_theta}[ R(y) ] * log R(y) / pi_theta(y)"
+    ],
+    "answer_index": 2,
+    "explanation": "The policy gradient theorem gives grad J = E[grad log pi_theta(y) R(y)]. The gradient acts only on log pi_theta, which is differentiable; R is a constant scale. Options with grad R would require differentiating through the reward, which is exactly what is impossible."
+  },
+  {
+    "id": "15.2-009",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "How is log pi_theta(y) of a whole generated sequence computed?",
+    "options": [
+      "The log-probability of the final token only, since it is conditioned on every earlier token of the sequence",
+      "The sum over tokens of log pi_theta(a_t | s_t), since pi_theta(y) is a product of per-token probabilities",
+      "The log of the mean per-token probability, since averaging first keeps long and short sequences comparable",
+      "The reward model's log-score divided by sequence length, since the policy has no sequence-level probability"
+    ],
+    "answer_index": 1,
+    "explanation": "The sequence probability factorizes autoregressively as the product of per-token conditional probabilities, so its log is the sum of per-token log-probs. These are values the model already computes from its log-softmax. Averaging probabilities before the log is not the same quantity."
+  },
+  {
+    "id": "15.2-010",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "In the REINFORCE gradient, how is the reward R(y) treated?",
+    "options": [
+      "As a constant that only scales the gradient; it is not differentiated through",
+      "As a differentiable function whose gradient flows back through the reward model's weights",
+      "As a learnable parameter updated alongside the policy",
+      "As a mask that zeroes out gradients for negative-reward tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "R(y) multiplies grad log pi_theta but is itself detached. Autograd differentiates only the log-probability factor. Treating R as differentiable is a common and serious bug."
+  },
+  {
+    "id": "15.2-011",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "What is the 'log-derivative trick' used to derive the policy gradient?",
+    "options": [
+      "grad log pi = log grad pi",
+      "grad pi = grad log pi / pi",
+      "grad pi = pi · grad log pi",
+      "log(pi · R) = log pi + log R"
+    ],
+    "answer_index": 2,
+    "explanation": "Since grad log pi = grad pi / pi, multiplying both sides by pi gives grad pi = pi grad log pi. Substituting into grad of the integral of pi R turns the integral back into an expectation under pi of R grad log pi, which can be estimated by sampling. The other identities are false or irrelevant."
+  },
+  {
+    "id": "15.2-012",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "How is the REINFORCE update implemented in PyTorch code?",
+    "options": [
+      "Call reward.backward() first, then multiply every parameter's .grad by log pi_theta(y) before the step",
+      "Minimize -mean(R) directly with the optimizer, since R already depends on the policy's sampled tokens",
+      "Form the surrogate loss -mean(R · log pi_theta(y)) and call .backward(); R rides along as a constant",
+      "Compute the gradient of R with torch.autograd.grad through the sampler and add it to the weights"
+    ],
+    "answer_index": 2,
+    "explanation": "The surrogate loss is negated because optimizers minimize, and its gradient equals minus the policy gradient. Autograd differentiates only the log-prob factor. Minimizing or differentiating R directly is impossible because R does not depend differentiably on the weights."
+  },
+  {
+    "id": "15.2-013",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "Why is the raw REINFORCE gradient estimate high-variance?",
+    "options": [
+      "The per-token log-probabilities are always close to zero, so tiny rounding errors dominate the gradient",
+      "R can be large and differs for every sample, so the gradient magnitude swings wildly between samples",
+      "The sigmoid at the end of the reward model saturates, so most rewards collapse to exactly 0 or 1",
+      "Autograd introduces random stochastic rounding in the backward pass whenever bf16 weights are used"
+    ],
+    "answer_index": 1,
+    "explanation": "Each sample's gradient is scaled by its own reward, which varies a lot, so small-batch estimates are very noisy. This makes training slow and unstable. The fix is subtracting a baseline."
+  },
+  {
+    "id": "15.2-014",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "REINFORCE: the policy gradient",
+    "question": "If all rewards are positive, what does vanilla REINFORCE do to the sampled actions?",
+    "options": [
+      "Pushes every sampled action up (some more than others), never directly saying an action was below average",
+      "Pushes every sampled action down slightly, because positive rewards are treated as an exploration penalty",
+      "Leaves the policy unchanged, because with all-positive rewards the per-sample gradients cancel out exactly",
+      "Pushes up only the single highest-reward action in the batch and leaves every other sample untouched"
+    ],
+    "answer_index": 0,
+    "explanation": "With all-positive R, each sample's log-prob gradient is scaled by a positive number, so all are increased. It never directly signals 'that one was below average', which is a source of slow, unstable learning. A baseline fixes this by centering the signal."
+  },
+  {
+    "id": "15.2-015",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "What does subtracting a baseline b(s) from the reward accomplish in the policy gradient?",
+    "options": [
+      "It makes the gradient estimate biased toward the baseline, but much cheaper to compute per sampled sequence",
+      "It removes the need to compute log-probabilities, since the advantage alone now determines each token's update",
+      "It doubles the effective learning rate for good actions while leaving the update for bad actions unchanged",
+      "Actions are pushed up only if they beat expectations; variance drops while the expected gradient is unchanged"
+    ],
+    "answer_index": 3,
+    "explanation": "With R - b(s), an action that merely met expectations gets near-zero gradient, better-than-expected is pushed up, worse is pushed down. The baseline term integrates to zero in expectation, so the gradient stays unbiased, but its variance is drastically reduced."
+  },
+  {
+    "id": "15.2-016",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "Why does subtracting a state-dependent baseline b(s) not change the policy gradient in expectation?",
+    "options": [
+      "Because a learned baseline is trained to be zero on average across all states in the batch",
+      "Because the baseline is detached, so autograd never computes any gradient term involving it",
+      "Because PPO's clipping step removes the baseline's contribution before the update",
+      "The baseline term integrates to zero, since E[grad log pi] = 0 under the policy"
+    ],
+    "answer_index": 3,
+    "explanation": "E_{a~pi}[grad log pi(a|s) · b(s)] = b(s) · grad of the sum of pi(a|s) over actions = b(s) · grad 1 = 0. So the baseline adds no bias, only reduces variance. It is not required to be zero; it is typically a learned value estimate."
+  },
+  {
+    "id": "15.2-017",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "In LLM PPO, what is the baseline b(s) usually?",
+    "options": [
+      "The reward model's score for the SFT model's greedy completion of the same prompt",
+      "A learned value function V(s), implemented as a second scalar 'value head' on the model",
+      "A running constant equal to the maximum reward seen so far across all earlier PPO batches",
+      "The per-token KL divergence between the current policy and the frozen reference model"
+    ],
+    "answer_index": 1,
+    "explanation": "The baseline is typically a learned value function V(s) estimating the average return from state s. In LLM PPO it is an extra scalar head on the policy backbone. It is not the KL term or a fixed constant."
+  },
+  {
+    "id": "15.2-018",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "What is the advantage A-hat in PPO with a single terminal reward?",
+    "options": [
+      "A-hat = R - V(s): how much the return beat the value baseline's prediction",
+      "A-hat = R + V(s): the observed reward plus the reward the value head predicted",
+      "A-hat = V(s) / R: the fraction of the observed reward that was predicted in advance",
+      "A-hat = log pi_theta - log pi_ref: the per-token log-ratio to the reference"
+    ],
+    "answer_index": 0,
+    "explanation": "The advantage is the return minus the baseline value. Positive means above expectation (push up), negative means below (push down). The log-ratio to the reference is the KL estimate, not the advantage."
+  },
+  {
+    "id": "15.2-019",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "What does Generalized Advantage Estimation (GAE) do, and when does it reduce to A-hat = R - V?",
+    "options": [
+      "It replaces the reward model with a learned value model; it reduces to R - V exactly when beta_KL is set to 0",
+      "It normalizes advantages to zero mean and unit variance per batch; it reduces to R - V when the batch holds one sequence",
+      "It clips each advantage into [1 - eps, 1 + eps] before the update; it reduces to R - V when eps is set to 0",
+      "It estimates advantages over multi-step trajectories; with one terminal reward per sequence, R - V is the exact case"
+    ],
+    "answer_index": 3,
+    "explanation": "The full PPO paper uses GAE to estimate advantages from multi-step trajectories with intermediate rewards. With one terminal reward per sequence, the advantage R - V is the simple exact case implemented from scratch. Normalization (whitening) and clipping are separate mechanisms."
+  },
+  {
+    "id": "15.2-020",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "Completions with rewards [1.0, 0.0, 2.0] have a value baseline of 0.5 each. What happens to the middle completion's tokens?",
+    "options": [
+      "They get zero advantage and are left unchanged, because a reward of exactly zero yields no gradient",
+      "They get a positive advantage (+0.5), because 0.0 is still above the minimum reward the model can give",
+      "They get a negative advantage (-0.5) and are pushed down, even though the reward was not negative",
+      "They are dropped from the batch entirely, because zero-reward completions carry no learning signal"
+    ],
+    "answer_index": 2,
+    "explanation": "A-hat = R - V = 0.0 - 0.5 = -0.5. The completion did worse than expected, so the baseline turns a non-negative reward into a negative signal. That is exactly the baseline doing its job."
+  },
+  {
+    "id": "15.2-021",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Baseline and advantage",
+    "question": "What does advantage 'whitening' (normalize=True in compute_advantages) do?",
+    "options": [
+      "Standardizes advantages to zero mean and unit variance across the batch, a standard PPO stabilizer",
+      "Clips every advantage into the range [-1, 1] so that no single token can dominate the update",
+      "Replaces each advantage with its sign, so every token gets +1 or -1 regardless of how good it was",
+      "Adds small Gaussian noise to each advantage so the policy keeps exploring alternative tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "Whitening subtracts the batch mean and divides by the batch standard deviation. This keeps the scale of the policy-gradient signal stable across batches. It is not clipping or sign-taking."
+  },
+  {
+    "id": "15.2-022",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "What problem does PPO solve relative to vanilla REINFORCE?",
+    "options": [
+      "REINFORCE can use each expensive sampled batch for only one step; PPO allows several steps safely",
+      "REINFORCE cannot handle a terminal reward at the end of the sequence; PPO assigns a reward to every token",
+      "REINFORCE needs a separately trained reward model; PPO learns directly from the human preference pairs",
+      "REINFORCE cannot compute per-token log-probabilities of a sampled sequence; PPO computes them exactly"
+    ],
+    "answer_index": 0,
+    "explanation": "Sampling (generation) is expensive, so reusing a batch for multiple optimizer steps is attractive. But after a step the policy differs from the data-generating pi_old, making the data off-policy, and a big step can wreck the policy. PPO's importance ratio plus clipping makes multiple steps per batch safe."
+  },
+  {
+    "id": "15.2-023",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In PPO, what is the probability ratio r_t?",
+    "options": [
+      "r_t = pi_theta(a_t | s_t) / pi_ref(a_t | s_t), current policy vs the frozen SFT model, for the taken action",
+      "r_t = R / V(s_t), the observed reward relative to the value baseline's prediction at that token",
+      "r_t = the fraction of tokens in the batch whose probability increased since the last update",
+      "r_t = pi_theta(a_t | s_t) / pi_old(a_t | s_t), current vs data-generating policy, for the taken action"
+    ],
+    "answer_index": 3,
+    "explanation": "r_t compares the current policy to pi_old, the policy that generated the batch, for the action actually taken. r_t = 1 means unchanged. The ratio to pi_ref appears in the KL penalty, not in the clip ratio."
+  },
+  {
+    "id": "15.2-024",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "How is the PPO ratio r_t computed numerically, and why?",
+    "options": [
+      "As pi_theta / pi_old directly, because computing exponentials of log-probs is slow on GPU",
+      "As log pi_theta / log pi_old, because the log-probs are already available from the forward",
+      "As exp(log pi_theta - log pi_old), because dividing raw probabilities can underflow",
+      "As sigmoid(log pi_theta - log pi_old), to keep the ratio safely bounded inside (0, 1)"
+    ],
+    "answer_index": 2,
+    "explanation": "Token probabilities can be tiny, so dividing them directly risks underflow. Subtracting log-probs and exponentiating is stable. A ratio of log-probs is not the probability ratio, and sigmoid would wrongly bound it below 1."
+  },
+  {
+    "id": "15.2-025",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "What is the PPO clipped surrogate objective?",
+    "options": [
+      "E_t[ max( r_t A_t, clip(r_t, 1 - eps, 1 + eps) A_t ) ]",
+      "E_t[ min( r_t A_t, clip(r_t, 1 - eps, 1 + eps) A_t ) ]",
+      "E_t[ clip(r_t A_t, 1 - eps, 1 + eps) ]",
+      "E_t[ r_t A_t - eps * (r_t - 1)^2 ] with a squared trust penalty"
+    ],
+    "answer_index": 1,
+    "explanation": "L_CLIP takes the minimum of the unclipped term r_t A_t and the clipped term clip(r_t, 1-eps, 1+eps) A_t. The min makes it pessimistic. Clipping the product rather than the ratio, or taking a max, would not give PPO's trust-region behavior."
+  },
+  {
+    "id": "15.2-026",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "What is the typical value of PPO's clipping parameter epsilon, and what band does it define?",
+    "options": [
+      "About 2.0, giving the ratio band [-1, 3]",
+      "About 0.2, giving the ratio band [0.8, 1.2]",
+      "About 0.01, giving the ratio band [0.99, 1.01]",
+      "About 0.5, giving the ratio band [0, 1]"
+    ],
+    "answer_index": 1,
+    "explanation": "epsilon is typically 0.2, so the ratio is clipped into [1-0.2, 1+0.2] = [0.8, 1.2]. Moving the ratio outside this trust band gives no further gain in the objective."
+  },
+  {
+    "id": "15.2-027",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "Why does PPO take the min of the clipped and unclipped terms?",
+    "options": [
+      "It makes the objective optimistic, so that good actions are pushed up as far as the sampled batch data allows",
+      "It guarantees the objective is always negative, so the loss passed to backward() stays positive",
+      "It averages the clipped and unclipped terms, which halves the variance of the gradient estimate",
+      "It makes the objective pessimistic, removing any incentive to push the ratio outside [1 - eps, 1 + eps]"
+    ],
+    "answer_index": 3,
+    "explanation": "Taking the smaller value means the objective never rewards moving the ratio beyond the trust band. For good actions the gain is capped once r_t > 1+eps; for bad actions the objective stops improving once r_t < 1-eps. This lets several steps be taken per batch without one update moving the policy too far."
+  },
+  {
+    "id": "15.2-028",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In PPO, for a good action (A > 0), what happens once the ratio r_t exceeds 1 + eps?",
+    "options": [
+      "The objective keeps growing linearly with r_t, so the gradient pushes the probability ever higher",
+      "The objective drops to zero and the token is masked out of the batch for the remaining epochs",
+      "The objective is capped at (1 + eps) A, so pushing the probability higher gives no further gain",
+      "The objective flips sign to penalize the action for having moved too far from the old policy"
+    ],
+    "answer_index": 2,
+    "explanation": "With A > 0, the clipped branch (1+eps)A becomes smaller than r_t A once r_t > 1+eps, and the min picks it. Because that branch is constant in r_t, its gradient is zero. So there is no incentive to shove the probability arbitrarily high in one update."
+  },
+  {
+    "id": "15.2-029",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In PPO, for a bad action (A < 0), what happens once the ratio r_t falls below 1 - eps?",
+    "options": [
+      "The objective keeps improving as r_t approaches zero, so the action's probability is driven toward collapse",
+      "The objective is held constant at (1 - eps) A, so nothing drives the probability toward zero in one step",
+      "The advantage's sign is flipped to positive, so the action is now pushed back up toward the old policy",
+      "The action's log-probability is reset to the old policy's value before the next gradient step is taken"
+    ],
+    "answer_index": 1,
+    "explanation": "With A < 0, below r_t < 1-eps the clipped term (1-eps)A is more negative than r_t A, so the min picks the constant clipped value. Its gradient is zero, so further lowering the probability gives no gain. This prevents a bad action's probability from collapsing in one update."
+  },
+  {
+    "id": "15.2-030",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In PPO with eps = 0.2, a bad action (A = -2.0) has ratio r_t = 1.5. Which branch does the min select?",
+    "options": [
+      "The unclipped branch (-3.0): a bad action whose probability rose is not helped by clipping",
+      "The clipped branch (-2.4), since the ratio 1.5 is outside the band and the penalty must be capped",
+      "Neither branch; outside the trust band the objective is defined as zero, so there is no gradient",
+      "The clipped branch (-1.6), using the lower band edge 0.8 because the advantage is negative"
+    ],
+    "answer_index": 0,
+    "explanation": "Unclipped = 1.5 × (-2) = -3.0; clipped = 1.2 × (-2) = -2.4. The min is -3.0, the unclipped term. So when a bad action's probability went up, PPO keeps the full penalty and its gradient — clipping only removes incentives, it never shields a harmful change."
+  },
+  {
+    "id": "15.2-031",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "Is the PPO clipped objective L_CLIP maximized or minimized, and what loss is backpropagated?",
+    "options": [
+      "L_CLIP is minimized directly as the training loss",
+      "L_CLIP is maximized; the training loss is 1 / L_CLIP",
+      "L_CLIP is maximized; the training loss is -L_CLIP",
+      "L_CLIP is minimized; the training loss is exp(L_CLIP)"
+    ],
+    "answer_index": 2,
+    "explanation": "L_CLIP is an objective to maximize because higher means more advantage-weighted probability on good actions. Optimizers minimize, so the loss passed to backward() is its negation. Confusing the sign is a common mistake."
+  },
+  {
+    "id": "15.2-032",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In a from-scratch PPO implementation, which of logprobs, old_logprobs, and advantages carry gradients?",
+    "options": [
+      "All three carry gradients, since each depends on the current policy's forward pass",
+      "Only advantages, since they come from the trainable value head and must be updated",
+      "Only logprobs; old_logprobs and advantages are detached constants",
+      "Only old_logprobs, since they define the trust region the ratio is measured against"
+    ],
+    "answer_index": 2,
+    "explanation": "logprobs come from the current policy and must carry grad so the ratio can be differentiated. old_logprobs (from pi_old) and advantages are fixed per batch and .detach()ed. All three have the same elementwise shape, e.g. (N,) over N tokens, and the objective is reduced with .mean()."
+  },
+  {
+    "id": "15.2-033",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "PPO: the clipped surrogate",
+    "question": "In ppo_clip_objective, which PyTorch operations implement the clip and the pessimistic min?",
+    "options": [
+      "torch.sigmoid(ratio) to bound it and torch.max(unclipped, clipped), followed by .sum()",
+      "torch.clamp(ratio, 1 - eps, 1 + eps) and torch.minimum(unclipped, clipped), followed by .mean()",
+      "torch.nn.utils.clip_grad_norm_(ratio, eps) and torch.min over the batch axis, followed by .mean()",
+      "F.logsigmoid(ratio) and torch.where(ratio > 1, unclipped, clipped), followed by .mean()"
+    ],
+    "answer_index": 1,
+    "explanation": "The ratio is clamped elementwise into the trust band and multiplied by advantages; torch.minimum picks the smaller of clipped and unclipped per element; .mean() reduces to a scalar objective. Gradient-norm clipping is a different mechanism entirely."
+  },
+  {
+    "id": "15.2-034",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "What is reward hacking (over-optimization) in RLHF?",
+    "options": [
+      "The policy exploits blind spots of the imperfect reward model, scoring high while actually being bad",
+      "The reward model overfits to the SFT data and outputs a near-constant reward for every completion",
+      "The value head learns to predict rewards perfectly, so every advantage is zero and learning stops",
+      "Labelers deliberately mislabel preference pairs so that their preferred outputs get inflated rewards"
+    ],
+    "answer_index": 0,
+    "explanation": "The reward model is only a proxy for human preference. Optimized without limit, the policy finds text that scores high on the proxy but is low quality. The KL penalty to a frozen reference is the guardrail against this."
+  },
+  {
+    "id": "15.2-035",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "In RLHF-PPO, what is the reference policy pi_ref used in the KL penalty?",
+    "options": [
+      "The policy from the previous PPO iteration (pi_old)",
+      "The reward model with its scalar head",
+      "A uniform distribution over the vocabulary",
+      "The frozen SFT model the policy started from"
+    ],
+    "answer_index": 3,
+    "explanation": "pi_ref is the trusted SFT model, kept frozen. The policy may improve but must stay recognizably close to it. pi_old is different — it is the policy that generated the current batch, used for the clip ratio."
+  },
+  {
+    "id": "15.2-036",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "How is the per-token reward fed to PPO modified by the KL penalty?",
+    "options": [
+      "R_t = r(x, y) + beta_KL · (log pi_theta(a_t | s_t) - log pi_ref(a_t | s_t))",
+      "R_t = r(x, y) * exp(-beta_KL * log pi_ref(a_t | s_t)), a multiplicative penalty",
+      "R_t = r(x, y) - beta_KL · (log pi_theta(a_t | s_t) - log pi_old(a_t | s_t))",
+      "R_t = r(x, y) - beta_KL · (log pi_theta(a_t | s_t) - log pi_ref(a_t | s_t))"
+    ],
+    "answer_index": 3,
+    "explanation": "The reward-model score is reduced by beta_KL times the log-ratio of policy to reference for the sampled token. That log-ratio is a single-sample estimate of KL(pi_theta || pi_ref), so drifting from the reference costs reward. The reference, not pi_old, appears here."
+  },
+  {
+    "id": "15.2-037",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "What does the coefficient beta_KL control in RLHF-PPO?",
+    "options": [
+      "The width of the PPO clipping band around a ratio of 1 for each token",
+      "The trade-off between maximizing reward and staying close to the reference",
+      "The learning rate of the value head relative to the policy's learning rate",
+      "The sampling temperature used during rollouts, trading diversity for reward"
+    ],
+    "answer_index": 1,
+    "explanation": "A larger beta_KL penalizes drift from pi_ref more heavily, keeping the policy closer to the SFT model; a smaller one lets the policy chase reward more aggressively. The clip band is controlled by epsilon, a separate hyperparameter."
+  },
+  {
+    "id": "15.2-038",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "What does (logprobs - ref_logprobs).mean() over sampled tokens estimate?",
+    "options": [
+      "KL(pi_theta || pi_ref), as the mean log-ratio over tokens the policy actually sampled",
+      "KL(pi_ref || pi_theta), as the mean log-ratio over tokens the reference would sample",
+      "The entropy of the policy, as the mean negative log-probability of the sampled tokens",
+      "The PPO clip ratio averaged over the batch, as a log-space measure of policy change"
+    ],
+    "answer_index": 0,
+    "explanation": "Since tokens are sampled from pi_theta, the average of log pi_theta - log pi_ref is a Monte Carlo estimate of KL(pi_theta || pi_ref). For two tokens where the policy is 0.5 nats more confident than the reference each, it gives 0.5. Direction matters: sampling is from the policy."
+  },
+  {
+    "id": "15.2-039",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "The KL penalty: don't reward-hack",
+    "question": "What is a known weakness of the plain log-ratio 'k1' KL estimator, and what alternative does production RLHF often use?",
+    "options": [
+      "k1 is biased upward on long sequences; TRL often uses the squared log-ratio (log r)^2 / 2 instead",
+      "k1 needs the full vocabulary distribution at every step; TRL approximates it using only the top-k tokens",
+      "k1 explodes for long sequences; TRL clips each per-token log-ratio at the PPO epsilon before averaging",
+      "k1 is unbiased but can go negative on a finite sample; TRL often uses the nonnegative k3 = exp(d) - 1 - d"
+    ],
+    "answer_index": 3,
+    "explanation": "The plain log-ratio is an unbiased estimator of KL, but individual sample averages can be negative even though true KL is not. The k3 estimator exp(d) - 1 - d, with d = log pi_ref - log pi_theta, is always nonnegative. Both estimate the same KL."
+  },
+  {
+    "id": "15.2-040",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Under the hood / cost — why PPO-on-LLMs is heavy",
+    "question": "Which four models are in play during full RLHF-PPO?",
+    "options": [
+      "The tokenizer, the trainable policy, the AdamW optimizer's moment state, and the frozen reward model",
+      "The base pretrained model, the SFT model, a DPO-tuned model, and a GRPO-tuned model",
+      "The trainable policy, the frozen reference (SFT), the frozen reward model, and the value model",
+      "The trainable policy, two separate reward models (helpful and harmless), and a discriminator"
+    ],
+    "answer_index": 2,
+    "explanation": "PPO-RLHF keeps the trainable policy, a frozen reference for the KL term, a frozen reward model to score completions, and a value model for the baseline (often a value head on the policy). This is why it is memory-hungry. The other lists are not the PPO setup."
+  },
+  {
+    "id": "15.2-041",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Under the hood / cost — why PPO-on-LLMs is heavy",
+    "question": "What does a single RLHF-PPO iteration involve?",
+    "options": [
+      "Sample rollouts, score them with the RM, compute policy/reference log-probs and advantages, then take several clipped steps",
+      "Forward the chosen and rejected completions through the policy and minimize the Bradley-Terry loss on their reward gap",
+      "Compute the DPO loss on a fixed offline preference dataset, using the frozen reference only for its log-probabilities",
+      "Fine-tune on human-written demonstrations with token-level cross-entropy, then score the result with the reward model"
+    ],
+    "answer_index": 0,
+    "explanation": "Each iteration samples rollouts (slow autoregressive generation), scores them, computes log-probs under both policy and reference for the KL term, computes advantages with the value model, and then takes multiple clipped updates. The Bradley-Terry and DPO losses belong to other stages/methods."
+  },
+  {
+    "id": "15.2-042",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Under the hood / cost — why PPO-on-LLMs is heavy",
+    "question": "Why is PPO on LLMs considered heavy and finicky?",
+    "options": [
+      "Several model copies eat memory, generation is slow, and many hyperparameters interact (eps, beta_KL, lr, GAE lambda)",
+      "It needs human labelers to rate every single rollout in real time, so each PPO iteration waits on annotation",
+      "It cannot run in mixed precision, so every model must be held and trained in full fp32 throughout",
+      "It must retrain the tokenizer every iteration, because the policy's token vocabulary drifts as the model is updated"
+    ],
+    "answer_index": 0,
+    "explanation": "Four models in memory, slow autoregressive rollouts, and a pile of interacting hyperparameters make PPO engineering-heavy. This engineering weight is exactly what DPO removes. Real-time human rating is not part of the loop; the reward model does the scoring."
+  },
+  {
+    "id": "15.2-043",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Under the hood / cost — why PPO-on-LLMs is heavy",
+    "question": "What does TRL's PPOTrainer provide?",
+    "options": [
+      "A Bradley-Terry trainer that fits reward models on preference pairs, with no generation or policy-update logic of any kind",
+      "A tokenizer trainer for chat templates that adds special role tokens and retrains the BPE merges for dialogue data",
+      "A distributed data-parallel wrapper that shards the policy across GPUs but leaves the entire RL loop to the user",
+      "A loop wiring generation, reward scoring, reference log-probs, GAE, and the clipped update, plus value head and KL control"
+    ],
+    "answer_index": 3,
+    "explanation": "TRL (Transformer Reinforcement Learning) packages the full PPO loop. Implementing the clipped objective, advantage, and KL estimate from scratch first means each line of that loop is understandable. It is not merely a reward-model or distributed-training tool."
+  },
+  {
+    "id": "15.2-044",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Under the hood / cost — why PPO-on-LLMs is heavy",
+    "question": "What is the minimum hardware for RLHF-PPO on a ~1B policy, and can it be trained on CPU?",
+    "options": [
+      "Min 1x 8GB consumer GPU with 4-bit LoRA; CPU-only training works but is about 10x slower",
+      "Min 64x H100 even at 1B because of the four models; CPU is never used, not even for unit tests",
+      "Min 1× A100 40GB with LoRA and a small reward model; CPU-only training is impossible",
+      "Any CPU with 32GB RAM is enough for training; GPUs only speed up the rollout generation step"
+    ],
+    "answer_index": 2,
+    "explanation": "The hardware track lists min 1× A100 40GB for a ~1B policy with LoRA (slow because of generation), and recommended 8× A100/H100 for 7B+. Runtime is hours to days and tens to hundreds of GPU-hours. CPU training is impossible, though the small llmre.rl.ppo math functions run instantly on CPU for unit tests."
+  },
+  {
+    "id": "15.2-045",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "In a PPO implementation, what is wrong if the reward or advantage tensor has requires_grad=True during the policy update?",
+    "options": [
+      "Nothing goes wrong; gradients through the reward jointly improve the reward model alongside the policy",
+      "Gradients flow through what should be a constant multiplier; only log pi_theta should carry grad",
+      "It silently causes the clip ratio to be computed in probability space instead of log space",
+      "It disables the KL penalty, because the penalized reward is then treated as a learnable tensor"
+    ],
+    "answer_index": 1,
+    "explanation": "R and A-hat are constant scale factors in the policy gradient and must be detached. Letting gradients flow through them computes nonsense rather than the policy gradient. Only the log-probabilities of the current policy should be differentiated."
+  },
+  {
+    "id": "15.2-046",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What typically happens in RLHF-PPO if the KL penalty is dropped?",
+    "options": [
+      "Training becomes slower but more stable, since the policy no longer fights a second objective",
+      "The policy reward-hacks within a few hundred steps: reward climbs while quality collapses",
+      "The value head can no longer be trained, since its regression target depended on the KL term",
+      "The clip ratio stays exactly 1 for every token, so PPO degenerates into plain REINFORCE"
+    ],
+    "answer_index": 1,
+    "explanation": "Without the KL term nothing anchors the policy to the trusted SFT model, so it quickly finds reward-model blind spots. The reported reward rises but the outputs get worse. The KL term is the main guardrail against this."
+  },
+  {
+    "id": "15.2-047",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "During PPO, reward-model scores climb, human raters say outputs are getting worse, and KL to the reference rises fast. What is happening and what is the primary fix?",
+    "options": [
+      "The value head is underfitting; raise the value learning rate so advantages become accurate",
+      "The clip epsilon is too small to allow progress; increase it from 0.2 to about 0.5",
+      "The reward model is too accurate and overconfident; add noise to its output scores",
+      "Reward hacking; increase beta_KL (or tighten the KL target) and/or stop earlier"
+    ],
+    "answer_index": 3,
+    "explanation": "Rising reward with falling true quality, together with exploding KL, is the classic over-optimization signature: the policy is racing toward inputs the imperfect reward model overrates. Raising beta_KL pulls it back toward the reference; stopping earlier also helps. Increasing epsilon would allow even larger policy moves."
+  },
+  {
+    "id": "15.2-048",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "In a PPO run, what is the 'tell' that distinguishes reward hacking from genuine improvement?",
+    "options": [
+      "The value loss reaching zero, meaning the critic has fully memorized the rewards",
+      "The clip fraction staying exactly at zero, meaning no token ever leaves the band",
+      "KL to the reference climbing fast; a healthy run keeps KL bounded",
+      "The reward staying flat across steps while the policy loss keeps decreasing"
+    ],
+    "answer_index": 2,
+    "explanation": "When the policy drifts far from the trusted SFT model, KL explodes; that drift is what reward hacking looks like. A healthy PPO run improves reward while keeping KL bounded. Longer term, refreshing the reward model on new on-policy samples addresses the underlying distribution shift."
+  },
+  {
+    "id": "15.2-049",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Check yourself",
+    "question": "In PPO with eps = 0.2, a bad action (A = -2.0) has ratio 0.7. What is its objective value and which branch wins?",
+    "options": [
+      "-1.4, the unclipped branch",
+      "-1.6, the clipped branch",
+      "-2.4, the clipped branch at the upper edge",
+      "0, because the ratio is outside the band"
+    ],
+    "answer_index": 1,
+    "explanation": "Unclipped = 0.7 × (-2.0) = -1.4; clipped ratio = 0.8, so clipped = -1.6. The min is -1.6, the clipped branch. A bad action whose probability already dropped below the band is held at the constant clipped value, so there is no gradient pushing it further down."
+  },
+  {
+    "id": "15.2-050",
+    "chapter": "15.2",
+    "chapter_name": "Policy gradient, advantage, PPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-02.md",
+    "section": "Check yourself",
+    "question": "What two things does the policy gradient multiply together to recover a usable gradient from a non-differentiable sampled reward?",
+    "options": [
+      "The reward value and the gradient of the log-probability of the action taken",
+      "The gradient of the reward and the probability of the action taken, both from autograd",
+      "The reward value and the gradient of the reward model's own training loss on that sample",
+      "The KL penalty and the gradient of the value head's prediction for the current state"
+    ],
+    "answer_index": 0,
+    "explanation": "The policy gradient is E[R · grad log pi_theta(a)]: the reward value is just a number, and the log-probability of the chosen action is differentiable. This sidesteps the non-differentiable sampling step entirely."
+  }
+]

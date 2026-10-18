@@ -1,0 +1,1136 @@
+[
+  {
+    "id": "01.1-001",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "At heart, what does a language model emit at each position after reading some text?",
+    "options": [
+      "A single deterministic next token with no probabilities",
+      "A continuous Gaussian distribution over word embeddings",
+      "A categorical distribution over the next token",
+      "A variance estimate for the length of the sentence"
+    ],
+    "answer_index": 2,
+    "explanation": "A language model reads text and emits a categorical distribution over the vocabulary for the next token. Sampling or picking the argmax turns that into a concrete token, but the model's actual output is the distribution. Expectation, likelihood, entropy, cross-entropy and perplexity in Module 1 are all machinery for measuring how good that distribution is."
+  },
+  {
+    "id": "01.1-002",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is the categorical distribution singled out as the most important distribution for a course on training language models?",
+    "options": [
+      "It is exactly the object a language model outputs at every position",
+      "It is the only distribution whose variance is always exactly zero",
+      "It is the distribution used to initialize every model's weight matrices",
+      "It is the only distribution that can describe continuous outcomes"
+    ],
+    "answer_index": 0,
+    "explanation": "Every next-token prediction is a categorical distribution over the vocabulary, so understanding this one object makes the training loss read as a consequence rather than a memorized formula. It is not about weight initialization, and a categorical is discrete, not continuous."
+  },
+  {
+    "id": "01.1-003",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "1. Intuition: a random variable is a number you do not know yet",
+    "question": "A programmer thinks of `roll_die()` as a function with randomness inside that returns a number in 1..6. What does the corresponding random variable describe?",
+    "options": [
+      "The specific value returned by the most recent call to the function",
+      "The source code and internal state of the random number generator",
+      "Only the largest value the function can ever return across all calls",
+      "The possible return values together with how often each one happens"
+    ],
+    "answer_index": 3,
+    "explanation": "A random variable is the description of an uncertain value plus how often each outcome happens. It is not one realized value (that is an outcome x), and it is not about the generator's implementation."
+  },
+  {
+    "id": "01.1-004",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "1. Intuition: a random variable is a number you do not know yet",
+    "question": "In standard probability notation, what is the difference between X and x?",
+    "options": [
+      "X is one concrete outcome; x is the random variable it comes from",
+      "X is the random variable; x is one concrete outcome it can take",
+      "X is the probability of an outcome; x is the expectation of X",
+      "X is a continuous random variable; x is a discrete one"
+    ],
+    "answer_index": 1,
+    "explanation": "Capital letters denote random variables and lowercase letters denote their concrete values. For a fair die, X is the result of the roll and x ranges over {1,...,6}; 'X = 4' names one particular outcome."
+  },
+  {
+    "id": "01.1-005",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "1. Intuition: a random variable is a number you do not know yet",
+    "question": "What makes a random variable discrete?",
+    "options": [
+      "Its outcomes are always equally likely to occur",
+      "Its outcomes come from a finite or countable list",
+      "Its expectation is always one of its integer outcomes",
+      "Its variance is always strictly less than one"
+    ],
+    "answer_index": 1,
+    "explanation": "A discrete random variable takes values from a finite or countable list of outcomes. Equal probabilities are not required (a biased die is still discrete), and a discrete variable's mean need not be an integer — the fair die has mean 3.5."
+  },
+  {
+    "id": "01.1-006",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "1. Intuition: a random variable is a number you do not know yet",
+    "question": "Why are discrete random variables sufficient for modeling next-token prediction, while continuous ones are not needed?",
+    "options": [
+      "Tokens are real numbers between 0 and 1, so a single value suffices",
+      "Continuous variables cannot be represented in GPU memory at all",
+      "Language models never use probabilities, only deterministic raw scores",
+      "A token is one of a finite vocabulary, such as 50257 possibilities"
+    ],
+    "answer_index": 3,
+    "explanation": "The next token is drawn from a finite vocabulary (for example 50257 tokens), which is exactly the discrete case. Continuous random variables such as heights or temperatures need calculus (densities and integrals) and are not required for this."
+  },
+  {
+    "id": "01.1-007",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "What does the probability mass function p(x) of a discrete random variable X give?",
+    "options": [
+      "For each outcome x, the probability P(X = x)",
+      "The cumulative probability that X is at most x",
+      "The average value of X over many samples",
+      "The squared distance of x from the mean"
+    ],
+    "answer_index": 0,
+    "explanation": "The PMF maps each possible outcome x to P(X = x), and it fully describes a discrete random variable. The cumulative version is a different function, the average is the expectation, and squared distance from the mean belongs to the variance."
+  },
+  {
+    "id": "01.1-008",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "Which two conditions must a function p(x) satisfy to be a valid probability mass function?",
+    "options": [
+      "p(x) <= 1 for every x, and the product of p(x) over all x equals 1",
+      "p(x) > 0 for every x, and the maximum p(x) equals 1",
+      "p(x) >= 0 for every x, and the sum of p(x) over all x equals 1",
+      "p(x) is between -1 and 1, and the mean of p(x) equals 0"
+    ],
+    "answer_index": 2,
+    "explanation": "A valid PMF is non-negative everywhere and normalized: the probabilities over all outcomes sum to exactly 1. Zero probabilities are allowed, so strict positivity is not required, and it is the sum, not the product or maximum, that must equal 1."
+  },
+  {
+    "id": "01.1-009",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "What does the normalization rule, sum over x of p(x) = 1, express intuitively?",
+    "options": [
+      "Every outcome must be equally likely, so each one receives 1/K",
+      "The most likely outcome always has probability 1, and all the others share 0",
+      "The expectation of the variable must equal 1 for the PMF to be valid",
+      "Something must happen: a fixed budget of 1 is spread across the outcomes"
+    ],
+    "answer_index": 3,
+    "explanation": "Normalization says the total probability mass is exactly 1 and the PMF only distributes that budget across outcomes, because exactly one outcome occurs. It does not force equal probabilities, and it says nothing about the mean."
+  },
+  {
+    "id": "01.1-010",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "Why is softmax the function used to produce a language model's predicted next-token probabilities?",
+    "options": [
+      "It makes all predicted probabilities equal, so no token is favoured",
+      "It guarantees the expectation of the token index is an integer value",
+      "It enforces that the outputs are non-negative and sum to 1 over the vocabulary",
+      "It removes the need for a fixed vocabulary by generating raw characters instead"
+    ],
+    "answer_index": 2,
+    "explanation": "The model's predictions over the vocabulary must form a valid PMF, which requires non-negativity and summing to 1; softmax enforces exactly that. It does not make probabilities uniform — it preserves the ordering of the raw scores while normalizing them."
+  },
+  {
+    "id": "01.1-011",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "What is the PMF of a fair six-sided die?",
+    "options": [
+      "p(x) = x/21 for each x in {1,2,3,4,5,6}",
+      "p(x) = 1/6 for each x in {1,2,3,4,5,6}",
+      "p(x) = 1/2 for each x in {1,...,6}",
+      "p(x) = 1/6 for x = 1 and 0 otherwise"
+    ],
+    "answer_index": 1,
+    "explanation": "A fair die makes every face equally likely, so each of the six faces gets 1/6, and 6 × 1/6 = 1 checks normalization. p(x) = x/21 is a valid but biased PMF, and 1/2 per face would sum to 3."
+  },
+  {
+    "id": "01.1-012",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "2. The PMF: how probability is spread across outcomes",
+    "question": "In one phrase, what is a discrete random variable fully specified by?",
+    "options": [
+      "A list of outcomes plus a PMF that is non-negative and sums to 1",
+      "Its expectation alone, since the mean pins down the PMF",
+      "Its variance alone, together with the number of outcomes",
+      "Its largest and smallest outcomes and the gap that separates them"
+    ],
+    "answer_index": 0,
+    "explanation": "A discrete random variable is a set of outcomes together with a PMF satisfying non-negativity and normalization. The mean or variance alone cannot recover the whole distribution: many different distributions share the same mean."
+  },
+  {
+    "id": "01.1-013",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "3. Expectation: the long-run average outcome",
+    "question": "What is the expectation E[X] of a discrete random variable?",
+    "options": [
+      "The most probable outcome, i.e. the single value x with the highest p(x)",
+      "The middle outcome when all outcomes are sorted by value",
+      "The probability-weighted average of its outcomes, sum over x of x·p(x)",
+      "The plain sum of all outcomes, sum over x of x, with no weighting"
+    ],
+    "answer_index": 2,
+    "explanation": "E[X] = sum over x of x·p(x): each outcome contributes its value scaled by how often it happens. It is the long-run average if you sampled many times. The most probable value is the mode and the middle value is the median — different quantities in general."
+  },
+  {
+    "id": "01.1-014",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "3. Expectation: the long-run average outcome",
+    "question": "In E[X] = sum over x of x·p(x), what does the term x·p(x) represent?",
+    "options": [
+      "That outcome's contribution to the average, weighted by its probability",
+      "The probability that X exceeds x, accumulated across outcomes",
+      "The squared deviation of x from the mean, weighted by how often x occurs",
+      "The number of times x was observed in a finite sample of repeated draws"
+    ],
+    "answer_index": 0,
+    "explanation": "Each term multiplies an outcome's value by its probability, giving that outcome's contribution to the weighted average; summing contributions over all outcomes gives E[X]. Squared deviations appear in the variance, not the expectation."
+  },
+  {
+    "id": "01.1-015",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "3. Expectation: the long-run average outcome",
+    "question": "If you sample a random variable many times and average the results, what does the running average settle toward?",
+    "options": [
+      "The variance Var(X)",
+      "The largest possible outcome",
+      "The value with the smallest probability",
+      "The expectation E[X]"
+    ],
+    "answer_index": 3,
+    "explanation": "The expectation is the long-run average of samples, so the running average of many draws converges toward E[X]. For a fair die the running average settles toward 3.5."
+  },
+  {
+    "id": "01.1-016",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "3.1 Worked example: the fair die",
+    "question": "The expected value of a fair six-sided die is 3.5, a value the die can never show. What does this illustrate?",
+    "options": [
+      "The calculation must be wrong, because an expectation is always an achievable outcome",
+      "The expectation is the distribution's balance point, not necessarily an achievable value",
+      "The die must be biased toward the middle faces, pulling the mean between 3 and 4",
+      "Expectations only make sense for continuous variables, so the discrete answer is meaningless"
+    ],
+    "answer_index": 1,
+    "explanation": "E[X] = 21/6 = 3.5 for a fair die. The expectation is the weighted balance point, so it can fall between possible outcomes. Expecting it to be achievable is a common mistake; nothing is wrong with the die or the arithmetic."
+  },
+  {
+    "id": "01.1-017",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "What does the variance of a random variable measure?",
+    "options": [
+      "The location of the center of the distribution, where its probability mass balances",
+      "How far outcomes typically sit from the mean, as the expected squared distance from it",
+      "The probability of the most likely outcome, which shrinks as the distribution spreads out",
+      "The number of distinct outcomes the variable can take, counted with multiplicity"
+    ],
+    "answer_index": 1,
+    "explanation": "Var(X) = E[(X - μ)^2] measures spread: the expected squared distance of outcomes from the mean μ. The center itself is given by the expectation, not the variance."
+  },
+  {
+    "id": "01.1-018",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "In Var(X) = sum over x of (x - μ)^2 p(x), what is μ?",
+    "options": [
+      "The most likely outcome, the mode of X",
+      "The standard deviation of the variable",
+      "The number of outcomes the variable has",
+      "The mean E[X] of the random variable"
+    ],
+    "answer_index": 3,
+    "explanation": "μ is shorthand for E[X], the mean. The variance weights each outcome's squared distance from μ by its probability. The standard deviation is the square root of the variance, not μ."
+  },
+  {
+    "id": "01.1-019",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "Why is the distance (x - μ) squared in the definition of variance?",
+    "options": [
+      "So deviations above and below the mean cannot cancel, and large deviations count more",
+      "So that the variance comes out in the same units as X, making it directly comparable",
+      "So that the variance always equals the expectation for any symmetric distribution",
+      "So that the variance can turn negative for skewed distributions with long left tails"
+    ],
+    "answer_index": 0,
+    "explanation": "Squaring makes every term non-negative, so positive and negative deviations cannot cancel, and it weights large deviations more than small ones. It actually puts the variance in squared units — the standard deviation takes the square root to return to the original units."
+  },
+  {
+    "id": "01.1-020",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "When is the variance of a random variable exactly 0?",
+    "options": [
+      "Whenever the mean of the variable is exactly 0",
+      "Whenever all of its outcomes are equally likely",
+      "Only when the variable is a constant with no spread",
+      "Whenever the variable has an even number of outcomes"
+    ],
+    "answer_index": 2,
+    "explanation": "Variance is a probability-weighted sum of non-negative squared distances, so it is always >= 0, and it is 0 only if all probability sits on one value — a constant. A zero mean or a uniform PMF does not imply zero spread; a fair die is uniform and has variance 35/12."
+  },
+  {
+    "id": "01.1-021",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "Which formula is equivalent to Var(X) = E[(X - μ)^2]?",
+    "options": [
+      "(E[X])^2 - E[X^2]",
+      "E[X^2] + (E[X])^2",
+      "E[X^2] - 2(E[X])^2",
+      "E[X^2] - (E[X])^2"
+    ],
+    "answer_index": 3,
+    "explanation": "Expanding the square gives Var(X) = E[X^2] - (E[X])^2: 'mean of the square minus square of the mean.' Reversing the order would give a non-positive number, which cannot be a variance."
+  },
+  {
+    "id": "01.1-022",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4. Variance: how spread out the outcomes are",
+    "question": "In the shortcut formula Var(X) = E[X^2] - (E[X])^2, what is E[X^2]?",
+    "options": [
+      "The square of the expectation, (sum over x of x p(x))^2",
+      "The variance multiplied by two, 2·Var(X)",
+      "The expectation of the squared variable, sum over x of x^2 p(x)",
+      "The plain sum of the squared outcomes, without any probabilities"
+    ],
+    "answer_index": 2,
+    "explanation": "E[X^2] = sum over x of x^2 p(x) — you square each outcome, then take the weighted average. It differs from (E[X])^2, where you average first and then square; their difference is the variance."
+  },
+  {
+    "id": "01.1-023",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.1 Worked example: the fair die",
+    "question": "Given that a fair die has variance 35/12 ≈ 2.9167, what is the standard deviation and what does it represent?",
+    "options": [
+      "About 8.5, the squared distance of the farthest face (1 or 6) from the mean",
+      "About 1.708, a roll's typical distance from the mean, in the original units",
+      "About 2.9167, exactly the same number as the variance, just read in different units",
+      "About 0.5, the probability that a single roll lands above the mean"
+    ],
+    "answer_index": 1,
+    "explanation": "The standard deviation is the square root of the variance: √2.9167 ≈ 1.708. Taking the root returns to the original units of the die, so it reads as a typical distance of a roll from the mean of 3.5."
+  },
+  {
+    "id": "01.1-024",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.2 Verify it in Python",
+    "question": "In a PyTorch check of the fair die, `x = torch.arange(1, 7, dtype=torch.float64)`. What does this tensor contain and what is its shape?",
+    "options": [
+      "The outcomes 1 through 6, shape (6,)",
+      "The outcomes 1 through 7, shape (7,)",
+      "The probabilities 1/6, shape (6,)",
+      "The outcomes 0 through 6 inclusive, shape (7,)"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.arange(1, 7) includes the start and excludes the end, giving 1,2,3,4,5,6 — six values, shape (6,). The probabilities are a separate tensor built with torch.full((6,), 1/6)."
+  },
+  {
+    "id": "01.1-025",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.2 Verify it in Python",
+    "question": "Given a float64 outcome tensor `x` and PMF tensor `p` for a fair die, which PyTorch expression computes the expectation E[X]?",
+    "options": [
+      "x.sum() * p.sum()",
+      "(x + p).mean()",
+      "(x * p).sum()",
+      "x.mean() * p.mean()"
+    ],
+    "answer_index": 2,
+    "explanation": "E[X] = sum over x of x·p(x), which is an elementwise product followed by a sum: (x * p).sum(). Multiplying the separate sums ignores which probability goes with which outcome."
+  },
+  {
+    "id": "01.1-026",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.2 Verify it in Python",
+    "question": "Given float64 tensors `x` (outcomes), `p` (PMF) and `E` (the expectation), which expression computes the variance?",
+    "options": [
+      "((x - E)**2 * p).sum()",
+      "((x - E) * p).sum()",
+      "((x - E)**2).sum() * p.sum()",
+      "(x**2 * p).sum()"
+    ],
+    "answer_index": 0,
+    "explanation": "The variance is the probability-weighted sum of squared deviations from the mean, ((x - E)**2 * p).sum(). Without squaring, the weighted deviations sum to 0; without p, outcomes are not weighted; and (x**2 * p).sum() is E[X^2], not the variance."
+  },
+  {
+    "id": "01.1-027",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.2 Verify it in Python",
+    "question": "Why was float64 used when verifying the fair-die expectation and variance in PyTorch?",
+    "options": [
+      "Because torch.arange cannot produce float32 values",
+      "Because the variance of a die cannot be represented in float32",
+      "Because float64 is what language models are trained in",
+      "Purely so the printout is clean; real models run in float32 or lower"
+    ],
+    "answer_index": 3,
+    "explanation": "float64 was chosen only to make the printed numbers clean. Real models run in float32 or lower precision, which matters later when tiny probabilities start to underflow. float32 could represent these values; it would just print more rounding noise."
+  },
+  {
+    "id": "01.1-028",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "4.2 Verify it in Python",
+    "question": "What is a good assertion to check that a PMF tensor `p` is valid in terms of normalization?",
+    "options": [
+      "assert p.sum() == 0",
+      "assert torch.isclose(p.sum(), torch.tensor(1.0))",
+      "assert torch.isclose(p.max(), torch.tensor(1.0))",
+      "assert torch.isclose(p.mean(), torch.tensor(1.0))"
+    ],
+    "answer_index": 1,
+    "explanation": "A PMF must sum to 1; torch.isclose tolerates floating-point rounding, which an exact == comparison might not. A maximum of 1 would mean a degenerate distribution, and a mean of 1 is not a normalization condition."
+  },
+  {
+    "id": "01.1-029",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "What is a categorical distribution?",
+    "options": [
+      "A distribution over real numbers, described fully by its mean and variance",
+      "A random variable with K distinct outcomes, each with its own probability",
+      "A distribution where all K outcomes must share one equal probability",
+      "A distribution over exactly two outcomes, success and failure"
+    ],
+    "answer_index": 1,
+    "explanation": "A categorical has K categories with a probability vector p = (p_1,...,p_K), p_i >= 0 and summing to 1. The probabilities need not be equal; the two-outcome special case is the Bernoulli."
+  },
+  {
+    "id": "01.1-030",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "How is a fair six-sided die related to the categorical distribution?",
+    "options": [
+      "It is not a categorical because its outcomes are numbers",
+      "It is a categorical with K = 21, one per pip",
+      "It is a categorical only if at least one face is biased",
+      "It is a categorical with K = 6 and equal probabilities"
+    ],
+    "answer_index": 3,
+    "explanation": "The categorical is the natural generalization of the die: a die is a categorical with K = 6 equal probabilities of 1/6. A categorical simply allows the probabilities to differ."
+  },
+  {
+    "id": "01.1-031",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "Which constraints define a valid categorical probability vector p = (p_1, ..., p_K)?",
+    "options": [
+      "Each p_i >= 0 and the p_i sum to 1",
+      "Each p_i > 0 and the p_i multiply to 1",
+      "Each p_i <= 1 and the p_i average to 1",
+      "Each p_i is an integer and the p_i sum to K"
+    ],
+    "answer_index": 0,
+    "explanation": "Like any PMF, the categorical needs non-negative entries summing to 1. Individual entries may be 0, and the constraint is on the sum, not the product or average."
+  },
+  {
+    "id": "01.1-032",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "When applying the categorical distribution to a language model, what plays the role of K?",
+    "options": [
+      "The sequence length T",
+      "The batch size B",
+      "The vocabulary size V",
+      "The number of layers in the model"
+    ],
+    "answer_index": 2,
+    "explanation": "The categories are the vocabulary's tokens (words or word-pieces), so the number of categories K is the vocabulary size V. T and B index which position and which sequence each distribution belongs to."
+  },
+  {
+    "id": "01.1-033",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "When someone says 'the model puts 40% probability on the token the', what is that 40%?",
+    "options": [
+      "The expectation of the categorical distribution output at that position",
+      "The variance of the next-token distribution, read off at the token the",
+      "The fraction of the training data in which the next token was the",
+      "One entry p_i of the categorical the model output at that position"
+    ],
+    "answer_index": 3,
+    "explanation": "The model's output at a position is a categorical over the vocabulary, and the 40% is the single entry corresponding to the token 'the'. It is not a mean or variance, and it is the model's prediction, not a corpus statistic."
+  },
+  {
+    "id": "01.1-034",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5. The categorical distribution — a language model's output",
+    "question": "What does it mean to say 'predicting the next token is producing a categorical'?",
+    "options": [
+      "The model picks a grammatical category for the next word, such as noun, verb or adjective",
+      "The model outputs one integer token ID per position, with no probabilities attached to it",
+      "The prediction is a vector of V non-negative numbers summing to 1, one per possible next token",
+      "The model sorts the whole vocabulary alphabetically and returns the first matching category"
+    ],
+    "answer_index": 2,
+    "explanation": "At each position the model outputs a vector of V non-negative numbers summing to 1, the probability of each possible next token. That vector is the prediction; the rest of Module 1 is about scoring it."
+  },
+  {
+    "id": "01.1-035",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.1 A length-5 categorical in PyTorch",
+    "question": "What does `torch.tensor([0.1, 0.2, 0.4, 0.2, 0.1])` represent when used as a toy next-token distribution?",
+    "options": [
+      "A 2-D tensor of shape (1, 5) holding raw logits for 5 vocabulary tokens",
+      "A 1-D float32 tensor of shape (5,) that is a categorical over 5 tokens",
+      "An int64 tensor holding 5 token indices sampled from a distribution",
+      "A float64 tensor of shape (5,) holding the outcome values 1 through 5"
+    ],
+    "answer_index": 1,
+    "explanation": "Python floats in torch.tensor default to float32 on the CPU, giving a 1-D tensor of shape (5,). Entries are non-negative and sum to 1, so the whole vector is a categorical; probs[i] is the probability of token i."
+  },
+  {
+    "id": "01.1-036",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.1 A length-5 categorical in PyTorch",
+    "question": "For the categorical `probs = torch.tensor([0.1, 0.2, 0.4, 0.2, 0.1])`, which token index is most likely?",
+    "options": [
+      "Index 2, with probability 0.4",
+      "Index 0, with probability 0.1",
+      "Index 4, with probability 0.1",
+      "Index 3, with probability 0.2"
+    ],
+    "answer_index": 0,
+    "explanation": "Indexing is 0-based, so the entry 0.4 sits at index 2, the most likely token. Indices 0 and 4 have 0.1 and are the least likely."
+  },
+  {
+    "id": "01.1-037",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.1 A length-5 categorical in PyTorch",
+    "question": "In a real GPT-2-sized language model, what would a single next-token distribution tensor look like and what produces it?",
+    "options": [
+      "Shape (50257, 50257), produced by matrix multiplication alone",
+      "Shape (1,), a single token index produced by an argmax over the logits",
+      "Shape (V,) with V = 50257, produced by a softmax over the model's logits",
+      "Shape (V,) with V = 50257, produced by squaring the logits and clipping them"
+    ],
+    "answer_index": 2,
+    "explanation": "A single categorical has one entry per vocabulary token, shape (V,) with V = 50257, and is produced by applying softmax to the raw scores (logits). Squaring would make values non-negative but would not normalize them, and argmax gives one index, not a distribution."
+  },
+  {
+    "id": "01.1-038",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "What is the difference between producing a next-token distribution and generating text?",
+    "options": [
+      "Generation must sample a concrete token: outcome i with probability p_i",
+      "There is no difference; the distribution is already the generated text",
+      "Generation requires computing the variance of the distribution first",
+      "Generation discards the distribution and uses the logits directly as tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "The distribution tells you probabilities; to generate text you must draw a concrete token, choosing index i with probability p_i. In PyTorch this is done with torch.multinomial."
+  },
+  {
+    "id": "01.1-039",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "What does `torch.multinomial(probs, num_samples=10, replacement=True)` return for a (5,) probability vector?",
+    "options": [
+      "A (5,) float32 tensor of probabilities renormalized from the samples",
+      "A (10,) float32 tensor of the probabilities of the sampled tokens",
+      "A (10, 5) tensor of one-hot vectors, one row per sampled token",
+      "A (10,) int64 tensor of indices, each drawn with probability probs[i]"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.multinomial returns integer indices (int64), one per sample, so 10 samples give shape (10,). Each index is in [0, 5) and drawn independently with probability probs[i]. It returns indices, not probabilities or one-hot vectors."
+  },
+  {
+    "id": "01.1-040",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "What does `replacement=True` mean in `torch.multinomial`, and why does next-token sampling want it?",
+    "options": [
+      "Each category can be picked at most once across all draws, so tokens never repeat",
+      "Each draw is independent, so a category can be picked repeatedly, as a token can recur",
+      "The input probabilities are replaced by uniform ones, so every token is equally likely",
+      "The sampled indices replace the original probability tensor in place to save memory"
+    ],
+    "answer_index": 1,
+    "explanation": "With replacement, every draw is independent and any category can be chosen many times — exactly what next-token sampling needs, since a token like index 2 may be sampled repeatedly. Without replacement, a category could be drawn at most once."
+  },
+  {
+    "id": "01.1-041",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "Why call `torch.manual_seed(0)` before sampling with `torch.multinomial`?",
+    "options": [
+      "To force the sampler to always return index 0 on draw one",
+      "To make the random sampling reproducible across runs",
+      "To normalize the probability vector before sampling",
+      "To switch sampling from the CPU generator to the GPU"
+    ],
+    "answer_index": 1,
+    "explanation": "Fixing the seed makes the random number generator produce the same sequence, so the same indices are sampled every run. It does not bias the sampler toward index 0 or change the probabilities."
+  },
+  {
+    "id": "01.1-042",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "When many samples are drawn from probs = [0.1, 0.2, 0.4, 0.2, 0.1], what pattern should the sampled indices show?",
+    "options": [
+      "Every index appears exactly the same number of times, as for a fair die",
+      "Only index 2 ever appears, since sampling always picks the most likely one",
+      "Indices appear in increasing order, cycling from 0 up to 4 and repeating",
+      "Index 2 appears most often, 0 and 4 rarely, mirroring the distribution"
+    ],
+    "answer_index": 3,
+    "explanation": "Sampling draws each index in proportion to its probability, so index 2 (0.4) dominates and 0 and 4 (0.1) are rare; the empirical frequencies reflect the distribution's shape. Always returning the most likely index would be argmax, not sampling."
+  },
+  {
+    "id": "01.1-043",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "Does `torch.multinomial` require its input weights to sum to 1?",
+    "options": [
+      "No; it normalizes internally, treating the values as unnormalized weights",
+      "Yes; it raises an error unless the input sums to exactly 1 within tolerance",
+      "Yes; it silently returns zeros if the input does not sum to exactly 1",
+      "No; it ignores the values entirely and samples each category uniformly"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.multinomial treats its input as non-negative unnormalized weights and normalizes internally, so the sum need not be 1. In a language model you usually pass a proper softmax output anyway. It does not ignore the weights."
+  },
+  {
+    "id": "01.1-044",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.2 Sampling from a categorical with torch.multinomial",
+    "question": "Which inputs make `torch.multinomial` raise an error?",
+    "options": [
+      "Inputs that sum to more than 1, since probabilities cannot exceed 1",
+      "Inputs that sum to less than 1, since some mass is missing",
+      "Inputs containing negative values, or an all-zeros input",
+      "Inputs given in float32 instead of float64 precision"
+    ],
+    "answer_index": 2,
+    "explanation": "Negative weights are invalid and raise an error, and an all-zeros input has nothing to sample, so it also errors. Inputs that do not sum to 1 are fine because multinomial normalizes them, and float32 is accepted."
+  },
+  {
+    "id": "01.1-045",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "A model outputs next-token distributions for B sequences of T positions over a vocabulary of size V. What is the tensor's shape and along which axis does it sum to 1?",
+    "options": [
+      "(B, T, V), summing to 1 across the batch, along dim=0",
+      "(V, B, T), summing to 1 along the batch axis, dim=1",
+      "(B, V), summing to 1 along both axes at once",
+      "(B, T, V), summing to 1 along the last axis, dim=-1"
+    ],
+    "answer_index": 3,
+    "explanation": "There is one categorical per (sequence, position), giving shape (B, T, V). Each length-V vector is a distribution over the vocabulary, so the tensor sums to 1 along the last axis. The V axis is always the one that sums to 1."
+  },
+  {
+    "id": "01.1-046",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "How many separate categorical distributions are contained in a (B, T, V) next-token probability tensor?",
+    "options": [
+      "B * T * V",
+      "V",
+      "B * T",
+      "B + T"
+    ],
+    "answer_index": 2,
+    "explanation": "Each (sequence b, position t) pair has its own length-V distribution, so there are B * T distributions. V is the length of each one, not the number of them."
+  },
+  {
+    "id": "01.1-047",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "Which input dimensionalities does `torch.multinomial` accept?",
+    "options": [
+      "Any number of dimensions, sampling independently along the last axis of the input",
+      "A 1-D tensor (one distribution) or a 2-D tensor (one distribution per row)",
+      "Only 3-D tensors of shape (B, T, V), sampling at every position",
+      "Only 1-D tensors, a single distribution per call"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.multinomial accepts 1-D input (a single distribution) or 2-D input (a stack of distributions, one per row). A 3-D (B, T, V) tensor is rejected with 'prob_dist must be 1 or 2 dim'."
+  },
+  {
+    "id": "01.1-048",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "To sample one token at every position of a (B, T, V) probability tensor with `torch.multinomial`, what is the standard approach?",
+    "options": [
+      "Reshape to (B*T, V), sample once per row, then view the result as (B, T)",
+      "Pass the 3-D tensor directly with num_samples=B*T and reshape the output",
+      "Transpose to (V, B, T) first and sample along dim=0 for each column",
+      "Sum over the T axis first, then sample from the (B, V) result"
+    ],
+    "answer_index": 0,
+    "explanation": "multinomial needs 1-D or 2-D input, so flatten the first two axes into rows to get (B*T, V), sample one index per row, and fold the (B*T, 1) result back into (B, T). Summing over positions would destroy the per-position distributions."
+  },
+  {
+    "id": "01.1-049",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "After `flat = probs.reshape(-1, V)` on a contiguous (B, T, V) tensor, which row r of `flat` corresponds to sequence b, position t?",
+    "options": [
+      "r = t * B + b",
+      "r = b * T * V + t",
+      "r = b * T + t",
+      "r = b * V + t"
+    ],
+    "answer_index": 2,
+    "explanation": "Row-major flattening of the first two axes puts all T positions of sequence 0 first, then sequence 1, so r = b * T + t. This ordering is also what lets view(B, T) put each sample back in the right place."
+  },
+  {
+    "id": "01.1-050",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "Why is `probs.reshape(-1, 4)` on a contiguous (2, 3, 4) tensor cheap?",
+    "options": [
+      "Because the tensor is contiguous, the reshape is just a view: no data is copied",
+      "Because reshape always copies the data, and copying is very fast for small tensors",
+      "Because reshape converts the data to int64, which is cheaper to move around",
+      "Because reshape only runs on GPU tensors, where memory moves are effectively free"
+    ],
+    "answer_index": 0,
+    "explanation": "For a contiguous tensor, reshape returns a view: the same memory with new shape and stride metadata, so no data is copied. Reshape on a non-contiguous tensor may need to copy, but that is not the case here."
+  },
+  {
+    "id": "01.1-051",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "What shape does `torch.multinomial(flat, num_samples=k)` return when `flat` has shape (N, V)?",
+    "options": [
+      "(k, N), one row per sample",
+      "(N,), regardless of k",
+      "(N, V), the renormalized probabilities",
+      "(N, k), one column per sample"
+    ],
+    "answer_index": 3,
+    "explanation": "For 2-D input, multinomial returns shape (N, k): each row gets k sampled indices. With k = 1 that is (N, 1), which becomes (N,) after squeeze(-1), or can be folded straight to (B, T) with view."
+  },
+  {
+    "id": "01.1-052",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "If one row of a next-token probability tensor is [0.0, 0.0, 1.0, 0.0], what will `torch.multinomial` sample for that row?",
+    "options": [
+      "A random index, different with each seed",
+      "Index 2 every time, regardless of seed",
+      "Index 0, since it comes first",
+      "It raises an error because some probabilities are zero"
+    ],
+    "answer_index": 1,
+    "explanation": "All probability mass is on token 2, so that row always samples index 2. Zero entries are allowed as long as the row is non-negative and not all zero; only rows with spread-out probabilities give seed-dependent results."
+  },
+  {
+    "id": "01.1-053",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "During text generation, why is the (B*T, V) flatten usually unnecessary?",
+    "options": [
+      "Generation always runs with batch size 1, so the probability tensor is already 1-D",
+      "Usually only the last position is sampled, and probs[:, -1, :] is already (B, V)",
+      "Generation uses argmax over the logits instead of sampling from probabilities",
+      "multinomial accepts 3-D tensors when called inside a torch.no_grad() block"
+    ],
+    "answer_index": 1,
+    "explanation": "When generating, you typically only need a token for the last position, and slicing probs[:, -1, :] gives a 2-D (B, V) tensor that multinomial accepts directly. The full flatten is for sampling every position at once."
+  },
+  {
+    "id": "01.1-054",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "5.3 Tensor-shape summary",
+    "question": "Besides sampling every position at once, where else does the (B*T, V) flatten of model outputs reappear?",
+    "options": [
+      "In the tokenizer's vocabulary construction during BPE merges",
+      "In computing the learning-rate schedule from the step count",
+      "In weight initialization of the token embedding layer",
+      "In the cross-entropy loss, which also expects 2-D input"
+    ],
+    "answer_index": 3,
+    "explanation": "The cross-entropy loss also expects a 2-D (N, V) input, so the same (B*T, V) flatten is used when computing the training loss. It has nothing to do with tokenizer construction or the LR schedule."
+  },
+  {
+    "id": "01.1-055",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A hand-built 'probability' vector sums to 0.98 instead of 1. What is the consequence?",
+    "options": [
+      "Every downstream quantity such as expectation, entropy and loss is wrong",
+      "Nothing, because small deviations from 1 are always ignored by every function",
+      "Only the variance is affected; the expectation remains exactly correct",
+      "PyTorch automatically rescales it to sum to 1 inside every function"
+    ],
+    "answer_index": 0,
+    "explanation": "If the vector is not normalized it is not a valid distribution, so expectations, entropies and losses computed from it are all wrong. Some functions such as multinomial renormalize internally, but most computations do not, so check with torch.isclose(p.sum(), torch.tensor(1.0))."
+  },
+  {
+    "id": "01.1-056",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "How do a model's logits differ from probabilities?",
+    "options": [
+      "Logits are probabilities stored in float16 instead of float32 to save memory during training",
+      "Logits are already non-negative and sum to 1; softmax only sharpens them before sampling",
+      "Logits are unnormalized real scores, possibly negative; softmax turns them into probabilities",
+      "Logits are the sampled token indices, one integer per position, taken from the probabilities"
+    ],
+    "answer_index": 2,
+    "explanation": "Logits are raw real-valued scores — possibly negative, not normalized. Only after softmax do they become a categorical distribution. Treating logits as probabilities is a common bug."
+  },
+  {
+    "id": "01.1-057",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if you sample directly from logits with `torch.multinomial`?",
+    "options": [
+      "It works correctly, because multinomial applies a softmax internally before it samples",
+      "It always returns the argmax token, since the largest logit dominates every draw",
+      "It returns probabilities instead of indices, because logits are floating-point",
+      "It errors on negative logits, or silently misbehaves if they happen to be non-negative"
+    ],
+    "answer_index": 3,
+    "explanation": "multinomial does not apply softmax; it only normalizes non-negative weights by their sum. Negative logits raise an error, and non-negative logits give a distribution proportional to the raw logits rather than to exp(logits) — a silent bug."
+  },
+  {
+    "id": "01.1-058",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is no 'n - 1' correction applied in Var(X) = sum over x of (x - μ)^2 p(x)?",
+    "options": [
+      "Because n - 1 corrections only apply to continuous variables, never to discrete PMFs",
+      "Because the correction is already folded into p(x), which is computed as count / (n - 1)",
+      "It is the population variance of a known distribution; n - 1 is for estimating from a sample",
+      "Because the variance of a discrete variable is always biased, so correcting it is pointless"
+    ],
+    "answer_index": 2,
+    "explanation": "When the distribution is known exactly, the variance is computed directly and there is no sample to correct for. The n - 1 (Bessel) correction belongs to estimating variance from a finite data sample, which is a different task."
+  },
+  {
+    "id": "01.1-059",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Exercise",
+    "question": "For a categorical over token indices {0, 1, 2}, how are E[X] and Var(X) computed when the indices are treated as outcome values?",
+    "options": [
+      "E[X] = sum of p_i, which is always 1, and Var(X) = sum of p_i^2",
+      "E[X] = sum over i of i·p_i, and Var(X) = sum over i of i^2 p_i minus (E[X])^2",
+      "E[X] = the index with the largest p_i, and Var(X) = 1 - max p_i",
+      "E[X] = plain mean of the indices, and Var(X) = variance of the indices, ignoring p"
+    ],
+    "answer_index": 1,
+    "explanation": "Treating indices as outcomes, the expectation is the probability-weighted average of the indices and the variance uses E[X^2] - (E[X])^2 with E[X^2] = sum of i^2 p_i. Ignoring the probabilities would describe a uniform distribution, not this biased one."
+  },
+  {
+    "id": "01.1-060",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Exercise",
+    "question": "A Python computation of a variance prints 0.48999999999999994 when the exact answer is 0.49. What explains this?",
+    "options": [
+      "Ordinary floating-point rounding, not an error",
+      "A bug in the variance formula's subtraction order",
+      "Underflow of the very small probabilities in p",
+      "The distribution not summing to exactly 1"
+    ],
+    "answer_index": 0,
+    "explanation": "Decimal values like 0.2 and 0.3 cannot be represented exactly in binary floating point, so tiny rounding errors appear in the last digits. That is normal; underflow involves values far smaller, near the bottom of the float range."
+  },
+  {
+    "id": "01.1-061",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why must the entries of a categorical distribution sum to exactly 1?",
+    "options": [
+      "Because softmax happens to produce values that sum to 1, and the rule is inherited from it",
+      "Because the expectation of every categorical must equal 1",
+      "The outcomes are exhaustive and mutually exclusive: exactly one happens on each draw",
+      "Because all entries must be equal, each being 1/K exactly"
+    ],
+    "answer_index": 2,
+    "explanation": "Exactly one outcome happens each draw, so the total probability mass is 1 and the PMF distributes that fixed budget. Softmax is used because it guarantees this property, not the other way around."
+  },
+  {
+    "id": "01.1-062",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Compare the standard deviation of a fair die roll with its mean.",
+    "options": [
+      "The standard deviation (about 1.71) is smaller than the mean (3.5)",
+      "The standard deviation (about 2.92) is a bit smaller than the mean (3.5)",
+      "The standard deviation (about 3.5) equals the mean",
+      "The standard deviation (about 12.25) is larger than the mean"
+    ],
+    "answer_index": 0,
+    "explanation": "The variance is 35/12 ≈ 2.9167, so the standard deviation is its square root, ≈ 1.71, well below the mean of 3.5. 2.92 is the variance itself, and 12.25 is the squared mean."
+  },
+  {
+    "id": "01.1-063",
+    "chapter": "01.1",
+    "chapter_name": "Random variables, expectation, variance",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Can logits be passed straight to `torch.multinomial`, given that multinomial renormalizes its input?",
+    "options": [
+      "Yes: renormalization turns any real-valued input, including negative logits, into a valid distribution",
+      "Yes, but only if the logits are first cast to float64 so renormalization stays exact",
+      "No: multinomial requires the input to sum to exactly 1, so you must divide by the sum",
+      "No: renormalization fixes the sum, but the values must be non-negative, so apply softmax first"
+    ],
+    "answer_index": 3,
+    "explanation": "multinomial's internal normalization fixes the sum but not the sign; negative logits cause an error. Convert logits to a non-negative distribution with softmax, then sample. It does not require the sum to be exactly 1."
+  }
+]

@@ -1,0 +1,920 @@
+[
+  {
+    "id": "14.3-001",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "By roughly how much does LoRA cut trainable parameters and the optimizer memory that dominates fine-tuning?",
+    "options": [
+      "One to two orders of magnitude",
+      "About 10%",
+      "Roughly half",
+      "It does not change trainable parameters, only activations"
+    ],
+    "answer_index": 0,
+    "explanation": "LoRA trains only small low-rank adapters, cutting trainable parameters and therefore gradient and optimizer memory by one to two orders of magnitude. That is what moved fine-tuning from clusters to a single GPU."
+  },
+  {
+    "id": "14.3-002",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What practical deployment benefit does LoRA give when you fine-tune one base model for many tasks?",
+    "options": [
+      "You can merge all task adapters into one combined adapter with no loss in quality on any task",
+      "You can drop the base model at inference, since each adapter fully replaces its weights",
+      "Adapted tasks can skip the tokenizer, because adapters operate directly on raw text bytes",
+      "Many small per-task adapters share one base model instead of many full model copies"
+    ],
+    "answer_index": 3,
+    "explanation": "Each task needs only its adapters (a few MB), so many adapters can share one base model. Without LoRA, each task would require storing a full copy of the base weights."
+  },
+  {
+    "id": "14.3-003",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "1. Intuition: why full fine-tuning hurts",
+    "question": "Under fp32 full fine-tuning with AdamW, roughly how many numbers are carried per trainable parameter?",
+    "options": [
+      "1: just the weight, since AdamW updates parameters in place",
+      "2: the weight and its gradient, with moments recomputed each step",
+      "About 4: the weight, its gradient, and two optimizer moments",
+      "8: the weight, its gradient, and six optimizer buffers per step"
+    ],
+    "answer_index": 2,
+    "explanation": "AdamW keeps first-moment (mean) and second-moment (variance) estimates for each trainable parameter, plus you need the gradient and the weight — about 4 numbers per parameter, not one."
+  },
+  {
+    "id": "14.3-004",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "1. Intuition: why full fine-tuning hurts",
+    "question": "What two extra tensors does AdamW keep per trainable parameter?",
+    "options": [
+      "The previous step's weight and gradient, used to form a finite-difference update",
+      "First-moment (mean) and second-moment (variance) estimates of the gradient",
+      "A per-parameter learning rate and a per-parameter weight-decay coefficient",
+      "A momentum buffer and a cached copy of the layer's input activations"
+    ],
+    "answer_index": 1,
+    "explanation": "AdamW stores two moment tensors per trainable parameter: an exponential average of the gradient and of the squared gradient. These are what make optimizer state the memory hog in fine-tuning."
+  },
+  {
+    "id": "14.3-005",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "1. Intuition: why full fine-tuning hurts",
+    "question": "Approximately how much memory does AdamW optimizer state alone take for full fp32 fine-tuning of GPT-2 small (124M params)?",
+    "options": [
+      "About 124 MB (124M x 1 byte per moment)",
+      "About 1 GB (124M x 2 moments x 4 bytes)",
+      "About 4 GB (124M x 8 moments x 4 bytes)",
+      "About 16 GB (124M x 32 moments x 4 bytes)"
+    ],
+    "answer_index": 1,
+    "explanation": "124M parameters x 2 moments x 4 bytes is roughly 1 GB just for optimizer state, on top of weights, gradients and activations. For real models this optimizer state is what blows the memory budget."
+  },
+  {
+    "id": "14.3-006",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "1. Intuition: why full fine-tuning hurts",
+    "question": "What is LoRA's basic strategy for reducing fine-tuning memory?",
+    "options": [
+      "Freeze the pretrained weights (no gradient or optimizer state) and train a tiny add-on",
+      "Quantize the AdamW optimizer state to 1 bit per parameter while still training all weights",
+      "Train only the final transformer layer and its head, freezing every earlier layer",
+      "Cut the batch size to one and accumulate gradients over many steps to save memory"
+    ],
+    "answer_index": 0,
+    "explanation": "LoRA freezes the pretrained weights so they carry no gradient or optimizer state, and trains only small low-rank matrices. Training only the last layer is a different (weaker) technique."
+  },
+  {
+    "id": "14.3-007",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "In LoRA, how is the weight update for a frozen weight W (out x in) parameterized?",
+    "options": [
+      "Delta W = alpha r A B with A in R^(in x r) and B in R^(r x out)",
+      "Delta W = W A with A in R^(in x in), a full-rank right multiplier of W",
+      "Delta W = B + A with both B and A of the full shape (out x in) of W",
+      "Delta W = (alpha / r) B A with A in R^(r x in) and B in R^(out x r)"
+    ],
+    "answer_index": 3,
+    "explanation": "LoRA factorizes the update as (alpha/r) B A: A maps the input down to an r-dimensional bottleneck and B maps it back up to out. The product B A has the shape of W but rank at most r."
+  },
+  {
+    "id": "14.3-008",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "In LoRA, how small is the rank r typically relative to the layer dimensions?",
+    "options": [
+      "r equals min(in, out), so the update is full rank",
+      "r is larger than max(in, out), e.g. r = 4096",
+      "r is much smaller than min(in, out), e.g. r = 8",
+      "r equals the number of transformer layers, e.g. 12"
+    ],
+    "answer_index": 2,
+    "explanation": "The rank is chosen with r << min(in, out); a common value is r = 8. The small bottleneck is what makes LoRA cheap."
+  },
+  {
+    "id": "14.3-009",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "What is the LoRA forward pass for an input x?",
+    "options": [
+      "y = (W - (alpha / r) B A) x",
+      "y = alpha W x + (r / alpha) A (B x)",
+      "y = W x + (alpha / r) B (A x)",
+      "y = (alpha / r) B (W (A x))"
+    ],
+    "answer_index": 2,
+    "explanation": "The frozen path W x is added to the scaled low-rank path (alpha/r) B (A x). Only A and B are trained."
+  },
+  {
+    "id": "14.3-010",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "In LoRA, why is B A guaranteed to have rank at most r?",
+    "options": [
+      "Because B is initialized to zero, and that zero init caps the product's rank at r forever",
+      "Everything passes an r-wide bottleneck: A maps down to r dimensions, B maps back up",
+      "Because the alpha / r factor rescales the product until its rank drops to r",
+      "Because W is frozen, so the update must lie in an r-dimensional subspace of W"
+    ],
+    "answer_index": 1,
+    "explanation": "B A is out x in, but every column passes through A's r-dimensional output, so the product has rank at most r. The zero init and alpha/r scale do not determine the rank."
+  },
+  {
+    "id": "14.3-011",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "In LoRA, which tensors are trainable?",
+    "options": [
+      "Only A and B",
+      "Only W",
+      "W, A and B",
+      "Only alpha and r"
+    ],
+    "answer_index": 0,
+    "explanation": "W is frozen; only A and B are trainable. alpha and r are hyperparameters, not learned."
+  },
+  {
+    "id": "14.3-012",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "During LoRA training, why is the forward computed as B (A x) rather than (B A) x?",
+    "options": [
+      "Because (B A) x gives a mathematically different result, so only B (A x) is correct LoRA",
+      "Because A x must run on the CPU while B runs on the GPU, so the order is forced",
+      "Because autograd cannot backpropagate through a product of two trainable matrices",
+      "A x first yields a tiny r-vector, so the full out x in matrix B A is never materialized"
+    ],
+    "answer_index": 3,
+    "explanation": "Applying A first produces an r-dimensional vector, and B maps it up — cost proportional to r. Materializing B A each step would create a full out x in matrix and defeat the purpose. Both orders give the same result mathematically."
+  },
+  {
+    "id": "14.3-013",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "2. Mathematics: the low-rank update",
+    "question": "What empirical finding explains why a low-rank update is enough for LoRA fine-tuning?",
+    "options": [
+      "Pretrained weight matrices are already low-rank, so any update to them must also be low-rank to stay consistent with the base",
+      "Full-rank updates always overfit downstream data, so a low-rank update is strictly better in quality",
+      "Low-rank updates tolerate much higher learning rates, so they converge to full fine-tuning's quality faster",
+      "The weight change a task needs lies near a small subspace, so ranks 1 to 8 recover most of full fine-tuning's quality"
+    ],
+    "answer_index": 3,
+    "explanation": "Hu et al. (2021) found that the direction fine-tuning moves in is close to low-rank; adapting with rank 1 to 8 recovers most of full fine-tuning's quality. The claim is about the update, not the pretrained weights."
+  },
+  {
+    "id": "14.3-014",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The alpha scaling and the zero init",
+    "question": "How are LoRA's A and B initialized?",
+    "options": [
+      "A to zero and B to small random noise",
+      "Both A and B to zero, so the adapter starts silent",
+      "B to zero and A to small random noise",
+      "Both to the same small random noise matrix"
+    ],
+    "answer_index": 2,
+    "explanation": "B starts at zero and A at small random values (Kaiming-uniform). Then B A = 0 at step 0. If both were zero, gradients would be zero too and nothing would learn."
+  },
+  {
+    "id": "14.3-015",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The alpha scaling and the zero init",
+    "question": "Why is LoRA's B initialized to zero?",
+    "options": [
+      "So that A receives no gradient at the first step and stays at its random initial value",
+      "So B A = 0 at step 0 and the layer outputs exactly W x, starting from the pretrained model",
+      "So that the adapter has fewer effective parameters, acting as an implicit rank regularizer",
+      "So that the alpha / r scaling factor cancels out and the update size is independent of r"
+    ],
+    "answer_index": 1,
+    "explanation": "With B = 0, the adapter's contribution is zero and the layer behaves exactly like the pretrained one. Training starts from the pretrained model and the adapter learns a correction."
+  },
+  {
+    "id": "14.3-016",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The alpha scaling and the zero init",
+    "question": "What is the purpose of LoRA's alpha / r scaling factor?",
+    "options": [
+      "It decouples the update size from the rank, so changing r needs no learning-rate retuning",
+      "It ensures the rank of the adapter product never exceeds r, even after many updates",
+      "It normalizes the input x to unit length before the down-projection through A",
+      "It sets the adapter's dropout probability, so higher ranks are regularized more strongly"
+    ],
+    "answer_index": 0,
+    "explanation": "Changing r changes the raw magnitude of B A. Dividing by r and multiplying by a fixed alpha keeps the effective scale roughly constant across ranks, so the learning rate does not need retuning when r changes."
+  },
+  {
+    "id": "14.3-017",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The alpha scaling and the zero init",
+    "question": "What is a common practical setting of LoRA's alpha relative to r?",
+    "options": [
+      "alpha as a small multiple of r, e.g. alpha = 16 with r = 8",
+      "alpha = 1 / r, e.g. alpha = 0.125 with r = 8, giving a tiny scale",
+      "alpha equal to the hidden size, e.g. alpha = 768 for GPT-2 small",
+      "alpha = 0, disabling the scale so the adapter starts inactive"
+    ],
+    "answer_index": 0,
+    "explanation": "People set alpha to a small multiple of r, e.g. alpha = 16, r = 8, giving a scale of 2. alpha = 0 would zero out the adapter."
+  },
+  {
+    "id": "14.3-018",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "3. Numerical example (worked by hand, verified in Python)",
+    "question": "In a LoRA layer with W = [[1,0,2],[0,1,1]], A = [1,0,1], B = [1,2]^T, alpha = 2, r = 1 and x = [1,1,1], what is the output y?",
+    "options": [
+      "[3, 2]",
+      "[11, 10]",
+      "[4, 8]",
+      "[7, 10]"
+    ],
+    "answer_index": 3,
+    "explanation": "W x = [3, 2]. A x = 2, B(A x) = [2, 4], scaled by alpha/r = 2 gives [4, 8]. y = [3, 2] + [4, 8] = [7, 10]. [3, 2] is only the frozen path; [4, 8] is only the scaled adapter path."
+  },
+  {
+    "id": "14.3-019",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "3. Numerical example (worked by hand, verified in Python)",
+    "question": "What does LoRA's merged weight W' equal, and what property does it satisfy?",
+    "options": [
+      "W' = W - (alpha / r) B A, and W' x equals the base layer output for every x",
+      "W' = (alpha / r) B A alone, and W' x equals only the adapter path for every x",
+      "W' = W + (alpha / r) B A, and W' x equals the LoRA forward output for every x",
+      "W' = (alpha / r) W, and W' x equals a rescaled base output for every input x"
+    ],
+    "answer_index": 2,
+    "explanation": "Folding the scaled low-rank update into W gives W' = W + (alpha/r) B A. By linearity, W' x = W x + (alpha/r) B (A x), identical to the LoRA forward. That is what merge() guarantees."
+  },
+  {
+    "id": "14.3-020",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The savings, in numbers",
+    "question": "For a 768 x 768 layer with LoRA rank r = 8, how many trainable parameters does LoRA add?",
+    "options": [
+      "589,824",
+      "12,288",
+      "6,144",
+      "49,152"
+    ],
+    "answer_index": 1,
+    "explanation": "A is 8 x 768 and B is 768 x 8, so 2 x 8 x 768 = 12,288. Full fine-tuning of that layer would train 768 x 768 = 589,824. 6,144 is only one of the two matrices."
+  },
+  {
+    "id": "14.3-021",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The savings, in numbers",
+    "question": "For a 768 x 768 layer with r = 8, what is LoRA's reduction factor in trainable parameters versus full fine-tuning?",
+    "options": [
+      "About 8x",
+      "About 48x",
+      "About 96x",
+      "About 768x"
+    ],
+    "answer_index": 1,
+    "explanation": "589,824 / 12,288 = 48. In general the factor for a square d x d layer is d / (2r) = 768 / 16 = 48."
+  },
+  {
+    "id": "14.3-022",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The savings, in numbers",
+    "question": "Why does LoRA shrink AdamW moment memory in proportion to its parameter reduction?",
+    "options": [
+      "Because optimizer state scales with trainable parameters, and only A and B are trainable",
+      "Because LoRA switches to a different optimizer that keeps no moment tensors at all",
+      "Because the frozen base weights are deleted from GPU memory as soon as adapters are attached",
+      "Because LoRA updates the AdamW moments only once every r steps instead of every step"
+    ],
+    "answer_index": 0,
+    "explanation": "AdamW allocates moments only for trainable parameters. With only A and B trainable, moment memory drops from about 4.7 MB to about 0.1 MB for a 768 x 768 layer. The frozen weights stay in memory but carry no optimizer state."
+  },
+  {
+    "id": "14.3-023",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "The savings, in numbers",
+    "question": "What do you need to store to save a new LoRA task, compared to full fine-tuning?",
+    "options": [
+      "A full copy of the base model plus the adapters, merged per task",
+      "Only the AdamW optimizer state, from which the adapters are rebuilt",
+      "Only the tokenizer and chat template, since the weights are shared",
+      "Only the adapters (a few MB), not a fresh copy of the base model"
+    ],
+    "answer_index": 3,
+    "explanation": "A LoRA task is fully described by its A and B matrices, which are tiny, while the shared base is stored once. Full fine-tuning would need a full copy of the model per task."
+  },
+  {
+    "id": "14.3-024",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Hardware note",
+    "question": "Roughly what memory does full fp32 fine-tuning of GPT-2 small (124M) need, excluding activations?",
+    "options": [
+      "About 124 MB in total, one byte per parameter for everything",
+      "About 0.5 GB in total, since gradients reuse weight memory",
+      "About 0.5 GB weights + 0.5 GB gradients + 1 GB AdamW state",
+      "About 50 GB, which forces you to shard across multiple GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "Weights about 0.5 GB, gradients about 0.5 GB and AdamW state about 1 GB, plus activations — several GB, feasible on a 12 to 16 GB GPU but tight."
+  },
+  {
+    "id": "14.3-025",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Hardware note",
+    "question": "With LoRA (r = 8 on attention/MLP projections), what becomes the dominant memory cost?",
+    "options": [
+      "The gradients of the adapter matrices A and B",
+      "The AdamW moment tensors of the adapters",
+      "The frozen weights and the activations",
+      "The tokenizer vocabulary and chat-template strings"
+    ],
+    "answer_index": 2,
+    "explanation": "LoRA trains under 1% of the parameters, so gradient and optimizer memory for the trainable set drops to tens of MB. What remains dominant is the frozen base weights and activations — which is what QLoRA attacks."
+  },
+  {
+    "id": "14.3-026",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Hardware note",
+    "question": "What does QLoRA make possible in terms of single-GPU fine-tuning?",
+    "options": [
+      "Fine-tuning 7B models entirely on a CPU in a few minutes, with no GPU required at all",
+      "7B-scale fine-tuning on a single 24 GB consumer GPU (and 65B on a single 48 GB GPU)",
+      "Fine-tuning 65B models with no GPU memory at all used for the frozen base weights",
+      "Pretraining a 7B model from scratch on a single laptop GPU in a few days"
+    ],
+    "answer_index": 1,
+    "explanation": "By storing the frozen base in 4-bit, QLoRA brings 7B fine-tuning onto a 24 GB card and 65B onto a single 48 GB GPU. The base still occupies memory, just about 4x less."
+  },
+  {
+    "id": "14.3-027",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "In a LoRALinear wrapping nn.Linear(in, out), what are the shapes of self.A and self.B?",
+    "options": [
+      "A is (r, in) and B is (out, r)",
+      "A is (in, r) and B is (r, out)",
+      "A is (out, r) and B is (r, in)",
+      "A and B are both (out, in)"
+    ],
+    "answer_index": 0,
+    "explanation": "Matching nn.Linear's (out, in) weight convention, A is (r, in) — it maps in to r — and B is (out, r) — it maps r to out. Their product B @ A is (out, in)."
+  },
+  {
+    "id": "14.3-028",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "What shapes flow through LoRALinear's forward for an input of shape (..., in)?",
+    "options": [
+      "F.linear(x, B) gives (..., r), then F.linear(., A) gives (..., in), added to base(x) of shape (..., in)",
+      "x is first expanded to (..., out, in), multiplied elementwise by B @ A, then summed to (..., out)",
+      "F.linear(x, A) gives (..., out) directly, B is unused in forward, and the sum has shape (..., out)",
+      "F.linear(x, A) gives (..., r), F.linear(., B) gives (..., out), added to base(x) of shape (..., out)"
+    ],
+    "answer_index": 3,
+    "explanation": "Down to the rank-r bottleneck through A, then up to out through B, then added to the base output of the same shape (..., out)."
+  },
+  {
+    "id": "14.3-029",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "In a from-scratch LoRALinear, what is the requires_grad status of self.base.weight?",
+    "options": [
+      "True: it is trained alongside A and B",
+      "True only for the first epoch",
+      "It depends on alpha",
+      "False: it is frozen"
+    ],
+    "answer_index": 3,
+    "explanation": "The base weight (and bias) is frozen with requires_grad_(False), so it gets no gradient and no optimizer state. A and B are trainable."
+  },
+  {
+    "id": "14.3-030",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "What does LoRALinear.merge() return?",
+    "options": [
+      "The same LoRALinear with B reset to zero after folding it into base.weight",
+      "A tuple of the A and B tensors, scaled by alpha / r, ready for saving to disk",
+      "A plain nn.Linear with weight base.weight + (alpha / r) B @ A and the base bias",
+      "A new LoRALinear with doubled rank, initialized from the current A and B values"
+    ],
+    "answer_index": 2,
+    "explanation": "merge() builds a new nn.Linear on the same device and dtype, copies base.weight + scaling * (B @ A) into its weight and copies the bias. The result is an ordinary layer."
+  },
+  {
+    "id": "14.3-031",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the from-scratch LoRALinear, how are the dtype and device of A and B chosen?",
+    "options": [
+      "They are always float32 on CPU",
+      "They match the base weight's dtype and device",
+      "They are always float16 on GPU",
+      "They are chosen by the optimizer at the first step"
+    ],
+    "answer_index": 1,
+    "explanation": "A and B are created with dtype=w.dtype and device=w.device, matching the wrapped base weight. This keeps the forward sum on one device with one dtype."
+  },
+  {
+    "id": "14.3-032",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Which initializer does the from-scratch LoRALinear apply to A?",
+    "options": [
+      "nn.init.kaiming_uniform_ with a = sqrt(5)",
+      "nn.init.zeros_, the same as B, so B A = 0",
+      "nn.init.ones_ scaled by 1 / sqrt(in_features)",
+      "nn.init.orthogonal_ with gain = sqrt(2)"
+    ],
+    "answer_index": 0,
+    "explanation": "A is created empty and initialized with kaiming_uniform_(a=sqrt(5)), the same default nn.Linear uses. B is created with torch.zeros and stays zero."
+  },
+  {
+    "id": "14.3-033",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Why does LoRA add zero inference cost after merge()?",
+    "options": [
+      "By linearity, W x + (alpha / r) B (A x) = (W + (alpha / r) B A) x, so one matmul with W' does both",
+      "Because the adapter is discarded after training and only the original base weights are deployed",
+      "Because inference runs only through the frozen base path, while A and B are used during training only",
+      "Because A and B are quantized to zero bits at export, so their multiplies cost nothing at runtime"
+    ],
+    "answer_index": 0,
+    "explanation": "Linearity lets you fold the scaled B A into W once. The deployed model is byte-for-byte a normal GPT with plain nn.Linear layers, so there are no extra A/B multiplies at inference."
+  },
+  {
+    "id": "14.3-034",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does a helper like mark_only_lora_trainable(model) do?",
+    "options": [
+      "Wraps every nn.Linear in a LoRALinear and leaves all parameters with requires_grad True",
+      "Merges every adapter into its base weight, then deletes A and B from each LoRALinear",
+      "Deletes all non-LoRA parameters from the model, so only A and B remain in memory",
+      "Sets requires_grad = False on all parameters, then True on every LoRALinear's A and B"
+    ],
+    "answer_index": 3,
+    "explanation": "It first freezes every parameter, then re-enables gradients for A and B of each LoRALinear module. The base weights stay in the model but are frozen."
+  },
+  {
+    "id": "14.3-035",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "When training a LoRA model with AdamW, which parameters should be passed to the optimizer?",
+    "options": [
+      "All of model.parameters(), since frozen ones get no gradient and so AdamW allocates nothing for them",
+      "Only the base model's parameters, since the adapters are updated by a separate rule",
+      "Only those with requires_grad = True, e.g. [p for p in model.parameters() if p.requires_grad]",
+      "Only the embedding parameters, since they are the ones LoRA's adapters attach to"
+    ],
+    "answer_index": 2,
+    "explanation": "Passing only trainable parameters ensures AdamW does not allocate moment tensors for frozen weights. Handing it all parameters wastes optimizer memory even if the frozen ones never update."
+  },
+  {
+    "id": "14.3-036",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "What key observation underlies QLoRA?",
+    "options": [
+      "Because the adapters are tiny, they can be stored in 1-bit precision while the base stays in full fp16",
+      "Because the base is frozen, full precision is needed only for the matmul, never for an optimizer update",
+      "Because gradients are sparse, backward can be skipped for most layers of the frozen base model",
+      "Because activations are low-rank, they can be compressed to 4-bit without any loss of accuracy at all"
+    ],
+    "answer_index": 1,
+    "explanation": "The frozen base never gets an optimizer update, so it does not need to be stored in full precision. QLoRA stores it in 4-bit and dequantizes on the fly for the matmul."
+  },
+  {
+    "id": "14.3-037",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "How does QLoRA store and use the frozen base weights?",
+    "options": [
+      "In 8-bit integers, used directly in integer matmuls and never dequantized to compute precision",
+      "In 4-bit NF4, dequantizing each block to compute precision on the fly during the matmul",
+      "In fp32 on the CPU, streaming each layer's weights to the GPU just before its matmul",
+      "In fp16 on the GPU, while the trainable LoRA adapters are stored in 4-bit NF4"
+    ],
+    "answer_index": 1,
+    "explanation": "QLoRA stores the frozen base in a 4-bit format called NF4 and dequantizes each weight block to compute precision during the matmul. The small LoRA adapters stay in higher precision."
+  },
+  {
+    "id": "14.3-038",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "Why is QLoRA's 4-bit format called NF4 suited to model weights?",
+    "options": [
+      "It is matched to the roughly normal distribution of weights",
+      "It is matched to the uniform distribution of token ids in the vocabulary",
+      "It stores only the sign of each weight plus one scale per tensor",
+      "It uses a learned codebook trained separately for every layer"
+    ],
+    "answer_index": 0,
+    "explanation": "NF4 is a special 4-bit format whose levels are matched to the roughly normal distribution of neural-network weights."
+  },
+  {
+    "id": "14.3-039",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "In QLoRA, where do the gradients and optimizer state live?",
+    "options": [
+      "In the 4-bit frozen base weights, updated through a straight-through estimator",
+      "In a dequantized fp16 copy of the base, kept permanently in memory",
+      "Nowhere; QLoRA updates the adapters in closed form without an optimizer",
+      "In the small LoRA adapters A and B, kept in higher precision"
+    ],
+    "answer_index": 3,
+    "explanation": "The base is frozen and quantized, so it has no gradients or optimizer state. All of that lives in the higher-precision adapters A and B."
+  },
+  {
+    "id": "14.3-040",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "How much does QLoRA shrink the memory of the frozen base weights relative to fp16?",
+    "options": [
+      "About 2x",
+      "About 16x",
+      "About 4x",
+      "Not at all; only the adapters shrink"
+    ],
+    "answer_index": 2,
+    "explanation": "Going from 16-bit to 4-bit storage shrinks the frozen base about 4x. A 7B model is about 14 GB in fp16."
+  },
+  {
+    "id": "14.3-041",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "Besides NF4, which engineering techniques are part of QLoRA?",
+    "options": [
+      "Mixture-of-experts routing and speculative decoding",
+      "Gradient checkpointing and tensor parallelism only",
+      "Double quantization and paged optimizers",
+      "Rotary embeddings and grouped-query attention"
+    ],
+    "answer_index": 2,
+    "explanation": "The QLoRA paper's engineering includes NF4, double quantization, and paged optimizers. The core concept is simply LoRA plus a 4-bit frozen base."
+  },
+  {
+    "id": "14.3-042",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "Which parts of the LoRA paper are recommended for close reading?",
+    "options": [
+      "Only the related-work section, which surveys adapter and prefix methods",
+      "The rank-ablation section and the 'which weights to adapt' section",
+      "Only the appendix listing the GPT-3 hyperparameters used for each task",
+      "Only the introduction and the conclusion, skipping all experiments"
+    ],
+    "answer_index": 1,
+    "explanation": "The rank-ablation section shows how small r can be, and the 'which weights to adapt' section shows that attention q and v projections give the most per parameter."
+  },
+  {
+    "id": "14.3-043",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "QLoRA: quantize the frozen base",
+    "question": "According to the LoRA paper, which weights give the most benefit per parameter when adapted?",
+    "options": [
+      "The attention q and v projections",
+      "The token embedding matrix and LM head",
+      "The final layer norm gain and bias",
+      "The MLP output projection bias terms"
+    ],
+    "answer_index": 0,
+    "explanation": "The 'which weights to adapt' section reports that adapting the attention query and value projections gives the most quality per trainable parameter."
+  },
+  {
+    "id": "14.3-044",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "6. Under the hood: the production library",
+    "question": "What does PEFT's get_peft_model(model, LoraConfig(r=8, lora_alpha=16, target_modules=['c_attn'])) do?",
+    "options": [
+      "Quantizes the whole model to 4-bit NF4 and then trains all weights with paged AdamW optimizer state",
+      "Merges an existing adapter into the c_attn weights, then discards the adapter and unfreezes the model",
+      "Replaces the c_attn attention with a rank-8 low-rank approximation of each full pretrained weight matrix",
+      "Wraps matching linears with LoRA adapters, marks only adapters trainable, and saves/loads just adapter weights"
+    ],
+    "answer_index": 3,
+    "explanation": "PEFT wraps target linears with a frozen base plus rank-r A/B adapters scaled by alpha/r, with B zero-initialized, marks only adapters trainable, saves just adapter weights, and provides a merge step."
+  },
+  {
+    "id": "14.3-045",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "6. Under the hood: the production library",
+    "question": "How is QLoRA done with HuggingFace PEFT?",
+    "options": [
+      "A separate QLoRA library that replaces PEFT and its LoraConfig entirely",
+      "By setting r = 4 in LoraConfig, which makes PEFT store adapters in 4 bits",
+      "By quantizing only the LoRA adapters to 4-bit while keeping the base in fp16",
+      "The same LoRA call on a 4-bit-quantized base model, via bitsandbytes"
+    ],
+    "answer_index": 3,
+    "explanation": "QLoRA in PEFT is the same get_peft_model call applied to a base model quantized to 4-bit with bitsandbytes. Setting r = 4 just changes the rank."
+  },
+  {
+    "id": "14.3-046",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if LoRA's B is initialized to nonzero values?",
+    "options": [
+      "The adapter cannot receive gradients, because a nonzero B blocks backprop into A entirely",
+      "The rank of B A grows larger than r, so the update is no longer low-rank and memory grows",
+      "Delta W is nonzero at step 0, so training starts from a perturbed model and often loses quality",
+      "merge() raises a shape error, because it assumes B is still all zeros when folding into W"
+    ],
+    "answer_index": 2,
+    "explanation": "A nonzero B means B A is not zero at init, so the wrapped layer no longer matches the pretrained model. Training starts from a perturbed point and quality often drops."
+  },
+  {
+    "id": "14.3-047",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What happens if you forget to freeze the base weight in a LoRA setup?",
+    "options": [
+      "The adapters stop receiving gradients, because the base weight absorbs the entire update",
+      "The optimizer trains the base too, so you pay for LoRA while doing a (worse) full fine-tune",
+      "The model's outputs collapse to zero, since base and adapter gradients cancel each other",
+      "merge() produces a smaller layer, since the trained base and the adapter are folded twice"
+    ],
+    "answer_index": 1,
+    "explanation": "If the base keeps requires_grad = True, it gets gradients and optimizer state. You lose LoRA's memory savings while doing a muddled full fine-tune. Verify with sum(p.requires_grad for p in ...)."
+  },
+  {
+    "id": "14.3-048",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is materializing B @ A in every LoRA forward pass a mistake?",
+    "options": [
+      "It builds an out x in matrix each step and throws away the compute savings",
+      "It gives a numerically different output from B (A x), breaking the merge identity",
+      "It makes the adapter non-differentiable, so A and B stop receiving any gradient",
+      "It changes the rank of the update from r to min(in, out) at every step"
+    ],
+    "answer_index": 0,
+    "explanation": "The result is mathematically the same, but computing the full product each step costs out x in memory and FLOPs. Always go input to A to B."
+  },
+  {
+    "id": "14.3-049",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "A fresh LoRALinear's output differs from its base layer. The code inits A with zeros then kaiming_uniform_, and B with empty then kaiming_uniform_. What is the bug?",
+    "options": [
+      "B is initialized with random Kaiming noise instead of zeros, so B A is nonzero at init",
+      "A should be initialized to zero and B to random noise, so the two inits are swapped",
+      "A should not be initialized at all, since kaiming_uniform_ on A makes B A nonzero",
+      "kaiming_uniform_ should use a = 0 instead of sqrt(5), which keeps the output near base"
+    ],
+    "answer_index": 0,
+    "explanation": "LoRA requires B = 0 at init so that B A = 0 and the fresh adapter reproduces the base exactly. Random A is fine and intended. Fix: self.B = nn.Parameter(torch.zeros(out_features, r)) without calling kaiming_uniform_ on it."
+  },
+  {
+    "id": "14.3-050",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does freezing the base weights save far more memory than the weights themselves occupy?",
+    "options": [
+      "Because PyTorch automatically deletes frozen weights from GPU memory once requires_grad is set to False, freeing them",
+      "Because frozen weights are automatically stored in 4-bit, cutting their own footprint by about 4x",
+      "Because freezing halves the activation memory, which dominates over gradients and optimizer state",
+      "Gradients and optimizer state scale with trainable parameters; freezing drops about 3 extra tensors per base parameter"
+    ],
+    "answer_index": 3,
+    "explanation": "AdamW's two moments plus the gradient are about 3 extra tensors per trainable parameter. Freezing the base removes all of that, leaving it only for A and B. The frozen weights still occupy memory but carry no gradient or optimizer state."
+  },
+  {
+    "id": "14.3-051",
+    "chapter": "14.3",
+    "chapter_name": "LoRA & QLoRA from scratch",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-03.md",
+    "section": "Check yourself",
+    "question": "For a 1024 x 1024 layer with LoRA rank r = 16, how many trainable parameters are there and what is the reduction factor?",
+    "options": [
+      "16,384 parameters, a 64x reduction",
+      "65,536 parameters, a 16x reduction",
+      "32,768 parameters, a 32x reduction",
+      "1,048,576 parameters, no reduction"
+    ],
+    "answer_index": 2,
+    "explanation": "A is 16 x 1024 and B is 1024 x 16, so 2 x 16 x 1024 = 32,768. Full is 1,048,576. 1,048,576 / 32,768 = 32."
+  }
+]

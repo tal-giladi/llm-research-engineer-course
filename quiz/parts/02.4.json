@@ -1,0 +1,1100 @@
+[
+  {
+    "id": "02.4-001",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Stripped to its essentials, what does PyTorch's .backward() consist of?",
+    "options": [
+      "A finite-difference sweep that perturbs every parameter and reruns the forward pass",
+      "A recorded graph, a topological sort, and one local-derivative rule per op",
+      "A symbolic algebra system that simplifies the loss formula before evaluating it",
+      "A precompiled static graph that must be fully defined before any data flows"
+    ],
+    "answer_index": 1,
+    "explanation": "Once opened up, .backward() is a graph built during the forward pass, a topological sort of it, and one local VJP rule per op, which can be written in about 60 lines. It is not symbolic simplification or finite differences, and PyTorch's graph is not predefined."
+  },
+  {
+    "id": "02.4-002",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why does knowing precisely what .backward() does matter for later ML work?",
+    "options": [
+      "It lets you debug vanishing gradients, retain_graph errors and memory blowups",
+      "It removes the need to choose a learning rate, since gradients set the step size",
+      "It lets you train without ever calling an optimizer, by editing .grad directly",
+      "It guarantees that every model will converge once its graph is built correctly"
+    ],
+    "answer_index": 0,
+    "explanation": "Every training loop calls .backward(), so understanding the graph, saved tensors and sweep is what lets you diagnose gradient problems, graph-reuse errors and activation-memory issues. It does not replace optimizers or guarantee convergence."
+  },
+  {
+    "id": "02.4-003",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "1. Intuition: the graph is built while you compute, not before",
+    "question": "What does it mean that PyTorch is define-by-run?",
+    "options": [
+      "The graph is inferred after training by statically reading the model's Python source",
+      "The graph must be defined and compiled ahead of time, before any numbers are fed through it",
+      "The graph is built once at model construction and then reused for every step",
+      "The graph is recorded on the fly as each tensor op executes, with no separate build step"
+    ],
+    "answer_index": 3,
+    "explanation": "In PyTorch, ordinary Python lines run tensor ops and each op is recorded into the graph as it happens. Older frameworks like TensorFlow 1.x and Theano were define-then-run: build and compile the graph first, then feed data."
+  },
+  {
+    "id": "02.4-004",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "1. Intuition: the graph is built while you compute, not before",
+    "question": "Which frameworks are given as examples of the define-then-compile style, in contrast to PyTorch?",
+    "options": [
+      "PyTorch 2.x and Keras 3",
+      "Caffe2 and ONNX Runtime only",
+      "JAX and NumPy",
+      "TensorFlow 1.x and Theano"
+    ],
+    "answer_index": 3,
+    "explanation": "TensorFlow 1.x and Theano made you define a computation graph first, compile it, then feed numbers through. PyTorch records the graph during execution instead."
+  },
+  {
+    "id": "02.4-005",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "1. Intuition: the graph is built while you compute, not before",
+    "question": "In PyTorch, what gets recorded in the autograd graph when the forward pass executes a Python if/else?",
+    "options": [
+      "Only the else branch, as a fallback",
+      "Neither branch, since control flow is not differentiable",
+      "Only the branch that actually ran",
+      "Both branches, so either can be differentiated"
+    ],
+    "answer_index": 2,
+    "explanation": "Because the graph is built by running the code, only operations that actually execute are recorded. The untaken branch never ran, so it isn't in the graph."
+  },
+  {
+    "id": "02.4-006",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "1. Intuition: the graph is built while you compute, not before",
+    "question": "How does a Python for loop inside a PyTorch forward pass affect the autograd graph?",
+    "options": [
+      "The graph grows by one iteration's worth of ops per pass through the loop",
+      "The loop body is recorded once as a single node and reused for every iteration",
+      "The loop is ignored by autograd, and only its final output tensor is recorded",
+      "The loop must be unrolled manually in the source before PyTorch can record it"
+    ],
+    "answer_index": 0,
+    "explanation": "Define-by-run records every executed op, so each loop iteration adds its operations to the graph. No manual unrolling is needed."
+  },
+  {
+    "id": "02.4-007",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "1. Intuition: the graph is built while you compute, not before",
+    "question": "How often is the PyTorch autograd graph built?",
+    "options": [
+      "It is rebuilt from scratch on every forward pass",
+      "Once per epoch, then cached and reused for every batch",
+      "Only when the model architecture or layer list changes",
+      "Once per training run, at the first forward pass"
+    ],
+    "answer_index": 0,
+    "explanation": "The graph is a side effect of doing the forward computation, so it is rebuilt every forward pass. That is also why control flow can differ between passes."
+  },
+  {
+    "id": "02.4-008",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "What does setting requires_grad=True on a tensor do, and how does the flag spread?",
+    "options": [
+      "Marks the tensor for gradients; any tensor computed from it inherits the flag",
+      "Marks the tensor for gradients; the flag must be set manually on every result",
+      "Freezes the tensor's values; any tensor computed from it is also frozen in place",
+      "Moves the tensor to the GPU for autograd; results computed from it stay on CPU"
+    ],
+    "answer_index": 0,
+    "explanation": "requires_grad is a boolean flag set on the tensors you want gradients for (parameters, inputs), and it propagates forward automatically through every op that uses them. It has nothing to do with freezing or device placement."
+  },
+  {
+    "id": "02.4-009",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "In PyTorch autograd, what is a leaf tensor?",
+    "options": [
+      "Any tensor that is the final output of the model, at the end of the graph",
+      "A tensor produced by the last operation in a layer, before the next layer begins",
+      "Any tensor that has requires_grad=False, whether created directly or by an op",
+      "A tensor created directly, like a parameter or input, not as an op's result"
+    ],
+    "answer_index": 3,
+    "explanation": "Leaves are tensors you created directly. They are where gradients accumulate when requires_grad=True. The model output is the root, not a leaf, and leaves may or may not require grad."
+  },
+  {
+    "id": "02.4-010",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "After .backward(), which tensors have their .grad filled by default?",
+    "options": [
+      "Only tensors with requires_grad=False",
+      "Leaf tensors with requires_grad=True",
+      "Every tensor in the graph, including intermediates",
+      "Only the root tensor on which backward was called"
+    ],
+    "answer_index": 1,
+    "explanation": "By default only leaves with requires_grad=True keep a .grad. Intermediate tensors' gradients are computed and used during the sweep but not retained, unless you call .retain_grad() on them."
+  },
+  {
+    "id": "02.4-011",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "What does a non-leaf tensor's .grad_fn hold?",
+    "options": [
+      "The numeric gradient of the loss with respect to the tensor, filled in by backward",
+      "A copy of the tensor's values from the previous training step, used for rollback",
+      "A reference to the op that produced it, linked to its inputs, with a backward recipe",
+      "The optimizer state for the tensor, such as its Adam moments and step count"
+    ],
+    "answer_index": 2,
+    "explanation": ".grad_fn names the producing op (e.g. AddBackward0, MulBackward0) and links to its inputs, forming the graph's edge structure. The numeric gradient goes in .grad, not .grad_fn."
+  },
+  {
+    "id": "02.4-012",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "What is the grad_fn of a leaf tensor such as x = torch.tensor(2.0, requires_grad=True)?",
+    "options": [
+      "AddBackward0, the default op",
+      "None, because no operation produced it",
+      "PowBackward0, for its square",
+      "AccumulateGrad, because it accumulates gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "A leaf has grad_fn = None since nothing produced it. x.is_leaf is True. Intermediates like y = 3*x + 1 get a grad_fn such as AddBackward0."
+  },
+  {
+    "id": "02.4-013",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "For x = torch.tensor(2.0, requires_grad=True), y = 3*x + 1, z = y**2, what are y.grad_fn and z.grad_fn?",
+    "options": [
+      "MulBackward0 and MulBackward0",
+      "AddBackward0 and PowBackward0",
+      "None and PowBackward0",
+      "AddBackward0 and None"
+    ],
+    "answer_index": 1,
+    "explanation": "y's last op is the + (so AddBackward0) and z comes from ** (PowBackward0). Both are non-leaves, so neither grad_fn is None."
+  },
+  {
+    "id": "02.4-014",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "How is PyTorch's computational graph physically stored?",
+    "options": [
+      "As a list of parameters and their producing ops, owned by the optimizer",
+      "As a single global adjacency matrix kept inside the torch module",
+      "As a text file written to disk at each forward pass and read by backward",
+      "As linked objects off tensors: result → grad_fn → inputs → … → leaves"
+    ],
+    "answer_index": 3,
+    "explanation": "Following z.grad_fn's stored input references reaches y's AddBackward0 and then x. That linked structure is the computational graph. There is no global matrix or file."
+  },
+  {
+    "id": "02.4-015",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "Besides input references, what else does each grad_fn hold, and why does it matter for memory?",
+    "options": [
+      "A copy of the full model weights, which doubles the parameter memory per step",
+      "The gradient history of all previous steps, which momentum optimizers read",
+      "The saved tensors its VJP needs; these cached activations dominate memory",
+      "Nothing else; grad_fn objects are tiny pointers with negligible memory cost"
+    ],
+    "answer_index": 2,
+    "explanation": "Each grad_fn stores the forward values its backward needs (e.g. y for y**2). Those saved activations are what the forward caches and what dominate training memory; freeing the graph releases them."
+  },
+  {
+    "id": "02.4-016",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "2. Leaves, grad_fn, and how the graph is stored",
+    "question": "For z = y**2 in PyTorch, how can you inspect the tensor that PowBackward0 stashed for its backward?",
+    "options": [
+      "z.grad, after backward",
+      "z.grad_fn._saved_self",
+      "y.grad_fn.next_functions",
+      "z.data, after forward"
+    ],
+    "answer_index": 1,
+    "explanation": "z.grad_fn._saved_self is the y that PowBackward0 saved, because the backward of y**2 needs y. z.grad would be its gradient (not retained for non-leaves) and z.data is z's value."
+  },
+  {
+    "id": "02.4-017",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "What is the first step of PyTorch's algorithm when z.backward() is called on a scalar z?",
+    "options": [
+      "Zero every leaf's .grad so old values are cleared",
+      "Sort the leaves by size, largest tensors first",
+      "Run the forward pass again to refresh saved values",
+      "Seed: set the root's gradient to 1 (dz/dz = 1)"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward seeds the root gradient with 1, the length-1 VJP seed. It does not zero existing gradients (they accumulate), and it doesn't re-run the forward."
+  },
+  {
+    "id": "02.4-018",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "What ordering does the topological sort in .backward() guarantee?",
+    "options": [
+      "Nodes are ordered alphabetically by op name, so AddBackward0 runs before MulBackward0",
+      "Nodes are ordered by the size of their tensors, largest first, so memory can be freed early on",
+      "Each node comes after all nodes producing its inputs, so the reverse visits downstream first",
+      "Nodes are ordered by the time their gradients were last updated, most recent first"
+    ],
+    "answer_index": 2,
+    "explanation": "The topological order places each node after its inputs; walking it in reverse processes a node only after all downstream nodes have contributed to its output gradient. Size or name ordering is irrelevant."
+  },
+  {
+    "id": "02.4-019",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "During the reverse sweep of .backward(), what happens at each node?",
+    "options": [
+      "Its accumulated output gradient goes through its local VJP and is added into its inputs' gradients",
+      "Its output gradient is replaced by the gradient of the root, which is then copied to its inputs",
+      "Its forward value is recomputed from its inputs and compared to the cached value for safety",
+      "Its local VJP is skipped if the node has no parameters, and its output gradient passes through"
+    ],
+    "answer_index": 0,
+    "explanation": "At each node, the already-accumulated output gradient goes through the node's grad_fn (local VJP), and the results are added into its inputs' gradients. Parameter-free nodes still pass gradients through."
+  },
+  {
+    "id": "02.4-020",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "Why does .grad accumulate across multiple .backward() calls?",
+    "options": [
+      "Because the optimizer copies its gradients back into .grad after each step",
+      "The sweep adds contributions rather than assigning them, by design for fan-in",
+      "Because .grad is stored as a Python list that grows by one entry each call",
+      "Because PyTorch averages gradients across calls automatically, for stability"
+    ],
+    "answer_index": 1,
+    "explanation": "The same += mechanism that sums gradients over multiple paths also sums across backward calls. That is why optimizer.zero_grad() is needed each step, or the new gradient piles onto the last."
+  },
+  {
+    "id": "02.4-021",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "What happens if you omit optimizer.zero_grad() between training steps?",
+    "options": [
+      "The gradients are reset automatically by the optimizer",
+      "PyTorch raises an error at the second backward call",
+      "The model's parameters are reset to their initial values",
+      "Each step's gradient piles onto the previous step's"
+    ],
+    "answer_index": 3,
+    "explanation": "Because backward accumulates into .grad, skipping zero_grad means the optimizer steps on the sum of the current and stale gradients. No error is raised."
+  },
+  {
+    "id": "02.4-022",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "Why is topological order mandatory in the backward sweep?",
+    "options": [
+      "Because the GPU can only process nodes in the order they were created",
+      "Because leaves must be processed before any intermediate node",
+      "Because out-of-order processing would force a recompute of the forward pass",
+      "A node's gradient is incomplete until every downstream contribution arrives"
+    ],
+    "answer_index": 3,
+    "explanation": "If a node applied its VJP before all downstream contributions were summed, it would propagate an incomplete gradient. Reverse topological order prevents that. Leaves are processed last, not first."
+  },
+  {
+    "id": "02.4-023",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "3. What .backward() does: seed, topo-sort, sweep",
+    "question": "Beyond the seed/topo-sort/sweep core, what does the rest of PyTorch's autograd mostly add?",
+    "options": [
+      "Efficiency and coverage: hundreds of ops' VJPs, CUDA kernels, in-place tracking",
+      "Automatic learning-rate tuning for every parameter, based on gradient statistics",
+      "A second forward pass that refines each gradient after the first backward sweep",
+      "A different differentiation algorithm based on symbolic algebra over the graph"
+    ],
+    "answer_index": 0,
+    "explanation": "The core algorithm is the whole idea; the rest is engineering around it. PyTorch does not use symbolic differentiation or tune learning rates."
+  },
+  {
+    "id": "02.4-024",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "4. retain_graph and create_graph, briefly",
+    "question": "What does .backward() do to the graph by default, and why?",
+    "options": [
+      "Saves the graph to disk so later steps and debuggers can inspect it",
+      "Frees the graph and its saved tensors, since a step needs it only once",
+      "Keeps the graph forever so later steps can reuse it without a forward",
+      "Doubles the graph so that a second backward can run in parallel"
+    ],
+    "answer_index": 1,
+    "explanation": "Freeing the graph during the sweep reclaims activation memory, since a normal training step backpropagates once. retain_graph=True overrides this."
+  },
+  {
+    "id": "02.4-025",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "4. retain_graph and create_graph, briefly",
+    "question": "When is retain_graph=True needed?",
+    "options": [
+      "Whenever you want to keep the gradients of intermediate tensors after backward",
+      "Whenever you need second-order derivatives such as Hessian-vector products",
+      "Whenever the model runs on GPU, since CUDA frees graphs asynchronously",
+      "When .backward() must run a second time over the same graph"
+    ],
+    "answer_index": 3,
+    "explanation": "Without it, the first backward frees the graph and a second raises 'Trying to backward through the graph a second time.' Intermediate gradients need .retain_grad(), and second-order derivatives need create_graph=True."
+  },
+  {
+    "id": "02.4-026",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "4. retain_graph and create_graph, briefly",
+    "question": "Why shouldn't retain_graph=True be used routinely?",
+    "options": [
+      "It makes gradients numerically inaccurate",
+      "It disables gradient accumulation",
+      "It keeps activations alive, costing memory",
+      "It prevents the optimizer from updating parameters"
+    ],
+    "answer_index": 2,
+    "explanation": "Retaining the graph keeps all saved tensors in memory until it is freed. It doesn't change gradient accuracy or optimizer behaviour."
+  },
+  {
+    "id": "02.4-027",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "4. retain_graph and create_graph, briefly",
+    "question": "What does create_graph=True enable?",
+    "options": [
+      "Keeping every intermediate tensor's .grad after backward, not just the leaves'",
+      "Building the full forward graph ahead of time, before any data flows through it",
+      "Recording the backward pass itself, so gradients can be differentiated again",
+      "Copying the autograd graph to every GPU in a data-parallel training job"
+    ],
+    "answer_index": 2,
+    "explanation": "With create_graph=True, the gradients themselves get a grad_fn, allowing Hessian-vector products, some meta-learning and gradient-penalty terms. It's costlier in time and memory because the backward graph is retained and recorded."
+  },
+  {
+    "id": "02.4-028",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "4. retain_graph and create_graph, briefly",
+    "question": "Which kind of computation is create_graph=True typically used for?",
+    "options": [
+      "Data loading and tokenization pipelines that build tensors on the fly",
+      "Hessian-vector products and some meta-learning or penalty terms",
+      "Standard next-token pretraining with a cross-entropy loss",
+      "Mixed-precision loss scaling, to avoid fp16 gradient underflow"
+    ],
+    "answer_index": 1,
+    "explanation": "create_graph makes the backward differentiable, giving access to second-order derivatives. Ordinary pretraining needs neither create_graph nor retain_graph."
+  },
+  {
+    "id": "02.4-029",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In the micrograd-style Value engine, what does each operation store besides its forward value?",
+    "options": [
+      "A copy of the entire graph up to that point, so that backward can be started from any node",
+      "The finite-difference estimate of its derivative, computed during the forward pass",
+      "A _backward closure that adds incoming gradient times the local derivative into its inputs",
+      "A full Jacobian matrix of the op with respect to its inputs, built at forward time"
+    ],
+    "answer_index": 2,
+    "explanation": "Each op's _backward closure is the hand-written grad_fn: it multiplies out.grad by the local derivative and adds it into each input's .grad. No Jacobian or finite differences are stored."
+  },
+  {
+    "id": "02.4-030",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In the Value class, what do self._prev and self._backward represent?",
+    "options": [
+      "_prev holds the gradient history of the node; _backward clears it before each step",
+      "_prev holds the previous step's value; _backward reverts the node to that value",
+      "_prev holds the trainable parameters; _backward applies the optimizer update",
+      "_prev holds the input nodes (edges); _backward is the local VJP, a no-op for leaves"
+    ],
+    "answer_index": 3,
+    "explanation": "_prev is a tuple of child (input) nodes, defining the graph's edges. _backward defaults to a no-op lambda for leaves and is replaced by each op with its local VJP."
+  },
+  {
+    "id": "02.4-031",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In the Value engine, what does the _backward closure for a + b do?",
+    "options": [
+      "Adds 1.0 * out.grad into both self.grad and other.grad",
+      "Adds other.data * out.grad into self.grad only, leaving other",
+      "Sets both self.grad and other.grad to out.data, the sum",
+      "Adds out.grad into self.grad and subtracts it from other.grad"
+    ],
+    "answer_index": 0,
+    "explanation": "d(a+b)/da = d(a+b)/db = 1, so the incoming gradient flows straight through to both inputs, using +=. Subtraction or using data values would be wrong."
+  },
+  {
+    "id": "02.4-032",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In the Value engine, what does the _backward closure for a * b add into self.grad?",
+    "options": [
+      "out.grad alone — multiplication passes the incoming gradient straight through",
+      "self.data * out.grad — each factor's derivative with respect to itself is itself",
+      "out.data * out.grad — the product's value times the incoming gradient",
+      "other.data * out.grad — each factor's local derivative is the other factor"
+    ],
+    "answer_index": 3,
+    "explanation": "By the product rule, ∂(ab)/∂a = b and ∂(ab)/∂b = a. So self.grad += other.data * out.grad and other.grad += self.data * out.grad."
+  },
+  {
+    "id": "02.4-033",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In the Value engine, what local derivative does tanh's _backward use, and what does it save?",
+    "options": [
+      "sinh(x), using the saved input x from forward",
+      "1 − t^2, using the saved output t = tanh(x)",
+      "t^2, using the saved forward output t",
+      "1 − x^2, using the saved input x itself"
+    ],
+    "answer_index": 1,
+    "explanation": "d/dx tanh(x) = 1 − tanh(x)^2, so the closure reuses the saved output t: self.grad += (1 − t*t) * out.grad. This is an example of a VJP needing a saved forward value."
+  },
+  {
+    "id": "02.4-034",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "How does the build function inside Value.backward() produce a topological order?",
+    "options": [
+      "It visits each node's _prev inputs first and appends the node after them",
+      "It appends each node first and only then recursively visits its _prev inputs",
+      "It uses the order in which nodes were garbage-collected after the forward pass",
+      "It sorts nodes by their data values in ascending order, smallest first"
+    ],
+    "answer_index": 0,
+    "explanation": "build(v) recurses into every child in v._prev, then appends v, so each node appears after all its inputs. A visited set prevents processing a shared node twice. Appending before visiting would give reverse order."
+  },
+  {
+    "id": "02.4-035",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "In Value.backward(), what two steps follow building the topological order?",
+    "options": [
+      "Set every node's grad to 1.0, then sum all of them into the root's .grad",
+      "Set self.grad = 1.0 (seed), then call v._backward() for v in reversed(topo)",
+      "Call v._backward() for every v in topo order, then set self.grad = 1.0",
+      "Set self.grad = 0.0, then call v._backward() for every v in forward topo order"
+    ],
+    "answer_index": 1,
+    "explanation": "Seeding the root with 1 and sweeping in reverse topological order matches PyTorch's algorithm. Seeding 0 would zero every gradient, and the forward order would process nodes before their downstream contributions arrive."
+  },
+  {
+    "id": "02.4-036",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "5. From scratch: a scalar autodiff engine",
+    "question": "Why does each _backward closure in the Value engine use += rather than = on the inputs' .grad?",
+    "options": [
+      "Because Python closures cannot rebind an outer variable with plain =",
+      "So the gradient is automatically averaged across the examples in a batch",
+      "So a reused node accumulates gradient over all its paths (fan-in)",
+      "So that older gradients decay over time, like momentum in an optimizer"
+    ],
+    "answer_index": 2,
+    "explanation": "A node feeding several ops (like a feeding a*b and a+b) gets a contribution from each; the chain rule sums them. = would overwrite all but the last, giving a wrong gradient."
+  },
+  {
+    "id": "02.4-037",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "6. Verifying it against PyTorch",
+    "question": "When the Value engine and PyTorch (float64) both compute L = tanh(a*b + b)·(a + b) at a = −3, b = 2, how closely do they agree?",
+    "options": [
+      "In the value but not the gradients, which differ in sign",
+      "Only after both are rounded to float16",
+      "To full double precision, in the value and both gradients",
+      "Only to about 3 decimal places, due to tanh approximations"
+    ],
+    "answer_index": 2,
+    "explanation": "Both print 0.999329299739067, ∂L/∂a = −1.0020112011051188, ∂L/∂b = −0.9966473983730152. The toy engine does exactly what torch.autograd does on this expression."
+  },
+  {
+    "id": "02.4-038",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "6. Verifying it against PyTorch",
+    "question": "For L = tanh(n)·s with n = a*b + b and s = a + b, at a = −3, b = 2, what are n, s and L?",
+    "options": [
+      "n = 4, s = −1, L ≈ −0.99933",
+      "n = −4, s = −1, L ≈ 0.99933",
+      "n = −6, s = −1, L ≈ −0.99999",
+      "n = −4, s = 5, L ≈ −4.997"
+    ],
+    "answer_index": 1,
+    "explanation": "n = (−3)(2) + 2 = −4, tanh(−4) ≈ −0.99933, s = −3 + 2 = −1, so L = (−0.99933)(−1) ≈ 0.99933. n = −6 forgets the + b term."
+  },
+  {
+    "id": "02.4-039",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "6. Verifying it against PyTorch",
+    "question": "In the trace of L = tanh(n)·s backward, what does the final * send into the tanh branch and the s branch?",
+    "options": [
+      "1 into both branches, since multiplication passes gradients straight through",
+      "s = −1 into the tanh branch, and tanh(n) ≈ −0.99933 into the s branch",
+      "L ≈ 0.99933 into both branches, scaled by 1/2 so the two halves sum to L",
+      "tanh(n) into the tanh branch, and s into the s branch, each its own value"
+    ],
+    "answer_index": 1,
+    "explanation": "For a product, each input's local derivative is the other factor, so the tanh output receives s and s receives tanh(n). Passing 1 straight through is the + rule, not *."
+  },
+  {
+    "id": "02.4-040",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "6. Verifying it against PyTorch",
+    "question": "In L = tanh(a*b + b)·(a + b), why does a's gradient come from two contributions?",
+    "options": [
+      "a feeds both a·b and a + b, so contributions along both paths are added",
+      "Because the seed of 1 is split equally between a and b at the root",
+      "Because a is a leaf, and leaves always receive exactly two contributions",
+      "Because tanh has two derivatives, one for each side of its input"
+    ],
+    "answer_index": 0,
+    "explanation": "a appears in both a*b and a+b, so the chain rule sums contributions along both paths; the Value engine's += handles this. The arithmetic lands on −1.00201, matching PyTorch."
+  },
+  {
+    "id": "02.4-041",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "6. Verifying it against PyTorch",
+    "question": "In the backward trace of L = tanh(n)·s at n = −4, what factor does tanh multiply its incoming gradient by?",
+    "options": [
+      "tanh(−4) ≈ −0.99933",
+      "1 + tanh^2(−4) ≈ 1.99866",
+      "cosh(−4) ≈ 27.3",
+      "1 − tanh^2(−4) ≈ 0.00134"
+    ],
+    "answer_index": 3,
+    "explanation": "tanh's local derivative is 1 − tanh^2(n) = 1 − 0.99866 ≈ 0.00134. That tiny value shows how a saturated tanh shrinks gradients, which relates to vanishing gradients."
+  },
+  {
+    "id": "02.4-042",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "7. This engine lives in the codebase",
+    "question": "In the course codebase, where does the micrograd Value engine live and where is its parity test?",
+    "options": [
+      "llmre/optim/micrograd.py, tested by tests/test_optim.py",
+      "llmre/training/autograd.py, tested by tests/test_training.py",
+      "llmre/model/micrograd.py, tested by tests/test_micrograd.py",
+      "scripts/micrograd.py, tested by notebooks/micrograd.ipynb"
+    ],
+    "answer_index": 2,
+    "explanation": "The Value class ships as llmre/model/micrograd.py and tests/test_micrograd.py checks it against torch, asserting value and gradients match to 1e-6."
+  },
+  {
+    "id": "02.4-043",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "7. This engine lives in the codebase",
+    "question": "What does tests/test_micrograd.py assert about the Value engine?",
+    "options": [
+      "That the Value engine runs faster than PyTorch on the same scalar expression",
+      "That the Value engine uses less memory than PyTorch for the saved activations",
+      "That the gradients are all positive for the test expression at a = −3, b = 2",
+      "That L.data, a.grad and b.grad match PyTorch's float64 results within 1e-6"
+    ],
+    "answer_index": 3,
+    "explanation": "The test builds the same expression with Value and torch (float64), then asserts the absolute differences of the value and both gradients are below 1e-6."
+  },
+  {
+    "id": "02.4-044",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "7. This engine lives in the codebase",
+    "question": "What is needed to add an op such as exp or pow to the Value engine?",
+    "options": [
+      "A full Jacobian matrix of the op, stored on the new node at forward time",
+      "A new seed value specific to that op, set before the backward sweep starts",
+      "One forward line plus its one-line local derivative in a _backward closure",
+      "A rewrite of the topological sort so it knows how to visit the new op"
+    ],
+    "answer_index": 2,
+    "explanation": "The pattern is uniform: compute the forward value, create the out node with its children, and define _backward with the local derivative. The sort and sweep are op-agnostic."
+  },
+  {
+    "id": "02.4-045",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "8. Under the hood: how PyTorch differs from our toy",
+    "question": "How does a PyTorch autograd node differ from a node in the scalar Value engine?",
+    "options": [
+      "Each PyTorch node is a whole tensor, so its backward is a tensor VJP like a matmul",
+      "PyTorch nodes have no backward functions; gradients are inferred from the forward",
+      "PyTorch nodes store full Jacobians instead of VJPs, since tensors make them cheap",
+      "PyTorch nodes are scalars too, exactly like Value, but are executed on the GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "PyTorch operates on tensors, so each _backward equivalent is a tensor VJP (e.g. W^T g for a linear layer). The topological sort and reverse sweep are identical in principle."
+  },
+  {
+    "id": "02.4-046",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "8. Under the hood: how PyTorch differs from our toy",
+    "question": "In what language does PyTorch's autograd graph walk run, and how are many backward formulas written?",
+    "options": [
+      "In pure Python, with every backward formula derived symbolically at runtime",
+      "In a C++ engine, with many hand-written closed-form backward formulas",
+      "In CUDA only, with each backward formula found by finite differences",
+      "In JavaScript, with the backward formulas loaded from a remote server"
+    ],
+    "answer_index": 1,
+    "explanation": "PyTorch's engine is C++ with hundreds of registered backward formulas, many hand-written closed forms like the fused cross_entropy backward. They are not naive compositions or numerical estimates."
+  },
+  {
+    "id": "02.4-047",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "8. Under the hood: how PyTorch differs from our toy",
+    "question": "How does PyTorch manage autograd memory compared with the toy Value engine?",
+    "options": [
+      "It frees the graph and saved tensors after the sweep unless retained, and offers checkpointing",
+      "It frees only the leaf tensors after each backward call, keeping every intermediate alive",
+      "It copies the graph to CPU memory after every backward call, so the GPU is freed",
+      "It never frees the graph, relying on the user to delete tensors with del after each step"
+    ],
+    "answer_index": 0,
+    "explanation": "PyTorch explicitly frees saved tensors after backward (unless retained) and supports checkpointing to trade compute for memory. The toy relies on Python's garbage collector."
+  },
+  {
+    "id": "02.4-048",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "8. Under the hood: how PyTorch differs from our toy",
+    "question": "What does PyTorch do about in-place modifications that would corrupt values a backward step needs?",
+    "options": [
+      "It silently recomputes the corrupted saved value from scratch during backward",
+      "It forbids all in-place operations on every tensor that has requires_grad=True",
+      "It tracks in-place changes and errors if one corrupts a saved value",
+      "It ignores in-place ops entirely, accepting a possibly wrong gradient as the cost"
+    ],
+    "answer_index": 2,
+    "explanation": "PyTorch tracks in-place changes (via version counters) and errors when a saved tensor needed by some backward was modified. The toy engine never mutates data, so it avoids the issue."
+  },
+  {
+    "id": "02.4-049",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "8. Under the hood: how PyTorch differs from our toy",
+    "question": "Which sentence summarises what loss.backward() does?",
+    "options": [
+      "Build a graph on the backward pass, seed each leaf with 0, sort by tensor size, sweep forward applying each op's Jacobian, overwrite leaves",
+      "Symbolically differentiate the loss expression into a closed form, simplify it, then evaluate it at the current parameter values",
+      "Build a graph on the forward pass, seed the root with 1, topologically sort, sweep backward with each op's VJP, accumulate into leaves",
+      "Perturb each leaf in turn, rerun the forward pass, and store the change in loss divided by the size of the perturbation"
+    ],
+    "answer_index": 2,
+    "explanation": "That one sentence captures the mental model shared by the toy engine and PyTorch. The perturbation option describes finite differences; symbolic differentiation is a different technique."
+  },
+  {
+    "id": "02.4-050",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Exercise",
+    "question": "What is the correct _backward rule for a relu method on the Value engine?",
+    "options": [
+      "self.grad = (1.0 if self.data > 0 else 0.0) * out.grad",
+      "self.grad += (1.0 if self.data > 0 else 0.0) * out.grad",
+      "self.grad += (1.0 if out.grad > 0 else 0.0) * self.data",
+      "self.grad += max(0.0, self.data) * out.grad"
+    ],
+    "answer_index": 1,
+    "explanation": "relu's local derivative is 1 where x > 0 and 0 where x ≤ 0, multiplied by the incoming gradient and accumulated with +=. Using max(0, x) as the derivative confuses value with slope; using = would break fan-in."
+  },
+  {
+    "id": "02.4-051",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Exercise",
+    "question": "For x = −2, w = 3 and y = relu(x·w) + x, what are y, x.grad and w.grad?",
+    "options": [
+      "y = −2, x.grad = 1, w.grad = 0",
+      "y = −2, x.grad = 4, w.grad = −2",
+      "y = 0, x.grad = 0, w.grad = 0",
+      "y = −6, x.grad = 3, w.grad = −2"
+    ],
+    "answer_index": 0,
+    "explanation": "x·w = −6 ≤ 0, so relu outputs 0 and its branch is dead (local derivative 0). y = 0 + x = −2. Only the +x path contributes, so x.grad = 1; w's only path goes through the dead relu, so w.grad = 0."
+  },
+  {
+    "id": "02.4-052",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Exercise",
+    "question": "Why is w.grad exactly 0 for y = relu(x·w) + x at x = −2, w = 3?",
+    "options": [
+      "Because w is a leaf, and leaves always end up with zero gradient after backward",
+      "Because w = 3 is positive, and relu passes no gradient for positive inputs",
+      "w's only path to y runs through a relu whose input −6 ≤ 0, so it passes 0",
+      "Because the +x term exactly cancels w's contribution along the relu path"
+    ],
+    "answer_index": 2,
+    "explanation": "A relu with non-positive input passes no gradient. w reaches y only through that dead relu, so its gradient is 0. Leaves normally do receive gradients."
+  },
+  {
+    "id": "02.4-053",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "Why does y = x**2; y.backward(); z = y*3; z.backward() raise 'Trying to backward through the graph a second time'?",
+    "options": [
+      "Because z was created with requires_grad=False, so it has no grad_fn to walk",
+      "Because multiplication by a constant has no registered backward formula",
+      "Because y is a leaf tensor, and a leaf cannot be reused after its backward",
+      "The first backward freed y's subgraph and its saved tensors, which z needs"
+    ],
+    "answer_index": 3,
+    "explanation": "y.backward() freed y's subgraph. z = y * 3 builds a new node on top of it, so z.backward() tries to walk through the freed part. y is not a leaf, and z does require grad since y does."
+  },
+  {
+    "id": "02.4-054",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "What is the quick one-flag fix for 'Trying to backward through the graph a second time' when reusing y after y.backward()?",
+    "options": [
+      "Call y.retain_grad() before the first backward",
+      "Call z.backward(create_graph=True) on the second call",
+      "Call y.backward(retain_graph=True) on the first call",
+      "Call torch.no_grad() before the second backward"
+    ],
+    "answer_index": 2,
+    "explanation": "retain_graph=True keeps the graph and saved tensors alive for a second backward. create_graph is for second-order derivatives; retain_grad keeps an intermediate's .grad, not the graph."
+  },
+  {
+    "id": "02.4-055",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "What is usually the better fix than retain_graph=True when two backward calls hit a shared graph?",
+    "options": [
+      "Use one scalar loss and one .backward(), or detach y if it shouldn't get gradients",
+      "Call zero_grad() between the two backward calls, which rebuilds the freed graph",
+      "Always add retain_graph=True to every backward call by default, just to be safe",
+      "Convert all tensors to float64 before the second backward so the graph is kept"
+    ],
+    "answer_index": 0,
+    "explanation": "Usually you meant one loss and one backward. If the second computation shouldn't send gradients into the first, use y.detach(). retain_graph=True is correct only when you genuinely need two passes over shared structure, and it costs memory. zero_grad does not restore a freed graph."
+  },
+  {
+    "id": "02.4-056",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Check yourself",
+    "question": "How can you keep the gradient of an intermediate (non-leaf) tensor after .backward()?",
+    "options": [
+      "Set retain_graph=True on the backward call",
+      "Call .retain_grad() on it before backward",
+      "Set requires_grad=False on it",
+      "Call .detach() on it before backward"
+    ],
+    "answer_index": 1,
+    "explanation": "Intermediates' gradients are used during the sweep but discarded by default; .retain_grad() keeps them. retain_graph keeps the graph, not intermediate grads. Detaching removes it from the graph entirely."
+  },
+  {
+    "id": "02.4-057",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Check yourself",
+    "question": "What does a node's local VJP need before it can run correctly in the backward sweep?",
+    "options": [
+      "Its output gradient fully accumulated from every downstream node",
+      "Its forward value recomputed from scratch from its inputs",
+      "Its input gradient already computed by its children upstream",
+      "The loss recomputed with the node removed from the graph"
+    ],
+    "answer_index": 0,
+    "explanation": "The output gradient is the sum of contributions from every downstream node, so all of them must be processed first. Reverse topological order guarantees this."
+  },
+  {
+    "id": "02.4-058",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Check yourself",
+    "question": "If loss.backward() is called on two consecutive steps without zero_grad(), what do the parameter .grad values hold?",
+    "options": [
+      "The sum of both steps' gradients, so the optimizer steps on stale gradients",
+      "Zero, because the two steps' gradients cancel each other when added",
+      "The average of both steps' gradients, since backward divides by the call count",
+      "Only the second step's gradient, since backward overwrites .grad each call"
+    ],
+    "answer_index": 0,
+    "explanation": "Gradients accumulate, so each .grad holds the sum. Fix with optimizer.zero_grad() or param.grad = None at the top of each iteration. Gradient accumulation across micro-batches deliberately exploits this."
+  },
+  {
+    "id": "02.4-059",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Which technique deliberately exploits the accumulation of .grad across backward calls?",
+    "options": [
+      "Gradient accumulation across micro-batches",
+      "Learning-rate warmup over the first steps",
+      "Mixed-precision loss scaling with fp16",
+      "Activation checkpointing within each layer"
+    ],
+    "answer_index": 0,
+    "explanation": "Running backward on several micro-batches before one optimizer step sums their gradients, simulating a larger batch. It is intentional accumulation; checkpointing, loss scaling and warmup are unrelated."
+  },
+  {
+    "id": "02.4-060",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Besides optimizer.zero_grad(), what other way is given to clear a parameter's gradient at the top of each iteration?",
+    "options": [
+      "param.data = 0",
+      "param.detach_()",
+      "param.requires_grad = False",
+      "param.grad = None"
+    ],
+    "answer_index": 3,
+    "explanation": "Setting param.grad = None clears accumulated gradients. Changing requires_grad stops tracking, detaching removes graph history, and zeroing data destroys the parameter's values."
+  },
+  {
+    "id": "02.4-061",
+    "chapter": "02.4",
+    "chapter_name": "Autograd internals",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-04.md",
+    "section": "Next",
+    "question": "After autograd internals, what does the next module turn gradients into?",
+    "options": [
+      "Attention: computing scaled dot-product scores between queries and keys",
+      "Tokenization: building BPE vocabularies by merging frequent byte pairs",
+      "Inference: sampling the next token with temperature and top-k filtering",
+      "Learning: stepping parameters downhill with SGD, momentum and Adam"
+    ],
+    "answer_index": 3,
+    "explanation": "With derivatives, VJPs, the output gradient and autograd internals in hand, the next step is optimization: SGD, momentum and Adam, which use the gradients to update parameters."
+  }
+]

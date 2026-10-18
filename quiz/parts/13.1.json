@@ -1,0 +1,902 @@
+[
+  {
+    "id": "13.1-001",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Prerequisites / overview",
+    "question": "Why is getting language-model evaluation right described as critical for every later experiment in an ML research workflow?",
+    "options": [
+      "Every architecture, data, and hyperparameter change is judged by the number evaluation produces, so a flawed metric fools you",
+      "Evaluation code is what computes the gradients the optimizer applies, so any error there silently corrupts every training step",
+      "Benchmark numbers must be reported to a registry before any model can be released, so evaluation gates every single release",
+      "Evaluation determines the learning-rate schedule automatically, so a bad metric changes how fast or slowly each training run proceeds"
+    ],
+    "answer_index": 0,
+    "explanation": "You cannot improve what you cannot measure: every change you try is accepted or rejected based on the evaluation number. An honest held-out set, the right metric, and a fair scoring rule separate real progress from self-deception. Evaluation does not compute training gradients — it only measures the model."
+  },
+  {
+    "id": "13.1-002",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "In language-model training, what exactly is the 'training loss'?",
+    "options": [
+      "The mean cross-entropy (in nats) computed on a held-out stream of text that the optimizer never takes a gradient step on",
+      "The fraction of next tokens the model predicts incorrectly on the training batches, averaged over every token position in the whole batch",
+      "The exponential of the validation cross-entropy, reported once per epoch and smoothed with a moving average over recent steps",
+      "The mean cross-entropy (in nats) between the model's next-token distribution and the true next token, on the batches being optimized"
+    ],
+    "answer_index": 3,
+    "explanation": "Training loss is the mean cross-entropy over the true next tokens, in nats, measured on the very batches used for gradient updates. Loss on a held-out stream is the validation loss, and the exponential of a loss is perplexity, not loss. It is a cross-entropy, not an error rate."
+  },
+  {
+    "id": "13.1-003",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "Why can training loss alone not tell you whether a language model is learning the language?",
+    "options": [
+      "Training loss is measured in nats, which cannot be compared across steps because the vocabulary normalizer keeps changing as training goes on",
+      "Training loss is always noisier than validation loss, so its downward trend is meaningless until the run has fully converged",
+      "A model with enough parameters can drive training loss very low by memorizing the training tokens while getting no better on unseen text",
+      "Training loss ignores the first token of every sequence, so it systematically underestimates the true loss on longer documents"
+    ],
+    "answer_index": 2,
+    "explanation": "Training loss mixes memorization and genuine learning: a large model can memorize the training tokens and push training loss down without generalizing. Only a held-out stream the optimizer never touches can separate the two. The units (nats) are perfectly comparable across steps, so that is not the problem."
+  },
+  {
+    "id": "13.1-004",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "What is a validation set in language-model training?",
+    "options": [
+      "A subset of the training batches that is weighted more heavily in the loss so that the optimizer focuses on representative text",
+      "A separate stream of text the optimizer never updates on, on which loss is measured periodically to estimate generalization",
+      "The set of prompts used to tune the tokenizer's vocabulary and merge rules before pretraining begins on the main corpus",
+      "The final batch of each epoch, which is used to check gradient norms and adjust the clipping threshold periodically"
+    ],
+    "answer_index": 1,
+    "explanation": "The validation set is held out: it is never used for gradient updates, and loss on it is measured periodically. Because the model never fit those tokens, validation loss reflects only what generalizes. Using training batches, even reweighted, would still mix in memorization."
+  },
+  {
+    "id": "13.1-005",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "During training, training loss keeps falling while validation loss stops falling and begins to rise. What does this pattern indicate?",
+    "options": [
+      "Underfitting: the model is too small to fit even the training data, so it should be scaled up",
+      "Overfitting: the model is fitting quirks of the training tokens that do not transfer to unseen text",
+      "A learning rate that is too low, so the model has stopped learning and only training noise remains",
+      "Data leakage from the validation set into training, which makes validation loss look better than it is"
+    ],
+    "answer_index": 1,
+    "explanation": "Rising validation loss with falling training loss is the classic overfitting signature: gains on the training set are memorization that does not generalize. Underfitting would show both losses high and flat. Leakage would tend to make validation loss look too good, not rise."
+  },
+  {
+    "id": "13.1-006",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "Which loss should you report and use for decisions when comparing language-model experiments?",
+    "options": [
+      "The validation (held-out) loss, because it measures only what generalizes",
+      "The training loss, because it is computed on far more tokens",
+      "The minimum of training and validation loss at each step",
+      "The training loss at the final step, because it reflects the finished model"
+    ],
+    "answer_index": 0,
+    "explanation": "Decisions should be made on validation loss: training loss measures memorization plus learning tangled together, whereas held-out loss isolates generalization, which is what you actually care about. Taking a minimum or the final training loss still lets memorization leak into the decision."
+  },
+  {
+    "id": "13.1-007",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "In large-scale LM pretraining, why is classic overfitting (validation loss turning upward) rare during the main run?",
+    "options": [
+      "Large models use dropout rates high enough to prevent any memorization of training tokens, even after many repeated epochs over the corpus",
+      "The validation set is resampled from the training data every step, which hides any gap between training and validation loss",
+      "Weight decay is set to zero during pretraining, so the parameters cannot grow large enough to memorize individual documents",
+      "Models see so much data for so few passes, often a single epoch, that they rarely see the same tokens enough to memorize them"
+    ],
+    "answer_index": 3,
+    "explanation": "With huge corpora and roughly a single epoch, each token is seen about once, so train and validation curves sit almost on top of each other. That is a property of the data regime, not of dropout or weight decay. Resampling the validation set would be a mistake, not a reason for the curves to agree."
+  },
+  {
+    "id": "13.1-008",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "1. Training loss vs validation loss",
+    "question": "If training and validation loss curves nearly coincide during large-scale pretraining, why is a held-out set still essential?",
+    "options": [
+      "It is needed to compute the gradients for the next epoch, since the optimizer averages training and held-out gradients together",
+      "It is required to set the learning-rate warmup length, which is chosen from how quickly held-out loss first starts to fall",
+      "It is still the only honest measurement, it catches bugs such as a broken data pipeline, and it is what you compare across experiments",
+      "It is used to detect overfitting, which still happens every few thousand steps even in single-epoch pretraining runs over web-scale data"
+    ],
+    "answer_index": 2,
+    "explanation": "Even without overfitting, the held-out loss is the honest measurement, it exposes bugs (for example a validation loss that will not move because the pipeline is broken), and it is the yardstick across experiments. It plays no role in computing gradients or schedules."
+  },
+  {
+    "id": "13.1-009",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "Why is LM quality conventionally reported as perplexity rather than raw loss in nats?",
+    "options": [
+      "Perplexity is the quantity actually differentiated during training, so reporting it matches what the optimizer sees directly",
+      "Perplexity is comparable across tokenizers and vocabulary sizes while loss in nats is not, so it allows direct cross-model comparison",
+      "Loss in nats is the right quantity to optimize but is not intuitive to report; exponentiating it gives a more interpretable number",
+      "Loss in nats can be negative for confident models, so it must be exponentiated into a positive number before it is reported"
+    ],
+    "answer_index": 2,
+    "explanation": "Loss in nats is what you differentiate and optimize, but exp(loss) — perplexity — reads as an intuitive effective branching factor. Perplexity is not comparable across tokenizers either, and cross-entropy loss is never negative."
+  },
+  {
+    "id": "13.1-010",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "If the mean cross-entropy over a held-out set is L nats, what is the perplexity?",
+    "options": [
+      "ln(L)",
+      "exp(L)",
+      "log2(L)",
+      "exp(-L)"
+    ],
+    "answer_index": 1,
+    "explanation": "Perplexity is exp(L) when L is measured in nats (natural log); 2^L would be correct only if L were in bits. ln(L) and log2(L) have no interpretation as a branching factor, and exp(-L) is the geometric-mean probability of the true tokens, the reciprocal of perplexity."
+  },
+  {
+    "id": "13.1-011",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "What does the mean cross-entropy L = -(1/N) Σ ln q(x_i) represent in language-model evaluation?",
+    "options": [
+      "The mean negative log-probability the model assigns to the true tokens",
+      "The mean probability the model assigns to its most likely token",
+      "The entropy of the model's own predictive distribution, ignoring the true tokens",
+      "The fraction of positions where the true token is the argmax"
+    ],
+    "answer_index": 0,
+    "explanation": "L averages -ln q(x_i) over the true tokens x_i, i.e. how surprised the model is by what actually occurred. The model's own entropy ignores the true tokens, and argmax accuracy is a different metric entirely."
+  },
+  {
+    "id": "13.1-012",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "What is the 'effective branching factor' interpretation of perplexity?",
+    "options": [
+      "The average number of tokens the model generates on each prompt before it reaches and emits an end-of-sequence token",
+      "The number of attention heads that effectively carry information at each position, averaged over all layers of the model",
+      "The number of distinct vocabulary tokens that ever receive nonzero probability from the model on the held-out set",
+      "On average, at each position the model is as uncertain as if it were choosing uniformly among PPL equally likely tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "Because PPL is the exponential of the mean negative log-probability, it equals the size of a uniform choice with the same average uncertainty. A perplexity of 20 means the model is about as uncertain as picking uniformly among 20 tokens. It has nothing to do with generation length or heads."
+  },
+  {
+    "id": "13.1-013",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "What loss and perplexity does a perfect language model achieve on held-out text?",
+    "options": [
+      "Loss 1 and perplexity e, because the minimum cross-entropy is one nat",
+      "Loss 0 and perplexity 0, because there is no uncertainty left in any prediction",
+      "Loss -infinity and perplexity 0, because log-probabilities become maximal",
+      "Loss 0 and perplexity 1, because it assigns probability 1 to every true token"
+    ],
+    "answer_index": 3,
+    "explanation": "A perfect model puts probability 1 on each true token; ln 1 = 0, so L = 0 and PPL = exp(0) = 1, meaning one effective choice. Perplexity can never fall below 1, so PPL 0 is impossible, and cross-entropy is bounded below by 0, not minus infinity."
+  },
+  {
+    "id": "13.1-014",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "A model is uniform over a vocabulary of size V. What are its loss and perplexity?",
+    "options": [
+      "Loss 1/V and perplexity V",
+      "Loss V and perplexity exp(V)",
+      "Loss ln V and perplexity V",
+      "Loss ln V and perplexity ln V"
+    ],
+    "answer_index": 2,
+    "explanation": "A uniform model gives each token probability 1/V, so the negative log-probability of every true token is ln V. Exponentiating gives PPL = V: all V tokens are equally likely, maximal uncertainty."
+  },
+  {
+    "id": "13.1-015",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "What sanity check should you run on a freshly initialized GPT-2-style model (vocabulary 50257) before training?",
+    "options": [
+      "Its loss should be about 0 nats and its perplexity about 1, because the weights are initialized near zero; anything else is a bug",
+      "Its loss should be about ln 50257 ≈ 10.82 nats and its perplexity about 50257; a very different number signals a bug",
+      "Its perplexity should be about 1 and its loss near 0, matching a near-deterministic initial model with tiny random weights",
+      "Its loss should be about 50257 nats and its perplexity about e, matching the vocabulary size; a smaller loss signals a bug"
+    ],
+    "answer_index": 1,
+    "explanation": "An untrained model is roughly uniform over the vocabulary, so loss ≈ ln V and perplexity ≈ V. If the untrained model reports something wildly different, the loss or the data pipeline is wrong, and you catch it before wasting GPU-hours. Loss equals ln V, not V itself."
+  },
+  {
+    "id": "13.1-016",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "Why can per-token perplexities of two models with different tokenizers not be compared directly?",
+    "options": [
+      "A bigger vocabulary spreads probability over more tokens and needs fewer tokens per word, so per-token perplexity measures another unit",
+      "Perplexity is always computed in bits for byte-level tokenizers and in nats for word-piece ones, so the numbers use different log bases",
+      "Models with larger vocabularies always have lower per-token perplexity by construction, regardless of how well they actually model the text",
+      "Different tokenizers use different end-of-sequence tokens, and those rare tokens dominate the average loss and therefore the perplexity"
+    ],
+    "answer_index": 0,
+    "explanation": "Perplexity is per token, and the meaning of a 'token' changes with the tokenizer: a larger vocabulary has more options per position but fewer positions per word. So the numbers are on different scales. Compare within a fixed vocabulary, or switch to bits-per-byte to cross tokenizers."
+  },
+  {
+    "id": "13.1-017",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "2. Perplexity: the reportable metric",
+    "question": "If you must compare language-model quality across models with different tokenizers, what metric is suggested instead of per-token perplexity?",
+    "options": [
+      "Bits-per-byte",
+      "Perplexity divided by vocabulary size",
+      "Top-1 next-token accuracy",
+      "Loss in nats multiplied by vocabulary size"
+    ],
+    "answer_index": 0,
+    "explanation": "Bits-per-byte normalizes by the raw byte count of the text, which is the same regardless of tokenizer, so it is comparable across vocabularies. Dividing perplexity by V or using top-1 accuracy does not remove the dependence on how text is cut into tokens."
+  },
+  {
+    "id": "13.1-018",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "3. Held-out evaluation, done honestly",
+    "question": "Why must the validation (and test) stream be carved off the corpus before the training run begins and kept fixed for the project?",
+    "options": [
+      "Splitting after training makes the tokenizer unable to encode validation text",
+      "The optimizer needs to know the validation set in advance to schedule the learning rate",
+      "A fixed validation set is required to compute perplexity in nats, since the log base depends on the split size",
+      "A validation set that changes between experiments cannot be used to compare those experiments"
+    ],
+    "answer_index": 3,
+    "explanation": "Splitting first guarantees the model never saw the held-out data, and keeping it fixed for the life of the project means every experiment is measured on the same data, so differences reflect the models, not the data. The optimizer and tokenizer do not depend on the split."
+  },
+  {
+    "id": "13.1-019",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "3. Held-out evaluation, done honestly",
+    "question": "If the same document or a near-duplicate appears in both training and validation splits, what does the validation loss end up measuring?",
+    "options": [
+      "Generalization more accurately, because more data is shared",
+      "Exactly the training loss, because the two splits become identical",
+      "Memorization rather than generalization",
+      "Calibration rather than accuracy"
+    ],
+    "answer_index": 2,
+    "explanation": "Leakage of the same or near-duplicate documents across the split lets the model score well on validation by recalling what it trained on, so the held-out number stops measuring generalization. This is the deduplication problem applied across the split; its evaluation cousin is benchmark contamination."
+  },
+  {
+    "id": "13.1-020",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "3. Held-out evaluation, done honestly",
+    "question": "Why keep a separate test set in addition to a validation set?",
+    "options": [
+      "The validation set is usually too small to compute perplexity reliably, so a much larger test set is needed for a stable estimate",
+      "Tuning hyperparameters against the validation set slowly fits to it, so a rarely-viewed test set gives an unbiased final number",
+      "The test set is used for early stopping and checkpoint selection, while the validation set is used for final reporting",
+      "The test set must cover tokens missing from the validation vocabulary, so every token type is evaluated at least once"
+    ],
+    "answer_index": 1,
+    "explanation": "Every hyperparameter choice made against the validation set leaks a little information into model selection, so over many experiments you overfit to it. A test set you look at rarely, ideally once at the end, remains an unbiased estimate. Early stopping uses validation, not test."
+  },
+  {
+    "id": "13.1-021",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "How do zero-shot and few-shot evaluation elicit task ability from a pretrained language model?",
+    "options": [
+      "By briefly fine-tuning the model on a handful of task examples before testing",
+      "Purely through the prompt the model conditions on, with no weight updates at all",
+      "By adding a task-specific classification head trained on the benchmark",
+      "By changing the tokenizer to include task-specific tokens for each benchmark's labels"
+    ],
+    "answer_index": 1,
+    "explanation": "The key discovery of GPT-2 and especially GPT-3 is that task ability emerges from next-token pretraining and can be elicited purely by the prompt. Neither zero- nor few-shot changes weights, adds heads, or modifies the tokenizer."
+  },
+  {
+    "id": "13.1-022",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "What does a zero-shot prompt contain?",
+    "options": [
+      "Only a description of the task and the input, with no worked examples",
+      "A task description, the input, and exactly one worked example of the task",
+      "Only the input, with the task inferred from weights fine-tuned on that task",
+      "A set of worked examples of the task, but no instruction or description"
+    ],
+    "answer_index": 0,
+    "explanation": "Zero-shot gives just the instruction and the input (e.g. 'Translate English to French. English: cheese French:'), and the model must infer what to do from the instruction alone. Adding one example would make it one-shot."
+  },
+  {
+    "id": "13.1-023",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "In few-shot (in-context) evaluation, what are the 'shots'?",
+    "options": [
+      "Separate forward passes over the same input averaged together to reduce variance",
+      "Gradient steps taken on a handful of task examples just before evaluation starts",
+      "Samples drawn from the model at high temperature and combined by majority vote",
+      "Worked examples of the task prepended to the prompt before the real input"
+    ],
+    "answer_index": 3,
+    "explanation": "A shot is a solved demonstration of the task placed in the prompt ahead of the real query; one example is one-shot, k examples is k-shot. The model reads the pattern and continues it. No gradient steps are involved."
+  },
+  {
+    "id": "13.1-024",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "Why is few-shot learning described as a prompting method rather than training?",
+    "options": [
+      "The examples are discarded before the forward pass and only their labels are kept as a prior over the answer options",
+      "Few-shot updates only the embedding layer on the k examples, not the full network, so it is cheaper than fine-tuning",
+      "The k examples only live in the context window for one forward pass; no gradient is computed and no weight changes",
+      "The model is trained on the examples for one step, but the weight updates are reverted after the answer is produced"
+    ],
+    "answer_index": 2,
+    "explanation": "In-context learning happens entirely inside the context: the examples influence the current forward pass and nothing is stored in the parameters. Once the prompt ends, the model has learned nothing permanent. No layer, not even the embeddings, receives an update."
+  },
+  {
+    "id": "13.1-025",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "Why does placing a few demonstrations in the prompt help a pretrained language model on a task?",
+    "options": [
+      "The demonstrations increase the model's effective parameter count for that prompt, since each one adds attention keys that act like extra weights for the query",
+      "The demonstrations reset internal recurrent state left over from pretraining, so the model starts the real input from a clean hidden state",
+      "Pretraining taught it to recognize and continue patterns; the demonstrations pin down which task and format you mean, sharpening its predictions",
+      "The demonstrations are memorized permanently into the weights during the forward pass, so every later query on that task benefits from them"
+    ],
+    "answer_index": 2,
+    "explanation": "A model trained on a huge varied corpus can continue many patterns; the demos disambiguate which one (task and format) you want, sharpening the distribution over next tokens. They do not add parameters or create permanent memories."
+  },
+  {
+    "id": "13.1-026",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "According to the GPT-3 results, how does the benefit of few-shot examples change with model scale?",
+    "options": [
+      "The benefit shrinks with scale, because large models already solve most tasks zero-shot",
+      "The benefit grows with scale: larger models make far better use of the same in-context examples",
+      "The benefit is roughly constant across scales, from 125M parameters up to 175B",
+      "The benefit only appears in models below one billion parameters and vanishes entirely beyond that size"
+    ],
+    "answer_index": 1,
+    "explanation": "A central finding of GPT-3 ('Language Models are Few-Shot Learners', Brown et al., 2020) is that few-shot accuracy rises with parameter count and larger models exploit in-context examples much better. More shots generally help up to a point."
+  },
+  {
+    "id": "13.1-027",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "4. Zero-shot vs few-shot: evaluating without fine-tuning",
+    "question": "How does the scoring machinery for multiple-choice evaluation differ between zero-shot and few-shot settings?",
+    "options": [
+      "It is identical; the number of shots only changes how much text sits in front of the question",
+      "Few-shot requires summed log-likelihood, while zero-shot requires length normalization by option tokens",
+      "Few-shot also scores the demonstrations' tokens along with the option tokens",
+      "Zero-shot uses greedy generation while few-shot uses log-likelihood scoring"
+    ],
+    "answer_index": 0,
+    "explanation": "Both settings change only the prompt. The same scorer runs on [context; option], and the in-context examples are simply part of the context. Demonstration tokens are context, so they are not included in the option score."
+  },
+  {
+    "id": "13.1-028",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5. Scoring a multiple-choice question by log-likelihood",
+    "question": "How is a pretrained language model graded on a multiple-choice benchmark such as ARC, HellaSwag, or MMLU via log-likelihood?",
+    "options": [
+      "Generate a free-form answer from the context with greedy decoding, then check whether it contains the letter or text of the correct option",
+      "Fine-tune a small classifier head on the final hidden state that maps the context to one of the option indices, then take its argmax",
+      "Score each option by the perplexity of the context alone when that option is appended as a suffix, then pick the option with the lowest value",
+      "For each option, compute how likely the model finds that option's tokens given the context, then pick the option with the highest likelihood"
+    ],
+    "answer_index": 3,
+    "explanation": "A pretrained model assigns probabilities to token sequences rather than clicking options, so we ask how likely each option's tokens are given the context and take the argmax. Context-only scoring would be identical across options and could not distinguish them."
+  },
+  {
+    "id": "13.1-029",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.1 Score the continuation, not the context",
+    "question": "When scoring option o of a multiple-choice question, what sequence is fed to the model and what is summed?",
+    "options": [
+      "Feed only the option tokens with no context in front, and sum their log-probabilities ln q(x_t | x_<t)",
+      "Feed [context tokens] + [option tokens] once and sum ln q(x_t | x_<t) over all of the tokens",
+      "Feed the context once and sum the probabilities of each option's first token across the options",
+      "Feed [context tokens] + [option tokens] once and sum ln q(x_t | x_<t) over the option tokens only"
+    ],
+    "answer_index": 3,
+    "explanation": "The option is conditioned on the full context in a single forward pass, and only the option tokens' conditional log-probabilities enter ℓ_o. Dropping the context loses the question, summing the context adds a shared constant, and scoring only the first token ignores the rest of the option."
+  },
+  {
+    "id": "13.1-030",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.1 Score the continuation, not the context",
+    "question": "Why are the context tokens excluded from an option's log-likelihood score in multiple-choice grading?",
+    "options": [
+      "The context tokens have zero log-probability under the model once they are conditioned on, so including them in the score contributes nothing at all",
+      "Including the context log-probabilities would make the total score positive, which breaks the argmax over options in the scorer",
+      "The context is shared by all options, so its log-probability is the same constant for each and cannot change the winner; it only adds noise",
+      "The context is scored separately in its own forward pass and then subtracted from each option's perplexity before taking the argmax"
+    ],
+    "answer_index": 2,
+    "explanation": "Every option shares the context, so its log-probability adds an identical constant to every score — it cannot change the argmax, but its large magnitude can bury the small differences between options. Context log-probabilities are not zero; they are negative like any others."
+  },
+  {
+    "id": "13.1-031",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.1 Score the continuation, not the context",
+    "question": "How does a multiple-choice log-likelihood scorer relate to a sequence_loglikelihood function that scores a whole sequence?",
+    "options": [
+      "The scorer uses a different, unnormalized softmax than sequence_loglikelihood",
+      "The scorer is the same computation restricted to the continuation (option) tokens",
+      "sequence_loglikelihood scores only the first token while the scorer scores all tokens",
+      "They are unrelated; one uses logits and the other uses hidden states"
+    ],
+    "answer_index": 1,
+    "explanation": "sequence_loglikelihood sums ln q(x_t | x_<t) over every token after the first; the multiple-choice scorer does the same arithmetic but restricts the sum to the option tokens. Both use the stable log_softmax of the logits."
+  },
+  {
+    "id": "13.1-032",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.2 Length-normalize",
+    "question": "Why does comparing raw summed log-likelihoods bias multiple-choice scoring toward short options?",
+    "options": [
+      "Every per-token log-probability is negative, so a longer option accumulates more negative terms and looks less likely just for being longer",
+      "Longer options are truncated by the context window, so they lose their most probable final tokens and their summed score drops sharply",
+      "Short options get a bonus from the end-of-sequence token, whose log-probability is positive and is added to the score of every short option",
+      "The softmax assigns systematically higher probabilities to short tokens, so options made of short tokens score higher on every one of their tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "Each term ln q is ≤ 0 because probabilities are ≤ 1. Adding more terms can only push the sum lower, so longer options are penalized for length alone, even when they are the better answer. Truncation and EOS bonuses are not the mechanism."
+  },
+  {
+    "id": "13.1-033",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.2 Length-normalize",
+    "question": "What does length normalization do in multiple-choice log-likelihood scoring?",
+    "options": [
+      "Divides each option's summed log-likelihood by its token count and picks the option with the highest mean per-token log-probability",
+      "Truncates every option to the token length of the shortest option before scoring, then picks the highest summed log-likelihood",
+      "Multiplies each option's summed log-likelihood by its token count to reward longer answers, then takes the option with the highest product",
+      "Pads all options with filler tokens to the same length before summing, so every option accumulates the same number of terms"
+    ],
+    "answer_index": 0,
+    "explanation": "Length normalization compares mean per-token log-probability, (1/|o|) Σ ln q, and picks the argmax. Truncating or padding would change the content being scored, and multiplying by length would amplify rather than remove the bias."
+  },
+  {
+    "id": "13.1-034",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.3 Worked example — why normalization matters",
+    "question": "Option A is 1 token with log-prob -1.0; option B is 4 tokens with log-probs [-0.4, -0.3, -0.4, -0.3]. What does this illustrate about summed versus length-normalized scoring?",
+    "options": [
+      "Both rules pick A, because its single token has a higher log-prob than B's total, showing normalization rarely matters",
+      "Both rules pick B, because its summed log-prob of -1.4 beats A's -1.0, showing that the plain sum already corrects for option length",
+      "The sum picks B and normalization picks A, showing that length normalization favors short options over long ones",
+      "The rules disagree: the sum picks A only because it is shorter, while normalization picks B, whose tokens are each more probable"
+    ],
+    "answer_index": 3,
+    "explanation": "Sums are -1.0 vs -1.4, so the sum crowns A; normalized means are -1.0 vs -0.35, so normalization picks B. A single mildly confident token beats four more confident tokens under the sum just by having fewer negative terms."
+  },
+  {
+    "id": "13.1-035",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.3 Worked example — why normalization matters",
+    "question": "Which widely used evaluation tool scores tasks like HellaSwag by length-normalized log-likelihood?",
+    "options": [
+      "vLLM benchmark_serving",
+      "TensorBoard HParams",
+      "lm-eval-harness",
+      "DeepSpeed-Chat"
+    ],
+    "answer_index": 2,
+    "explanation": "lm-eval-harness, the standard benchmark harness, scores tasks like HellaSwag by length-normalized log-likelihood because options differ in length. vLLM (benchmark_serving is its throughput script) is an inference server, TensorBoard HParams a logging view, and DeepSpeed-Chat an RLHF training framework."
+  },
+  {
+    "id": "13.1-036",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.3 Worked example — why normalization matters",
+    "question": "Why is length normalization by token count described as a heuristic rather than a law?",
+    "options": [
+      "It only works for options shorter than five tokens, beyond which the mean per-token log-probability stops being well defined at all",
+      "It assumes every token carries equal weight, which is not exactly true; some benchmarks normalize by characters or bytes, or keep the raw sum",
+      "It makes scores depend on the length of the shared context, so the same options score differently under different prompts and different shot counts",
+      "It is mathematically identical to the raw sum for any model, so calling it a separate scoring rule overstates what it actually changes"
+    ],
+    "answer_index": 1,
+    "explanation": "Normalizing by token count is an assumption, not a derivation: tokens are not equally informative, and benchmarks variously normalize by characters, bytes, or not at all. It is not identical to the raw sum (summed and normalized rules can pick different winners) and is not restricted to short options."
+  },
+  {
+    "id": "13.1-037",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "5.3 Worked example — why normalization matters",
+    "question": "Two papers both report 'HellaSwag accuracy' but used different normalization rules when scoring options. What follows?",
+    "options": [
+      "The numbers are comparable as long as both papers evaluated the same model size on the same split",
+      "The numbers are not directly comparable, because the scoring rule is part of the benchmark definition",
+      "The higher number is always the one computed with length normalization, so it should be preferred",
+      "Normalization only affects calibration, not the argmax, so the two accuracies remain directly comparable"
+    ],
+    "answer_index": 1,
+    "explanation": "The scoring rule is part of what the benchmark measures, so different normalizations produce different accuracies for the same model. Comparisons are meaningful only with the same rule. Normalization changes which option wins, i.e. accuracy, not just calibration."
+  },
+  {
+    "id": "13.1-038",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "6. In code",
+    "question": "What steps does multiple_choice_score in llmre.evaluation.harness perform?",
+    "options": [
+      "Build [context; option], run the model once per option, sum option-token log-probs via log_softmax, optionally divide by length, return the argmax",
+      "Generate a greedy completion from the context, tokenize it, and return the index of the option with the smallest token-level edit distance to it",
+      "Run the model once on the context, embed each option with the model's embedding table, and return the option closest to the final hidden state",
+      "Sum log-probabilities from a stable log_softmax over both the context and option tokens, optionally divide by length, and return the argmin index of the options"
+    ],
+    "answer_index": 0,
+    "explanation": "It implements log-likelihood scoring directly: one forward pass per [context; option], option tokens only, numerically stable log_softmax, optional length normalization, argmax. It does not generate text or compare embeddings, and it returns the highest, not lowest, score."
+  },
+  {
+    "id": "13.1-039",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "6. In code",
+    "question": "With multiple_choice_score, option A (index 0) is one low-confidence token and option B (index 1) is four higher-confidence tokens. What do length_normalize=False and length_normalize=True return?",
+    "options": [
+      "False returns 1 (option B); True returns 0 (option A)",
+      "Both return 0, because option A is listed first and ties go to index 0",
+      "Both return 1, because B has more tokens",
+      "False returns 0 (option A); True returns 1 (option B)"
+    ],
+    "answer_index": 3,
+    "explanation": "Without normalization the summed log-likelihood favors the shorter option A (index 0); with normalization the higher per-token log-prob of B wins (index 1). This reproduces the summed-vs-normalized flip."
+  },
+  {
+    "id": "13.1-040",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "6. In code",
+    "question": "Why is multiple_choice_score called model-agnostic?",
+    "options": [
+      "It reimplements the transformer internally from the config and ignores the weights of the model passed in, so any architecture works",
+      "It works only on raw string inputs, so tokenization and the forward pass are delegated to each model's own generate method",
+      "It only calls model(seq) -> (logits, loss), so it works with the from-scratch GPT or any object returning logits of shape (B, T, V)",
+      "It uses only the returned scalar loss value, never the logits, so any model that reports a loss of shape () can be scored"
+    ],
+    "answer_index": 2,
+    "explanation": "The scorer depends only on the interface model(seq) -> (logits, loss) that GPT.forward exposes, reading logits of shape (B, T, V). It needs the logits, not the loss, since it must pick out each option token's log-probability."
+  },
+  {
+    "id": "13.1-041",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "6. In code",
+    "question": "In a causal LM, the context has length L_c and the option has length L_o. Which logit positions predict the option's tokens?",
+    "options": [
+      "Positions L_c through L_c + L_o - 1",
+      "Positions 0 through L_o - 1, counting from the start",
+      "Positions L_c - 1 through L_c + L_o - 2",
+      "Positions L_c + 1 through L_c + L_o"
+    ],
+    "answer_index": 2,
+    "explanation": "The logits at position p predict token p+1. The option tokens sit at absolute positions L_c … L_c + L_o - 1, so they are predicted by positions one earlier: L_c - 1 … L_c + L_o - 2. Using L_c … L_c + L_o - 1 is the classic off-by-one bug."
+  },
+  {
+    "id": "13.1-042",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Exercise",
+    "question": "Option X has 2 tokens with log-probs [-0.8, -0.9]; option Y has 5 tokens with log-probs [-0.5, -0.6, -0.5, -0.5, -0.6]. Which option wins under the summed rule and which under length normalization?",
+    "options": [
+      "Summed picks Y (-2.7 vs -1.7); normalized picks X (-0.85 vs -0.54)",
+      "Summed picks X (-1.7 vs -2.7); normalized picks Y (-0.54 vs -0.85)",
+      "Both rules pick X, since its tokens are fewer and each is likelier",
+      "Both rules pick Y, since its mean and its sum are both higher than X's"
+    ],
+    "answer_index": 1,
+    "explanation": "Sums: X = -1.7, Y = -2.7, so X wins the sum. Means: X = -0.85, Y = -0.54, so Y wins normalized. Y is longer, so its sum is dragged down by more negative terms even though each of its tokens is more confident on average."
+  },
+  {
+    "id": "13.1-043",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A language model's loss curve looks suspiciously good. What is the first thing to check?",
+    "options": [
+      "That you are plotting the held-out loss rather than the loss on the batches being trained on",
+      "That the learning rate is high enough for the loss to have dropped that fast, rather than a lucky seed",
+      "That perplexity is reported in bits rather than nats, since base-2 logs make the curve look lower",
+      "That the vocabulary is large enough, since a small vocabulary makes per-token loss look artificially low"
+    ],
+    "answer_index": 0,
+    "explanation": "A common mistake is reporting training loss, which looks great because it includes memorization. Verify the plotted curve is on held-out data. The other checks do not explain an unrealistically good curve."
+  },
+  {
+    "id": "13.1-044",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A multiple-choice scorer accidentally adds the shared context's log-probability into each option's score. What is the effect?",
+    "options": [
+      "It makes the scorer pick the longest option every time, since the context adds more to longer sequences",
+      "It converts the scorer into a calibration metric that measures confidence rather than which option is right",
+      "It has no effect at all, because the context's log-probabilities are exactly zero once they are conditioned on by the model",
+      "It adds the same constant to every option, which cannot change the ideal ranking but buries the distinguishing signal"
+    ],
+    "answer_index": 3,
+    "explanation": "The context is shared, so its log-probability is an identical additive constant; the ranking is unchanged in principle, but its large magnitude buries the small differences between options. Context log-probs are negative, not zero."
+  },
+  {
+    "id": "13.1-045",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Which statement about few-shot evaluation is a common mistake?",
+    "options": [
+      "Saying the in-context examples live in the prompt for only one forward pass",
+      "Saying that zero-shot and few-shot share exactly the same scoring machinery",
+      "Saying that the benefit of few-shot examples grows with model scale, as GPT-3 reported",
+      "Calling it fine-tuning, as if the in-context examples updated the model's weights"
+    ],
+    "answer_index": 3,
+    "explanation": "Few-shot is not fine-tuning: no weights change, and the examples only affect the current forward pass. The other three statements are correct descriptions of in-context evaluation."
+  },
+  {
+    "id": "13.1-046",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A zero-shot multiple-choice scorer always picks the option with the fewest tokens, using score = sum(log_probs_of_option_tokens) and argmax. What one change fixes it?",
+    "options": [
+      "Take the argmin instead of the argmax of the summed score, so the option with the least likely total is chosen",
+      "Add the shared context's log-probability to every option's summed score before the argmax",
+      "Divide the sum by the number of option tokens and take the argmax of the mean per-token log-probability",
+      "Multiply the summed score by the number of option tokens before taking the argmax over options"
+    ],
+    "answer_index": 2,
+    "explanation": "Summed negative log-probs penalize longer options, so the shortest option wins regardless of content. Length normalization — dividing by the option's token count — removes the bias; this is the length_normalize=True path. Argmin or multiplying by length would make things worse, and adding the context changes nothing."
+  },
+  {
+    "id": "13.1-047",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A newly initialized model with a 32000-token vocabulary reports a validation loss of about 10.373 nats. What does this indicate?",
+    "options": [
+      "It signals an initialization bug, because an untrained model should have loss near 0 nats and perplexity near 1",
+      "It is expected: ln 32000 ≈ 10.373, so the model is roughly uniform and its perplexity is about 32000",
+      "It means the model has already learned the data, since 10.373 is far below the vocabulary size",
+      "It means the model's perplexity is about 10.373, so it is choosing among roughly ten tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "An untrained model is roughly uniform, so loss ≈ ln V = ln 32000 ≈ 10.373 nats and perplexity ≈ exp(10.373) ≈ 32000. That is the standard wiring sanity check. Perplexity is exp(loss), not the loss itself."
+  },
+  {
+    "id": "13.1-048",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Training loss keeps dropping, but validation loss bottomed out 2000 steps ago and is now creeping up. Which response fits?",
+    "options": [
+      "Treat it as overfitting: report at the validation minimum and consider early stopping, regularization, more or deduplicated data, or less capacity",
+      "Cut the learning rate and keep training: validation rising while training falls means the step size is too large, so report the final checkpoint instead",
+      "Increase model capacity and keep training, since a larger model will push validation loss back down past its earlier minimum",
+      "Drop the validation set and rely on training loss, since a held-out split that disagrees with training loss must be corrupted"
+    ],
+    "answer_index": 0,
+    "explanation": "Rising validation loss with falling training loss is overfitting. Report and checkpoint at the validation minimum; remedies include early stopping, weight decay or dropout, more or deduplicated data, or reducing capacity. Adding capacity would usually worsen overfitting."
+  },
+  {
+    "id": "13.1-049",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Is 5-shot evaluation a form of training?",
+    "options": [
+      "No — the five examples affect only the current forward pass; no gradient is taken and no weight is updated",
+      "Yes — the model updates its weights on each of the five examples before it answers the question",
+      "Yes — but only the final layer and the output embedding are updated, once per shown example",
+      "No — because the five examples are removed from the prompt before inference, leaving only the bare question"
+    ],
+    "answer_index": 0,
+    "explanation": "5-shot is in-context (prompt-time) learning: the examples sit in the prompt and influence only that forward pass, with no gradient or weight change. The examples are not removed; they are exactly what conditions the answer."
+  },
+  {
+    "id": "13.1-050",
+    "chapter": "13.1",
+    "chapter_name": "Loss, perplexity, zero-/few-shot",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Two options have lengths 1 and 3. The 1-token option has log-prob -2.0; the 3-token option has log-probs [-0.5, -0.5, -0.5]. What do the summed and length-normalized rules choose, and what does this show?",
+    "options": [
+      "Summed picks the 1-token option and normalized picks the 3-token option, showing the two rules always disagree",
+      "Both pick the 1-token option, since shorter options always win the summed rule and normalization only breaks ties",
+      "Summed picks the 3-token option and normalized picks the 1-token option, showing normalization favors short options",
+      "Both pick the 3-token option; normalization matters only when the length bias would otherwise decide the outcome"
+    ],
+    "answer_index": 3,
+    "explanation": "Summed: -1.5 beats -2.0; normalized: -0.5 beats -2.0. Both choose the longer option because its per-token confidence is high enough that even its sum wins. Normalization does not always flip the winner — it matters only when length bias would decide the outcome."
+  }
+]

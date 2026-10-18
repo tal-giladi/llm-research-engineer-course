@@ -1,0 +1,794 @@
+[
+  {
+    "id": "13.3-001",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Prerequisites / overview",
+    "question": "Why is an evaluation you cannot reproduce described as worse than none?",
+    "options": [
+      "It produces numbers that drift between runs and lead you to false conclusions",
+      "It always takes longer to run than the training run it is meant to measure",
+      "It prevents the model from being checkpointed until the evaluation finishes cleanly",
+      "It forces you to retrain the tokenizer between experiments so the vocabularies match"
+    ],
+    "answer_index": 0,
+    "explanation": "Research velocity is bounded by how quickly and reliably you can measure. A non-reproducible evaluation gives drifting numbers, so differences between experiments may be noise and you draw wrong conclusions. That is worse than having no number at all."
+  },
+  {
+    "id": "13.3-002",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "1. Evaluation is a first-class discipline",
+    "question": "What is the ML-project equivalent of a software project's test suite, according to the 'evaluation as a first-class discipline' view?",
+    "options": [
+      "The training loop's gradient-clipping logic, which guards every update against bad batches and silent divergence",
+      "The data loader's shuffling routine, which guarantees every experiment sees the same examples in the same order",
+      "The checkpoint-saving code, which records every model state so that any experiment can be restored and rerun",
+      "The evaluation harness: the code that, given a model, produces the metrics decisions are made on"
+    ],
+    "answer_index": 3,
+    "explanation": "Just as you would not ship code without tests, you should not make ML decisions without a harness that measures the model. It deserves production-code seriousness: documented interfaces, deterministic behavior, and its own tests."
+  },
+  {
+    "id": "13.3-003",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "1. Evaluation is a first-class discipline",
+    "question": "What does the evaluation harness return so its results can be logged, compared, and asserted on?",
+    "options": [
+      "GPU tensors with autograd graphs",
+      "Raw logits for every scored token",
+      "Plain Python floats and indices",
+      "Matplotlib figures of the loss curve"
+    ],
+    "answer_index": 2,
+    "explanation": "The harness orchestrates the forward pass and log_softmax over held-out data and returns plain floats (perplexity, log-likelihoods) and integer indices (chosen options). These are easy to log and assert on, unlike tensors carrying graphs."
+  },
+  {
+    "id": "13.3-004",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "1. Evaluation is a first-class discipline",
+    "question": "Which three properties make an evaluation harness trustworthy?",
+    "options": [
+      "Fast (one pass per eval set), GPU-only (every metric computed on device), and distributed (sharded across ranks so results match)",
+      "Deterministic (same inputs give the same numbers), documented (shapes/dtype/device stated), and tested (metrics checked against known answers)",
+      "Stochastic (fresh samples each run to avoid overfitting), cached (results reused across runs), and approximate (subsampled eval sets)",
+      "Fine-tuned (the model adapted to each benchmark), calibrated (temperature-scaled logits), and decontaminated (overlaps removed first)"
+    ],
+    "answer_index": 1,
+    "explanation": "A harness must be deterministic, documented, and tested; lose any one and its numbers become unreliable. Speed and hardware are conveniences, not trustworthiness properties."
+  },
+  {
+    "id": "13.3-005",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "What are the inputs to evaluate_perplexity in the llmre harness?",
+    "options": [
+      "A list of raw held-out strings, a tokenizer to encode them, a learning rate, and a number of evaluation epochs",
+      "A flat 1-D torch.long tensor of held-out token ids, a block_size, a batch_size, and an optional max_batches",
+      "A 2-D float tensor of precomputed logits of shape (N, V), a target tensor of shape (N,), and a temperature",
+      "A model checkpoint path, a vocabulary file, a block_size, and the device on which to load the weights to"
+    ],
+    "answer_index": 1,
+    "explanation": "evaluate_perplexity takes the model, a flat long tensor data of held-out ids, the context length block_size, batch_size, and an optional max_batches to stop early on huge streams. Tokenization happens before."
+  },
+  {
+    "id": "13.3-006",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "How does evaluate_perplexity form input and target for window i of length T?",
+    "options": [
+      "x = data[i·T : i·T + T] and y = data[i·T + 1 : i·T + 1 + T], the same window shifted one token right",
+      "x = data[i·T : i·T + T] and y = data[i·T : i·T + T], the same window used as both input and target",
+      "x = data[i : i + T] and y = data[i + T], a sliding window that predicts one single next token per step",
+      "x and y are random overlapping windows of length T sampled fresh for each batch, as in the training loader"
+    ],
+    "answer_index": 0,
+    "explanation": "Non-overlapping windows are cut from the stream, and the target is the input shifted by one, the standard next-token setup. Using the same slice for y is a bug that makes the task trivial."
+  },
+  {
+    "id": "13.3-007",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "Why does evaluate_perplexity cut the stream into non-overlapping windows of length block_size?",
+    "options": [
+      "Because overlapping windows would require gradient computation across windows, which no_grad forbids during evaluation",
+      "Because the model cannot accept sequences shorter than its vocabulary size, so every window must be exactly block_size",
+      "Because non-overlapping windows always give the lowest possible perplexity, which is the number papers conventionally report",
+      "So each held-out target token is scored once with a fixed context length, making the metric well-defined and reproducible"
+    ],
+    "answer_index": 3,
+    "explanation": "Non-overlapping windows partition the stream so each target token is counted once under a defined block_size. Overlap would double-count tokens; gradients are irrelevant here. Lower perplexity is not the goal — consistency is."
+  },
+  {
+    "id": "13.3-008",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "How does evaluate_perplexity aggregate per-batch losses?",
+    "options": [
+      "Average the per-batch mean losses directly, giving each batch equal weight whatever its size, then exponentiate the result",
+      "Take the minimum batch loss across all batches as the most reliable estimate, then exponentiate it to get perplexity",
+      "Token-weighted: multiply each batch's mean loss by its token count, sum, and divide by total tokens, then exponentiate",
+      "Exponentiate each batch's mean loss into a perplexity first, then average the per-batch perplexities weighted by token count"
+    ],
+    "answer_index": 2,
+    "explanation": "Accumulating float(loss) * n_tok and dividing by total_tokens gives exactly the mean over all target tokens, independent of how windows divide into batches. Averaging batch means over-weights a small final batch; averaging per-batch perplexities is also not the same as exp of the mean loss."
+  },
+  {
+    "id": "13.3-009",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "Why does evaluation run under torch.no_grad() with the model in eval() mode?",
+    "options": [
+      "no_grad enables dropout for regularization during scoring; eval() turns on gradient checkpointing to save activation memory",
+      "no_grad converts the weights to fp16 so evaluation runs faster; eval() freezes the tokenizer so token ids cannot change",
+      "no_grad builds no autograd graph, saving memory and time; eval() disables dropout so the numbers are deterministic",
+      "Both are required for the loss to be computed in nats rather than bits, since training mode uses a base-2 cross-entropy"
+    ],
+    "answer_index": 2,
+    "explanation": "torch.no_grad() stops recording operations for backprop, so no graph or saved activations are retained. model.eval() switches dropout (and batch-norm, if present) to inference behavior so an input always yields the same logits. Neither changes units or precision."
+  },
+  {
+    "id": "13.3-010",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "What does model.eval() change for a GPT with dropout?",
+    "options": [
+      "It stops gradients from being computed for every forward pass",
+      "It disables dropout so a given input always produces the same logits",
+      "It freezes the weights so that the optimizer can no longer change any of them",
+      "It switches the model to half precision for faster inference"
+    ],
+    "answer_index": 1,
+    "explanation": "eval() flips modules like dropout and batch-norm into inference behavior; for the GPT it disables dropout, giving deterministic outputs. Gradient tracking is controlled by no_grad, not eval(), and eval() does not touch precision or the optimizer."
+  },
+  {
+    "id": "13.3-011",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "Which statement correctly describes the separate roles of model.eval() and torch.no_grad() in evaluation?",
+    "options": [
+      "eval() is required for determinism and no_grad() for memory; forgetting either does not change the correctness of a single deterministic pass",
+      "eval() is required for memory and no_grad() for determinism; forgetting either changes the value that a single deterministic pass computes",
+      "Both are required for correctness, because without them the cross-entropy is computed on dropped-out logits and so the loss value itself is wrong",
+      "Only one is needed, because eval() automatically disables gradient tracking, so wrapping evaluation in no_grad() as well is redundant"
+    ],
+    "answer_index": 0,
+    "explanation": "eval() removes dropout randomness; no_grad() avoids retaining the graph. Neither changes the mathematical value of one deterministic pass. eval() does not disable gradient tracking, so both are needed."
+  },
+  {
+    "id": "13.3-012",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "In evaluate_perplexity, how is the number of windows computed from a stream of data.numel() tokens?",
+    "options": [
+      "data.numel() // block_size, using every token as an input, with the very last target wrapping around",
+      "data.numel() - block_size, giving one overlapping window per possible starting position",
+      "(data.numel() + 1) // block_size, rounding up so the final partial window is included",
+      "(data.numel() - 1) // block_size, since each window needs one extra token for the shifted target"
+    ],
+    "answer_index": 3,
+    "explanation": "Each window needs block_size inputs plus one more token for the last target, so the last token can only be a target; hence (numel − 1) // block_size non-overlapping windows. One window per start position would mean overlapping windows."
+  },
+  {
+    "id": "13.3-013",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "2. `evaluate_perplexity` over a held-out stream",
+    "question": "In evaluate_perplexity, why would averaging per-batch losses directly give a wrong answer?",
+    "options": [
+      "It under-weights the first batch, whose loss is inflated by warmup, so the mean comes out too low",
+      "It double-counts tokens that appear in several overlapping windows, inflating their weight in the overall average",
+      "It converts nats to bits incorrectly, because a mean of per-batch means is taken in base 2 instead of base e",
+      "It over-weights a small final batch, whereas token weighting reproduces the single mean over all target tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "Each batch loss is already a mean over its tokens, so a mean of means gives every batch equal weight regardless of size. Weighting by token count makes the result independent of batching."
+  },
+  {
+    "id": "13.3-014",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "3. `sequence_loglikelihood`: the likelihood primitive",
+    "question": "What does sequence_loglikelihood(model, ids) compute?",
+    "options": [
+      "The perplexity of the sequence averaged over sliding windows of block_size tokens with stride 1",
+      "The probability of the sequence's first token only, given a beginning-of-sequence token in front",
+      "The total log-probability Σ_t ln q(x_t | x_<t) over the sequence, from a single forward pass",
+      "The entropy of the model's next-token distribution at the last position, from a single forward pass"
+    ],
+    "answer_index": 2,
+    "explanation": "It sums the conditional log-probabilities of tokens 1 … L−1 given their prefixes. One forward pass suffices because the logits at position t are the model's prediction for token t+1."
+  },
+  {
+    "id": "13.3-015",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "3. `sequence_loglikelihood`: the likelihood primitive",
+    "question": "In sequence_loglikelihood, why are logits[:-1] paired with ids[1:]?",
+    "options": [
+      "The first logit is always padding from the beginning-of-sequence slot, so it must be dropped before pairing with the targets",
+      "The last position would predict a token past the end, and ids[1:] are exactly the tokens predicted by positions 0 … L−2",
+      "ids[1:] removes the end-of-sequence token, which the model never has to predict, and logits[:-1] drops its matching row",
+      "It reverses the sequence so that the model reads right to left, which is how causal attention lines up logits with targets"
+    ],
+    "answer_index": 1,
+    "explanation": "Logits at position p predict token p+1, so dropping the final position and the first target aligns predictions with what they predict. This index arithmetic is the whole trick."
+  },
+  {
+    "id": "13.3-016",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "3. `sequence_loglikelihood`: the likelihood primitive",
+    "question": "Why is the first token of a sequence never scored by sequence_loglikelihood under a plain LM?",
+    "options": [
+      "It has no prefix, so there is no conditional ln q(x_0 | x_<0) to score",
+      "The first token is always a special BOS token with probability 1",
+      "Scoring it would require a second forward pass with a dummy prefix token",
+      "The first logit is discarded for numerical stability inside log_softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "The score of each token is its probability given preceding tokens; the first token has none. The code enforces this by predicting tokens 1 … L−1 from positions 0 … L−2."
+  },
+  {
+    "id": "13.3-017",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "3. `sequence_loglikelihood`: the likelihood primitive",
+    "question": "What does the value returned by sequence_loglikelihood mean?",
+    "options": [
+      "A single Python float ≤ 0; less negative means the model finds the sequence more probable",
+      "A positive Python float where larger values mean the model finds the sequence less probable",
+      "A tensor of shape (L, V) holding the model's log-probabilities at every position",
+      "A perplexity value ≥ 1, the exponential of the mean negative log-likelihood per token"
+    ],
+    "answer_index": 0,
+    "explanation": "It returns float(chosen.sum()), the sum of log-probabilities, which is at most 0. A value closer to 0 means higher probability. It is not perplexity and is not a tensor."
+  },
+  {
+    "id": "13.3-018",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "3. `sequence_loglikelihood`: the likelihood primitive",
+    "question": "In sequence_loglikelihood with ids of shape (L,), what are the shapes of logits after taking batch element 0, of logp, and of chosen?",
+    "options": [
+      "logits (1, L); logp (L, V); chosen (L,)",
+      "logits (V, L); logp (V, L−1); chosen (V, L−1)",
+      "logits (L, V); logp (L, V); chosen (1,)",
+      "logits (L, V); logp (L−1, V); chosen (L−1,)"
+    ],
+    "answer_index": 3,
+    "explanation": "The model returns (1, L, V); indexing [0] gives (L, V). log_softmax(logits[:-1]) is (L−1, V), and gathering the target token per row gives chosen of shape (L−1,), which is then summed."
+  },
+  {
+    "id": "13.3-019",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "4. `multiple_choice_score`: grading tasks",
+    "question": "Where do the option tokens sit in [context; option], and which logits predict them, in multiple_choice_score?",
+    "options": [
+      "At positions 0 … L_o − 1, at the front of the sequence, predicted by logits at those same positions 0 … L_o − 1",
+      "At positions L_c + 1 … L_c + L_o, after a separator token, predicted by logits at positions L_c … L_c + L_o − 1",
+      "At absolute positions L_c … L_c + L_o − 1, predicted by logits at positions L_c − 1 … L_c + L_o − 2",
+      "At absolute positions L_c … L_c + L_o − 1, predicted by logits at those same positions L_c … L_c + L_o − 1"
+    ],
+    "answer_index": 2,
+    "explanation": "Option tokens follow the L_c context tokens, and since logits at p predict token p+1, they are predicted by positions one earlier. This is the §3 index arithmetic offset by the context length."
+  },
+  {
+    "id": "13.3-020",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "4. `multiple_choice_score`: grading tasks",
+    "question": "How does multiple_choice_score handle zero-shot versus few-shot evaluation?",
+    "options": [
+      "It requires a separate few_shot flag that enables a second forward pass over the demonstrations",
+      "Identically; the number of in-context examples only changes how many tokens are in context_ids",
+      "It scores the demonstrations as additional options in few-shot mode and drops them from the argmax",
+      "It only supports zero-shot scoring; few-shot evaluation needs a model fine-tuned on the examples"
+    ],
+    "answer_index": 1,
+    "explanation": "Because it accepts any model(seq) -> (logits, loss) and any context, demonstrations are simply more context tokens. The scoring logic does not change."
+  },
+  {
+    "id": "13.3-021",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "5. Reproducibility: seeds, fixed eval set, versioned config",
+    "question": "Why must every source of randomness be seeded before an evaluation that uses any?",
+    "options": [
+      "Perplexity computed in eval() mode changes from run to run unless the global seed is fixed before each run",
+      "Anything involving sampling, such as generating completions for pass@k, is only reproducible if seeded",
+      "Seeds control the learning rate and warmup schedule used during evaluation, so unseeded runs differ",
+      "Seeding is needed to make torch.no_grad() take effect, since the graph is otherwise built at random"
+    ],
+    "answer_index": 1,
+    "explanation": "Perplexity and log-likelihood scoring are deterministic in eval() mode, but sampling-based evaluation is not; seeding torch, NumPy, and Python makes it reproducible. Seeds do not affect no_grad or learning rates."
+  },
+  {
+    "id": "13.3-022",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "5. Reproducibility: seeds, fixed eval set, versioned config",
+    "question": "Why must the held-out stream and benchmark question set be frozen and versioned?",
+    "options": [
+      "Comparing run B with run A is only valid if both were measured on the same data; changing the eval set silently turns comparison into noise",
+      "Because the model memorizes whatever eval set it is shown, so any change to the set leaks new answers into the weights over successive runs",
+      "Because unfrozen eval sets cannot be tokenized consistently, since the BPE merges are refit from scratch whenever the underlying text changes",
+      "Because versioned data is stored contiguously on disk and runs faster on GPUs, which keeps evaluation cheap enough to run after every step"
+    ],
+    "answer_index": 0,
+    "explanation": "A comparison between experiments is meaningful only on identical evaluation data. Altering the data changes the numbers for reasons unrelated to the models."
+  },
+  {
+    "id": "13.3-023",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "5. Reproducibility: seeds, fixed eval set, versioned config",
+    "question": "Which items belong in a versioned evaluation config stored next to each result?",
+    "options": [
+      "Only the final metric value and the date it was computed, since the code in the repository at that date fully determines everything else",
+      "Only the model's parameter count, the GPU type, and the driver version, since the hardware is what makes evaluation numbers drift",
+      "Only the random seed used for the run, since with the seed fixed every other part of the evaluation is fully deterministic and needs no record",
+      "Checkpoint hash, tokenizer version, block_size, batch_size, eval-set version/hash, scoring rule, few-shot count, and library versions"
+    ],
+    "answer_index": 3,
+    "explanation": "Everything that can affect the number must be recorded so it can be regenerated months later: checkpoint, tokenizer, block/batch sizes, eval-set version, scoring rule (summed vs normalized), shot count, and library versions."
+  },
+  {
+    "id": "13.3-024",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "5. Reproducibility: seeds, fixed eval set, versioned config",
+    "question": "What is the most common silent reproducibility bug in evaluation?",
+    "options": [
+      "Running evaluation on CPU instead of GPU, so fused kernels change the low-order bits and every reported metric shifts slightly between machines",
+      "Logging metrics as floats instead of strings, so rounding in the experiment tracker silently changes the third decimal place of every logged metric",
+      "Comparing two numbers produced under different settings, e.g. another block_size, normalization, decontaminated vs raw eval set, or tokenizer",
+      "Evaluating more often than once per epoch, so the held-out set is seen many times and slowly leaks into the model through checkpoint selection"
+    ],
+    "answer_index": 2,
+    "explanation": "Numbers computed under different settings look comparable but are not. Logging the full config with every metric makes such mismatches visible. Hardware choice does not change a deterministic metric meaningfully."
+  },
+  {
+    "id": "13.3-025",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "6. Regression testing: lock the metrics in",
+    "question": "What is an evaluation regression test?",
+    "options": [
+      "A linear regression fit of validation loss against training steps, used to predict when the metric will stop improving",
+      "A test that reruns a short training job from a fixed seed and checks that the training loss still decreases as it did before the change",
+      "A test that pins a metric to a known value or known-answer synthetic case, so a refactor that changes the number fails loudly",
+      "A benchmark run comparing the current model against the previous model release, failing if the new score is any lower"
+    ],
+    "answer_index": 2,
+    "explanation": "Like regression tests in software, it catches changes that quietly break behavior: if a refactor shifts the metric on a known-answer case, the test fails before the wrong number reaches an experiment."
+  },
+  {
+    "id": "13.3-026",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "6. Regression testing: lock the metrics in",
+    "question": "What does the uniform-model regression test assert about evaluate_perplexity?",
+    "options": [
+      "A model returning all-zero logits over V tokens must give a held-out perplexity of exactly 1",
+      "A model returning all-zero logits over V tokens must give held-out perplexity exactly V",
+      "A uniform model over V tokens must give held-out perplexity ln V, the uniform cross-entropy",
+      "A uniform model must give perplexity 0, because all-zero logits carry no signal about the data"
+    ],
+    "answer_index": 1,
+    "explanation": "All-zero logits produce a uniform softmax with probability 1/V per token, so cross-entropy is ln V and perplexity exp(ln V) = V. evaluate_perplexity(UniformModel(V), data, block_size=16) must return V."
+  },
+  {
+    "id": "13.3-027",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "6. Regression testing: lock the metrics in",
+    "question": "How do the constructed-logits tests pin the behavior of multiple_choice_score?",
+    "options": [
+      "A model putting a large logit on one token must make the scorer pick the option built from that token, and swapping options must flip the answer",
+      "A model with random logits must make the scorer pick option 0 more than half the time, and adding a third option must not change the winner",
+      "A model with all-zero logits must make the scorer pick the longest option, and turning on length normalization must make it pick the shortest one instead",
+      "The scorer must return the same answer index regardless of option order, and a model with constant logits must always pick the first option"
+    ],
+    "answer_index": 0,
+    "explanation": "By constructing a model whose preference is known, the test asserts the scorer picks the favored option and that reordering the options flips the returned index, pinning the scoring logic."
+  },
+  {
+    "id": "13.3-028",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "6. Regression testing: lock the metrics in",
+    "question": "What does the length-normalization regression test in test_eval.py check?",
+    "options": [
+      "That length normalization never changes the chosen option when the per-token confidences of the two options are known in advance",
+      "That the normalized rule always picks the shortest option, while the summed rule picks whichever option contains the most confident single token",
+      "That normalization makes every option's score positive, so the argmax over options is well defined even for very long options",
+      "With two known per-token confidences, the summed rule picks the short option and the normalized rule picks the longer, higher-confidence one"
+    ],
+    "answer_index": 3,
+    "explanation": "The test reproduces the summed-vs-normalized flip: the sum favors the short option, normalization favors the longer option whose tokens are each more probable. This locks in the normalization behavior."
+  },
+  {
+    "id": "13.3-029",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "6. Regression testing: lock the metrics in",
+    "question": "What makes a good known-answer test for an evaluation harness?",
+    "options": [
+      "Inputs drawn from the real benchmark, with the expected answers recorded from the current harness output so that any later change in the number is caught",
+      "Inputs chosen randomly on each run to cover more cases over time, with the expected metric recomputed by the harness on every single run",
+      "Inputs that produce the largest possible metric values, e.g. a model that is always confidently wrong, so overflow and edge cases get exercised",
+      "Inputs whose correct metric you can compute by hand, e.g. uniform model gives perplexity V, or all-wrong predictions at confidence 0.9 give ECE 0.9"
+    ],
+    "answer_index": 3,
+    "explanation": "Known-answer tests compare the harness to values derived independently by hand, so any deviation reveals a bug. Snapshotting the current harness output would lock in existing bugs, and random inputs are not reproducible."
+  },
+  {
+    "id": "13.3-030",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "7. Running the harness on a tiny trained model",
+    "question": "In the tiny-GPT harness demonstration, why is the model trained on the repeating stream 0, 1, 2, …, V−1, 0, 1, …?",
+    "options": [
+      "Because it is effectively random noise to the model, so its perplexity should stay at about V however long it trains",
+      "Because it exercises the tokenizer's merge rules on a stream whose byte pairs repeat in a known, countable order",
+      "Because its next token is fully learnable, so a few dozen steps suffice to drive perplexity well below V",
+      "Because it maximizes the number of distinct n-grams in the stream, so the held-out windows never overlap with training"
+    ],
+    "answer_index": 2,
+    "explanation": "The pattern is deterministic: every token determines the next. A 2-layer GPT learns it in a few dozen steps, demonstrating the harness on a real model with a predictable outcome."
+  },
+  {
+    "id": "13.3-031",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "7. Running the harness on a tiny trained model",
+    "question": "What does the tiny-GPT demonstration show before and after a few dozen training steps?",
+    "options": [
+      "Before, perplexity is about 1 because the model is untrained; after, it rises toward V = 16 as the scorer learns to prefer option 11",
+      "Before, perplexity is about V = 16; after, it drops well below V and the scorer prefers the true continuation 5 over 11 after context [0,1,2,3,4]",
+      "Before and after, perplexity stays at about V = 16, because the tiny model is too small to learn the pattern in a few dozen steps",
+      "After training, perplexity drops well below V, but the scorer prefers option 11 over 5 after context [0,1,2,3,4] because 11 has the higher token id"
+    ],
+    "answer_index": 1,
+    "explanation": "An untrained model is near uniform (perplexity ≈ V). After learning the pattern, perplexity falls well below 16, and multiple_choice_score returns 0, choosing token 5 as the continuation of 0,1,2,3,4."
+  },
+  {
+    "id": "13.3-032",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "7. Running the harness on a tiny trained model",
+    "question": "Why does the tiny-GPT demonstration call torch.manual_seed(0) and set dropout=0.0?",
+    "options": [
+      "To make initialization and training sampling reproducible and to remove dropout randomness, so the test is deterministic",
+      "To speed up training by skipping random initialization of the weights and removing the dropout masks from every forward pass",
+      "Because GPTConfig requires a seed of 0 and dropout of 0.0 whenever it is used to build a model on a CPU-only machine",
+      "Because dropout must be 0 for perplexity to be finite, and seeding is what makes the uniform-model test hit exactly V"
+    ],
+    "answer_index": 0,
+    "explanation": "Fixing the seed makes the random initialization and randomly sampled training windows identical every run; dropout 0 removes stochasticity from the forward pass. Together they make the test reproducible."
+  },
+  {
+    "id": "13.3-033",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "7. Running the harness on a tiny trained model",
+    "question": "What does the full tiny-GPT test assert?",
+    "options": [
+      "That perplexity is finite and positive and that the correct option wins",
+      "That held-out perplexity equals exactly 1 after a few dozen training steps",
+      "That training loss falls below 0.01 nats and the scorer picks option 0",
+      "That the model generates the full pattern from an empty prompt"
+    ],
+    "answer_index": 0,
+    "explanation": "Exact post-training perplexity is not pinned; the test asserts it is finite and positive and that multiple_choice_score picks the true continuation. It runs in under a second on CPU."
+  },
+  {
+    "id": "13.3-034",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Hardware track",
+    "question": "What hardware is needed for the evaluation-harness lesson and its tests?",
+    "options": [
+      "At least one 24 GB GPU, since evaluation keeps the optimizer state and saved activations of the full model in memory",
+      "A multi-GPU node, because the token-weighted perplexity requires a distributed all-reduce across at least two ranks",
+      "A TPU or TPU emulator, because the harness relies on XLA-specific operations for its log_softmax and gather steps",
+      "Any CPU is fully sufficient; a GPU only helps when evaluating a full-size model over millions of held-out tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "The harness is inference-only and the toy example finishes in well under a second on CPU. On a real corpus with a full-size model it becomes a batched inference job where a GPU helps. No optimizer state is needed."
+  },
+  {
+    "id": "13.3-035",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Hardware track",
+    "question": "Why does evaluation under torch.no_grad() use far less GPU memory than a training step?",
+    "options": [
+      "The model weights are automatically quantized to 4 bits inside no_grad",
+      "Only the first layer of the model is executed when no autograd graph is recorded",
+      "There is no optimizer state and no saved activations for a backward pass",
+      "The batch size is forced to 1 and the sequence length to the block size"
+    ],
+    "answer_index": 2,
+    "explanation": "Training memory includes optimizer state, gradients, and activations saved for backward. Evaluation under no_grad needs only the weights and the transient activations of the forward pass."
+  },
+  {
+    "id": "13.3-036",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Exercise",
+    "question": "A teammate changes evaluate_perplexity to average per-batch losses directly. Batch A has mean 2.0 over 800 tokens and batch B mean 4.0 over 8 tokens. What are the token-weighted and mean-of-means losses?",
+    "options": [
+      "Both equal 3.0, since each batch's mean loss is already token-weighted, so the change is harmless",
+      "Token-weighted ≈ 2.02; mean-of-means = 3.0, badly off because the tiny batch gets equal weight",
+      "Token-weighted = 3.0; mean-of-means ≈ 2.02, because the mean-of-means favors the large batch",
+      "Token-weighted = 4.0; mean-of-means = 2.0, because weighting by tokens favors the higher loss"
+    ],
+    "answer_index": 1,
+    "explanation": "Token-weighted: (2.0·800 + 4.0·8)/808 = 1632/808 ≈ 2.02. Mean of means: (2.0 + 4.0)/2 = 3.0. The two agree only when all batches have equal token counts, which fails when the last batch is smaller."
+  },
+  {
+    "id": "13.3-037",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What happens if an evaluation runs without model.eval()?",
+    "options": [
+      "Gradients are computed and the optimizer then updates the model's weights after every single evaluation batch",
+      "Dropout stays active, so the same input gives different logits each run and the metric is non-deterministic",
+      "The loss is reported in bits instead of nats, so the perplexity comes out lower by a factor of ln 2",
+      "The model cannot accept target tokens in training mode, so the forward call raises an error at once"
+    ],
+    "answer_index": 1,
+    "explanation": "Without eval(), dropout randomly zeroes activations during evaluation, making results vary run to run. It does not update weights — that requires an optimizer step."
+  },
+  {
+    "id": "13.3-038",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What happens if an evaluation runs without torch.no_grad()?",
+    "options": [
+      "The values are still correct for one pass, but PyTorch retains the computation graph and evaluation can run out of memory on a real model",
+      "The metric becomes non-deterministic, because leaving no_grad off keeps dropout enabled and PyTorch samples new masks each pass",
+      "The model's weights are updated during evaluation, because autograd applies the stored gradients to the parameters at the end of every forward",
+      "The loss becomes negative, because the retained graph adds the gradient of each token's log-probability back into the value"
+    ],
+    "answer_index": 0,
+    "explanation": "Without no_grad, autograd records operations and keeps activations for a backward pass that never comes, inflating memory. Dropout is controlled by eval(), not no_grad."
+  },
+  {
+    "id": "13.3-039",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is the lack of a regression test on the evaluation harness a common mistake?",
+    "options": [
+      "Without tests the harness runs slower, because results are never cached",
+      "Regression tests are required to compute perplexity in the first place",
+      "Without tests the harness cannot load checkpoints from older versions",
+      "A refactor can silently change the number and you keep trusting it"
+    ],
+    "answer_index": 3,
+    "explanation": "Without pinned known-answer tests, a code change that alters a metric goes unnoticed, and wrong numbers flow into experiments. Tests do not affect speed or functionality."
+  },
+  {
+    "id": "13.3-040",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "An evaluate_perplexity variant returns a far-too-low perplexity. Its targets are ys = data[i*block_size : i*block_size + block_size], the same slice as the inputs. What is wrong?",
+    "options": [
+      "The inputs should be shifted left by one instead of the targets, so the model sees future tokens and predicts the past ones",
+      "The block_size is too small for the model, so most positions have almost no context and the loss is clipped toward zero",
+      "The targets are not shifted by one, so each position is asked to predict its own input token, making the task trivial",
+      "The model is in eval() mode, which turns off dropout and makes held-out loss artificially lower than the true training loss"
+    ],
+    "answer_index": 2,
+    "explanation": "Targets must be data[i*block_size + 1 : i*block_size + 1 + block_size]. With unshifted targets the model can read the answer directly, so loss goes near zero and perplexity far too low. eval() mode does not lower loss artificially."
+  },
+  {
+    "id": "13.3-041",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "Besides the unshifted targets, what smaller second bug is in that faulty evaluate_perplexity variant that appends float(loss) to a list and returns exp(sum(losses)/len(losses))?",
+    "options": [
+      "It exponentiates in base 2 instead of base e, so the perplexity is reported in bits per token",
+      "It forgets to call model.eval(), so dropout makes every batch's loss slightly too low on average",
+      "The mean of per-batch means is not token-weighted, so a smaller final batch is over-weighted",
+      "It omits the torch.no_grad() decorator, so the retained graph adds memory and lowers the loss value"
+    ],
+    "answer_index": 2,
+    "explanation": "Averaging batch means gives each batch equal weight regardless of its token count, biasing the result whenever batches are unequal. The variant does call model.eval() and is decorated with torch.no_grad()."
+  },
+  {
+    "id": "13.3-042",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Check yourself",
+    "question": "What is the combined effect of omitting torch.no_grad() and model.eval() from an evaluation harness?",
+    "options": [
+      "Omitting either makes every reported number mathematically wrong, since dropout and the retained graph both change the cross-entropy that is computed",
+      "Omitting no_grad risks out-of-memory; omitting eval leaves dropout on and the metric non-deterministic; neither changes one deterministic pass",
+      "Omitting no_grad makes results non-deterministic because autograd reorders reductions; omitting eval causes out-of-memory from dropout masks",
+      "Neither matters for language models, because GPT-style transformers have no dropout or batch-norm layers and never build a graph at eval time"
+    ],
+    "answer_index": 1,
+    "explanation": "no_grad is about memory, eval about determinism. Both are needed for a correct, reproducible, memory-efficient harness, though neither changes the value of one deterministic forward pass. GPTs typically do have dropout."
+  },
+  {
+    "id": "13.3-043",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why is the uniform-model perplexity test a good known-answer case?",
+    "options": [
+      "Its correct value is derivable by hand — cross-entropy ln V, perplexity V — independent of the data or the harness's batching",
+      "Because uniform models are what production systems deploy as a safe fallback, so the test mirrors real serving conditions closely",
+      "Because it produces the lowest possible perplexity, so any harness bug can only show up as a higher, failing number",
+      "Because it requires a trained model, so the same test also checks that the training loop converges to the uniform answer on held-out data"
+    ],
+    "answer_index": 0,
+    "explanation": "A uniform distribution gives exactly ln V nats per token on any data, so perplexity must be V regardless of batching. Any deviation exposes a bug such as a bad shift or wrong aggregation. No training is needed."
+  },
+  {
+    "id": "13.3-044",
+    "chapter": "13.3",
+    "chapter_name": "A reproducible eval harness",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-03.md",
+    "section": "Check yourself",
+    "question": "The same model gives perplexity 18.4 with block_size 512 and 21.7 with block_size 128. Can you conclude the first setting is better?",
+    "options": [
+      "Yes — lower perplexity on the same held-out stream always means the better setting, whatever block_size each run happened to use",
+      "Yes — but only if both runs used the same batch_size, since batch size is what changes the token weighting of the mean perplexity",
+      "No — perplexity is undefined for block_size above 256, so the 18.4 figure must have come from a truncated or otherwise broken evaluation run",
+      "No — a longer block_size gives most positions more context, generally lowering perplexity whatever the quality; the configs are not comparable"
+    ],
+    "answer_index": 3,
+    "explanation": "Perplexity depends on how much preceding context each position has; longer windows lower it mechanically. To compare fairly, fix block_size and every other setting, which is why the config is versioned with the metric."
+  }
+]

@@ -1,0 +1,812 @@
+[
+  {
+    "id": "05.3-001",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why does understanding multi-head attention's split-and-merge matter for later architecture variants like GQA, MQA and MLA?",
+    "options": [
+      "Because those variants drop the softmax and use linear attention instead",
+      "Because those variants change exactly the head structure of attention",
+      "Because those variants only change how positions are encoded in Q and K",
+      "Because those variants replace LayerNorm with RMSNorm inside each block"
+    ],
+    "answer_index": 1,
+    "explanation": "GQA, MQA and MLA all modify how heads are structured (e.g. how keys and values are shared across heads). Knowing the split-and-merge lets you read any GPT attention module, reason about its memory, and modify it."
+  },
+  {
+    "id": "05.3-002",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "1. Intuition: several relationships at once",
+    "question": "Why is a single attention head limiting for language modelling?",
+    "options": [
+      "Because a single head cannot apply a causal mask over a full context, so it leaks future tokens unless the sequence is split into blocks",
+      "Because a single head's softmax saturates once d_k exceeds 64, so its weights become one-hot and its gradients vanish in training",
+      "Because a token relates to different positions for different reasons at once, and one set of Q, K, V forces a single compromise blend",
+      "Because a single head can only attend to a fixed window of nearby positions, so long-range links such as coreference are lost"
+    ],
+    "answer_index": 2,
+    "explanation": "A token may simultaneously need its subject (agreement), its antecedent (coreference) and the previous token (position). One attention gives one blended view, forcing a compromise. Multiple heads let different heads specialize in different relationships."
+  },
+  {
+    "id": "05.3-003",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "1. Intuition: several relationships at once",
+    "question": "How do the heads in multi-head attention interact before their outputs are combined?",
+    "options": [
+      "They share one set of Q, K, V weights and differ only in which positions each one is allowed to see",
+      "Each head reads the softmax scores of the other heads and renormalizes so the heads attend to disjoint positions",
+      "They run sequentially, each head refining the previous head's output before passing it to the next one",
+      "They are fully independent: no shared weights and no access to each other's scores until the end"
+    ],
+    "answer_index": 3,
+    "explanation": "Each head is an independent attention on its own channel slice: no shared weights, no shared scores. Their outputs are only combined at the end, by concatenation and the output projection W_O. They run in parallel, not sequentially."
+  },
+  {
+    "id": "05.3-004",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "1. Intuition: several relationships at once",
+    "question": "Which summary of multi-head attention is correct?",
+    "options": [
+      "Split C into n_h slices of size C/n_h, attend in each, concatenate back to width C, then mix with a learned W_O",
+      "Run one attention n_h times on the full width C with different seeds, average the n_h outputs, then apply W_O",
+      "Duplicate the input n_h times along the channel axis, run attention once on width n_h·C, then project back to C",
+      "Split the T positions into n_h chunks of length T/n_h, attend within each chunk, then concatenate chunks back to T"
+    ],
+    "answer_index": 0,
+    "explanation": "Multi-head attention partitions the channels into n_h slices of size d_h = C/n_h, runs the same scaled dot-product attention independently in each, concatenates back to C, and applies W_O. It splits channels, not positions, and does not average full-width copies."
+  },
+  {
+    "id": "05.3-005",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "2. The split: C = n_h · d_h",
+    "question": "In GPT-2 small with C = 768 and n_h = 12, what is the per-head dimension d_h?",
+    "options": [
+      "12",
+      "64",
+      "96",
+      "768"
+    ],
+    "answer_index": 1,
+    "explanation": "d_h = C / n_h = 768 / 12 = 64. Each head operates on its own contiguous block of 64 channels."
+  },
+  {
+    "id": "05.3-006",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "2. The split: C = n_h · d_h",
+    "question": "In multi-head attention, how are Q, K, V first produced before splitting into heads?",
+    "options": [
+      "As n_h separate (C, d_h) projections, each called in a Python loop over heads",
+      "By slicing x along T into n_h chunks and projecting each chunk with its own W",
+      "Each of shape (B, T, C), the full width, using a single linear projection",
+      "By computing one head's Q of width d_h and repeating it n_h times along C"
+    ],
+    "answer_index": 2,
+    "explanation": "The projection produces full-width (B, T, C) Q, K and V, and only then is the channel axis reshaped into (n_h, d_h). This is the same math as having n_h separate (C, d_h) projections, but done in one big matmul."
+  },
+  {
+    "id": "05.3-007",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "2. The split: C = n_h · d_h",
+    "question": "What reshape sequence turns a (B, T, C) query tensor into per-head form?",
+    "options": [
+      "transpose(1, 2) to (B, C, T), then view to (B, n_h, d_h, T)",
+      "view directly to (B, n_h, T, d_h), with no transpose needed at all",
+      "view to (B, T, d_h, n_h), then transpose(2, 3) to (B, T, n_h, d_h)",
+      "view to (B, T, n_h, d_h), then transpose(1, 2) to (B, n_h, T, d_h)"
+    ],
+    "answer_index": 3,
+    "explanation": "First view re-groups the C channels as (n_h, d_h), giving (B, T, n_h, d_h); then transpose(1, 2) swaps T and n_h to give (B, n_h, T, d_h). A direct view to (B, n_h, T, d_h) would scramble data because memory is laid out with T before the channels."
+  },
+  {
+    "id": "05.3-008",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "2. The split: C = n_h · d_h",
+    "question": "What does the `view(B, T, n_h, d_h)` step in multi-head attention do to the underlying memory?",
+    "options": [
+      "Nothing is moved — it only reinterprets how the existing contiguous memory is indexed",
+      "It copies the data into a new buffer laid out as (B, T, n_h, d_h) for speed",
+      "It physically reorders the channels so each head's slice is stored contiguously in a new buffer",
+      "It allocates n_h new tensors of shape (B, T, d_h) and fills each with one slice"
+    ],
+    "answer_index": 0,
+    "explanation": "A view re-groups the C channels into n_h groups of d_h without moving any data; it just changes the indexing of the same contiguous buffer. The later transpose also does not move data but makes the tensor non-contiguous."
+  },
+  {
+    "id": "05.3-009",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "2. The split: C = n_h · d_h",
+    "question": "After splitting Q into shape (B, n_h, T, d_h), what do the last two axes represent and how many such matrices are there?",
+    "options": [
+      "(n_h, d_h) matrices, one per (sequence, position), so B·T of them",
+      "(T, d_h) matrices, one per (sequence, head), so B·n_h of them",
+      "(T, T) matrices, one per sequence, so B of them shared by all heads",
+      "(d_h, T) matrices, one per head, so n_h of them shared by the batch"
+    ],
+    "answer_index": 1,
+    "explanation": "After transpose(1, 2), the last two axes are (T, d_h), exactly the per-head query matrix. There are B·n_h of them, one for each sequence and head. Batched matmul treats the leading (B, n_h) axes as batch axes."
+  },
+  {
+    "id": "05.3-010",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "3. Numerical example: splitting one vector into heads",
+    "question": "With C = 4, n_h = 2 and query vector q = [10, 20, 30, 40], how does the view split it into heads?",
+    "options": [
+      "head 0 = [10, 30], head 1 = [20, 40] (interleaved)",
+      "head 0 = [10, 20, 30, 40], head 1 = [10, 20, 30, 40] (copies)",
+      "head 0 = [10, 20], head 1 = [30, 40] (contiguous halves)",
+      "head 0 = [40, 30], head 1 = [20, 10]"
+    ],
+    "answer_index": 2,
+    "explanation": "The view splits the channels into contiguous blocks of d_h: head 0 gets channels 0:2, head 1 gets channels 2:4. Channels are not interleaved or duplicated."
+  },
+  {
+    "id": "05.3-011",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "3. Numerical example: splitting one vector into heads",
+    "question": "In multi-head attention, which channels of the query does head 0 see when C = 4 and n_h = 2?",
+    "options": [
+      "All four channels, but with its own Q, K and V weights",
+      "Channels 1 and 3, the odd-indexed ones, interleaved with head 1",
+      "Only channel 0, since each head gets one channel per head index",
+      "Only channels 0 and 1; it never sees channels 2 and 3"
+    ],
+    "answer_index": 3,
+    "explanation": "Head 0 owns the first d_h = 2 channels and runs its own attention using only that slice. It never sees channels 2 and 3, which belong to head 1."
+  },
+  {
+    "id": "05.3-012",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "3. Numerical example: splitting one vector into heads",
+    "question": "Why do all n_h heads compute at once without a Python loop over heads?",
+    "options": [
+      "Because the head slices sit on a separate axis, so attention runs as one batched matmul",
+      "Because PyTorch automatically parallelizes Python for-loops over heads on the GPU",
+      "Because only one head is actually computed and the other heads are copies of it",
+      "Because the heads share one attention score matrix, so softmax runs only once per layer"
+    ],
+    "answer_index": 0,
+    "explanation": "Putting heads on their own axis makes them a batch dimension for @, so all heads compute in a single batched matmul. PyTorch does not auto-parallelize Python loops, and heads have independent scores."
+  },
+  {
+    "id": "05.3-013",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "4. Attention per head, in one batched matmul",
+    "question": "How does PyTorch's `@` operator handle tensors of shape (B, n_h, T, d_h) and (B, n_h, d_h, T)?",
+    "options": [
+      "It multiplies over the first two axes and broadcasts the rest, giving (B, n_h)",
+      "It treats all leading axes as batch axes and returns (B, n_h, T, T)",
+      "It flattens everything to 2-D first, giving one (B·n_h·T, T) score matrix",
+      "It raises an error, because @ only accepts 2-D or 3-D input tensors"
+    ],
+    "answer_index": 1,
+    "explanation": "Batched matmul treats all leading axes as batch axes and multiplies the last two: (T, d_h) times (d_h, T) gives (T, T). The result is (B, n_h, T, T) — one score matrix per head per sequence."
+  },
+  {
+    "id": "05.3-014",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "4. Attention per head, in one batched matmul",
+    "question": "How is a single (T, T) causal mask applied to multi-head scores of shape (B, n_h, T, T)?",
+    "options": [
+      "It must be expanded explicitly with repeat to (B, n_h, T, T) before it can be added",
+      "It is applied to head 0 only, and the other heads inherit the mask through W_O",
+      "It broadcasts over the leading (B, n_h) axes, so one triangular matrix masks every head",
+      "It is transposed for odd-numbered heads so half the heads look forward in time"
+    ],
+    "answer_index": 2,
+    "explanation": "Broadcasting aligns the mask's (T, T) with the last two axes, so the same triangular mask applies to every head and every sequence. No explicit copy is needed."
+  },
+  {
+    "id": "05.3-015",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "4. Attention per head, in one batched matmul",
+    "question": "What is the shape of the per-head attention outputs A v in multi-head attention?",
+    "options": [
+      "(B, n_h, T, T, d_h)",
+      "(B, n_h, T, T)",
+      "(B, T, n_h, d_h)",
+      "(B, n_h, T, d_h)"
+    ],
+    "answer_index": 3,
+    "explanation": "(B, n_h, T, T) weights times (B, n_h, T, d_h) values gives (B, n_h, T, d_h): each head's own attended output. Merging heads later brings it back to (B, T, C)."
+  },
+  {
+    "id": "05.3-016",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "4. Attention per head, in one batched matmul",
+    "question": "In multi-head attention, which scale factor is applied to each head's scores?",
+    "options": [
+      "1/sqrt(d_h), with d_h the per-head dimension",
+      "1/sqrt(C), with C the full model width",
+      "1/n_h, averaging the heads' scores",
+      "No scale; each head's d_h is small enough to skip it"
+    ],
+    "answer_index": 0,
+    "explanation": "Each head is a standard scaled dot-product attention over d_h dimensions, so its scores are divided by sqrt(d_h) (e.g. sqrt(64) = 8 in GPT-2). The dot products are over d_h channels, not C."
+  },
+  {
+    "id": "05.3-017",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "How are the per-head outputs merged back into a (B, T, C) tensor?",
+    "options": [
+      "By averaging over the head axis, then repeating the result n_h times along C",
+      "By transpose(1, 2) then view to (B, T, C), concatenating the heads end to end",
+      "By summing over the head axis, then projecting d_h back up to C with W_O",
+      "By taking the maximum over the head axis, then tiling it back to width C"
+    ],
+    "answer_index": 1,
+    "explanation": "Reversing the split, transpose(1, 2) moves the head axis back next to d_h, and view merges (n_h, d_h) into C. This concatenates each position's n_h head outputs end to end. It is neither an average nor a sum."
+  },
+  {
+    "id": "05.3-018",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "With C = 4 and n_h = 2, if head 0 outputs [a0, a1] and head 1 outputs [b0, b1] at a position, what is the merged vector?",
+    "options": [
+      "[a0 + b0, a1 + b1]",
+      "[a0, b0, a1, b1]",
+      "[a0, a1, b0, b1]",
+      "[b0, b1, a0, a1]"
+    ],
+    "answer_index": 2,
+    "explanation": "The merge is concatenation in head order, the exact inverse of the split: head 0's d_h channels first, then head 1's. So the merged vector is [a0, a1, b0, b1]."
+  },
+  {
+    "id": "05.3-019",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "What is the formula for the multi-head attention output after merging?",
+    "options": [
+      "MultiHead = mean over heads of head_i, with no learned projection",
+      "MultiHead = softmax(Concat(head_1, ..., head_n_h)) W_O, then normalized",
+      "MultiHead = Concat(head_1, ..., head_n_h) W_Q, with W_Q of shape (C, C)",
+      "MultiHead = Concat(head_1, ..., head_n_h) W_O, with W_O of shape (C, C)"
+    ],
+    "answer_index": 3,
+    "explanation": "The concatenated head outputs are multiplied by a learned output projection W_O of shape (C, C). W_Q is the query projection, used at the start. There is no extra softmax at the end."
+  },
+  {
+    "id": "05.3-020",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "Why does multi-head attention need the output projection W_O?",
+    "options": [
+      "Because concatenation leaves each head in its own channel slice; W_O mixes across heads into all C channels",
+      "Because the concatenated vector has width n_h·C, so W_O must project it back down to width C before the residual",
+      "Because W_O applies the causal mask after attention, zeroing contributions from future positions",
+      "Because W_O rescales each head's output to unit norm so no single head dominates the residual stream"
+    ],
+    "answer_index": 0,
+    "explanation": "Concatenation leaves each head's output in its own d_h-wide slice with nothing combining them. W_O maps every head's slice onto all C output channels, blending the independent results. The width is already C after concatenation; W_O is for mixing, not resizing."
+  },
+  {
+    "id": "05.3-021",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "What is the total number of weights in a multi-head attention layer's four projection matrices (ignoring biases)?",
+    "options": [
+      "3C², for W_Q, W_K, W_V",
+      "4C², for W_Q, W_K, W_V and W_O, each (C, C)",
+      "4C²·n_h, since each head has its own four matrices",
+      "C², since the split shares one matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "W_Q, W_K and W_V are each (C, C) — the split carves each into n_h slices of (C, d_h) — plus one extra (C, C) W_O: 4C² in total. The split and merge are pure reshapes with no parameters, and heads do not multiply the parameter count."
+  },
+  {
+    "id": "05.3-022",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "Why is the output projection W_O mathematically redundant with a single attention head?",
+    "options": [
+      "Because a single head has no value projection",
+      "Because single-head attention already includes a softmax over channels",
+      "Because A(x W_V) W_O = A x (W_V W_O), so W_O can be folded into W_V",
+      "Because W_O equals the identity in single-head models"
+    ],
+    "answer_index": 2,
+    "explanation": "With one head, the output is A x W_V W_O, and the product W_V W_O is just another matrix, so W_O adds no expressive power. With several heads it cannot be folded, because each head writes only its own slice and W_O is the only thing mapping every slice onto all C outputs."
+  },
+  {
+    "id": "05.3-023",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "Why can W_O not be folded into W_V when there are multiple heads?",
+    "options": [
+      "Because W_V is frozen in multi-head attention, so any learned mixing must live in W_O",
+      "Because W_O is applied before attention, so it acts on x rather than on the head outputs",
+      "Because a softmax across heads sits between W_V and W_O, making the composition nonlinear",
+      "Because each head writes only its own d_h slice, and only W_O maps every slice onto all C outputs"
+    ],
+    "answer_index": 3,
+    "explanation": "Each head's value projection only produces its own d_h channels, so no per-head W_V can write to other heads' channels. W_O is the single place where all head outputs get combined across the full width, so it cannot be absorbed into the per-head value projections."
+  },
+  {
+    "id": "05.3-024",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "Why does real single-head transformer code usually still include an output projection?",
+    "options": [
+      "For a uniform layer shape, even though it is mathematically redundant there",
+      "Because without it the gradients reaching W_V would be exactly zero in training",
+      "Because the causal mask is applied inside it, so removing it would leak the future",
+      "Because it doubles the usable context length by projecting into a wider space"
+    ],
+    "answer_index": 0,
+    "explanation": "In practice code keeps the output projection for a uniform layer structure, even though with one head it could be folded into W_V. It has no effect on masking or gradients being non-zero."
+  },
+  {
+    "id": "05.3-025",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "5. The merge: concatenate and project",
+    "question": "After `y.transpose(1, 2)` in the multi-head merge, why must `.contiguous()` be called before `.view(B, T, C)`?",
+    "options": [
+      "Because transpose casts the tensor to float32, and view must restore the original dtype first",
+      "Because transpose makes it non-contiguous and view needs contiguous memory, else it raises an error",
+      "Because otherwise view would silently interleave the heads in the wrong order without raising any error",
+      "Because .contiguous() applies the output projection W_O before the heads are merged"
+    ],
+    "answer_index": 1,
+    "explanation": "Transposing changes the strides so the axes no longer match the memory layout. view requires contiguous memory, so without .contiguous() PyTorch raises an error about the view being incompatible with the stride layout. .contiguous() copies data into the matching layout."
+  },
+  {
+    "id": "05.3-026",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "In the CausalSelfAttention module, what does `self.c_attn = nn.Linear(C, 3 * C)` compute?",
+    "options": [
+      "Three separate attention heads, each of full width C, in one layer",
+      "The output projection W_O, applied to the concatenated head outputs",
+      "Q, K and V stacked in one fused matmul, (B, T, C) → (B, T, 3C)",
+      "The causal mask, as a learned (C, 3C) matrix of additive biases"
+    ],
+    "answer_index": 2,
+    "explanation": "c_attn is a fused linear whose weight stacks W_Q, W_K and W_V into one (C, 3C) matrix. Its output is split into the three (B, T, C) tensors with .split(n_embd, dim=2). The output projection is c_proj."
+  },
+  {
+    "id": "05.3-027",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "Why does CausalSelfAttention use one fused Linear of width 3C instead of three separate Linears of width C?",
+    "options": [
+      "Because three separate Linears would compute different math, since their biases interact",
+      "Because a fused Linear has a third of the parameters, as Q, K and V share one weight matrix",
+      "Because three separate Linear outputs cannot be reshaped into heads without an extra copy of x first",
+      "Because it is the same math, but one larger matmul runs more efficiently on a GPU than three"
+    ],
+    "answer_index": 3,
+    "explanation": "Stacking W_Q, W_K, W_V into one (C, 3C) matrix computes exactly the same result with the same parameter count, but a single larger matmul uses the GPU more efficiently than three small ones."
+  },
+  {
+    "id": "05.3-028",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "In CausalSelfAttention, what does `q, k, v = self.c_attn(x).split(self.n_embd, dim=2)` do?",
+    "options": [
+      "Carves the 3C-wide output into three (B, T, C) tensors along the channel axis",
+      "Splits the sequence into three time chunks of length T/3 along the time axis",
+      "Splits the batch into three groups of B/3 sequences for Q, K and V separately",
+      "Splits each channel into three heads of width C/3 along the channel axis"
+    ],
+    "answer_index": 0,
+    "explanation": ".split(n_embd, dim=2) cuts the last (channel) axis of the (B, T, 3C) output into three pieces of width C: q, k and v. It does not touch the time or batch axes."
+  },
+  {
+    "id": "05.3-029",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "Why is the causal mask in CausalSelfAttention registered with `register_buffer` rather than as an nn.Parameter?",
+    "options": [
+      "Because buffers are excluded from state_dict, so the mask is never saved in checkpoints",
+      "Because it carries no gradient but should still move with .to(device) and be part of the module",
+      "Because nn.Parameter cannot hold −infinity values, so the mask would turn into NaN",
+      "Because buffers are rebuilt from scratch on every forward pass, so the mask always matches the current T"
+    ],
+    "answer_index": 1,
+    "explanation": "A buffer is module state that is not trained (no gradient) but moves with the module across devices. The mask is built once in __init__ and sliced to the current T in each forward. It is not recomputed every forward."
+  },
+  {
+    "id": "05.3-030",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "How is the causal mask stored in CausalSelfAttention and used in forward for a sequence of length T?",
+    "options": [
+      "As a (T, T) boolean computed fresh in every forward pass with torch.tril and then inverted",
+      "As a (B, n_h, T, T) tensor of zeros and ones that is multiplied into the attention weights",
+      "As (1, 1, block_size, block_size), 0 on/below the diagonal and −infinity above, sliced to the current T",
+      "As a learned (block_size, block_size) parameter initialized lower-triangular and trained with the model"
+    ],
+    "answer_index": 2,
+    "explanation": "The mask is built with torch.triu(torch.full(..., -inf), diagonal=1), reshaped to (1, 1, block_size, block_size), and sliced to the current T. The leading 1s broadcast over batch and heads."
+  },
+  {
+    "id": "05.3-031",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "What does `torch.triu(torch.full((N, N), float('-inf')), diagonal=1)` produce?",
+    "options": [
+      "−infinity in every entry, including the main diagonal",
+      "−infinity on and below the diagonal, 0 strictly above it",
+      "An identity matrix with −infinity on the main diagonal only",
+      "0 on and below the diagonal, −infinity strictly above it"
+    ],
+    "answer_index": 3,
+    "explanation": "triu with diagonal=1 keeps the entries strictly above the main diagonal and zeroes the rest, so the result has −infinity above the diagonal and 0 on and below — exactly an additive causal mask."
+  },
+  {
+    "id": "05.3-032",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "6. From scratch in PyTorch — the CausalSelfAttention module",
+    "question": "What does the test `test_causality_future_does_not_leak_into_past` check for CausalSelfAttention?",
+    "options": [
+      "It perturbs the token at one position and asserts outputs at all earlier positions are unchanged",
+      "It checks that the output shape is (B, T, C) across several batch sizes and sequence lengths",
+      "It checks that each row of attention weights sums to 1 and that masked entries are exactly zero",
+      "It checks that the module produces identical outputs on CPU and on GPU for one batch"
+    ],
+    "answer_index": 0,
+    "explanation": "The test verifies causality empirically: changing a later token must not affect any earlier position's output. A separate test checks that forward maps (B, T, C) to (B, T, C)."
+  },
+  {
+    "id": "05.3-033",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "7. Every shape, end to end",
+    "question": "For B = 8, T = 1024, C = 768, what is the shape of the output of `c_attn` in GPT-2 small's attention?",
+    "options": [
+      "(8, 1024, 768)",
+      "(8, 1024, 2304)",
+      "(8, 12, 1024, 64)",
+      "(8, 12, 1024, 1024)"
+    ],
+    "answer_index": 1,
+    "explanation": "c_attn maps C to 3C, so the output is (8, 1024, 3·768) = (8, 1024, 2304). After splitting it becomes three (8, 1024, 768) tensors and after the head split (8, 12, 1024, 64)."
+  },
+  {
+    "id": "05.3-034",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "7. Every shape, end to end",
+    "question": "For B = 8, T = 1024, C = 768, n_h = 12, what are the shapes of the attention input and the final output of CausalSelfAttention?",
+    "options": [
+      "(8, 1024, 768) in, (8, 12, 1024, 64) out, since heads stay separate",
+      "(8, 1024, 768) in, (8, 1024, 2304) out, holding Q, K and V stacked",
+      "Both (8, 1024, 768): attention preserves the residual stream's shape",
+      "(8, 12, 1024, 1024) in, (8, 1024, 768) out, after the score matmul"
+    ],
+    "answer_index": 2,
+    "explanation": "The input and output are both (8, 1024, 768). Attention is a shape-preserving map on the residual stream, which is what allows the residual add and stacking."
+  },
+  {
+    "id": "05.3-035",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "7. Every shape, end to end",
+    "question": "Do the heads in multi-head attention add width to each position's representation?",
+    "options": [
+      "Yes, the total width becomes n_h · C, one full copy of C per head",
+      "Yes, each head appends d_h channels, so the width grows to C + n_h · d_h",
+      "Yes, but only inside attention; W_O then projects n_h · C back down to C",
+      "No — n_h · d_h = C, so the heads partition C rather than add width"
+    ],
+    "answer_index": 3,
+    "explanation": "With n_h · d_h = 12 · 64 = 768 = C, the heads partition the same C channels. Splitting into heads just re-slices the same numbers onto a new axis."
+  },
+  {
+    "id": "05.3-036",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "7. Every shape, end to end",
+    "question": "How does multi-head attention's Q/K/V compute compare with a single-head attention of width C?",
+    "options": [
+      "It is the same — splitting into heads only re-slices the same numbers",
+      "It is n_h times larger, since each head has its own full C to C projection",
+      "It is n_h times smaller, since each head projects only to d_h channels",
+      "It grows quadratically in n_h, because every head pair interacts in W_O"
+    ],
+    "answer_index": 0,
+    "explanation": "Q, K and V are still one C to C projection each, so the projection compute is identical. Splitting into heads is essentially free, a reshape. What multiple heads buy is representational: independent relationship subspaces."
+  },
+  {
+    "id": "05.3-037",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "8. Under the hood: why the head axis goes next to the batch axis",
+    "question": "Why must the head axis be placed right after the batch axis, giving (B, n_h, T, d_h)?",
+    "options": [
+      "So the causal mask can be stored as an nn.Parameter of shape (n_h, T, T)",
+      "So the last two axes are (T, d_h) and @ runs B·n_h matmuls in one batched call",
+      "So the softmax normalizes across heads, making each position's head weights sum to 1",
+      "So that the later merge can call view without needing .contiguous() first"
+    ],
+    "answer_index": 1,
+    "explanation": "Batched @ treats all axes before the last two as batch axes. Placing n_h after B makes the last two axes (T, d_h), so q @ k.transpose(-2, -1) becomes B·n_h independent (T, d_h) x (d_h, T) matmuls launched together. The layout is the parallelism."
+  },
+  {
+    "id": "05.3-038",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "8. Under the hood: why the head axis goes next to the batch axis",
+    "question": "What would go wrong if the head axis were left in the (B, T, n_h, d_h) layout when computing q @ k.transpose(-2, -1)?",
+    "options": [
+      "Nothing; batched matmul ignores axis order, so the result would be identical",
+      "It would compute attention across the batch axis, mixing tokens from different sequences",
+      "The last two axes would be (n_h, d_h), so the matmul would mix heads, not positions",
+      "It would raise an error, because the −infinity mask cannot be added to it"
+    ],
+    "answer_index": 2,
+    "explanation": "With (B, T, n_h, d_h), the last two axes are (n_h, d_h), so the matmul would compare heads with each other at each position instead of positions with each other within a head. The result would be meaningless."
+  },
+  {
+    "id": "05.3-039",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "8. Under the hood: why the head axis goes next to the batch axis",
+    "question": "How does the memory cost of multi-head attention's score/weight tensors scale?",
+    "options": [
+      "Linear in T and independent of n_h, since the heads share one score matrix",
+      "Quadratic in n_h and linear in T, since every head pair forms a score matrix",
+      "Independent of both T and n_h, since only d_h-wide tensors are ever stored",
+      "Quadratic in T and linear in n_h, since there is one T x T matrix per head"
+    ],
+    "answer_index": 3,
+    "explanation": "The tensors are (B, n_h, T, T): quadratic in T and linear in n_h. More heads mean more T x T matrices, though each is formed over a smaller d_h and so is cheaper to compute. FlashAttention addresses this bottleneck identically for multi-head."
+  },
+  {
+    "id": "05.3-040",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Exercise",
+    "question": "A model has C = 512. What is d_h with n_h = 8, and why does n_h = 7 fail?",
+    "options": [
+      "d_h = 64; 512/7 is not an integer, so view(B, T, 7, d_h) is impossible",
+      "d_h = 8; n_h = 7 fails because the head count must be an even number",
+      "d_h = 64; n_h = 7 also works, with the last head zero-padded to width 73",
+      "d_h = 4096; n_h = 7 fails because a prime head count cannot be batched"
+    ],
+    "answer_index": 0,
+    "explanation": "d_h = 512/8 = 64. With 7 heads, 512/7 ≈ 73.14 is not an integer, so there is no d_h with 7·d_h = 512 and the view is impossible. The assert n_embd % n_head == 0 catches this. Parity or primality is not the issue — divisibility is."
+  },
+  {
+    "id": "05.3-041",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Exercise",
+    "question": "Which assertion in CausalSelfAttention's __init__ guards against an invalid head count?",
+    "options": [
+      "assert cfg.n_head % 2 == 0",
+      "assert cfg.n_embd % cfg.n_head == 0",
+      "assert cfg.block_size % cfg.n_head == 0",
+      "assert cfg.n_head <= 12"
+    ],
+    "answer_index": 1,
+    "explanation": "n_head must divide n_embd evenly so each head gets an integer d_h. The assert n_embd % n_head == 0 enforces exactly that. Head count need not be even or relate to block_size."
+  },
+  {
+    "id": "05.3-042",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is a valid alternative to `.contiguous().view(...)` when merging attention heads after a transpose?",
+    "options": [
+      ".flatten(0), which merges the batch and head axes",
+      ".detach().view(...), which drops the old strides",
+      ".reshape(...), which copies when needed",
+      ".squeeze(...), which removes the transposed axis"
+    ],
+    "answer_index": 2,
+    "explanation": "reshape works on non-contiguous tensors by copying when necessary, so it can replace .contiguous().view(...). detach does not change contiguity, and flatten(0) or squeeze would produce wrong shapes."
+  },
+  {
+    "id": "05.3-043",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why must the head split be applied to the channel axis (dim 2 of (B, T, C)) and not the time axis?",
+    "options": [
+      "Because the time axis is always of length 1 during training",
+      "Because splitting time would multiply the parameter count by n_h",
+      "Because view can only regroup the last axis of a tensor in PyTorch",
+      "Because splitting time would scramble positions across heads"
+    ],
+    "answer_index": 3,
+    "explanation": "Heads are channel subspaces: each head sees every position but only its d_h channels. Splitting the time axis would distribute different positions to different heads, scrambling the sequence."
+  },
+  {
+    "id": "05.3-044",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Which causal mask shape would misalign against 4-D multi-head scores of shape (B, n_h, T, T)?",
+    "options": [
+      "(B, T, T), missing the head axis",
+      "(1, 1, T, T), with singleton batch and head axes",
+      "(T, T), a plain lower-triangular matrix",
+      "(1, 1, block_size, block_size) sliced to T"
+    ],
+    "answer_index": 0,
+    "explanation": "(1, 1, T, T) and (T, T) both broadcast correctly over (B, n_h). A (B, T, T) mask aligns its B against n_h under broadcasting rules and so misaligns against the 4-D scores."
+  },
+  {
+    "id": "05.3-045",
+    "chapter": "05.3",
+    "chapter_name": "Multi-head attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-03.md",
+    "section": "Check yourself",
+    "question": "With C = 768, n_h = 12 and a batch (B, T) = (4, 256), what is the shape of the per-head query tensor?",
+    "options": [
+      "(4, 256, 768)",
+      "(4, 12, 256, 64)",
+      "(4, 256, 12, 64)",
+      "(4, 12, 256, 256)"
+    ],
+    "answer_index": 1,
+    "explanation": "d_h = 768/12 = 64, and after the split and transpose q has shape (B, n_h, T, d_h) = (4, 12, 256, 64). (4, 256, 12, 64) is the intermediate shape before transpose(1, 2), and (4, 12, 256, 256) is the score shape."
+  }
+]

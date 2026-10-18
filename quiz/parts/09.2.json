@@ -1,0 +1,1064 @@
+[
+  {
+    "id": "09.2-001",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In plain data parallelism, which parts of a training step's memory are replicated on every worker?",
+    "options": [
+      "Parameters, gradients and optimizer state: all of the model-sized memory",
+      "Only the parameters; gradients and optimizer state are split across the workers",
+      "Only the optimizer state; each worker keeps a private slice of the weights",
+      "Nothing; data parallelism shards all model state evenly across the workers"
+    ],
+    "answer_index": 0,
+    "explanation": "Plain data parallelism gives every worker a full copy of the parameters, the (all-reduced) gradients, and the optimizer state. The workers differ only in which data they process. That redundancy is exactly what ZeRO removes."
+  },
+  {
+    "id": "09.2-002",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which bucket does each ZeRO stage add to the set being sharded across data-parallel workers?",
+    "options": [
+      "Stage 1: parameters; stage 2: gradients; stage 3: optimizer state",
+      "Stage 1: gradients; stage 2: optimizer state; stage 3: activations",
+      "Stage 1: optimizer state; stage 2: gradients; stage 3: parameters",
+      "Stage 1: activations; stage 2: parameters; stage 3: gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-1 shards the optimizer state, ZeRO-2 additionally shards the gradients, and ZeRO-3 additionally shards the parameters. Each stage keeps the previous stage's sharding. Activations are not part of ZeRO's three model-sized buckets."
+  },
+  {
+    "id": "09.2-003",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How does PyTorch FSDP realize ZeRO stage 3?",
+    "options": [
+      "It keeps all parameters on rank 0 and streams each layer's weights to the other ranks on demand",
+      "It offloads all parameters to CPU memory and copies each layer back to the GPU right before use",
+      "It permanently splits each matmul's weight columns across devices and all-reduces the outputs",
+      "It all-gathers each layer's parameters just in time for forward/backward, then frees them"
+    ],
+    "answer_index": 3,
+    "explanation": "FSDP stores only a 1/W shard of each unit's parameters on every worker. Right before a unit runs, it all-gathers the full parameters, computes, and frees the gathered copy. That trades extra communication for a large memory saving."
+  },
+  {
+    "id": "09.2-004",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why can a billion-parameter model fail to train on a single GPU no matter how small the batch is made?",
+    "options": [
+      "Because the ~16P bytes of params, grads and Adam state are fixed and do not depend on batch",
+      "Because activation memory is dominated by the attention cache, which does not shrink with batch",
+      "Because the learning rate must scale with parameter count, which forces a minimum effective batch",
+      "Because GPU matmul kernels need a batch of at least 1024 before tensor cores can be scheduled"
+    ],
+    "answer_index": 0,
+    "explanation": "Parameters, gradients, and Adam's two moment buffers cost about 16 bytes per parameter regardless of batch size. Shrinking the batch only reduces activation memory. For large P that fixed cost alone exceeds one GPU, which is why ZeRO/FSDP shard it."
+  },
+  {
+    "id": "09.2-005",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Single-CPU note",
+    "question": "Why can a ZeRO/FSDP lesson be largely verified on a single CPU?",
+    "options": [
+      "Because ZeRO runs identically on one device, so a single CPU reproduces every stage's behaviour",
+      "Because ZeRO's communication cost is zero, so a single process measures everything that matters",
+      "Because FSDP has a CPU mode that faithfully reproduces multi-GPU timing and memory for every rank",
+      "The per-stage memory arithmetic is exact and computable directly; only sharded execution needs GPUs"
+    ],
+    "answer_index": 3,
+    "explanation": "Much of ZeRO is accounting: how many bytes per worker each stage keeps. That arithmetic is exact and checkable with a few lines of Python. The actual all-gather/free behaviour and its communication overhead require a real sharded multi-GPU job."
+  },
+  {
+    "id": "09.2-006",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "1. Intuition: data parallelism wastes memory W times over",
+    "question": "In fp32 training with Adam, how many bytes per parameter go to the parameter, its gradient, and the optimizer state?",
+    "options": [
+      "2 + 2 + 4 = 8 bytes",
+      "4 + 8 + 8 = 20 bytes",
+      "4 + 4 + 4 = 12 bytes",
+      "4 + 4 + 8 = 16 bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "Each fp32 parameter takes 4 bytes, its gradient another 4, and Adam's two moment buffers m and v take 4 bytes each, for 8. That totals 16 bytes per parameter, or 16P bytes, before any activations."
+  },
+  {
+    "id": "09.2-007",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "1. Intuition: data parallelism wastes memory W times over",
+    "question": "Using 16 bytes per parameter for fp32 params, grads and Adam state, roughly how much model-state memory does a 7.5B-parameter model need?",
+    "options": [
+      "7.5 GB",
+      "30 GB",
+      "1.2 TB",
+      "120 GB"
+    ],
+    "answer_index": 3,
+    "explanation": "16 * 7.5e9 = 1.2e11 bytes, which is 120 GB. That exceeds any single current GPU, such as an 80 GB A100, before activations are counted."
+  },
+  {
+    "id": "09.2-008",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "1. Intuition: data parallelism wastes memory W times over",
+    "question": "In plain data parallelism on 64 GPUs, how many of the 64 copies of the 16P bytes of model state are redundant?",
+    "options": [
+      "None",
+      "1",
+      "63",
+      "32"
+    ],
+    "answer_index": 2,
+    "explanation": "All 64 workers hold identical parameters, gradients (after all-reduce), and optimizer state. Only one copy is needed in principle, so 63 are pure redundancy. ZeRO's name, Zero Redundancy Optimizer, comes from eliminating that."
+  },
+  {
+    "id": "09.2-009",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "1. Intuition: data parallelism wastes memory W times over",
+    "question": "What is the central idea of ZeRO (Zero Redundancy Optimizer)?",
+    "options": [
+      "Compress gradients to low-bit integers before the all-reduce so communication shrinks about W-fold",
+      "Split the replicated model state into W disjoint shards, one per worker, gathering full tensors only when needed",
+      "Run the optimizer step on rank 0 only and broadcast the result, so other workers hold no optimizer state",
+      "Store all model state in fp8 so each replica's 16P bytes drop to about 4P bytes on every single worker"
+    ],
+    "answer_index": 1,
+    "explanation": "Instead of replicating everything, ZeRO splits the model-state bytes into W disjoint shards, gives one to each worker, and rebuilds full tensors only for the brief moment they are needed. The math and result of training are the same as plain data parallelism."
+  },
+  {
+    "id": "09.2-010",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "1. Intuition: data parallelism wastes memory W times over",
+    "question": "Why is ZeRO described as a spectrum rather than a single technique?",
+    "options": [
+      "Because each stage only works for a certain range of model sizes, so you pick it by parameter count",
+      "Because each stage shards more state, trading progressively more communication for less memory",
+      "Because accuracy degrades as you shard more, so each stage trades a bit of model quality for memory",
+      "Because each stage pairs with a different optimizer: SGD for stage 1, Adam for 2, Adafactor for 3"
+    ],
+    "answer_index": 1,
+    "explanation": "Reconstructing sharded tensors costs communication. Each successive stage shards another bucket, saving more memory but adding more communication. The training result is unchanged at every stage."
+  },
+  {
+    "id": "09.2-011",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "2. The memory a step holds, in bytes",
+    "question": "Why is activation memory not part of ZeRO's sharding?",
+    "options": [
+      "They scale with batch and context length, not with P, and are handled separately (e.g. checkpointing)",
+      "Activations are always smaller than gradients, so sharding them would save too little to be worth it",
+      "Activations are automatically shared across workers by the gradient all-reduce, so are never replicated",
+      "Activations are always kept in CPU memory during training, so they never compete for GPU memory"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO targets the three model-sized buckets: parameters, gradients, and optimizer state. Activations are a fourth bucket that grows with batch size times context length. Techniques like activation checkpointing and mixed precision address them."
+  },
+  {
+    "id": "09.2-012",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "2. The memory a step holds, in bytes",
+    "question": "How does the per-worker model-state memory of plain data parallelism change as the number of workers W grows?",
+    "options": [
+      "It falls as 16P/W, since every added worker takes a share of the state",
+      "It falls to 8P once W exceeds 8, because gradients get split automatically",
+      "It grows as 16P times W, because each worker buffers everyone's gradients",
+      "It stays at 16P per worker whether W is 1 or 1000"
+    ],
+    "answer_index": 3,
+    "explanation": "Plain data parallelism replicates all 16P bytes on every worker, so per-worker memory is independent of W. ZeRO's purpose is to make that per-worker number fall as W grows."
+  },
+  {
+    "id": "09.2-013",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "2. The memory a step holds, in bytes",
+    "question": "In the common mixed-precision accounting used by the ZeRO paper, how do the bytes per parameter break down?",
+    "options": [
+      "bf16 params 2 + fp32 grads 4 + fp32 m and v 8 = 14 bytes total",
+      "fp16 params 2 + fp16 grads 2 + fp16 master, m and v 6 = 10 bytes",
+      "fp32 params 4 + fp16 grads 2 + fp32 master, m and v 12 = 18 bytes",
+      "fp16 params 2 + fp16 grads 2 + fp32 master, m, v 12 = 16 bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "Mixed-precision Adam keeps fp16 parameters (2 bytes) and gradients (2 bytes), plus an fp32 optimizer state of a master weight copy, m, and v (4 bytes each, 12 total). That also totals 16P bytes. The sharding structure is the same as in the pure-fp32 breakdown."
+  },
+  {
+    "id": "09.2-014",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "2. The memory a step holds, in bytes",
+    "question": "Does switching from pure-fp32 accounting to mixed-precision accounting change how ZeRO stages shard memory?",
+    "options": [
+      "Yes; mixed precision already halves gradient memory, so stage 2 has nothing left to shard",
+      "No; the constants change, but each stage still divides one more bucket by W",
+      "Yes; fp16 parameters cannot be sharded, so stage 3 is unavailable under mixed precision",
+      "No; the per-bucket constants and totals stay identical to the fp32 accounting in every case"
+    ],
+    "answer_index": 1,
+    "explanation": "Mixed precision changes which bucket holds how many bytes per parameter, but ZeRO's structure is the same: stage 1 shards the optimizer state, stage 2 also the gradients, stage 3 also the parameters. Per-bucket constants differ (for example 2/2/12 versus 4/4/8)."
+  },
+  {
+    "id": "09.2-015",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 1 — shard the optimizer state",
+    "question": "Why is the optimizer state the natural first bucket for ZeRO to shard?",
+    "options": [
+      "It is only ever read on rank 0, which applies the update and then broadcasts the new weights",
+      "It is the smallest of the three buckets, so sharding it is cheap and needs no extra collective",
+      "It is recomputed from the gradients every forward pass, so no worker needs to keep it resident",
+      "It is only touched inside optimizer.step(); between steps it just sits there"
+    ],
+    "answer_index": 3,
+    "explanation": "The Adam moment buffers are read and written only during the optimizer step. So each worker can store only the slice it is responsible for updating. It is also the largest fp32 bucket (8P), so sharding it saves the most."
+  },
+  {
+    "id": "09.2-016",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 1 — shard the optimizer state",
+    "question": "In ZeRO stage 1, what happens during the optimizer step?",
+    "options": [
+      "Each worker updates only the slice it holds optimizer state for, then an all-gather shares the new params",
+      "Every worker updates all parameters with its local state, then an all-reduce averages the new weights",
+      "Rank 0 updates all parameters using the full optimizer state and broadcasts them to every other worker",
+      "Each worker skips parameters it does not own, so each replica's other slices stay one step stale"
+    ],
+    "answer_index": 0,
+    "explanation": "Worker w owns m and v for its 1/W slice of the parameters and updates only that slice. An all-gather then shares the updated slices so every worker again has the full weights for the next forward pass."
+  },
+  {
+    "id": "09.2-017",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 1 — shard the optimizer state",
+    "question": "In ZeRO stage 1, does each worker run forward and backward on only its slice of the parameters?",
+    "options": [
+      "No; forward and backward are unchanged from plain DP, with full weights and full averaged gradient",
+      "Yes; each worker runs forward and backward on its slice only and computes just that slice's gradients",
+      "Yes; each worker computes on its own slice and the partial activations are combined by an all-to-all",
+      "No; only rank 0 runs the forward pass, and the other workers run backward on its stored activations"
+    ],
+    "answer_index": 0,
+    "explanation": "In ZeRO-1, 'owns a slice' only refers to who performs the optimizer update and stores m and v. Every worker still holds full weights, runs the whole model on its micro-batch, and receives the full averaged gradient. Only the duplicated optimizer work and state are removed."
+  },
+  {
+    "id": "09.2-018",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 1 — shard the optimizer state",
+    "question": "What is the per-worker memory of ZeRO stage 1 in the fp32 accounting (P parameters, W workers)?",
+    "options": [
+      "8P + 8P/W",
+      "4P + 12P/W",
+      "16P/W",
+      "12P + 4P/W"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO-1 keeps full parameters (4P) and full gradients (4P) but shards the 8P optimizer state, giving 8P + 8P/W bytes per worker. 4P + 12P/W is ZeRO-2 and 16P/W is ZeRO-3."
+  },
+  {
+    "id": "09.2-019",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 1 — shard the optimizer state",
+    "question": "With P = 4 parameters and W = 2 workers under ZeRO-1, worker 0 updates theta_0 and theta_1 and worker 1 updates theta_2 and theta_3. What does each worker hold after the all-gather?",
+    "options": [
+      "All 4 new values, exactly what plain data parallelism would give",
+      "Only its own two updated values; the other two stay at the previous step's values",
+      "All 4 values, but the two from worker 1 are one optimizer step behind worker 0's",
+      "An element-wise average of the two workers' full parameter vectors after the update"
+    ],
+    "answer_index": 0,
+    "explanation": "Both workers compute all 4 gradients, each updates its two parameters, and the all-gather assembles all 4 updated values on both workers. The result is identical to plain data parallelism; ZeRO-1 only removed the duplicated optimizer work and state."
+  },
+  {
+    "id": "09.2-020",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 2 — also shard the gradients",
+    "question": "Why can ZeRO stage 2 shard the gradients once stage 1 is in place?",
+    "options": [
+      "Because gradients are recomputed from scratch during the optimizer step, so none need be stored",
+      "Worker w only updates its own parameter slice, so it only needs that slice's gradients",
+      "Because gradients are no longer averaged across workers once the optimizer state is sharded",
+      "Because gradients are stored alongside the activations, which each worker already keeps locally"
+    ],
+    "answer_index": 1,
+    "explanation": "Under ZeRO-1, each worker updates only its slice of parameters, so the other (W-1)/W of the averaged gradient is never used locally. ZeRO-2 therefore avoids storing it."
+  },
+  {
+    "id": "09.2-021",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 2 — also shard the gradients",
+    "question": "Which collective does ZeRO stage 2 use for gradients instead of an all-reduce, and why?",
+    "options": [
+      "All-gather, so every worker receives every other worker's full gradient before averaging locally",
+      "Broadcast, so rank 0's gradient is copied to every worker and no averaging is needed at all",
+      "Reduce-scatter: it averages gradients and leaves each worker only its 1/W slice",
+      "All-to-all, which routes each raw gradient slice to its owner without averaging the values"
+    ],
+    "answer_index": 2,
+    "explanation": "An all-reduce leaves the full averaged gradient on every worker. Reduce-scatter performs the same averaging but leaves each worker with only its own shard, which is all it needs. This is what makes gradient sharding possible."
+  },
+  {
+    "id": "09.2-022",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 2 — also shard the gradients",
+    "question": "What is the per-worker memory of ZeRO stage 2 in the fp32 accounting?",
+    "options": [
+      "8P + 8P/W",
+      "4P + 12P/W",
+      "16P/W",
+      "16P + 12P/W"
+    ],
+    "answer_index": 1,
+    "explanation": "ZeRO-2 keeps the full parameters (4P) and shards both the gradients (4P/W) and the optimizer state (8P/W): 4P + 12P/W bytes. ZeRO-1 is 8P + 8P/W and ZeRO-3 is 16P/W."
+  },
+  {
+    "id": "09.2-023",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 3 — also shard the parameters",
+    "question": "In ZeRO stage 3, how does a worker run a layer whose parameters it only stores 1/W of?",
+    "options": [
+      "It all-gathers the layer's full parameters just before it runs, computes, then frees the copy",
+      "It computes on its local shard and all-reduces the partial outputs, like a tensor-parallel matmul",
+      "It sends its input activations to the worker that owns the layer and waits for the output to return",
+      "It skips the layer in forward and runs it only in backward, once all the gradient shards have arrived"
+    ],
+    "answer_index": 0,
+    "explanation": "A forward pass needs a layer's full weights. ZeRO-3 all-gathers them from all workers immediately before the layer runs and discards the non-owned part right after, keeping only its own slice. The same all-gather-then-free happens again in backward."
+  },
+  {
+    "id": "09.2-024",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Stage 3 — also shard the parameters",
+    "question": "What is the per-worker memory of ZeRO stage 3 in the fp32 accounting?",
+    "options": [
+      "16P/W",
+      "4P + 12P/W",
+      "8P + 8P/W",
+      "16P"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO-3 shards all three buckets: 4P/W + 4P/W + 8P/W = 16P/W bytes per worker. It is the only stage whose per-worker model-state memory keeps shrinking as W grows."
+  },
+  {
+    "id": "09.2-025",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "3. The three ZeRO stages",
+    "question": "As the number of workers W grows very large, what floor does per-worker model-state memory approach for each ZeRO stage?",
+    "options": [
+      "ZeRO-1: 8P; ZeRO-2: 4P; ZeRO-3: approaching zero",
+      "ZeRO-1: 4P; ZeRO-2: 8P; ZeRO-3: a floor of 4P per worker",
+      "All three stages approach zero as W grows without bound",
+      "ZeRO-1: 16P; ZeRO-2: 8P; ZeRO-3: a floor of 4P"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO-1 keeps full parameters and gradients (8P), and ZeRO-2 keeps full parameters (4P), so they plateau at those floors. ZeRO-3 shards everything, so 16P/W keeps falling toward zero. That is why only ZeRO-3 scales model size with W."
+  },
+  {
+    "id": "09.2-026",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "3. The three ZeRO stages",
+    "question": "Which ordering of per-worker model-state memory is correct for W greater than 1?",
+    "options": [
+      "plain DP < ZeRO-1 < ZeRO-2 < ZeRO-3",
+      "ZeRO-1 < ZeRO-2 < ZeRO-3 < plain DP",
+      "ZeRO-3 < ZeRO-2 < ZeRO-1 < plain DP",
+      "ZeRO-2 < ZeRO-3 < ZeRO-1 < plain DP"
+    ],
+    "answer_index": 2,
+    "explanation": "Each stage shards one more bucket: plain DP is 16P, ZeRO-1 8P + 8P/W, ZeRO-2 4P + 12P/W, and ZeRO-3 16P/W. More sharding means less memory per worker, at the cost of more communication."
+  },
+  {
+    "id": "09.2-027",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "4. Worked example: 7.5B parameters on 64 workers",
+    "question": "For P = 7.5B on W = 64 workers in fp32, why does ZeRO-1 nearly halve per-worker memory compared with plain data parallelism?",
+    "options": [
+      "Because the 8P optimizer state is the biggest bucket and it is now sharded",
+      "Because ZeRO-1 stores the parameters in fp16, halving the 4P weight bucket on every worker",
+      "Because the gradients are discarded right after backward instead of being kept for the step",
+      "Because the activations are offloaded to CPU memory, freeing roughly half of the GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Plain DP needs 16P = 120 GB. ZeRO-1 shards the 8P optimizer state to 8P/64, leaving 8P + 8P/64, about 60.9 GB. The biggest bucket accounts for half the total, so sharding it almost halves the memory."
+  },
+  {
+    "id": "09.2-028",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "4. Worked example: 7.5B parameters on 64 workers",
+    "question": "A 7.5B-parameter model in fp32 needs 120 GB per worker with plain data parallelism. On 64 workers, which is the first ZeRO stage that fits on an 80 GB GPU (model state only)?",
+    "options": [
+      "ZeRO-3, at about 1.9 GB",
+      "ZeRO-2, at about 31.4 GB",
+      "ZeRO-1, at about 60.9 GB",
+      "None of the stages fit"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-1 gives 8P + 8P/64, about 60.9 GB, which fits in 80 GB. ZeRO-2 (about 31.4 GB) and ZeRO-3 (about 1.88 GB) leave even more room for activations, at higher communication cost."
+  },
+  {
+    "id": "09.2-029",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "4. Worked example: 7.5B parameters on 64 workers",
+    "question": "Why does ZeRO-3 reduce per-worker memory for a 7.5B model on 64 workers all the way to about 1.88 GB, and what does it cost?",
+    "options": [
+      "It compresses the optimizer state to 8 bits; the cost is a measurable drop in final accuracy",
+      "It offloads parameters to NVMe disk; the cost is much slower checkpoint save and restore times",
+      "Nothing model-sized stays fully resident; the cost is all-gathering every layer's weights each pass",
+      "It drops the gradients after each step; the cost is needing a larger learning rate to converge"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-3 shards parameters, gradients, and optimizer state, so each worker holds 16P/64 = 0.25 bytes per parameter. Since no worker permanently holds the full weights, each layer's weights must be all-gathered in both forward and backward. That makes it the most communication-heavy stage."
+  },
+  {
+    "id": "09.2-030",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "4. Worked example: 7.5B parameters on 64 workers",
+    "question": "Why do ZeRO-1 and ZeRO-2 plateau in per-worker memory on very large W, while ZeRO-3 keeps falling?",
+    "options": [
+      "ZeRO-3 discards the optimizer state entirely and recomputes it from the gradients each step",
+      "ZeRO-1 and ZeRO-2 spend more on communication, and their comm buffers grow linearly with W",
+      "ZeRO-3 stores everything in mixed precision, while ZeRO-1 and ZeRO-2 remain in pure fp32",
+      "ZeRO-1/2 keep a full-model bucket resident (8P or 4P); ZeRO-3 shards every bucket"
+    ],
+    "answer_index": 3,
+    "explanation": "ZeRO-1 keeps full parameters and gradients (8P), ZeRO-2 keeps full parameters (4P); those terms do not shrink with W. ZeRO-3 has no unsharded term, so its 16P/W keeps falling. The trade is that ZeRO-3 has the highest communication cost."
+  },
+  {
+    "id": "09.2-031",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "What is FSDP, and what does 'fully sharded' mean?",
+    "options": [
+      "A DeepSpeed feature that shards only the optimizer state, leaving parameters and gradients replicated",
+      "PyTorch's native ZeRO-3: params, grads and optimizer state all sharded, ~1/W of the model per worker",
+      "A Megatron mode that splits each matmul across GPUs so every layer's compute is fully partitioned",
+      "A PyTorch data loader that fully shards the dataset so each worker reads a disjoint subset of files"
+    ],
+    "answer_index": 1,
+    "explanation": "FSDP (Fully Sharded Data Parallel) is PyTorch's implementation of ZeRO stage 3. 'Fully sharded' means all three model-state buckets are sharded. Each worker permanently stores only its 1/W shard."
+  },
+  {
+    "id": "09.2-032",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "In FSDP, what is a 'wrapping unit'?",
+    "options": [
+      "A pipeline stage placed on its own GPU, passing activations to the next stage",
+      "A single parameter tensor, sharded and gathered independently of all others",
+      "A micro-batch of training examples whose gradients are accumulated as one",
+      "A group of layers whose parameters FSDP all-gathers and frees together"
+    ],
+    "answer_index": 3,
+    "explanation": "FSDP groups layers into wrapping units and performs just-in-time reconstruction unit by unit: all-gather the unit's parameters, compute, free. The size of the units determines the transient memory spike from materializing full parameters."
+  },
+  {
+    "id": "09.2-033",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "What is the correct sequence FSDP follows for each wrapping unit during a training step?",
+    "options": [
+      "Compute forward on the local shard, all-reduce the partial outputs, then all-gather the gradients",
+      "All-gather params, forward, free; in backward all-gather, compute, free, then reduce-scatter grads",
+      "Broadcast parameters from rank 0, compute forward and backward, then all-reduce the full gradients",
+      "All-gather every parameter once at the start of training and keep them; reduce-scatter grads each step"
+    ],
+    "answer_index": 1,
+    "explanation": "Before a unit's forward, FSDP all-gathers its full parameters, computes, and frees the non-owned part. In backward it repeats the all-gather, computes gradients, frees, and combines gradients with a reduce-scatter so each worker keeps only its gradient shard."
+  },
+  {
+    "id": "09.2-034",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "Why is FSDP's per-worker memory approximately 16P/W plus a transient term, and what is that transient term?",
+    "options": [
+      "The transient term is a full unsharded copy of the optimizer state, gathered for each optimizer step",
+      "Only one or a few prefetched units are materialized at once, so the extra is the largest unit's params",
+      "The transient term is a full copy of the whole model's gradients, held until the reduce-scatter ends",
+      "There is no transient term: memory is exactly 16P/W because gathers write into the shard in place"
+    ],
+    "answer_index": 1,
+    "explanation": "FSDP materializes full weights only for the unit currently running (plus any prefetched). So on top of the 16P/W shards, memory includes the transient full parameters of the largest unit, never the whole model."
+  },
+  {
+    "id": "09.2-035",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "In FSDP, what does the all_gather collective do with each worker's shard of a layer's weight?",
+    "options": [
+      "Concatenates the shards so every worker briefly holds the identical full tensor",
+      "Sums the shards element-wise so every worker holds a tensor of the shard's original size",
+      "Keeps only rank 0's shard and copies it to every worker, overwriting their local shards",
+      "Averages the shards element-wise, the same reduction used for gradients in plain DDP"
+    ],
+    "answer_index": 0,
+    "explanation": "All-gather collects each worker's shard and concatenates them into the full tensor on every worker. Unlike an all-reduce, it does not add values. The full tensor is used for the unit's computation and then dropped."
+  },
+  {
+    "id": "09.2-036",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "How does FSDP's communication per step compare with plain DDP's?",
+    "options": [
+      "FSDP communicates only during the optimizer step, when it gathers the updated parameter shards",
+      "FSDP communicates less than DDP, because each worker sends only its 1/W shard of the gradients",
+      "Both communicate exactly the same amount, since each exchanges the full gradient once per step",
+      "FSDP all-gathers each unit's params twice per step (forward, backward); DDP moves gradients once"
+    ],
+    "answer_index": 3,
+    "explanation": "FSDP must reconstruct each unit's parameters before forward and again before backward, plus reduce-scatter gradients. DDP only all-reduces gradients once per step. FSDP trades this extra traffic for much lower memory."
+  },
+  {
+    "id": "09.2-037",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "How does FSDP hide the cost of its extra all-gathers?",
+    "options": [
+      "By skipping the all-gather in backward and reusing the weights kept resident from the forward pass",
+      "By compressing the gathered parameters to int8 so each all-gather moves a quarter of the bytes",
+      "By prefetching: it starts all-gathering unit k+1's parameters while unit k computes",
+      "By running the optimizer during forward, so the gathers overlap with the parameter update"
+    ],
+    "answer_index": 2,
+    "explanation": "Prefetching overlaps communication with computation, just as DDP overlaps the gradient all-reduce with backward. When tuned well, FSDP keeps throughput close to DDP while using a fraction of the memory."
+  },
+  {
+    "id": "09.2-038",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "When does ZeRO-3/FSDP stop being efficient?",
+    "options": [
+      "On a slow interconnect, where per-layer all-gather traffic no longer hides under compute",
+      "When the model has more than 32 layers, since each extra wrapping unit adds a fixed sync cost",
+      "When training with Adam instead of SGD, since Adam's two moments double the gathered traffic",
+      "When the global batch is larger than the number of workers, so shards no longer divide evenly"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO-3/FSDP rely on overlapping their per-layer all-gathers with compute. They are most efficient with fast links like NVLink within a node or high-bandwidth fabric across nodes. On slow links, communication is exposed and throughput drops."
+  },
+  {
+    "id": "09.2-039",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "5. FSDP: PyTorch's stage-3, and the all-gather/free dance",
+    "question": "What is a common practical recipe for combining FSDP with plain data parallelism?",
+    "options": [
+      "FSDP only on rank 0, which holds the master weights, with plain data parallelism on all others",
+      "Plain data parallelism within each node, and FSDP sharding across the slower inter-node links",
+      "FSDP within a fast-linked group of GPUs, plain data parallelism across groups",
+      "Alternate FSDP and DDP on every other step so the communication cost averages out over time"
+    ],
+    "answer_index": 2,
+    "explanation": "FSDP's heavy all-gather traffic belongs on the fastest links, so it is used within a fast group (such as one node). Across groups, where links are slower, plain data parallelism needs only one gradient all-reduce per step. This hybrid maps communication cost to the hardware topology."
+  },
+  {
+    "id": "09.2-040",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "6. Which stage should you reach for?",
+    "question": "When is plain DDP the right choice instead of a ZeRO stage?",
+    "options": [
+      "When model and optimizer state fit comfortably on one GPU and you only want speed",
+      "When the model does not fit on one GPU, since DDP spreads its replicas across all the workers",
+      "When the interconnect is very fast, since DDP is the only mode that can saturate NVLink",
+      "When you need the largest possible batch per GPU, since DDP leaves the most free memory"
+    ],
+    "answer_index": 0,
+    "explanation": "If model state fits on one GPU, sharding adds communication without a needed memory benefit. Plain DDP gives the speedup with the least communication. Climb the ZeRO ladder only when memory forces you."
+  },
+  {
+    "id": "09.2-041",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "6. Which stage should you reach for?",
+    "question": "Why is ZeRO-1 often enough when you are just over the memory limit?",
+    "options": [
+      "It shards the biggest bucket (8P optimizer state) for little extra traffic: one param all-gather",
+      "It shards the activations, which are usually the largest bucket once the batch size is non-trivial",
+      "It removes the gradient all-reduce entirely, so it actually communicates less than plain DDP does",
+      "It halves the parameter count by sharing weights across layers, shrinking every bucket at once"
+    ],
+    "answer_index": 0,
+    "explanation": "The optimizer state is the largest fp32 bucket, so sharding it frees the most memory. The only extra communication is the all-gather of updated parameters after the step. That makes it the best memory saved per unit of extra communication."
+  },
+  {
+    "id": "09.2-042",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "6. Which stage should you reach for?",
+    "question": "When should you reach for ZeRO-3 or FSDP?",
+    "options": [
+      "When the model easily fits on one GPU, since ZeRO-3 then adds the least overhead of any stage",
+      "Always, because ZeRO-3 has the lowest communication volume of all the stages, including DDP",
+      "When it won't fit even with grads and optimizer state sharded, or to maximize batch/model per GPU",
+      "Only when training without an optimizer, because ZeRO-3 cannot shard Adam's moment buffers"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-3/FSDP give the lowest memory but the highest communication, due to per-layer all-gathers. They are the right rung when lower stages cannot fit the model, or when you need maximum memory headroom for batch or model size."
+  },
+  {
+    "id": "09.2-043",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "6. Which stage should you reach for?",
+    "question": "What rule of thumb governs how far up the ZeRO ladder to climb?",
+    "options": [
+      "Always use the highest stage available, since higher stages save memory at no extra traffic cost",
+      "Climb only as far as the memory wall forces you, since each rung adds communication",
+      "Use the ZeRO stage equal to the number of nodes, so each node owns exactly one sharded bucket",
+      "Use stage 2 whenever the model exceeds 1B parameters, and stage 3 whenever it exceeds 10B"
+    ],
+    "answer_index": 1,
+    "explanation": "Each stage trades more communication for less memory. Stage 1 buys the most memory per unit of extra communication; stage 3 buys the most memory overall but pays with per-layer all-gathers. So use the lowest stage that fits."
+  },
+  {
+    "id": "09.2-044",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which paper introduced ZeRO's three stages and their per-stage memory formulas?",
+    "options": [
+      "GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism",
+      "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism (Shoeybi et al., 2019)",
+      "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models (Rajbhandari et al., 2019)",
+      "Attention Is All You Need (Vaswani et al., 2017)"
+    ],
+    "answer_index": 2,
+    "explanation": "The ZeRO paper by Rajbhandari et al. (2019) introduced the 'zero redundancy' framing and the three stages, whose per-stage memory formulas are its central result. Megatron-LM is the companion foundational paper on tensor parallelism."
+  },
+  {
+    "id": "09.2-045",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Research connection",
+    "question": "In which widely used software do the ZeRO paper's ideas ship today?",
+    "options": [
+      "vLLM and NVIDIA TensorRT-LLM inference servers",
+      "Hugging Face Tokenizers and SentencePiece",
+      "Microsoft DeepSpeed (ZeRO) and PyTorch FSDP",
+      "NumPy, SciPy and the JAX array libraries"
+    ],
+    "answer_index": 2,
+    "explanation": "DeepSpeed implements ZeRO stages 1 to 3, and PyTorch FSDP implements ZeRO-3-style full sharding. Both are configured on top of a DDP-style training loop."
+  },
+  {
+    "id": "09.2-046",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Exercise",
+    "question": "A 3B-parameter model is trained on 8 GPUs with 40 GB each, using fp32 accounting and ignoring activations. Does plain data parallelism fit?",
+    "options": [
+      "Yes, at 6 GB per worker",
+      "No, it needs 48 GB per worker",
+      "Yes, at 27 GB per worker",
+      "No, it needs 96 GB per worker"
+    ],
+    "answer_index": 1,
+    "explanation": "Plain DP needs 16P = 16 * 3e9 = 48e9 bytes = 48 GB per worker, regardless of the number of workers. That exceeds 40 GB, so it does not fit."
+  },
+  {
+    "id": "09.2-047",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Exercise",
+    "question": "A 3B-parameter model on 8 GPUs (fp32, ignoring activations): what is the per-worker memory under ZeRO-1, and does it fit in 40 GB?",
+    "options": [
+      "24 GB, fits",
+      "48 GB, does not fit",
+      "6 GB, fits",
+      "27 GB, fits"
+    ],
+    "answer_index": 3,
+    "explanation": "ZeRO-1 is 8P + 8P/W = 24e9 + 3e9 = 27 GB per worker. That fits in 40 GB with about 13 GB left for activations."
+  },
+  {
+    "id": "09.2-048",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Exercise",
+    "question": "A 3B-parameter model on 8 GPUs (fp32, ignoring activations): what is the per-worker memory under ZeRO-3?",
+    "options": [
+      "6 GB",
+      "27 GB",
+      "48 GB",
+      "3 GB"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO-3 is 16P/W = 48e9 / 8 = 6 GB per worker. It fits easily, leaving about 34 GB for activations and a larger batch, at the cost of per-layer all-gathers."
+  },
+  {
+    "id": "09.2-049",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Exercise",
+    "question": "If both ZeRO-1 and ZeRO-3 fit a model on the available GPUs, which should you normally choose, and why?",
+    "options": [
+      "ZeRO-3, because ZeRO-1 does not actually shard anything and only reorganizes the optimizer step",
+      "ZeRO-3, because sharding all state always gives higher throughput than sharding only one bucket",
+      "ZeRO-1, the cheapest stage that fits; go to ZeRO-3 only for more activation headroom or batch",
+      "Plain DP, because ZeRO-1 and ZeRO-3 both change the numerical result of each training step"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-1 adds almost no communication, while ZeRO-3 requires per-layer all-gathers. Since both fit, ZeRO-1 is cheaper. Only climb further if the extra memory headroom is needed."
+  },
+  {
+    "id": "09.2-050",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What does plain data parallelism do for the memory wall?",
+    "options": [
+      "It shards the activations, so each worker holds only its micro-batch's share",
+      "It divides model-state memory by W, since each worker sees only 1/W of the data",
+      "It halves the optimizer state, because the averaged gradients are stored only once",
+      "Nothing: it saves time, but every worker still holds the full 16P bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "Data parallelism only adds throughput. Every worker still holds full parameters, gradients, and optimizer state, so per-worker memory is unchanged. That is the entire reason ZeRO exists."
+  },
+  {
+    "id": "09.2-051",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why can a model still run out of memory after enabling ZeRO-3?",
+    "options": [
+      "ZeRO shards only model-sized buckets; activations (batch x context) are untouched and often the limit",
+      "Because ZeRO-3 re-replicates the optimizer state on every worker during the optimizer step",
+      "Because ZeRO-3 doubles gradient memory by keeping both full and sharded copies until the step",
+      "Because ZeRO-3 is incompatible with Adam and silently falls back to unsharded plain DDP"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO handles parameters, gradients, and optimizer state, but activations scale with batch and context length and are not sharded by it. Pair ZeRO with activation checkpointing and mixed precision to address them."
+  },
+  {
+    "id": "09.2-052",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to assume ZeRO-3 is always the best stage?",
+    "options": [
+      "It gives less memory saving than ZeRO-1, because gathered parameters are never freed afterwards",
+      "Its per-layer all-gathers are the heaviest traffic of any stage; on slow links a lower stage wins",
+      "It changes the training result, because sharded optimizer updates are applied in a different order",
+      "It cannot be combined with mixed precision, so it forces fp32 and doubles the parameter memory"
+    ],
+    "answer_index": 1,
+    "explanation": "ZeRO-3 saves the most memory but communicates the most. If a lower stage already fits, the extra traffic is pure overhead, and on slow links it can dominate step time. Climb only as far as memory forces you."
+  },
+  {
+    "id": "09.2-053",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What is the difference between how plain DDP and ZeRO-2/3 combine gradients?",
+    "options": [
+      "Both all-gather the gradients, then each worker averages the full set locally before the step",
+      "DDP reduce-scatters to each worker's shard; ZeRO-2/3 all-reduce so every worker has the full average",
+      "DDP all-reduces (full averaged gradient everywhere); ZeRO-2/3 reduce-scatter (each keeps its shard)",
+      "DDP sums the gradients across workers; ZeRO-2/3 take the element-wise maximum to bound the update"
+    ],
+    "answer_index": 2,
+    "explanation": "An all-reduce leaves the full averaged gradient on every worker, which DDP needs because every worker updates all parameters. A reduce-scatter leaves each worker with only its averaged shard, which is all a ZeRO-2/3 worker needs. That difference makes gradient sharding possible."
+  },
+  {
+    "id": "09.2-054",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why does adding more GPUs with plain data parallelism not help a model that is too big for one GPU?",
+    "options": [
+      "Data parallelism requires the model to be split by layers first, which the big model cannot do",
+      "Data parallelism is limited to 8 GPUs per job, so it cannot add enough memory for a large model",
+      "Data parallelism shards only activations, and activations are not what makes the model too big",
+      "It replicates all 16P bytes on every GPU, adding throughput but not per-worker capacity"
+    ],
+    "answer_index": 3,
+    "explanation": "Each worker in plain data parallelism holds the complete model, gradients, and optimizer state. A model that does not fit on one GPU therefore does not fit on any of them. Sharding the bytes across workers, as ZeRO/FSDP do, is required."
+  },
+  {
+    "id": "09.2-055",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For P = 7.5B and W = 64 in fp32, ZeRO-1 needs about 60.9 GB per worker but ZeRO-3 only about 1.88 GB. Where do the extra savings come from?",
+    "options": [
+      "ZeRO-3 also removes the activations from GPU memory by recomputing them during backward",
+      "ZeRO-3 compresses the already-sharded optimizer state further, from 8P/W down to about 1P/W",
+      "ZeRO-3 also shards the 4P parameters and 4P gradients that ZeRO-1 keeps on every worker",
+      "ZeRO-3 stores all model state in fp16 while ZeRO-1 keeps it in fp32, halving every bucket"
+    ],
+    "answer_index": 2,
+    "explanation": "ZeRO-1 still keeps 8P = 60 GB of full parameters and gradients and shards only the optimizer state to about 0.9 GB. ZeRO-3 shards all three buckets, so they all become 1/64 of their size: 16P/64 = 1.88 GB."
+  },
+  {
+    "id": "09.2-056",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Hardware track — sharded training",
+    "question": "Roughly how does per-step throughput of ZeRO-1 and ZeRO-3/FSDP compare with DDP when communication overlaps well?",
+    "options": [
+      "Both are about twice as fast as DDP, because sharding halves the bytes each GPU must process",
+      "ZeRO-1 matches DDP; ZeRO-3/FSDP is a few % to ~20% slower, much worse on a weak interconnect",
+      "ZeRO-1 is about 50% slower than DDP, while ZeRO-3/FSDP matches DDP thanks to prefetching",
+      "Both are always more than 2x slower than DDP, regardless of interconnect or overlap quality"
+    ],
+    "answer_index": 1,
+    "explanation": "ZeRO-1 adds only a parameter all-gather after the step, so it is close to DDP. ZeRO-3/FSDP's per-layer all-gathers cost a few percent to about 20% per step when well overlapped. On a slow interconnect the gap grows much larger."
+  },
+  {
+    "id": "09.2-057",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Hardware track — sharded training",
+    "question": "What hardware does real ZeRO/FSDP training need to run efficiently?",
+    "options": [
+      "A single GPU with very large memory, since ZeRO gains nothing from adding more devices",
+      "W GPUs on a fast interconnect (NVLink/InfiniBand) so the all-gather traffic hides under compute",
+      "Any cluster of CPUs on standard Ethernet, since the sharded traffic per step is negligible",
+      "GPUs with no interconnect at all, since ZeRO avoids inter-device communication entirely"
+    ],
+    "answer_index": 1,
+    "explanation": "ZeRO/FSDP add communication to save memory. They need W GPUs with fast links, such as NVLink within a node or InfiniBand across nodes, so that communication overlaps with computation rather than stalling it."
+  },
+  {
+    "id": "09.2-058",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Hardware track — sharded training",
+    "question": "How do DeepSpeed and PyTorch FSDP relate to a DDP-style training loop?",
+    "options": [
+      "FSDP requires rewriting the model as a pipeline of stages, and DeepSpeed requires a custom trainer",
+      "Both replace the training loop with a new API that has no explicit optimizer or backward call",
+      "DeepSpeed works only for inference, while FSDP is a drop-in replacement for the PyTorch optimizer",
+      "Both are configuration on a DDP-style loop: DeepSpeed offers ZeRO 1-3, FSDP offers full sharding"
+    ],
+    "answer_index": 3,
+    "explanation": "The training loop of forward, backward, and step stays the same. DeepSpeed and FSDP are configured on top of it to choose a sharding strategy. DeepSpeed offers ZeRO stages 1 to 3; FSDP offers ZeRO-3-style full sharding."
+  },
+  {
+    "id": "09.2-059",
+    "chapter": "09.2",
+    "chapter_name": "ZeRO & FSDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-02.md",
+    "section": "Next",
+    "question": "What limitation of ZeRO/FSDP motivates model parallelism (tensor, pipeline, expert)?",
+    "options": [
+      "After gathering, each worker still runs each layer's full compute, which fails when one layer is too big",
+      "ZeRO/FSDP cannot shard the optimizer state, so it must be split across devices by layer instead",
+      "ZeRO/FSDP do not support more than 8 GPUs, so larger clusters need tensor or pipeline splits",
+      "ZeRO/FSDP change the model's output slightly, so exact-result training needs model parallelism"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO/FSDP shard memory across data-parallel workers but every worker still computes every layer in full. When a single layer's weights, compute, or activations are too large for one device, the math itself must be split: within matmuls (tensor parallelism), across layers (pipeline), or across experts (expert parallelism)."
+  }
+]

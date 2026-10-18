@@ -1,0 +1,740 @@
+[
+  {
+    "id": "00.3-001",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is training a neural network, at its core?",
+    "options": [
+      "Repeatedly computing the loss gradient with respect to the parameters and stepping each downhill",
+      "Storing every training example directly in the model's weights so it can be recalled later",
+      "Searching over all possible weight values exhaustively and keeping the set with the lowest loss",
+      "Running the forward pass repeatedly until the outputs stop changing between successive iterations"
+    ],
+    "answer_index": 0,
+    "explanation": "Training is repeatedly computing the gradient of the loss with respect to millions of parameters and moving each one downhill. Doing that by hand is impossible, which is why autograd exists. It is not memorisation or exhaustive search."
+  },
+  {
+    "id": "00.3-002",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which three steps does every training loop in the course rest on?",
+    "options": [
+      "model.eval(), model.save(), then model.load() at the start of each step",
+      "loss.backward(), read .grad, then step and zero the gradients",
+      "torch.no_grad(), .detach(), then .item() on the loss each step",
+      "forward twice, average the two losses, then print the result"
+    ],
+    "answer_index": 1,
+    "explanation": "Every training loop, up to GPT-2, rests on calling loss.backward(), reading the resulting .grad, then stepping the parameters and zeroing gradients. no_grad and detach turn autograd off and are not the core training steps."
+  },
+  {
+    "id": "00.3-003",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "1. Intuition: the derivative tells each number which way to nudge",
+    "question": "What does the derivative of the loss with respect to a parameter tell you?",
+    "options": [
+      "The exact value the parameter should be set to in order to minimise the loss",
+      "How many optimisation steps training will need before that parameter converges",
+      "How fast and in which direction the loss changes if you nudge that parameter",
+      "The loss value that will be reached at the optimum for that parameter"
+    ],
+    "answer_index": 2,
+    "explanation": "A derivative is the rate of change of the loss with respect to one input: if you nudge the parameter a tiny bit, does the loss go up or down, and how fast. It is a local slope, not a target value or a prediction of training length."
+  },
+  {
+    "id": "00.3-004",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "1. Intuition: the derivative tells each number which way to nudge",
+    "question": "If the derivative of the loss with respect to a weight is +5, how should you move the weight to reduce the loss?",
+    "options": [
+      "Increase it, because a positive gradient points towards lower loss",
+      "Leave it unchanged, because the gradient is non-zero",
+      "Set it to 5, the value the gradient is pointing at",
+      "Decrease it, because increasing it would increase the loss"
+    ],
+    "answer_index": 3,
+    "explanation": "A positive derivative means increasing the weight increases the loss, so to reduce the loss you move the weight the other way — decrease it. Doing that for every parameter at once is gradient descent. Following the gradient's sign would increase the loss."
+  },
+  {
+    "id": "00.3-005",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "1. Intuition: the derivative tells each number which way to nudge",
+    "question": "Why is computing derivatives by hand hopeless for a language model?",
+    "options": [
+      "Derivatives of matrix products are not defined for non-square weight matrices",
+      "Language models use integer weights, which have no meaningful derivative",
+      "The loss is computed through millions of chained operations",
+      "The loss is not a differentiable function of the weights in a language model"
+    ],
+    "answer_index": 2,
+    "explanation": "A language model computes its loss through millions of chained operations, so working the derivative out by hand is impractical. Autograd solves this mechanically. Matmuls are differentiable and weights are floats."
+  },
+  {
+    "id": "00.3-006",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "1. Intuition: the derivative tells each number which way to nudge",
+    "question": "How does autograd compute derivatives?",
+    "options": [
+      "It records each forward operation in a graph, then walks it backwards applying the chain rule",
+      "It numerically perturbs each parameter by a tiny step and measures how the loss changes",
+      "It symbolically differentiates and simplifies the model's Python source code ahead of time",
+      "It looks up precomputed derivative formulas that are registered for each supported architecture"
+    ],
+    "answer_index": 0,
+    "explanation": "Autograd watches every operation during the forward pass, builds a record (the graph) of them and how to differentiate each, and then walks it in reverse multiplying local derivatives via the chain rule. It is not finite differences or symbolic algebra, and it is architecture-agnostic."
+  },
+  {
+    "id": "00.3-007",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "1. Intuition: the derivative tells each number which way to nudge",
+    "question": "When you call .backward() on a final scalar, where does autograd deposit the derivatives?",
+    "options": [
+      "Into the .grad attribute of the scalar itself",
+      "Into the .grad attribute of each leaf tensor",
+      "Into a global dictionary of gradients",
+      "Into the optimizer's state"
+    ],
+    "answer_index": 1,
+    "explanation": "Backward deposits the derivative of the scalar with respect to each leaf tensor into that leaf's .grad. The scalar you call backward on does not receive it, and the optimizer only reads .grad later."
+  },
+  {
+    "id": "00.3-008",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "2. requires_grad and the graph",
+    "question": "How do you opt a tensor into differentiation in PyTorch?",
+    "options": [
+      "Wrap it in a torch.no_grad() block",
+      "Call .detach() on it before use",
+      "Give it a float64 dtype on creation",
+      "Create it with requires_grad=True"
+    ],
+    "answer_index": 3,
+    "explanation": "By default tensors are inert and operations on them are not tracked. Setting requires_grad=True opts a tensor in; anything computed from it inherits a link back. no_grad and detach do the opposite, and dtype alone does not enable tracking."
+  },
+  {
+    "id": "00.3-009",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "2. requires_grad and the graph",
+    "question": "In PyTorch's computational graph, what are the nodes and edges?",
+    "options": [
+      "Nodes are tensors; edges are operations that each know their local derivative",
+      "Nodes are layers; edges are the learning rates that scale updates between them",
+      "Nodes are GPUs; edges are the communication links that carry gradients between them",
+      "Nodes are operations; edges are the Python variables that hold intermediate results"
+    ],
+    "answer_index": 0,
+    "explanation": "The graph's nodes are tensors and its edges are the operations that produced them, each knowing how to compute its own local derivative. That structure is what lets the backward pass chain local derivatives together."
+  },
+  {
+    "id": "00.3-010",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "2. requires_grad and the graph",
+    "question": "What does it mean that PyTorch's computational graph is dynamic?",
+    "options": [
+      "It is compiled once ahead of time into a fixed graph and then reused every step",
+      "It changes the model's weights while executing, so the parameters shift mid-pass",
+      "It is rebuilt only when the batch size or sequence length of the input changes",
+      "It is built fresh on the fly each forward pass by ordinary Python execution"
+    ],
+    "answer_index": 3,
+    "explanation": "The graph is created anew every time the forward computation runs, simply by executing your Python code. There is no separate compile step. Static-graph frameworks build the graph once ahead of time instead."
+  },
+  {
+    "id": "00.3-011",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "2. requires_grad and the graph",
+    "question": "What practical benefit does a dynamic graph give model authors?",
+    "options": [
+      "Models always run faster than with any static graph, because nothing has to be precompiled",
+      "Gradients no longer need to be zeroed, because each step's graph is brand new",
+      "You can use ordinary if/for/while in a model, and the graph follows the path that ran",
+      "The model's weights are saved automatically each time a new graph is recorded"
+    ],
+    "answer_index": 2,
+    "explanation": "Because the graph is recorded as the code runs, normal control flow just works and the graph reflects whichever branch or loop count executed. Static-graph frameworks trade this flexibility for other optimisations. It does not remove the need to zero gradients."
+  },
+  {
+    "id": "00.3-012",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "2. requires_grad and the graph",
+    "question": "Why is PyTorch's choice of a dynamic graph credited with its dominance in research?",
+    "options": [
+      "It guarantees the fastest possible training speed on every supported accelerator",
+      "It favours flexibility over the ahead-of-time optimisations static graphs allow",
+      "It removes the need for GPUs, since dynamic graphs run efficiently on CPUs",
+      "It makes saved models much smaller on disk, because no graph is serialised"
+    ],
+    "answer_index": 1,
+    "explanation": "PyTorch chose flexibility: models are plain Python with arbitrary control flow. Static-graph frameworks build the graph once to enable other optimisations. That flexibility is a big part of why PyTorch dominates research; it is not about speed guarantees or model size."
+  },
+  {
+    "id": "00.3-013",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "3. The simplest example, by hand then by autograd",
+    "question": "With x = torch.tensor(3.0, requires_grad=True) and y = x**2, what is x.grad after y.backward()?",
+    "options": [
+      "tensor(9.)",
+      "tensor(3.)",
+      "tensor(6.)",
+      "tensor(2.)"
+    ],
+    "answer_index": 2,
+    "explanation": "dy/dx = 2x, and at x = 3 that is 6, so x.grad is tensor(6.). 9 is the forward value of y, not the gradient. PyTorch knows the local derivative of squaring is 2x and evaluates it at the stored x."
+  },
+  {
+    "id": "00.3-014",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "3. The simplest example, by hand then by autograd",
+    "question": "When you compute y = x**2 on a tensor with requires_grad=True, what happens besides computing the value 9.0?",
+    "options": [
+      "PyTorch immediately computes and stores x.grad",
+      "PyTorch records that y came from squaring x",
+      "PyTorch converts y to a plain Python float",
+      "PyTorch detaches x from the graph for safety"
+    ],
+    "answer_index": 1,
+    "explanation": "The forward pass both computes y and records the operation ('square') linking y back to x. The gradient is only computed later when you call backward. y remains a tensor attached to the graph."
+  },
+  {
+    "id": "00.3-015",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "3. The simplest example, by hand then by autograd",
+    "question": "On what kind of tensor do you call .backward() in a training loop?",
+    "options": [
+      "The final scalar, which in real training is the loss",
+      "Each parameter tensor individually, one call per weight",
+      "The input batch of token IDs fed to the model",
+      "The model's output logits of shape (B, T, V)"
+    ],
+    "answer_index": 0,
+    "explanation": "Backward starts from a single number — the final scalar. In real training that scalar is the loss. Calling backward on a non-scalar requires extra arguments and is not the normal pattern."
+  },
+  {
+    "id": "00.3-016",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "3. The simplest example, by hand then by autograd",
+    "question": "After y.backward(), which tensor holds the gradient dy/dx?",
+    "options": [
+      "The output y, in y.grad",
+      "Both x and y equally",
+      "Neither; it is returned by backward()",
+      "The leaf x, in x.grad"
+    ],
+    "answer_index": 3,
+    "explanation": "The gradient lands in the leaf's .grad — here x.grad — not on y. backward() returns None; its effect is filling .grad on leaves."
+  },
+  {
+    "id": "00.3-017",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "3. The simplest example, by hand then by autograd",
+    "question": "What does the value in x.grad represent?",
+    "options": [
+      "The slope of y with respect to x at x's current value",
+      "A symbolic formula for dy/dx that you can evaluate later",
+      "The change in x since the last optimiser step",
+      "The value of x that minimises y, found by autograd"
+    ],
+    "answer_index": 0,
+    "explanation": "x.grad is a number: how y changes as x changes right at the current value, i.e. the local slope. Autograd does not produce symbolic formulas. It is not a step history or an optimum."
+  },
+  {
+    "id": "00.3-018",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "For z = w*x + b and loss = (z - target)^2, what is d loss / dz?",
+    "options": [
+      "(z - target)^2",
+      "2(z - target)",
+      "2z - target",
+      "z - target"
+    ],
+    "answer_index": 1,
+    "explanation": "Differentiating the square gives d loss/dz = 2(z - target). With z = 7 and target = 10 that is -6. The other forms drop the factor of 2, keep the square, or misplace the target."
+  },
+  {
+    "id": "00.3-019",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "For z = w*x + b, what are the local derivatives dz/dw, dz/db and dz/dx?",
+    "options": [
+      "w, 1 and x",
+      "1, x and w",
+      "x, b and w",
+      "x, 1 and w"
+    ],
+    "answer_index": 3,
+    "explanation": "z is linear in each input: dz/dw = x, dz/db = 1 and dz/dx = w. The chain rule then multiplies each by d loss/dz. Swapping w and x is the common slip."
+  },
+  {
+    "id": "00.3-020",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "How does the chain rule combine derivatives in a chain of operations?",
+    "options": [
+      "The derivative of the chain is the sum of the local derivatives",
+      "Only the last operation's derivative matters; earlier ones cancel out",
+      "The derivative of the chain is the product of the local derivatives",
+      "Local derivatives are averaged across all operations in the chain"
+    ],
+    "answer_index": 2,
+    "explanation": "By the chain rule, d loss/dw = (d loss/dz)(dz/dw): the local derivatives multiply. For w = 2, x = 3, b = 1, target = 10 that gives -6 x 3 = -18 for w and -6 x 1 = -6 for b. Summing would give wrong answers."
+  },
+  {
+    "id": "00.3-021",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "With w = 2, x = 3, b = 1, target = 10, z = w*x + b and loss = (z - target)^2, what are w.grad and b.grad?",
+    "options": [
+      "-6 and -18",
+      "18 and 6",
+      "-12 and -6",
+      "-18 and -6"
+    ],
+    "answer_index": 3,
+    "explanation": "z = 7, loss = 9, d loss/dz = 2(7-10) = -6. Then d loss/dw = -6 x x = -18 and d loss/db = -6 x 1 = -6. -12 is d loss/dx = -6 x w, not a weight gradient."
+  },
+  {
+    "id": "00.3-022",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "In z = w*x + b with w = 2, x = 3, b = 1 and target 10, why is the gradient on w the steepest?",
+    "options": [
+      "w has the largest value of the three inputs, so its gradient is largest",
+      "Its local derivative is x = 3, the largest multiplier of d loss/dz",
+      "w was created first, so autograd assigns it the full gradient",
+      "b's gradient is always zero, so w and x share the whole signal"
+    ],
+    "answer_index": 1,
+    "explanation": "Each gradient is d loss/dz times the local derivative: for w that is x = 3, for b it is 1, and for x it is w = 2. So w gets -18, the steepest, meaning increasing w sharply reduces the loss. The magnitude of w itself is not what matters."
+  },
+  {
+    "id": "00.3-023",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "In the two-node example, x = torch.tensor(3.0) is created without requires_grad. How does autograd treat it?",
+    "options": [
+      "As a constant: no gradient is computed or stored for it",
+      "As a parameter: its gradient is computed and stored in x.grad",
+      "As an error, because all inputs need requires_grad",
+      "As a detached copy of w that shares w's gradient"
+    ],
+    "answer_index": 0,
+    "explanation": "With requires_grad=False (the default), x is treated as fixed data, so autograd neither computes nor stores a gradient for it. That is how you tell autograd which tensors are parameters to train and which are fixed inputs. No error occurs."
+  },
+  {
+    "id": "00.3-024",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "How do you tell autograd 'these are the things to train, and everything else is fixed data'?",
+    "options": [
+      "Put trainable tensors on the GPU and data on the CPU",
+      "Give trainable tensors float32 and data float16",
+      "Set requires_grad=True only on the trainable tensors",
+      "Wrap data tensors in .item()"
+    ],
+    "answer_index": 2,
+    "explanation": "Autograd tracks and stores gradients only for leaves with requires_grad=True, so you set it on parameters and leave inputs and targets at the default False. Device and dtype do not mark trainability."
+  },
+  {
+    "id": "00.3-025",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "After loss.backward() in z = w*x + b, does the intermediate tensor z keep a .grad by default?",
+    "options": [
+      "Yes; every tensor in the graph keeps its own .grad after backward runs",
+      "Yes; but only if z is a scalar, since vectors cannot hold a .grad",
+      "No; because PyTorch detaches z from the graph automatically after the forward",
+      "No; z participates in backward but PyTorch frees its gradient to save memory"
+    ],
+    "answer_index": 3,
+    "explanation": "Intermediate tensors like z are used in the backward pass — their local derivatives are chained — but they do not retain a .grad by default; PyTorch frees it to save memory. Only leaf tensors with requires_grad=True keep .grad. z is not detached."
+  },
+  {
+    "id": "00.3-026",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "4. A two-node graph, worked by hand and matched",
+    "question": "In a real neural network, which tensors are the leaves that receive .grad?",
+    "options": [
+      "The intermediate activations",
+      "The model's parameters",
+      "The input batch",
+      "The loss value"
+    ],
+    "answer_index": 1,
+    "explanation": "In a real model the leaves with requires_grad=True are the parameters, which is exactly the set of tensors you want gradients for. Activations are intermediates without retained grads, inputs do not require grad, and the loss is the root of the backward pass."
+  },
+  {
+    "id": "00.3-027",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "5. Turning autograd off: no_grad and detach",
+    "question": "Why might you want to turn autograd off?",
+    "options": [
+      "It makes the forward pass numerically inaccurate by rounding stored intermediates",
+      "It prevents tensors from being moved to the GPU while the graph is still alive",
+      "Its bookkeeping costs time and memory that is wasted when no backward pass will run",
+      "It doubles the number of parameters, since every weight gets a shadow copy"
+    ],
+    "answer_index": 2,
+    "explanation": "Every recorded operation stores what it needs for backward, which costs time and memory. When making predictions, or doing arithmetic that must not be part of the gradient, that cost is wasted. Recording does not change numerical results or device placement."
+  },
+  {
+    "id": "00.3-028",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "5. Turning autograd off: no_grad and detach",
+    "question": "What does with torch.no_grad(): do?",
+    "options": [
+      "Disables graph recording for everything computed inside the block",
+      "Deletes all existing .grad attributes on the model's parameters",
+      "Detaches all parameters permanently, so they can no longer be trained",
+      "Sets the learning rate to zero for every step inside the block"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.no_grad() is a context manager under which operations are computed but not recorded. For w with requires_grad=True, y = w * 3 inside the block has y.requires_grad == False. It does not delete grads or permanently change parameters."
+  },
+  {
+    "id": "00.3-029",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "5. Turning autograd off: no_grad and detach",
+    "question": "Which two situations are named as reasons to wrap code in torch.no_grad()?",
+    "options": [
+      "Evaluation/generation, and the optimizer's parameter update",
+      "Loss computation, and the backward pass that follows it",
+      "Data loading, and saving checkpoints to disk during training",
+      "Weight initialisation, and gradient zeroing before each step"
+    ],
+    "answer_index": 0,
+    "explanation": "Evaluation and generation never call backward, so recording would waste memory. The parameter update also goes inside no_grad because changing the weights is not part of the function whose gradient we want. The loss and backward must be recorded."
+  },
+  {
+    "id": "00.3-030",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "5. Turning autograd off: no_grad and detach",
+    "question": "What does .detach() return?",
+    "options": [
+      "A deep copy of the tensor with its own separately allocated memory",
+      "A tensor sharing the same data but cut out of the graph",
+      "The tensor's accumulated gradient, as a new tensor",
+      "The tensor converted to a plain Python number"
+    ],
+    "answer_index": 1,
+    "explanation": ".detach() returns a tensor with the same data but no link back to the graph — a value with its history clipped off; its requires_grad is False. It is not a deep copy (memory is shared), not the gradient, and not a Python number."
+  },
+  {
+    "id": "00.3-031",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "5. Turning autograd off: no_grad and detach",
+    "question": "When is .detach() the right tool?",
+    "options": [
+      "When you want a gradient to flow into a frozen parameter that has requires_grad=False",
+      "When you want to move a tensor to another device without copying its underlying data",
+      "When you want to zero the accumulated gradients before running the next backward pass",
+      "When you want to use a value as a constant, e.g. for logging, so no gradient flows back"
+    ],
+    "answer_index": 3,
+    "explanation": "Use .detach() to treat a value as a constant — for logging or feeding into a computation whose gradient must not reach the original tensor. It does the opposite of enabling gradient flow, and it neither moves devices nor zeroes gradients."
+  },
+  {
+    "id": "00.3-032",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "6. Why gradients accumulate — and zero_grad",
+    "question": "What does .backward() do to an existing value in a leaf's .grad?",
+    "options": [
+      "Overwrites it with the new gradient",
+      "Averages it with the new gradient",
+      "Adds the new gradient to it",
+      "Raises an error if it is not None"
+    ],
+    "answer_index": 2,
+    "explanation": ".backward() accumulates into .grad rather than overwriting. With p = 1.0, calling (p * 2).backward() twice gives p.grad = 2 then 4 — the second 2 was added. It is not averaged, and no error is raised."
+  },
+  {
+    "id": "00.3-033",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "6. Why gradients accumulate — and zero_grad",
+    "question": "Why does PyTorch accumulate gradients rather than overwrite them?",
+    "options": [
+      "It saves memory by reusing the same .grad buffer instead of allocating",
+      "It makes it easy to sum gradients from several pieces of a batch",
+      "It is required for the dynamic graph to be rebuilt on every forward pass",
+      "It makes the learning rate effectively smaller as steps go by"
+    ],
+    "answer_index": 1,
+    "explanation": "Accumulation is deliberate: it lets you sum gradients from multiple backward passes, used on purpose for gradient accumulation across micro-batches. It is not about the dynamic graph or the learning rate."
+  },
+  {
+    "id": "00.3-034",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "6. Why gradients accumulate — and zero_grad",
+    "question": "What happens in an ordinary training loop if gradients are never cleared between steps?",
+    "options": [
+      "Each step's gradient includes all previous steps' leftovers, and training silently goes wrong",
+      "PyTorch raises a RuntimeError on the second backward() because .grad is already populated",
+      "Nothing goes wrong, because optimizer.step() automatically resets every gradient to zero",
+      "Training converges faster, because the accumulated gradients act like extra momentum terms"
+    ],
+    "answer_index": 0,
+    "explanation": "Without clearing, step 2's gradient includes step 1's, step 3's includes both, and so on — the update direction is wrong. No error is raised and optimizer.step() does not reset grads. The loss just behaves strangely, often failing to converge."
+  },
+  {
+    "id": "00.3-035",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "6. Why gradients accumulate — and zero_grad",
+    "question": "Which are valid ways to clear a parameter's gradient?",
+    "options": [
+      "p.detach() on the parameter, or wrapping the step in torch.no_grad()",
+      "p.requires_grad = False, then back to True before the next step",
+      "optimizer.zero_grad(), or manually p.grad.zero_() or p.grad = None",
+      "loss.backward(retain_graph=False), which frees and clears all grads"
+    ],
+    "answer_index": 2,
+    "explanation": "The optimizer clears all its parameters' gradients with optimizer.zero_grad(); manually you can call p.grad.zero_() or set p.grad = None. detach, no_grad and requires_grad affect tracking, not the stored gradient."
+  },
+  {
+    "id": "00.3-036",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "6. Why gradients accumulate — and zero_grad",
+    "question": "A training loop runs without errors but does not learn. What is the first thing to check?",
+    "options": [
+      "That the model has more than one hidden layer",
+      "That the loss is printed with .item()",
+      "That all the data tensors live on the CPU",
+      "That gradients are being zeroed every step"
+    ],
+    "answer_index": 3,
+    "explanation": "Forgetting zero_grad() is one of the most common and insidious training bugs: no error, just a loss that behaves strangely because every gradient is contaminated by earlier ones. It is the first thing to check when a loop runs but does not learn."
+  },
+  {
+    "id": "00.3-037",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Debugging exercise: the silently detached tensor",
+    "question": "x = torch.tensor(3.0, requires_grad=True); y = x.detach() ** 2; y.backward(). What happens?",
+    "options": [
+      "RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn",
+      "x.grad becomes tensor(6.), since detach only affects the forward value",
+      "x.grad becomes tensor(0.), because the detached path contributes a zero gradient to x",
+      "y.grad becomes tensor(6.) and x.grad stays None, with no error raised"
+    ],
+    "answer_index": 0,
+    "explanation": "x.detach() cuts the value out of the graph, so y is computed from a constant and has no path back to x. Calling y.backward() fails outright with 'element 0 of tensors does not require grad and does not have a grad_fn', and x.grad stays None. Removing the stray .detach() gives x.grad = 6."
+  },
+  {
+    "id": "00.3-038",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Debugging exercise: the silently detached tensor",
+    "question": "A parameter's .grad is unexpectedly None or zero after backward. What should you hunt for on the path between loss and parameter?",
+    "options": [
+      "A missing .item() call on the loss, so backward receives a tensor instead of a float",
+      "A learning rate that is too small, so the stored gradient underflows to zero",
+      "A tensor that is contiguous, which autograd skips when it builds the backward graph",
+      "A .detach(), a no_grad block, a non-differentiable dtype cast, or a NumPy round-trip"
+    ],
+    "answer_index": 3,
+    "explanation": "Any .detach() or no_grad block on the path silently severs the gradient, as does converting to a non-differentiable dtype or to a NumPy array and back. The learning rate and contiguity do not affect whether a gradient reaches the parameter."
+  },
+  {
+    "id": "00.3-039",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Check yourself",
+    "question": "For y = x**3 with x = torch.tensor(2.0, requires_grad=True), what is x.grad after y.backward()?",
+    "options": [
+      "tensor(8.)",
+      "tensor(12.)",
+      "tensor(6.)",
+      "tensor(4.)"
+    ],
+    "answer_index": 1,
+    "explanation": "dy/dx = 3x^2 = 3 x 4 = 12, so x.grad is tensor(12.). 8 is the forward value 2^3; 6 would be 3x, a mistaken derivative."
+  },
+  {
+    "id": "00.3-040",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Check yourself",
+    "question": "You call loss.backward() twice in a row on the same computation without zeroing. What happens to the parameter gradients?",
+    "options": [
+      "They stay the same, because the second call overwrites the first one's result",
+      "They become zero, because the two backward calls cancel each other out",
+      "They double, because the second call adds the same gradient again",
+      "They are halved, because PyTorch averages over the two backward calls"
+    ],
+    "answer_index": 2,
+    "explanation": "Backward accumulates into .grad, so a second identical backward adds the same gradient again and the gradients double. That is why training loops call optimizer.zero_grad() before each backward."
+  },
+  {
+    "id": "00.3-041",
+    "chapter": "00.3",
+    "chapter_name": "Autograd: backward and grad",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why is model evaluation or generation wrapped in with torch.no_grad():?",
+    "options": [
+      "Without it, the model's weights would be updated during every forward pass",
+      "No backward will be called, so building the graph would waste memory and time",
+      "Without it, outputs would differ numerically from the ones produced during training",
+      "It is required to run the model on a GPU with mixed-precision kernels"
+    ],
+    "answer_index": 1,
+    "explanation": "Because no backward pass happens during evaluation or generation, recording intermediate values for one wastes memory and time. no_grad disables recording, making the forward pass cheaper. Weights are only updated by an optimizer step, and outputs are numerically the same."
+  }
+]

@@ -1,0 +1,1136 @@
+[
+  {
+    "id": "11.3-001",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How does an n-gram used for benchmark contamination checks relate to a k-shingle used in deduplication?",
+    "options": [
+      "An n-gram is a random sample of n words, while a shingle is consecutive",
+      "They are the same idea: a window of n (or k) consecutive words",
+      "An n-gram is a character window, while a shingle is a sentence",
+      "An n-gram is a hash, while a shingle is the original text"
+    ],
+    "answer_index": 1,
+    "explanation": "A word n-gram and a word k-shingle are the same object — a sliding window of consecutive words. Contamination detection reuses the representation from near-duplicate detection, but with a different, directional measure."
+  },
+  {
+    "id": "11.3-002",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How does data-side contamination handling relate to eval-side contamination handling?",
+    "options": [
+      "Data-side removes leakage before training; eval-side detects afterwards that a model was likely contaminated",
+      "They are unrelated phenomena with different causes, so each side needs its own detector and its own threshold",
+      "Data-side handles toxicity and PII in the corpus, while eval-side handles contamination of the benchmark scores",
+      "Data-side deletes leaked benchmarks from the eval suite, while eval-side deletes the matching training documents"
+    ],
+    "answer_index": 0,
+    "explanation": "Contamination can be fought before training by removing overlapping training documents (data side) or after training by detecting likely contamination during evaluation (eval side). Both target the same leakage."
+  },
+  {
+    "id": "11.3-003",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why can two models with identical architecture and compute differ enormously in quality?",
+    "options": [
+      "Because of floating-point nondeterminism on GPUs",
+      "Because one used a larger batch size for evaluation",
+      "Because of differences in the tokenizer's special tokens only",
+      "Purely because of what data they saw and in what proportion"
+    ],
+    "answer_index": 3,
+    "explanation": "Data choices — contamination, mixture proportions and ordering — are among the highest-leverage decisions in pretraining, and they are invisible in the model code. Same architecture and FLOPs can still yield very different models."
+  },
+  {
+    "id": "11.3-004",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is benchmark contamination described as making a mediocre model look great on paper?",
+    "options": [
+      "Contamination makes training faster, so the model reaches a lower loss on the same compute budget",
+      "Contamination increases the effective parameter count, since memorized items occupy extra capacity",
+      "Test-set text in training lets the model score by remembering rather than reasoning, inflating benchmarks",
+      "Contamination makes the evaluation harness select easier questions, which lowers the benchmark's difficulty"
+    ],
+    "answer_index": 2,
+    "explanation": "If benchmark questions or answers were in training, the model can recall them, so the score reflects memorization rather than capability. This is a real, recurring scandal on LLM leaderboards."
+  },
+  {
+    "id": "11.3-005",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Among contamination, mixing and curriculum, what does each primarily affect?",
+    "options": [
+      "Contamination affects training speed; mixing affects tokenizer size; curriculum affects the model's width and depth",
+      "Contamination affects trust in eval scores; mixing decides which capabilities appear; curriculum adds quality",
+      "All three only affect the learning rate schedule, which in turn sets every downstream capability",
+      "Contamination affects memory usage; mixing affects the batch size; curriculum affects the sequence length"
+    ],
+    "answer_index": 1,
+    "explanation": "Contamination inflates evaluation, mixing determines what capabilities the model gets, and curriculum (ordering, annealing) extracts more quality from the same data. All are high-leverage and invisible in the model definition."
+  },
+  {
+    "id": "11.3-006",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "1. Benchmark contamination: the invisible cheat",
+    "question": "What is benchmark contamination (leakage)?",
+    "options": [
+      "Test data leaking into the training data, inflating evaluation",
+      "Training data leaking into the model's output at inference time",
+      "The benchmark's answer key containing errors or ambiguous labels",
+      "A model forgetting earlier training data as later data arrives"
+    ],
+    "answer_index": 0,
+    "explanation": "Contamination is when benchmark items (questions or answers) are present in the training corpus. The model then scores well by remembering rather than reasoning."
+  },
+  {
+    "id": "11.3-007",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "1. Benchmark contamination: the invisible cheat",
+    "question": "Why does benchmark contamination happen so constantly in LLM pretraining?",
+    "options": [
+      "Because benchmark authors deliberately leak test sets onto the web to promote their benchmark's adoption",
+      "Because tokenizers copy benchmark text into the vocabulary, so every model sees it during tokenization itself",
+      "Because evaluation harnesses train briefly on the test set by default before reporting their scores",
+      "Benchmarks are built from the public web, and the training data is the public web, so test items get crawled"
+    ],
+    "answer_index": 3,
+    "explanation": "Benchmarks are drawn from or discussed on the web, and web crawls scoop up quiz sites, solutions and forum answers. Unless you actively remove them, you are very likely training on some of your own test set."
+  },
+  {
+    "id": "11.3-008",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "1. Benchmark contamination: the invisible cheat",
+    "question": "What does a decontamination pass do?",
+    "options": [
+      "After training, removes the benchmark questions that the model answered correctly from the reported set",
+      "Before training, removes near-duplicate documents within the corpus using MinHash over k-shingles",
+      "Before training, scans the corpus for overlap with every reported benchmark and removes matching documents",
+      "After training, re-weights the benchmark scores by item difficulty to cancel out any likely memorization effect"
+    ],
+    "answer_index": 2,
+    "explanation": "Decontamination runs before training: it checks the corpus against every benchmark you will report and deletes the overlapping training documents. Without it you cannot trust your own eval numbers, and neither can anyone else."
+  },
+  {
+    "id": "11.3-009",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "1. Benchmark contamination: the invisible cheat",
+    "question": "What is the consequence of skipping a decontamination pass before reporting benchmark results?",
+    "options": [
+      "The model will fail to converge, because leaked items cause loss spikes",
+      "You cannot trust your own eval numbers, and neither can anyone else",
+      "The benchmark becomes unusable for every other lab that evaluates on it",
+      "The tokenizer will overfit to benchmark text and inflate its vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "Without decontamination, any benchmark score might reflect memorization of leaked items. The numbers lose their meaning both for you and for readers."
+  },
+  {
+    "id": "11.3-010",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "How does the standard n-gram contamination detector decide whether a benchmark item leaked into a training document?",
+    "options": [
+      "It measures what fraction of the benchmark item's word n-grams also appear in the training document",
+      "It computes symmetric Jaccard similarity between the two n-gram sets and flags any pairs above 0.8",
+      "It checks whether the two texts share the same MinHash signature across all of the hash bands",
+      "It compares the perplexity of the benchmark item under the model with that of a held-out paraphrase"
+    ],
+    "answer_index": 0,
+    "explanation": "Each text becomes a set of word n-grams. The detector measures the fraction of the test item's n-grams present in the training document; a high fraction means the benchmark text is in training."
+  },
+  {
+    "id": "11.3-011",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "Why is the n-gram contamination measure directional (asymmetric) rather than symmetric Jaccard?",
+    "options": [
+      "Because symmetric Jaccard cannot be computed when the two n-gram sets have very different sizes",
+      "Because directional measures are cheaper to compute on GPUs than unions over large n-gram sets",
+      "Because the training document is always shorter than the test item, so its count is the natural denominator",
+      "The question is how much of the test item shows up in train, so it normalizes by the test item's n-grams"
+    ],
+    "answer_index": 3,
+    "explanation": "A training document is typically much larger than a benchmark item, so symmetric Jaccard would be tiny even if the whole test item were present. Dividing by the test item's n-gram count makes 'test item fully inside train' read as 1.0."
+  },
+  {
+    "id": "11.3-012",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "What is the formula for directional n-gram overlap used for contamination detection?",
+    "options": [
+      "$|\\text{ngrams}(test) \\cap \\text{ngrams}(train)| \\,/\\, |\\text{ngrams}(test) \\cup \\text{ngrams}(train)|$",
+      "$|\\text{ngrams}(test) \\cap \\text{ngrams}(train)| \\,/\\, |\\text{ngrams}(train)|$",
+      "$|\\text{ngrams}(test) \\cap \\text{ngrams}(train)| \\,/\\, |\\text{ngrams}(test)|$",
+      "$|\\text{ngrams}(train)| \\,/\\, |\\text{ngrams}(test)|$"
+    ],
+    "answer_index": 2,
+    "explanation": "The numerator is the shared n-grams and the denominator is the test item's n-gram count, so the measure asks how much of the test item appears in train. Dividing by the union gives Jaccard; dividing by train's count would make large training docs look clean."
+  },
+  {
+    "id": "11.3-013",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "What does an n-gram overlap of 1.0 between a training document and a benchmark item mean?",
+    "options": [
+      "The training document and the test item are identical in length and in word order",
+      "Every test n-gram appears in the training document (e.g. the test item is a substring of it)",
+      "The training document contains none of the test item's n-grams, so it is certainly clean",
+      "Half of the test n-grams appear in train, which is the usual flagging threshold for leaks"
+    ],
+    "answer_index": 1,
+    "explanation": "An overlap of 1.0 means all of the test item's n-grams appear in the training text, as happens when the test item is contained verbatim. An overlap near 0 means the two share almost no length-n word runs."
+  },
+  {
+    "id": "11.3-014",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "Why does the course's `ngram_overlap` implementation normalize text to lower-cased `\\w+` word tokens before building n-grams?",
+    "options": [
+      "So trailing punctuation and capitalization (e.g. 'Paris,' vs 'paris') do not block a real match",
+      "So the resulting word n-grams can be fed straight into the BPE tokenizer for hashing",
+      "So the n-gram sets stay smaller than the vocabulary and fit into memory even for large corpora",
+      "So that common stop-words such as 'the' and 'of' are removed from both texts before comparing"
+    ],
+    "answer_index": 0,
+    "explanation": "Without normalization, 'Paris,' and 'paris' would be different tokens and break an otherwise verbatim match. Lower-casing and keeping only word characters is the same normalization GPT-3 and later reports use for overlap checks."
+  },
+  {
+    "id": "11.3-015",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "2. Detecting contamination with n-gram overlap",
+    "question": "What does the course's `ngram_overlap(train_text, test_text, n=8)` return when the test text has no n-grams (e.g. it is shorter than n words)?",
+    "options": [
+      "1.0",
+      "It raises a ZeroDivisionError",
+      "None",
+      "0.0"
+    ],
+    "answer_index": 3,
+    "explanation": "If ngrams(test_text, n) is empty, the function returns 0.0 before dividing. Otherwise it returns the size of the shared set divided by the number of test n-grams."
+  },
+  {
+    "id": "11.3-016",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "An 8-word benchmark item is split into word 4-grams by sliding a 4-word window. How many 4-grams does it produce?",
+    "options": [
+      "4 (8 / 2)",
+      "8 (one per word)",
+      "5 (8 − 4 + 1)",
+      "2 (8 / 4)"
+    ],
+    "answer_index": 2,
+    "explanation": "A window of n words over L words gives L − n + 1 n-grams. For 8 words and n = 4 that is 5. Non-overlapping chunks would give 2, which is not how n-grams are formed."
+  },
+  {
+    "id": "11.3-017",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "A training document reads 'Study notes. The mitochondria is the powerhouse of the cell, a fact every student memorizes.' Why is its 4-gram overlap with the benchmark item 'the mitochondria is the powerhouse of the cell' exactly 1.0?",
+    "options": [
+      "Because the training document has more words than the benchmark item, and the overlap score counts total shared words",
+      "After normalization it contains the run 'the mitochondria is the powerhouse of the cell', so all 5 test 4-grams appear",
+      "Because it shares the word 'the' with the benchmark item, and 'the' starts most of the test item's 4-grams",
+      "Because overlap is always 1.0 when both texts are English sentences about the same scientific topic"
+    ],
+    "answer_index": 1,
+    "explanation": "Lower-casing and stripping punctuation turn 'The … cell,' into the exact benchmark run, so every one of the 5 test 4-grams is present. 5/5 = 1.0. Sharing a single common word would not make whole 4-grams match."
+  },
+  {
+    "id": "11.3-018",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "In a decontamination pass, what is removed when a training document is flagged as overlapping a benchmark item?",
+    "options": [
+      "The offending training document — never the benchmark",
+      "The benchmark item, so the training data stays fully intact",
+      "Both the training document and the benchmark item",
+      "Only the overlapping n-grams inside the benchmark"
+    ],
+    "answer_index": 0,
+    "explanation": "Decontamination deletes the training documents that overlap. The benchmark stays intact so the evaluation remains meaningful."
+  },
+  {
+    "id": "11.3-019",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "What kinds of flagging rules does a decontamination pass typically use?",
+    "options": [
+      "Flag a training document only if it is byte-identical to a benchmark item, after Unicode normalization",
+      "Flag a training document if it has the same word count as a benchmark item and shares its first sentence exactly",
+      "Flag a training document if its perplexity under a small reference model falls below a fixed threshold",
+      "Flag a training document with ≥ 0.5 overlap against any benchmark item, or even a single shared long n-gram"
+    ],
+    "answer_index": 3,
+    "explanation": "Typical rules use a fractional threshold (e.g. overlap ≥ 0.5) or flag on any single shared long n-gram. Byte-identical matching would miss most real leaks."
+  },
+  {
+    "id": "11.3-020",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "What two poles does the course's contamination unit test assert for `ngram_overlap`?",
+    "options": [
+      "Overlap = 0.5 for any two English texts, and exactly 1.0 for identical texts of the same length",
+      "Overlap is symmetric when train and test are swapped, and it is 0 only when both texts are empty",
+      "Overlap = 1.0 when the test text is a substring of the train text, and ≈ 0 for disjoint text",
+      "Overlap is always above 0.9 for documents from the same domain, and 0 for documents across domains"
+    ],
+    "answer_index": 2,
+    "explanation": "The test checks the extremes: full containment gives 1.0, and unrelated text gives approximately 0. These capture the behavior a decontamination threshold relies on."
+  },
+  {
+    "id": "11.3-021",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "In a contamination check, what is the effect of choosing a small n (say 4) for the n-gram size?",
+    "options": [
+      "It fires only on long verbatim runs, giving high precision but missing paraphrased leaks entirely",
+      "It catches paraphrases and partial leakage but fires on common phrases that are not really contamination",
+      "It makes the check unable to detect any leakage, because 4-grams are too short to ever match one another exactly",
+      "It makes the overlap measure symmetric, so train and test can be swapped without changing the score"
+    ],
+    "answer_index": 1,
+    "explanation": "Short n-grams match partial and lightly-paraphrased leaks (higher recall), but common phrases like 'as a result of' also match by chance, producing false positives."
+  },
+  {
+    "id": "11.3-022",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "What n-gram size is a common production value for contamination detection, and what is its trade-off?",
+    "options": [
+      "13 — fires only on long verbatim runs (high precision) but misses lightly-edited leaks",
+      "2 — catches every paraphrase with no false positives on common phrases or boilerplate",
+      "4 — gives perfect precision and recall on every benchmark at once, with no tuning",
+      "50 — required so that punctuation and casing differences never block a real match"
+    ],
+    "answer_index": 0,
+    "explanation": "Large n like 13 matches only long verbatim runs, which are rarely coincidental, so precision is high. The cost is recall: light edits break long exact runs, so some leaks slip through."
+  },
+  {
+    "id": "11.3-023",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example, worked by hand",
+    "question": "Why do real decontamination pipelines often flag on 'shares any n-gram for large n' rather than on an overlap fraction?",
+    "options": [
+      "Because overlap fractions cannot be computed for long training documents with many millions of distinct n-grams",
+      "Because large n-grams cannot be hashed into a Bloom filter without far too many collisions",
+      "Because overlap fractions are always exactly 1.0 for large n, so they carry no information at all",
+      "A single shared 13-word run is already very unlikely by chance, so one match is strong evidence of leakage"
+    ],
+    "answer_index": 3,
+    "explanation": "Long verbatim runs essentially never occur by coincidence, so even one shared 13-gram is strong evidence. That makes 'any shared long n-gram' a natural, high-precision rule."
+  },
+  {
+    "id": "11.3-024",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "3. Dataset mixing: weighting the sources",
+    "question": "Which major source types make up a typical pretraining corpus, and what is each valued for?",
+    "options": [
+      "Web (always high quality), code (only for code models), books (mostly short), math (abundant, low value)",
+      "Only web data, split by domain name into news, forums and encyclopedias, each weighted by its raw size",
+      "Web (huge, variable quality), code (structure, maybe reasoning), books (long-form), math (dense, scarce)",
+      "Web (small and clean), code (huge and noisy), books (low quality and short), math (abundant and very cheap)"
+    ],
+    "answer_index": 2,
+    "explanation": "A corpus mixes sources of very different character: web is the bulk with variable quality; code teaches syntax and (evidence suggests) reasoning; books give long-form coherence; math is scarce but disproportionately valuable. Wikipedia, papers and curated Q&A are also common."
+  },
+  {
+    "id": "11.3-025",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "3. Dataset mixing: weighting the sources",
+    "question": "In dataset mixing, how many tokens does source s contribute given weight $p_s$ (with $\\sum_s p_s = 1$) and total budget $T_{\\text{total}}$?",
+    "options": [
+      "$T_{\\text{total}} / p_s$",
+      "$p_s \\cdot T_{\\text{total}}$",
+      "$p_s$ times the tokens available in source s",
+      "$T_{\\text{total}}$ divided equally among sources"
+    ],
+    "answer_index": 1,
+    "explanation": "Mixture weights partition the total token budget: source s gets p_s · T_total tokens. Because the weights sum to 1, the allocations sum to the budget."
+  },
+  {
+    "id": "11.3-026",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "3. Dataset mixing: weighting the sources",
+    "question": "Why are mixture weights a first-class design decision in pretraining?",
+    "options": [
+      "They directly shape which capabilities the model gets: math near zero means bad math at any scale",
+      "They determine the model's parameter count, since each source gets its own embedding rows",
+      "They only affect the throughput of the data loader, not what the model learns from the tokens",
+      "They control the tokenizer's vocabulary size, because BPE merges are learned in proportion to each weight"
+    ],
+    "answer_index": 0,
+    "explanation": "The proportions of code, math, books and web determine what the model is good at. Over-weighting code often yields a better coder and reasoner, while starving math leaves the model weak at math regardless of size."
+  },
+  {
+    "id": "11.3-027",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "3. Dataset mixing: weighting the sources",
+    "question": "According to common reports, what is the typical effect of over-weighting code in a pretraining mixture?",
+    "options": [
+      "A worse coder but a better mathematician",
+      "No measurable effect on any capability at all",
+      "A model that can only ever output source code",
+      "A better coder and (often) a better reasoner"
+    ],
+    "answer_index": 3,
+    "explanation": "Increasing the code share tends to improve coding and often reasoning more generally. Mixture weights are therefore tuned deliberately rather than set by raw availability."
+  },
+  {
+    "id": "11.3-028",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Why upsample high-quality sources",
+    "question": "What is the tension that motivates upsampling high-quality sources in pretraining mixtures?",
+    "options": [
+      "High-quality sources are usually too large to fit in the budget, so most of their tokens are dropped",
+      "High-quality sources cannot be tokenized with the same BPE, so they need separate vocabularies",
+      "High-quality sources are small; weighting by raw size makes them a rounding error the model barely learns",
+      "High-quality sources contain more duplicates than web text, so they must be downweighted heavily in the mix"
+    ],
+    "answer_index": 2,
+    "explanation": "You may have 900B tokens of filtered web but only 3B of good math. Proportional weighting would make math a tiny fraction of training, so the model would barely learn it."
+  },
+  {
+    "id": "11.3-029",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Why upsample high-quality sources",
+    "question": "What does it mean to upsample a scarce high-quality source in a pretraining mixture?",
+    "options": [
+      "Generate synthetic copies of it by translating it into other languages until it matches the web source's size",
+      "Give it a weight above its raw-token share, so its tokens are seen several times and web less than once",
+      "Remove all of the other sources entirely, so that the scarce source is the only data that remains",
+      "Increase the learning rate whenever its tokens appear in a batch, so each token has a larger effect"
+    ],
+    "answer_index": 1,
+    "explanation": "Upsampling assigns the source a larger weight than its natural share. Because its data is small, filling that allocation means repeating it for multiple epochs, while the abundant web is only partly sampled."
+  },
+  {
+    "id": "11.3-030",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example — a token budget split",
+    "question": "In a mixture, how is 'epochs over source' computed for a source?",
+    "options": [
+      "Tokens used from the source divided by tokens available in the source",
+      "Tokens available in the source divided by tokens used from it",
+      "The source's weight times the total token budget of the run",
+      "The total token budget divided by the number of sources in the overall mix"
+    ],
+    "answer_index": 0,
+    "explanation": "Epochs over a source = tokens used / tokens available. Above 1 means the source is repeated; below 1 means only a fraction of it is sampled."
+  },
+  {
+    "id": "11.3-031",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example — a token budget split",
+    "question": "With a 300B-token budget, a web source of 900B tokens at weight 0.67 is seen about 0.22 times. What does an epoch value below 1 mean?",
+    "options": [
+      "The source is repeated multiple times during training, once per extra epoch",
+      "The source is excluded from training entirely, since it is too big to sample",
+      "The source's tokens are each seen exactly once over the course of training",
+      "There is far more of that source than needed, so only a fraction of it is sampled"
+    ],
+    "answer_index": 3,
+    "explanation": "0.67 × 300B = 201B used out of 900B available gives 0.22 epochs. Below 1 means much of the source is never seen; the budget only samples a fraction of the abundant web."
+  },
+  {
+    "id": "11.3-032",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example — a token budget split",
+    "question": "In a 300B-token mixture where math (3B tokens available) has weight 0.07, what is the 'upsampling lever' made concrete?",
+    "options": [
+      "Math is seen only 0.07 times because its weight is small, so it is effectively dropped from the mix",
+      "Math is dropped entirely because its raw size is smaller than 7% of the total 300B-token budget",
+      "Math's 3B tokens repeat about 7 times to fill its 21B allocation, so a scarce source punches above its size",
+      "Math is split into 7 separate datasets for curriculum, each one shown during a different phase of the training run"
+    ],
+    "answer_index": 2,
+    "explanation": "0.07 × 300B = 21B tokens needed from a 3B source, i.e. 7 epochs. Repetition lets a small high-value source count for much more of training than its raw size."
+  },
+  {
+    "id": "11.3-033",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Numerical example — a token budget split",
+    "question": "What is the risk of upsampling a small source too heavily?",
+    "options": [
+      "Upsampling carries no risk at all, because high-quality data cannot be over-learned no matter how often it repeats",
+      "Repeating the same tokens many times is duplication and drives memorization; a few epochs is fine, many hurt",
+      "Upsampling makes the source's tokens unreadable to the tokenizer once they repeat past the vocabulary limit",
+      "Upsampling always causes training divergence after one epoch, because the loss on repeated tokens collapses"
+    ],
+    "answer_index": 1,
+    "explanation": "Heavy repetition is duplication in disguise: the model memorizes those exact tokens. Empirically a few epochs over a high-quality source is fine, but many epochs hurts. You are choosing what the model over-learns."
+  },
+  {
+    "id": "11.3-034",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "How the weights are chosen",
+    "question": "Which claim about mixture weights is PUBLICLY DOCUMENTED?",
+    "options": [
+      "Open and frontier models use deliberate, non-proportional weights, e.g. GPT-3 undersampled Common Crawl",
+      "That GPT-4 was trained on exactly 30% code, as stated in the data section of its technical report",
+      "That Claude's pretraining mixture is 50% books, as stated in Anthropic's published model card for it",
+      "That Gemini uses no web data at all, relying only on licensed books, code and curated datasets instead"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-3's paper reports down-weighting Common Crawl relative to its size and up-weighting WebText2, Books and Wikipedia, and The Pile and Dolma publish per-source weights. Exact closed-model mixtures are not public."
+  },
+  {
+    "id": "11.3-035",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "How the weights are chosen",
+    "question": "Which open datasets publish their per-source mixture weights explicitly?",
+    "options": [
+      "GPT-4's training set and Claude's training set",
+      "Only C4, in its original T5 release",
+      "Only MMLU and GSM8K, as eval sets",
+      "The Pile and Dolma"
+    ],
+    "answer_index": 3,
+    "explanation": "The Pile and Dolma publish their per-source weights explicitly, giving documented examples of deliberate, non-proportional mixtures. MMLU and GSM8K are benchmarks, not training corpora."
+  },
+  {
+    "id": "11.3-036",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "How the weights are chosen",
+    "question": "What is the REASONABLE INDUSTRY PRACTICE for choosing mixture weights?",
+    "options": [
+      "Set every source's weight proportional to its raw size, then train once on the resulting mix",
+      "Choose weights at random and keep the first mixture whose training run converges without any loss spikes",
+      "Train many small proxy models on candidate mixtures and pick the one with the best validation loss",
+      "Copy GPT-4's published mixture weights, since they are the strongest documented recipe available"
+    ],
+    "answer_index": 2,
+    "explanation": "Mixtures are searched, not guessed: labs train small proxy models on candidate mixtures and select by validation loss or downstream evals. Increasing code and math share to improve reasoning is also widely reported."
+  },
+  {
+    "id": "11.3-037",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "How the weights are chosen",
+    "question": "Why are claims like 'GPT-4 was N% code' classified as INFERENCE / SPECULATION?",
+    "options": [
+      "Because GPT-4 was trained only on web data, so any code share must be guessed from crawl statistics",
+      "The exact mixture weights of closed frontier models are not public unless the lab documents them",
+      "Because code percentages cannot be measured at all once source documents have been tokenized",
+      "Because mixture weights change during inference, so no single training percentage is meaningful"
+    ],
+    "answer_index": 1,
+    "explanation": "Closed labs do not publish their exact mixtures, so any specific percentage is a guess. Distinguishing documented facts from speculation avoids overclaiming."
+  },
+  {
+    "id": "11.3-038",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "4. Token budgets and Chinchilla",
+    "question": "What does the Chinchilla rule of thumb (Hoffmann et al., 2022) say about tokens per parameter for compute-optimal training?",
+    "options": [
+      "Tokens should scale roughly with parameters, about 20 tokens per parameter",
+      "About 1 token per parameter, so data scales one-to-one with the model's size",
+      "About 200 tokens per parameter, ten times the commonly quoted figure",
+      "Tokens should be fixed regardless of parameter count once data is clean"
+    ],
+    "answer_index": 0,
+    "explanation": "For a fixed compute budget Chinchilla found tokens should scale with parameters, with a rule of thumb near 20 tokens per parameter. A 7B model therefore wants on the order of 140B tokens."
+  },
+  {
+    "id": "11.3-039",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "4. Token budgets and Chinchilla",
+    "question": "Under the Chinchilla rule of thumb, roughly how many training tokens does a 7B-parameter model want?",
+    "options": [
+      "About 7B tokens (1x)",
+      "About 1.4T tokens",
+      "About 14B tokens",
+      "About 140B tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "7B parameters × 20 tokens per parameter ≈ 140B tokens. Modern models often train far past this for better inference economics, as LLaMA did."
+  },
+  {
+    "id": "11.3-040",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "4. Token budgets and Chinchilla",
+    "question": "Why do many modern models train on far more tokens than the Chinchilla-optimal ~20 tokens per parameter?",
+    "options": [
+      "Because Chinchilla's rule was shown to be wrong by a factor of 100 in later scaling work",
+      "Because more training tokens shrink the parameter count needed automatically",
+      "For better inference economics — a smaller model trained longer is cheaper to serve",
+      "Because tokenizers produce many more tokens than expected from the raw text"
+    ],
+    "answer_index": 2,
+    "explanation": "Chinchilla optimizes training compute only. Training a smaller model past the optimal token count makes it better per parameter, which pays off when the model is served many times, as LLaMA did."
+  },
+  {
+    "id": "11.3-041",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "4. Token budgets and Chinchilla",
+    "question": "How do the Chinchilla token budget and dataset mixture weights compose?",
+    "options": [
+      "Mixing sets how many tokens to train on, while Chinchilla sets which sources those tokens come from",
+      "Chinchilla sets how many tokens; mixing sets which tokens, by partitioning that budget across sources",
+      "They are alternatives: you use one or the other, since both of them set the total token budget",
+      "Chinchilla sets the peak learning rate, while mixing sets the batch size used for each source"
+    ],
+    "answer_index": 1,
+    "explanation": "The total token budget comes from compute and the Chinchilla ratio; mixture weights then divide it among web, code, books, math, etc. Both are set before training starts."
+  },
+  {
+    "id": "11.3-042",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "4. Token budgets and Chinchilla",
+    "question": "Which two data knobs are set before a single training step runs and move final loss more than most architecture choices?",
+    "options": [
+      "Token budget (how many tokens total) and mixture weights (what fraction from each source)",
+      "Dropout rate and weight decay, which regularize the final weights after training",
+      "Number of attention heads and MLP width, which set the model's capacity per layer",
+      "Warmup steps and gradient clipping, which stabilize the early phase of training"
+    ],
+    "answer_index": 0,
+    "explanation": "Token budget and mixture weights are both fixed up front. Together they determine how much and which data the model learns from, which matters more than most architecture tweaks."
+  },
+  {
+    "id": "11.3-043",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "In Module 4's `get_batch`, why does data order not matter?",
+    "options": [
+      "Because the model is trained for only one step in Module 4, so order never has a chance to matter",
+      "Because the loss is invariant to example order by definition, for any optimizer and learning rate",
+      "Because get_batch sorts windows by quality first, so the order is already fixed and the same on every run",
+      "It samples windows uniformly from one packed stream, so every part of the corpus is seen throughout"
+    ],
+    "answer_index": 3,
+    "explanation": "Uniform random window sampling washes out order: any region of the corpus is equally likely at any point in training. A curriculum deliberately changes this."
+  },
+  {
+    "id": "11.3-044",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "What is a data curriculum in LLM pretraining?",
+    "options": [
+      "Removing benchmark text from the training data before it starts",
+      "Choosing the tokenizer's vocabulary size in phases as training runs",
+      "Deliberately changing what the model sees when during training",
+      "Training several models in sequence and averaging their weights"
+    ],
+    "answer_index": 2,
+    "explanation": "A data curriculum changes the composition or order of data over the course of training. Its most important instance in modern pretraining is annealing toward high-quality data at the end."
+  },
+  {
+    "id": "11.3-045",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "What is data annealing in pretraining?",
+    "options": [
+      "At the start of training, using only high-quality data, then switching to web data once loss has dropped",
+      "Near the end of training, shifting the mix toward higher-quality data while decaying the learning rate",
+      "Gradually increasing the learning rate at the end of training so the model escapes its final local minimum",
+      "Removing all code and math data in the final phase so the model finishes on clean natural-language text"
+    ],
+    "answer_index": 1,
+    "explanation": "Annealing changes the late-training mixture toward the highest-quality data and pairs it with learning-rate decay. The final, small refining updates are then shaped by the best tokens."
+  },
+  {
+    "id": "11.3-046",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "What is the intuition for saving the highest-quality data for late in training?",
+    "options": [
+      "Early, big coarse updates tolerate rough web data; late, small refining updates should be shaped by the best tokens",
+      "Early training ignores data quality entirely, because the gradients stay close to zero until the warmup phase has finished",
+      "Late training has the highest learning rate of the run, so whatever data is shown then has the largest effect",
+      "High-quality data cannot be tokenized until late in training, once the BPE merges have finished being learned"
+    ],
+    "answer_index": 0,
+    "explanation": "This mirrors learning-rate decay: early steps are large and coarse, so noisy web data is acceptable; late steps are small refinements, so you want the most trustworthy data to determine where the weights settle."
+  },
+  {
+    "id": "11.3-047",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "Which open-model reports PUBLICLY DOCUMENT a multi-phase pretraining with a late high-quality data phase?",
+    "options": [
+      "GPT-4 and Claude, whose technical reports publish the exact multi-phase mixture schedules they used",
+      "BERT and RoBERTa, whose reports describe an easy-to-hard ordering followed by a quality phase",
+      "Only Chinchilla, whose report introduces data annealing as part of its compute-optimal recipe",
+      "OLMo 2 (two-stage pretrain, late high-quality phase) and Llama 3 (annealing on high-quality data)"
+    ],
+    "answer_index": 3,
+    "explanation": "OLMo 2 (2024) describes a two-stage pretrain with a late high-quality phase, and Llama 3 (2024) documents adjusting the mix and annealing on high-quality data toward the end. Closed models' schedules are not public."
+  },
+  {
+    "id": "11.3-048",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "Which curriculum practice is classified as REASONABLE INDUSTRY PRACTICE rather than publicly documented in a single recipe or speculation?",
+    "options": [
+      "Strict easy-to-hard example ordering throughout pretraining, ranked by a small reference model's loss",
+      "Training only on synthetic data from the start, then mixing web data in during annealing",
+      "Pairing the quality anneal with LR decay, and folding fresh curated or synthetic data into it",
+      "Removing all web data after the first epoch so later epochs see only curated sources"
+    ],
+    "answer_index": 2,
+    "explanation": "Combining the anneal with LR decay and using the annealing phase to add fresh curated or synthetic high-quality data is common, sensible, and reported in several technical reports. Strict easy-to-hard ordering is not established."
+  },
+  {
+    "id": "11.3-049",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "What is the status of strict 'easy-to-hard' example ordering (classic curriculum learning) for large-scale LM pretraining?",
+    "options": [
+      "PUBLICLY DOCUMENTED as standard practice in all frontier models, with their orderings published",
+      "SPECULATION: not settled; much pretraining is still IID sampling plus a late quality anneal",
+      "Proven harmful in every published study, so it is classified as a documented anti-pattern",
+      "Required by the Chinchilla scaling law, which assumes examples are seen from easy to hard"
+    ],
+    "answer_index": 1,
+    "explanation": "Claims that strict easy-to-hard ordering reliably helps large LM pretraining are not settled. Elaborate ordering is researched but not standard; most pretraining is IID sampling plus a late anneal. Do not present it as known best practice."
+  },
+  {
+    "id": "11.3-050",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "5. Data curriculum: order and annealing",
+    "question": "How does the meaning of 'curriculum' in modern LLM pretraining differ from its classic ML meaning?",
+    "options": [
+      "Classic ML means ordering examples easy to hard; in LLMs it mostly means phased mixtures and a late anneal",
+      "Classic ML means data mixing across sources; in LLM pretraining it means deduplication of the whole corpus",
+      "Both mean strictly sorting the training examples by length, from short sequences to long ones",
+      "Classic ML means learning-rate annealing; LLM pretraining means strict easy-to-hard example ordering"
+    ],
+    "answer_index": 0,
+    "explanation": "Classic curriculum learning sorts examples by difficulty. In LLM pretraining the term is used loosely for phase-based mixtures and LR schedules. Keeping the senses distinct avoids overclaiming what labs actually do."
+  },
+  {
+    "id": "11.3-051",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "6. Where this closes the module",
+    "question": "In the complete data pipeline, which steps come between deduplication and BPE encoding?",
+    "options": [
+      "Language identification, then HTML text extraction and boilerplate removal",
+      "Packing documents into a stream, then sampling with get_batch",
+      "Quality filtering with a classifier, then toxicity and PII filtering",
+      "Decontamination, mixing sources by weight, and a late quality anneal"
+    ],
+    "answer_index": 3,
+    "explanation": "The order is raw crawl → extract → langid → quality → dedup → decontaminate → mix sources by weight → ordered, quality-annealed documents → BPE encode → pack → get_batch → model."
+  },
+  {
+    "id": "11.3-052",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "6. Where this closes the module",
+    "question": "What is the overall lesson of the data-engineering module about where model quality comes from?",
+    "options": [
+      "Data only matters for small models; at scale, architecture choices dominate the final loss instead",
+      "Only the tokenizer affects final loss; the other data stages are mostly cosmetic",
+      "At the frontier, data engineering is modeling: every pipeline stage is a lever on the loss",
+      "Data stages can be ignored once the model is large enough to filter noise itself"
+    ],
+    "answer_index": 2,
+    "explanation": "Extraction, filtering, dedup, decontamination, mixing and curriculum all move the final loss without appearing in the model code. At the frontier, these choices are as much 'modeling' as the architecture."
+  },
+  {
+    "id": "11.3-053",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Exercise",
+    "question": "When decontaminating with n = 4 and a fraction-based threshold of overlap ≥ 0.5, why might the check over-flag legitimate training documents?",
+    "options": [
+      "Because 4-grams are too long to ever match by chance, so every match the check finds is genuine leakage",
+      "Short runs like 'the fact that the' or 'as a result of' occur by chance in unrelated text, giving false positives",
+      "Because a threshold of 0.5 is too high to catch anything shorter than a full paragraph of copied text",
+      "Because 4-grams ignore punctuation, so unrelated sentences collapse into the same normalized n-grams"
+    ],
+    "answer_index": 1,
+    "explanation": "Common 4-word phrases appear across unrelated documents, so a low-n, fraction-based check fires on documents that merely share phrasing with a question. Those false positives delete clean training data."
+  },
+  {
+    "id": "11.3-054",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Exercise",
+    "question": "What is a safer decontamination choice than n = 4 with a fraction threshold, and what does it trade away?",
+    "options": [
+      "Use a larger n (8–13) and/or flag any shared long n-gram: high precision, but edited leaks slip through",
+      "Use n = 1 so every shared word counts: perfect recall, with essentially no false positives on common text",
+      "Use a threshold of 0.01 so even tiny overlaps are flagged: this catches everything with no trade-off",
+      "Remove the benchmark items instead of training documents: the corpus stays intact, with no trade-off"
+    ],
+    "answer_index": 0,
+    "explanation": "Long verbatim runs are almost never coincidental, so precision is high. The cost is recall: paraphrased or lightly edited leaks break long exact runs. Decontamination deliberately errs toward precision because deleting good data is costly and long-run matches are what truly inflate scores."
+  },
+  {
+    "id": "11.3-055",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is reporting eval numbers without a decontamination pass a mistake?",
+    "options": [
+      "It makes the eval run slower, since leaked items must be re-scored",
+      "It biases the score downward, because memorized items confuse the model at test time",
+      "It violates the benchmark's license, which forbids training on it",
+      "If benchmark text was in training, the score measures memorization, not skill"
+    ],
+    "answer_index": 3,
+    "explanation": "Without decontamination you cannot know whether a high score reflects ability or recall of leaked items. The number loses its value for you and for readers."
+  },
+  {
+    "id": "11.3-056",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is weighting pretraining sources strictly by raw size a mistake?",
+    "options": [
+      "It makes the total token budget too small to reach the Chinchilla-optimal ratio",
+      "It causes far too much upsampling of web data relative to every other source in the mix",
+      "It buries scarce high-quality data under abundant web; deliberate weights are the norm",
+      "It forces every source to be repeated exactly once, which wastes the small ones"
+    ],
+    "answer_index": 2,
+    "explanation": "Proportional weighting lets the largest source — filtered web — dominate, so small high-value sources barely register. Practice is to set non-proportional weights and upsample scarce quality data."
+  },
+  {
+    "id": "11.3-057",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is the 'over-upsampling' mistake in data mixing?",
+    "options": [
+      "Giving the web source a weight larger than 0.5, so it dominates every batch",
+      "Repeating a small source too many times: disguised duplication that drives memorization",
+      "Using more than four sources in the mix, which makes the weights impossible to tune well",
+      "Sampling web data less than once, so most of the crawl is never seen in training"
+    ],
+    "answer_index": 1,
+    "explanation": "Upsampling is useful in moderation, but repeating a small source dozens of times makes the model memorize it, just like duplicated data. A few epochs is the safe range."
+  },
+  {
+    "id": "11.3-058",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is the 'overclaiming curriculum' mistake?",
+    "options": [
+      "Presenting strict easy-to-hard ordering as established at scale, when only a late anneal is documented",
+      "Claiming that a late quality anneal is documented for open models, when no technical report describes one",
+      "Claiming that get_batch samples uniformly, when it actually orders windows from easy to hard",
+      "Claiming that learning-rate decay exists in pretraining, when real runs keep the LR constant"
+    ],
+    "answer_index": 0,
+    "explanation": "A late quality-anneal is documented (e.g. OLMo 2, Llama 3); strict easy→hard ordering is not established for large LM pretraining. Mark the difference between documented practice and speculation."
+  },
+  {
+    "id": "11.3-059",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Research connection",
+    "question": "Which papers should be read for documented data mixing and quality annealing details?",
+    "options": [
+      "Attention Is All You Need, BERT, and RoBERTa, for their data and pretraining sections",
+      "Only Chinchilla, since it sets both the token budget and the mixture weights",
+      "The Adam, AdamW and Lion optimizer papers, for their data-ordering experiments",
+      "GPT-3 (source upsampling), OLMo 2 (late high-quality phase) and Llama 3 (annealing)"
+    ],
+    "answer_index": 3,
+    "explanation": "GPT-3's data section documents source upsampling, OLMo 2 describes a two-stage pretrain with a late high-quality phase, and Llama 3 documents data-mix and annealing choices. Chinchilla is the reference for token budgets."
+  },
+  {
+    "id": "11.3-060",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does a directional overlap normalized by the test item's n-gram count make 'test item inside train' read as 1.0, while symmetric Jaccard would not?",
+    "options": [
+      "Because Jaccard is undefined when one set is contained in the other, so the score falls back to zero",
+      "Because directional overlap double-counts the shared n-grams, which pushes contained items up to 1.0",
+      "A huge train document's many n-grams swamp the Jaccard union; normalizing by the test item avoids that",
+      "Because Jaccard is always exactly 1.0 for any contained set, so it cannot separate leaked from clean items"
+    ],
+    "answer_index": 2,
+    "explanation": "If the test item is fully contained in a large training document, Jaccard = |test| / |train ∪ test| is small because the union is dominated by train's n-grams. Directional overlap divides by |test| only, giving 1.0 for full containment."
+  },
+  {
+    "id": "11.3-061",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Classify these statements: 'Llama 3 annealed on high-quality data at the end of pretraining' and 'GPT-4 was trained on 30% code'.",
+    "options": [
+      "Both are PUBLICLY DOCUMENTED in technical reports",
+      "The first is PUBLICLY DOCUMENTED; the second is SPECULATION",
+      "The first is SPECULATION; the second is PUBLICLY DOCUMENTED",
+      "Both are REASONABLE INDUSTRY PRACTICE, not publicly documented"
+    ],
+    "answer_index": 1,
+    "explanation": "Llama 3's report describes late-stage data-mix adjustment and annealing on high-quality data, so the first is documented. GPT-4's exact mixture is not public, so a specific code percentage is speculation."
+  },
+  {
+    "id": "11.3-062",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Check yourself",
+    "question": "How does annealing change what happens compared with Module 4's uniform `get_batch` sampling?",
+    "options": [
+      "It changes the stream over time so late training draws from a higher-quality mix, usually with LR decay",
+      "It shuffles the same packed stream more thoroughly, so every window is sampled with exactly equal frequency",
+      "It increases the batch size late in training, so each step averages over more high-quality windows",
+      "It removes the end-of-text separator between documents, so the late stream reads as one long text"
+    ],
+    "answer_index": 0,
+    "explanation": "Uniform sampling from one fixed stream makes order irrelevant. Annealing makes the data distribution time-dependent, shifting late training toward the best data while the LR decays, so the best data shapes the final weights."
+  },
+  {
+    "id": "11.3-063",
+    "chapter": "11.3",
+    "chapter_name": "Contamination, mixing, curriculum",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-03.md",
+    "section": "Next",
+    "question": "After the full data pipeline (extraction through curriculum), what does the next module upgrade?",
+    "options": [
+      "The tokenizer: BPE is replaced by character-level tokenization for robustness",
+      "The optimizer: AdamW is replaced by plain SGD with momentum for stability",
+      "The evaluation harness: benchmarks are replaced by held-out perplexity only",
+      "The model: the GPT-2 block is upgraded to RoPE, RMSNorm, SwiGLU, GQA and MoE"
+    ],
+    "answer_index": 3,
+    "explanation": "With clean, weighted, ordered data in hand, the course returns to the model and upgrades the GPT-2 block to modern components used by current frontier LLMs: RoPE, RMSNorm, SwiGLU, GQA and MoE."
+  }
+]

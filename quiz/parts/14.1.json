@@ -1,0 +1,884 @@
+[
+  {
+    "id": "14.1-001",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In supervised fine-tuning of a language model, what is a chat template?",
+    "options": [
+      "A fixed, deterministic rule that flattens a list of role-tagged messages into one delimited token string",
+      "A learned embedding layer that converts each conversation role into a separate vector before the first attention block",
+      "A sampling strategy that decides how many tokens the assistant may generate in each turn",
+      "A dataset filter that removes low-quality conversations before fine-tuning begins"
+    ],
+    "answer_index": 0,
+    "explanation": "A chat template is the exact, deterministic serialization rule that turns a list of role-tagged messages into a single string with delimiter tokens. It is not learned and has no parameters; it is the interface between a conversation and a sequence of token ids. Because it is fixed, the model can learn where the assistant turn begins and when to stop."
+  },
+  {
+    "id": "14.1-002",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which post-training stages operate on chat-formatted data?",
+    "options": [
+      "Only SFT; reward modeling and DPO operate on raw pretraining documents",
+      "Only RLHF, because it is the only stage that samples from the model",
+      "None of them; chat formatting is applied only at inference time",
+      "SFT, reward modeling, RLHF and DPO all operate on chat-formatted data"
+    ],
+    "answer_index": 3,
+    "explanation": "Everything after pretraining — SFT, reward modeling, RLHF, DPO — consumes chat-formatted data. That is why the chat template is the foundational interface of post-training. Formatting applied only at inference would mismatch the training distribution."
+  },
+  {
+    "id": "14.1-003",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What is the typical symptom when the chat template used at inference is inconsistent with the one used in fine-tuning?",
+    "options": [
+      "The tokenizer raises an exception, because the new delimiters are missing from its vocabulary",
+      "The loss becomes NaN on the first inference step, so generation outputs only padding tokens afterwards",
+      "The model silently degrades, often never seeing the stop delimiter it learned and rambling on",
+      "The model refuses to answer and returns an empty string for every prompt it is given"
+    ],
+    "answer_index": 2,
+    "explanation": "Template mismatch does not crash anything; the model is simply off-distribution. A typical outcome is that it never sees or emits the delimiter it was trained to stop on, so it keeps generating. The failure is silent, which makes it dangerous."
+  },
+  {
+    "id": "14.1-004",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "The causal story so far",
+    "question": "What was the only training objective of a pretrained GPT-2-style model?",
+    "options": [
+      "Predict a helpful response to a user request given a system prompt",
+      "Predict the next token given the tokens so far, via cross-entropy loss",
+      "Classify whether each document is high- or low-quality web text",
+      "Reconstruct randomly masked tokens anywhere in the sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "Pretraining optimizes next-token cross-entropy: given the prefix, predict the next token. Trained on a large text pile, the model becomes very good at continuing text. It never sees an objective about answering requests, and GPT-style models are causal, not masked-token models."
+  },
+  {
+    "id": "14.1-005",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "The causal story so far",
+    "question": "Why might a purely pretrained model continue the prompt 'Write a haiku about the sea.' with 'Write a haiku about the mountains.'?",
+    "options": [
+      "Because the model's context window is too short to hold a full haiku, so it restarts the prompt from scratch",
+      "Because in web text, a line that looks like a writing prompt is most often followed by another prompt in a list",
+      "Because pretraining loss was computed only on the prompt tokens, never on the answers that follow them in web text",
+      "Because the model has a bug in its sampling loop that copies the input back to the output with one word changed"
+    ],
+    "answer_index": 1,
+    "explanation": "The pretrained model models text continuation. In its corpus, lines like 'Write a haiku about X' usually appear in lists of writing prompts, so the most probable continuation is another prompt. The model is doing its job perfectly; its job just is not following instructions."
+  },
+  {
+    "id": "14.1-006",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "The causal story so far",
+    "question": "What does a pretrained language model fundamentally model, as opposed to an instruction-tuned one?",
+    "options": [
+      "What tokens plausibly come next in a document like the given text",
+      "What answer best fulfils the user's request",
+      "Which of several candidate responses a human would prefer",
+      "Which role (system, user, or assistant) is speaking at each position"
+    ],
+    "answer_index": 0,
+    "explanation": "A pretrained LM models text continuation — what plausibly comes next in a document like this one. Nothing in pretraining tells it a prompt is a request to fulfil. Preferences are learned later (reward modeling/DPO), and roles only exist once chat templates are introduced in SFT."
+  },
+  {
+    "id": "14.1-007",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "The causal story so far",
+    "question": "How does supervised fine-tuning (SFT) teach a pretrained model to follow instructions?",
+    "options": [
+      "By adding a new classification head that detects instructions in the prompt",
+      "By training a reward model and then optimizing against it with PPO",
+      "By freezing the model and only editing its tokenizer vocabulary",
+      "By continuing training on curated (prompt, ideal response) pairs"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT continues training on demonstrations: curated pairs of a prompt and the ideal response. After enough of these, the plausible continuation of a request becomes a helpful answer. Reward models and PPO belong to RLHF, a later stage."
+  },
+  {
+    "id": "14.1-008",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "1. Intuition: SFT is just more next-token training, on different data",
+    "question": "Relative to pretraining, what does SFT change about the model architecture and loss function?",
+    "options": [
+      "It adds a response head and switches to a ranking loss",
+      "It keeps the architecture but replaces cross-entropy with a mean-squared error",
+      "Neither; it uses the same architecture and the same next-token cross-entropy",
+      "It changes the architecture to an encoder-decoder but keeps cross-entropy"
+    ],
+    "answer_index": 2,
+    "explanation": "SFT is just more next-token training: same architecture, same cross-entropy loss. What changes is the data (demonstrations of desired behavior) and where the loss is applied (response tokens only). That simplicity is why SFT is the cheapest post-training step."
+  },
+  {
+    "id": "14.1-009",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "1. Intuition: SFT is just more next-token training, on different data",
+    "question": "Which two things change when moving from pretraining to SFT?",
+    "options": [
+      "The optimizer (SGD instead of AdamW) and the tokenizer (word-level instead of byte-level BPE)",
+      "The model depth (extra layers for the response) and the attention mechanism (bidirectional)",
+      "The training data (demonstrations) and which positions the loss is applied to (response only)",
+      "The learning-rate schedule (constant instead of cosine) and the vocabulary size (chat tokens only)"
+    ],
+    "answer_index": 2,
+    "explanation": "SFT swaps raw documents for demonstrations of the target behavior, and it scores only the response tokens, not the prompt. Architecture, optimizer family, and tokenizer are unchanged. These two changes are what make the continuation of a request become a helpful answer."
+  },
+  {
+    "id": "14.1-010",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "1. Intuition: SFT is just more next-token training, on different data",
+    "question": "In the post-training pipeline, what is SFT shaping, given what pretraining already installed?",
+    "options": [
+      "Knowledge, replacing the behavior pretraining installed",
+      "Behavior, on top of the knowledge pretraining already installed",
+      "Tokenization, on top of the embeddings pretraining installed",
+      "Model capacity, by adding parameters that pretraining did not have"
+    ],
+    "answer_index": 1,
+    "explanation": "Post-training (SFT, reward modeling, RLHF/DPO) is about shaping behavior on top of the knowledge that pretraining already put in the weights. SFT is the first and cheapest of these steps. It does not add capacity or replace knowledge."
+  },
+  {
+    "id": "14.1-011",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "1. Intuition: SFT is just more next-token training, on different data",
+    "question": "Which is the order of the standard post-training pipeline?",
+    "options": [
+      "SFT, then reward model, then RLHF/DPO",
+      "Reward model, then SFT, then pretraining",
+      "RLHF, then SFT, then reward model",
+      "DPO, then pretraining, then SFT"
+    ],
+    "answer_index": 0,
+    "explanation": "The standard pipeline runs SFT first (cheapest, imitation of demonstrations), then trains a reward model, then optimizes behavior with RLHF or DPO. Pretraining comes before all of them. SFT is described as the first and cheapest step."
+  },
+  {
+    "id": "14.1-012",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "What are the three fields of the classic FLAN/Alpaca instruction-tuning example?",
+    "options": [
+      "system, user, assistant",
+      "question, context, and label",
+      "prompt, chosen, rejected",
+      "instruction, input, output"
+    ],
+    "answer_index": 3,
+    "explanation": "The classic shape is (instruction, [input], output): what to do, optionally what to do it to, and the demonstrated ideal response. 'system/user/assistant' are chat roles, and 'prompt/chosen/rejected' is the preference-data format used later for reward modeling and DPO."
+  },
+  {
+    "id": "14.1-013",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "In an (instruction, [input], output) triple, which field is optional?",
+    "options": [
+      "instruction",
+      "output",
+      "none; all three are always required",
+      "input"
+    ],
+    "answer_index": 3,
+    "explanation": "The input is optional: some instructions are self-contained, such as 'Write a haiku about the sea.' The instruction and output are always needed, since the output is what the model is trained to produce."
+  },
+  {
+    "id": "14.1-014",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "In an instruction triple, which fields together form the prompt, and which is the training target?",
+    "options": [
+      "Instruction alone is the prompt; input plus output together form the target the model is trained on",
+      "Input alone is the prompt; instruction plus output together form the target the model must produce",
+      "Instruction plus input form the prompt; output is what the model is trained to produce",
+      "All three fields are concatenated, and every token of all three is scored equally as the target"
+    ],
+    "answer_index": 2,
+    "explanation": "The instruction and optional input together form the prompt, and the output is the demonstrated response the model learns to produce. Scoring the prompt as a target would teach the model to generate instructions, which SFT avoids by masking."
+  },
+  {
+    "id": "14.1-015",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "For the triple instruction='Translate the sentence to French.', input='The cat sat on the mat.', what role does 'Le chat s'est assis sur le tapis.' play?",
+    "options": [
+      "The input: the data that the instruction acts on",
+      "The output: the demonstrated ideal response",
+      "The system message: persistent behavior",
+      "The instruction: what to do"
+    ],
+    "answer_index": 1,
+    "explanation": "The French sentence is the output field — the demonstrated ideal response. The English sentence is the input (the thing to act on) and 'Translate the sentence to French.' is the instruction. The triple format has no system field."
+  },
+  {
+    "id": "14.1-016",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "How was the FLAN instruction dataset (Wei et al. 2021) built?",
+    "options": [
+      "By rewriting existing NLP datasets as natural-language instructions using many phrasing templates",
+      "By having a strong LM generate new instruction triples from a handful of human-written seed examples",
+      "By collecting human preference rankings between pairs of model responses to the same instruction",
+      "By scraping question-answer forums and keeping only the accepted or most upvoted answer per thread"
+    ],
+    "answer_index": 0,
+    "explanation": "FLAN took existing NLP datasets (translation, summarization, QA, sentiment, ...) and rephrased each as natural-language instructions with many templates. Generating triples from seeds with an LM is Self-Instruct; preference rankings are reward-modeling data."
+  },
+  {
+    "id": "14.1-017",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "What generalization result motivates FLAN-style instruction tuning?",
+    "options": [
+      "Fine-tuning on a mixture of instruction-phrased tasks lets the model follow unseen instructions zero-shot",
+      "Fine-tuning on one task makes the model better only at that exact task, so each task needs its own run",
+      "Fine-tuning on instructions removes the need for pretraining, since instructions carry the needed knowledge",
+      "Fine-tuning on instructions makes the model's tokenizer more compact, so unseen prompts use fewer tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "FLAN showed that training on a mixture of many tasks phrased as instructions makes the model generalize to instructions it has never seen, zero-shot. It builds on pretraining rather than replacing it, and has nothing to do with tokenizer size."
+  },
+  {
+    "id": "14.1-018",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "How does Self-Instruct (Wang et al. 2022) create instruction data?",
+    "options": [
+      "Rewrite existing labelled NLP datasets into instruction form with many phrasing templates, then train on the whole mixture",
+      "Hire annotators to write every instruction-response pair by hand, then have a second annotator verify each one",
+      "Sample many responses from the model and keep those a learned reward model scores highest, then train on them",
+      "Seed a few human-written examples, have a strong LM generate many more triples, filter for quality, and train on them"
+    ],
+    "answer_index": 3,
+    "explanation": "Self-Instruct bootstraps: start from a small set of human seeds, have a strong LM generate many (instruction, input, output) triples, filter for quality, and fine-tune on the result. This avoids hand-writing every example. Template rewriting of existing datasets is FLAN's approach."
+  },
+  {
+    "id": "14.1-019",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "Which well-known instruction dataset was built with the Self-Instruct recipe?",
+    "options": [
+      "FLAN",
+      "The GPT-2 WebText corpus",
+      "Alpaca",
+      "Common Crawl"
+    ],
+    "answer_index": 2,
+    "explanation": "Alpaca used the Self-Instruct recipe: LM-generated instruction triples bootstrapped from seeds. FLAN rewrote existing NLP datasets, and WebText/Common Crawl are pretraining corpora, not instruction data."
+  },
+  {
+    "id": "14.1-020",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "When reading the FLAN and Self-Instruct papers for SFT, which parts are recommended to read closely versus skip?",
+    "options": [
+      "Read the per-task appendices closely for the templates; skip the data-construction sections on a first pass",
+      "Read the data-construction sections closely; skip the long per-task appendices on a first pass",
+      "Read only the abstracts and related-work sections, then go straight to the released datasets and code",
+      "Skip both papers entirely on a first pass; they are optional background for anyone doing SFT in practice"
+    ],
+    "answer_index": 1,
+    "explanation": "Both are core Module 14 readings. The data-construction sections carry the key ideas — instructions as a training distribution and how to generate it cheaply — while the long per-task appendices can be skipped at first."
+  },
+  {
+    "id": "14.1-021",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "How can a single-turn (instruction, input, output) triple be represented as a chat?",
+    "options": [
+      "As a three-message chat: a system message (instruction), a user message (input), an assistant message (output)",
+      "As a two-message chat: a user message (instruction + input) and an assistant message (output)",
+      "As a single user message containing all three fields, with the output kept as an unscored suffix",
+      "As a single assistant message containing all three fields, so every token is trained as a response"
+    ],
+    "answer_index": 1,
+    "explanation": "A single-turn triple is just a user message holding the instruction and input, followed by an assistant message holding the output. A system message is a separate, optional element that sets persistent behavior; it is not where the instruction goes."
+  },
+  {
+    "id": "14.1-022",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Instruction datasets: the (instruction, [input], output) triple",
+    "question": "In multi-turn chat data, what is the purpose of a system message?",
+    "options": [
+      "To set persistent behavior for the conversation, such as 'You are a terse assistant.'",
+      "To mark the end of every turn, so the model knows when it should stop generating",
+      "To hold the model's demonstrated responses, which are the tokens scored in training",
+      "To store the user's previous conversation history once it no longer fits in context"
+    ],
+    "answer_index": 0,
+    "explanation": "The system message sets persistent behavior that applies across the conversation, e.g. 'You are a terse assistant.' Ending turns is the job of the end delimiter, and responses live in assistant messages. The general object to format is therefore a list of role-tagged messages."
+  },
+  {
+    "id": "14.1-023",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Chat templates: 1. Intuition",
+    "question": "Why is a chat template needed at all before a conversation can be fed to a language model?",
+    "options": [
+      "Because the model needs each role encoded as a separate input tensor alongside the token ids",
+      "Because tokenizers cannot handle newline characters, so turns must be joined with special tokens",
+      "Because attention requires every turn to be padded to the same length before it can be batched",
+      "Because the model consumes a flat sequence of token ids, not a list of role-tagged dicts"
+    ],
+    "answer_index": 3,
+    "explanation": "The model eats one flat sequence of token ids. A list of message dicts must therefore be serialized into one string, with delimiters marking turn boundaries and roles. There is no separate role tensor; the role information lives in the delimiter tokens."
+  },
+  {
+    "id": "14.1-024",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Chat templates: 1. Intuition",
+    "question": "In a chat template, what is the load-bearing role of the special delimiter tokens?",
+    "options": [
+      "They compress the conversation so that long multi-turn chats fit inside the context window",
+      "They tell the tokenizer which language each turn is written in, so it picks the right merges",
+      "They are the only signal the model has for a new turn, who is speaking, and when the turn is over",
+      "They carry the positional encoding for each turn, so that the model can tell how far back each turn is"
+    ],
+    "answer_index": 2,
+    "explanation": "Delimiters are the only signal for 'a new turn started', 'this is the assistant speaking', and crucially 'the turn is over, stop generating'. Without them the model could not distinguish roles or learn to stop. They do not compress text or carry positions."
+  },
+  {
+    "id": "14.1-025",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "2. The template we will use",
+    "question": "In the course's chat template, which four delimiter tokens are used?",
+    "options": [
+      "<|im_start|>, <|im_end|>, [INST] and [/INST]",
+      "<bos>, <eos>, <pad> and <unk>",
+      "<|system|>, <|user|>, <|assistant|> and <|end|>",
+      "<|system|>, <|user|>, <|assistant|> and <|pad|>, with <|pad|> closing turns"
+    ],
+    "answer_index": 2,
+    "explanation": "The template uses three role headers (<|system|>, <|user|>, <|assistant|>) that open a turn and one end-of-turn token <|end|> that closes it. <|im_start|>/<|im_end|> and [INST]/[/INST] are other model families' delimiters."
+  },
+  {
+    "id": "14.1-026",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "2. The template we will use",
+    "question": "In the course's chat template, how is one message rendered?",
+    "options": [
+      "The content first, then the role header after it, then a newline",
+      "Role header, a newline, the content, then <|end|> and a newline",
+      "Role header, then the content on the same line, a newline, and no end token",
+      "<|end|> first to close the previous turn, then the role header, the content, a newline"
+    ],
+    "answer_index": 1,
+    "explanation": "Each message becomes: its role header, a newline, its content, then <|end|> and a newline. Messages are concatenated. For example: '<|user|>\\nCapital of France?<|end|>\\n'."
+  },
+  {
+    "id": "14.1-027",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "2. The template we will use",
+    "question": "Why must chat delimiter tokens like <|end|> be treated as atomic by the tokenizer?",
+    "options": [
+      "So each is exactly one id and is never split into pieces like '<', '|', 'end'",
+      "So they are always mapped to the padding id and ignored by attention and the loss",
+      "So they can be merged with neighbouring words by BPE to save tokens in long chats",
+      "So the model can predict them character by character and learn their exact spelling"
+    ],
+    "answer_index": 0,
+    "explanation": "Delimiters must be one id each, never split into '<', '|', 'system', etc. Splitting would blur the boundary the model must learn and make it context-dependent. This is the special-token machinery of a production tokenizer."
+  },
+  {
+    "id": "14.1-028",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "2. The template we will use",
+    "question": "Why must chat delimiter tokens be reserved in the tokenizer?",
+    "options": [
+      "So they are excluded from the model's output vocabulary and can never be sampled",
+      "So they do not count toward the context length when long chats are truncated",
+      "So they are always placed at the start of the sequence, before any user text",
+      "So ordinary user text cannot forge them and fake a turn boundary"
+    ],
+    "answer_index": 3,
+    "explanation": "Reserving delimiters means ordinary text cannot produce their ids, so a user typing the literal string '<|end|>' cannot forge a turn boundary — otherwise it is a prompt-injection vector. The model still outputs them (it must emit <|end|> to stop)."
+  },
+  {
+    "id": "14.1-029",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "2. The template we will use",
+    "question": "The course's from-scratch BPETokenizer does not reserve chat delimiters. How does the code keep turn boundaries exact anyway?",
+    "options": [
+      "It replaces each delimiter with a single unused byte before encoding, then maps the byte back after decoding",
+      "It trains the BPE tokenizer on a corpus containing many delimiters, so they are learned as single merges",
+      "It strips all delimiters out before encoding and inserts them back into the token ids after decoding",
+      "It encodes each segment (header, content, closer) separately, so no BPE merge crosses a boundary"
+    ],
+    "answer_index": 3,
+    "explanation": "render_with_response_mask encodes segment by segment — role header, content, closer — so merges never span a boundary and the mask stays exact. A production tokenizer instead adds each delimiter to the vocabulary as a single id."
+  },
+  {
+    "id": "14.1-030",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "3. Why a consistent template matters",
+    "question": "After SFT with a consistent chat template, what two behaviors has the model learned?",
+    "options": [
+      "After '<|user|>\\n' produce a likely user question, and after <|end|> produce a fresh system message",
+      "After '<|system|>\\n' produce a helpful response, and never emit <|end|> so the reply is not cut short",
+      "After '<|assistant|>\\n' produce a helpful response, and when finished emit <|end|> and stop",
+      "After any delimiter produce padding tokens until the context fills, and then emit a single <|end|>"
+    ],
+    "answer_index": 2,
+    "explanation": "The template is a contract learned during SFT: after the assistant header, generate a helpful response; when done, emit <|end|> and stop. This contract only holds if inference uses the same format."
+  },
+  {
+    "id": "14.1-031",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "3. Why a consistent template matters",
+    "question": "What is the 'generation prompt' in chat-template inference?",
+    "options": [
+      "A special system message appended at the end that tells the model to be helpful and to answer the last user turn",
+      "The conversation rendered through a bare '<|assistant|>\\n' with no content, so the model generates the reply",
+      "The full conversation including the assistant answer, rendered once as a reference that sampling is scored against",
+      "A random prefix sampled from earlier assistant turns and prepended to the prompt to diversify the model's responses"
+    ],
+    "answer_index": 1,
+    "explanation": "At inference you render the conversation up to and including a bare assistant header, then call generate. The model fills in the response and emits <|end|>, at which point decoding stops. Including the answer would only be done for training data."
+  },
+  {
+    "id": "14.1-032",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "3. Why a consistent template matters",
+    "question": "What is the most common bug when a model trained with <|end|> as the stop signal is deployed?",
+    "options": [
+      "The decode loop does not treat <|end|> as a stop, so the model runs to the token limit",
+      "The model refuses to emit any tokens after the assistant header and returns empty",
+      "The model emits <|end|> as its very first token every time, so replies are empty",
+      "The tokenizer crashes on <|end|> at decode time because the token id is unknown"
+    ],
+    "answer_index": 0,
+    "explanation": "If train-time and inference-time formatting disagree, the model is off-distribution; the most common symptom is that it never stops. If you forget to sample until <|end|> and treat it as the end, generation continues to max tokens every time."
+  },
+  {
+    "id": "14.1-033",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "3. Why a consistent template matters",
+    "question": "Which of these train/inference differences would put an SFT model off-distribution?",
+    "options": [
+      "Any of: a missing newline, a different role header, or no end token",
+      "Only using a different random seed at inference than in training",
+      "Only using a larger batch size at inference than during training",
+      "Only running inference on a different GPU model than training"
+    ],
+    "answer_index": 0,
+    "explanation": "The model learned the exact template string. A missing newline, a different header, or a missing end token all change the token sequence it conditions on, so the model is off-distribution. Seeds, batch sizes, or hardware do not change the format."
+  },
+  {
+    "id": "14.1-034",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the course's llmre.sft.chat_template module, what does render_chat(messages[:2], add_generation_prompt=True) produce for a system and a user message?",
+    "options": [
+      "The rendered system and user turns followed by a closing '<|end|>' only",
+      "Only the user turn with a bare '<|assistant|>\\n', the system turn dropped",
+      "The full three-turn chat, including the assistant's answer and its <|end|>",
+      "The rendered system and user turns followed by a bare '<|assistant|>\\n'"
+    ],
+    "answer_index": 3,
+    "explanation": "With add_generation_prompt=True, render_chat renders the given messages and appends the assistant header with no content, ready for generation. Without it, it renders exactly the messages given, which for training includes assistant content."
+  },
+  {
+    "id": "14.1-035",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does render_with_response_mask(messages, encode) return?",
+    "options": [
+      "A torch.long tensor of token ids and a causal attention mask of shape (T, T) over all turns",
+      "A rendered string and the character index at which the first assistant turn's content starts",
+      "A list of token ids and an equal-length mask with 1 exactly on assistant-response tokens",
+      "A list of token ids and a list of role names, one per message, used to weight the loss by role"
+    ],
+    "answer_index": 2,
+    "explanation": "It returns input_ids and response_mask, two equal-length lists; response_mask[i] == 1 iff token i belongs to an assistant response. That mask is what the next step (loss masking) uses to build labels."
+  },
+  {
+    "id": "14.1-036",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In render_with_response_mask, which tokens are marked as response (mask = 1)?",
+    "options": [
+      "The assistant's content only, excluding <|end|>",
+      "The assistant's content and its <|end|> closer",
+      "The <|assistant|> header and the assistant's content",
+      "All tokens of every turn, including system and user"
+    ],
+    "answer_index": 1,
+    "explanation": "Assistant content plus its <|end|> closer are marked response; system text, user text, and all role headers (including <|assistant|>) are prompt. Including the closer is deliberate: it is how the model learns to emit the stop token."
+  },
+  {
+    "id": "14.1-037",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Why does the chat-template code deliberately mark the assistant's <|end|> closer as a response token?",
+    "options": [
+      "So the closer is excluded from attention at training time and never seen",
+      "So the loss trains the model to emit the stop token at the end of its turn",
+      "So the closer is not counted toward the sequence length when packing",
+      "So the model learns to predict the next user turn after its own reply"
+    ],
+    "answer_index": 1,
+    "explanation": "If <|end|> were masked as prompt, the model would never be trained to produce it and would not learn to stop. Marking it as response makes emitting the stop token part of the learned behavior."
+  },
+  {
+    "id": "14.1-038",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "How does render_with_response_mask build its outputs internally?",
+    "options": [
+      "It walks (text, is_response) segments, encodes each independently, and extends the ids and a repeated 0/1 flag",
+      "It renders the full string once, encodes it, then searches for the assistant header to set the mask",
+      "It encodes each character separately and marks characters after '<|assistant|>' as response",
+      "It runs the model over the rendered string and marks the tokens it predicts with high confidence as the response tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "The function iterates over segments (header, content, closer) tagged with is_response, encodes each segment, appends its ids, and appends [1 if is_resp else 0] * len(seg_ids) to the mask. Encoding per segment keeps boundaries exact with a BPE that does not reserve delimiters."
+  },
+  {
+    "id": "14.1-039",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "4. Shapes / dtype / device",
+    "question": "What are the types returned by render_with_response_mask in the course's chat-template module?",
+    "options": [
+      "Two torch.long tensors already on the training device",
+      "A torch.bool tensor and a torch.float tensor",
+      "A rendered string and a numpy int32 array of mask flags",
+      "Two equal-length Python list[int]; no tensors yet"
+    ],
+    "answer_index": 3,
+    "explanation": "There are no tensors in the chat-template module: messages is list[dict[str, str]], render_chat returns str, and render_with_response_mask returns two equal-length lists of Python ints. They become a torch.long tensor only later, when labels are built and batches are moved to the device."
+  },
+  {
+    "id": "14.1-040",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "4. Shapes / dtype / device",
+    "question": "In HuggingFace, what is tokenizer.apply_chat_template(messages, add_generation_prompt=...) equivalent to?",
+    "options": [
+      "A learned model that rewrites the message list into a better-performing prompt, with a switch for adding few-shot examples",
+      "A function that trains the tokenizer's merges on chat data so delimiters become single tokens, run once per model",
+      "The same job as render_chat: a deterministic message-list to delimited-string rule, with a generation-prompt switch",
+      "A function that computes only the response mask for the SFT loss, returning a 0/1 list aligned with the token ids"
+    ],
+    "answer_index": 2,
+    "explanation": "apply_chat_template does exactly what render_chat does; the template itself is a Jinja string shipped with each chat model. Different families use different delimiters (<|im_start|>/<|im_end|>, [INST]/[/INST]), but the job is the same."
+  },
+  {
+    "id": "14.1-041",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "4. Shapes / dtype / device",
+    "question": "In HuggingFace chat models, where is the chat template itself stored?",
+    "options": [
+      "As hard-coded Python inside the Transformers library, identical for all models",
+      "As learned weights inside the model's first layer",
+      "As a Jinja template string shipped with each chat model's tokenizer",
+      "As a separate fine-tuned adapter loaded at inference"
+    ],
+    "answer_index": 2,
+    "explanation": "Each chat model ships its own Jinja template string. That is why different families have different delimiters, and why you must use the right model's template. It is not learned and not shared across all models."
+  },
+  {
+    "id": "14.1-042",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if you format SFT data for model A using model B's chat delimiters?",
+    "options": [
+      "Nothing; delimiters are interchangeable across model families, since any string can mark a turn",
+      "The delimiters are not in either vocabulary as intended, so turn boundaries become gibberish",
+      "The model trains faster, because seeing more distinct delimiter tokens gives it a richer turn signal",
+      "The tokenizer automatically converts B's delimiters into A's, so the rendered data is identical anyway"
+    ],
+    "answer_index": 1,
+    "explanation": "Each family's delimiters are specific to its tokenizer. Using another model's delimiters means they do not exist as the intended single ids, so the turn structure the model must learn is garbled. There is no automatic conversion."
+  },
+  {
+    "id": "14.1-043",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What can happen if you forget add_generation_prompt at inference?",
+    "options": [
+      "Without the trailing '<|assistant|>\\n' the model is not cued that it is its turn and may continue the user's text",
+      "The model emits <|end|> as its first token, because the last thing in context is a closed user turn, and returns nothing",
+      "The tokenizer throws an error about a missing assistant role, since every rendered chat must end with an assistant turn",
+      "The model still answers correctly but twice as slowly, because it first regenerates the missing header token by token"
+    ],
+    "answer_index": 0,
+    "explanation": "The trailing assistant header is the cue that the assistant should speak. Without it, the prompt ends after the user's <|end|>, and the model may continue in the wrong role, such as writing more of the user's message."
+  },
+  {
+    "id": "14.1-044",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is the symptom of a decode loop that ignores <|end|>?",
+    "options": [
+      "No answer at all, only an empty string returned",
+      "An answer in the wrong language for the prompt",
+      "A tokenizer error raised at the end of generation",
+      "A correct answer followed by hallucinated extra turns"
+    ],
+    "answer_index": 3,
+    "explanation": "The model dutifully emits the stop token, but if the loop ignores it, sampling continues and the model starts inventing new turns. You get a correct answer followed by hallucinated follow-up turns."
+  },
+  {
+    "id": "14.1-045",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why must prompt tokens be masked out of the SFT loss?",
+    "options": [
+      "Otherwise the tokenizer cannot encode the prompt tokens",
+      "Otherwise attention cannot see the prompt during training",
+      "Otherwise the context window overflows on long prompts",
+      "Otherwise you teach the model to generate user turns"
+    ],
+    "answer_index": 3,
+    "explanation": "If prompt tokens are scored, the model is trained to predict user and system text, i.e. to generate user turns. Masking only removes them from the loss; the model still attends to them as context."
+  },
+  {
+    "id": "14.1-046",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "After SFT on data rendered with <|end|> after every turn, a model answers correctly but then invents a follow-up question and answers it until the length limit. Where is the most likely bug?",
+    "options": [
+      "In training: the rendered data never actually contained the <|end|> token",
+      "In the tokenizer: <|end|> is split into several ordinary tokens at decode time",
+      "In inference: the generation loop does not stop when <|end|> is sampled",
+      "In the optimizer: the learning rate was too high, so the model overfit to long replies"
+    ],
+    "answer_index": 2,
+    "explanation": "The training data included <|end|>, so the model did learn to emit it. The generation loop is not treating <|end|> as a stop and keeps sampling for max_new_tokens, so a hallucinated new turn begins. Fix: stop as soon as the sampled token is the <|end|> id or truncate at the first <|end|>."
+  },
+  {
+    "id": "14.1-047",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "When debugging a fine-tuned chat model that rambles, which observation would point to a training-formatting bug rather than an inference bug?",
+    "options": [
+      "The model emits <|end|> and then keeps generating past it",
+      "The model never emits <|end|> at all",
+      "The model stops correctly when <|end|> is passed as a stop token",
+      "The model answers correctly before it starts rambling on"
+    ],
+    "answer_index": 1,
+    "explanation": "If the model emits <|end|> and keeps going, the inference loop ignores the stop token. If the model never emits <|end|>, it never learned to, which points to training formatting (e.g. the closer was missing or masked out)."
+  },
+  {
+    "id": "14.1-048",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Check yourself",
+    "question": "What does SFT change so that the continuation of 'Write a haiku about the sea.' becomes a haiku?",
+    "options": [
+      "The training distribution, so that the continuation of a request is a helpful answer",
+      "The model architecture, by adding an instruction-detection module before the first block",
+      "The sampling temperature, so that continuing with another prompt becomes less likely",
+      "The tokenizer, so that lists of writing prompts are split into different token sequences"
+    ],
+    "answer_index": 0,
+    "explanation": "The pretrained model continues a writing prompt with another prompt because that is common in its data. SFT changes the training distribution so that what follows a request is a helpful answer. Architecture and tokenizer are unchanged."
+  },
+  {
+    "id": "14.1-049",
+    "chapter": "14.1",
+    "chapter_name": "Instruction data & chat templates",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-01.md",
+    "section": "Check yourself",
+    "question": "When should add_generation_prompt=True be used?",
+    "options": [
+      "At inference, to render the conversation so far before generating; not when formatting training data",
+      "When formatting training data, so that the model learns to produce the assistant header on its own",
+      "Only when the conversation has a system message, to separate it from the first user turn",
+      "Always, for both training and inference, so that the rendered format is identical in the two settings"
+    ],
+    "answer_index": 0,
+    "explanation": "It appends an empty assistant header to cue the model's turn, which is only needed at inference. Training data already contains the assistant content after the header, so adding an extra empty header would corrupt it."
+  }
+]

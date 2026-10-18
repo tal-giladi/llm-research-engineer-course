@@ -1,0 +1,650 @@
+[
+  {
+    "id": "07.P4-001",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Formula sheet",
+    "question": "How is the memory of a single activation tensor computed?",
+    "options": [
+      "Number of elements times bytes per element",
+      "Number of parameters times 16 bytes per parameter",
+      "Number of elements times the number of layers",
+      "Number of FLOPs that produced it times 4 bytes"
+    ],
+    "answer_index": 0,
+    "explanation": "A tensor's size is its element count (the product of its shape) times the dtype size: 4 bytes in fp32, 2 in bf16. For example, one (8, 1024, 768) fp32 tensor is 6,291,456 × 4 ≈ 25.2 MB. The 16-bytes-per-parameter rule applies to the fixed training state, not activations."
+  },
+  {
+    "id": "07.P4-002",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "In GPT-2 small (C = 768), the MLP's first linear layer maps C → 4C. How does its weight count compare with the attention block's four C×C matrices?",
+    "options": [
+      "The MLP linear is half as large (2C²)",
+      "They are equal: both are 4C²",
+      "The MLP linear is four times as large (16C²)",
+      "The MLP linear is C times larger"
+    ],
+    "answer_index": 1,
+    "explanation": "A C → 4C linear has C·4C = 4C² weights, the same as W_Q, W_K, W_V and W_O together (4 × C²). For C = 768 that is 2,359,296 weights. The full MLP (two linears) is 8C²."
+  },
+  {
+    "id": "07.P4-003",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "For a single linear layer, how are its backward FLOPs per token split?",
+    "options": [
+      "All go to ∂L/∂W; ∂L/∂x reuses the forward output, so it costs nothing extra",
+      "Two-thirds compute ∂L/∂x and one-third ∂L/∂W, since the input gradient is wider",
+      "All go to ∂L/∂x; the optimizer computes ∂L/∂W later inside opt.step()",
+      "Half compute ∂L/∂W and half ∂L/∂x, each equal to the forward FLOPs"
+    ],
+    "answer_index": 3,
+    "explanation": "The backward of a linear is two matmuls of the same size as the forward: one gives the weight gradient, the other the input gradient. So backward is twice the forward, split evenly. The optimizer only consumes ∂L/∂W; it does not compute it."
+  },
+  {
+    "id": "07.P4-004",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "Under the N ≈ 12·n_layer·C² estimate, how does N scale with depth and width?",
+    "options": [
+      "Quadratically with the number of layers and linearly with the width C",
+      "Linearly with both the number of layers and the width C",
+      "Linearly with the number of layers and quadratically with the width C",
+      "Quadratically with both the number of layers and the width C"
+    ],
+    "answer_index": 2,
+    "explanation": "Each layer has 12C² weights, so N is proportional to n_layer and to C². Going from GPT-2 small (12 layers, C = 768) to medium (24 layers, C = 1024) multiplies N by 2 × (1024/768)² ≈ 3.56."
+  },
+  {
+    "id": "07.P4-005",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "If you keep the number of layers fixed and double a transformer's width C, how does the 6N FLOPs-per-token cost change?",
+    "options": [
+      "It grows about 4×",
+      "It grows about 2×",
+      "It grows about 8×",
+      "It stays the same"
+    ],
+    "answer_index": 0,
+    "explanation": "N ≈ 12·n_layer·C² grows with C², so doubling C quadruples N and therefore 6N. Doubling the layers instead would only double it."
+  },
+  {
+    "id": "07.P4-006",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "How do the FLOPs of one optimizer step scale with the number of tokens in the step?",
+    "options": [
+      "Quadratically, because attention compares all tokens",
+      "They are constant per step regardless of tokens",
+      "Logarithmically, because of batching efficiency",
+      "Linearly: FLOPs per step = 6N × tokens per step"
+    ],
+    "answer_index": 3,
+    "explanation": "Each token costs about 6N FLOPs, so a step of K tokens costs 6N·K. For GPT-2 small, 500,000 tokens give about 255 TFLOP and 524,288 tokens about 267 TFLOP. (The attention-score term adds a T-dependent amount per token, but the 6N count is linear in tokens.)"
+  },
+  {
+    "id": "07.P4-007",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "Which formula gives the wall-clock time of a training run on hardware running at a given MFU?",
+    "options": [
+      "6ND × MFU ÷ peak FLOP/s",
+      "6N ÷ (D × peak FLOP/s)",
+      "6ND ÷ (MFU × peak FLOP/s)",
+      "peak FLOP/s ÷ (6ND × MFU)"
+    ],
+    "answer_index": 2,
+    "explanation": "Total work is 6ND FLOPs, and the effective rate is MFU × peak. Time = work ÷ rate. For GPT-2 small on 10¹⁰ tokens on one A100 at 40% MFU, that is about 11.3 hours."
+  },
+  {
+    "id": "07.P4-008",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "A colleague computes GPT-2 small's FLOPs per token as 6 × 124.4M, using the total parameter count including embeddings. What is wrong?",
+    "options": [
+      "It underestimates the cost by about 46%, because embeddings are used at both input and output",
+      "It overestimates 6N by about 46%: the embedding is a lookup with no multiply-adds, inflating MFU",
+      "It is correct, since every parameter, embeddings included, costs 6 FLOPs per token",
+      "It overestimates by about 1%, since embeddings are a tiny share of GPT-2 small's parameters"
+    ],
+    "answer_index": 1,
+    "explanation": "The token embedding (≈ 38.6M params) is a lookup and does not cost one multiply-add per parameter per token. Using 124.4M instead of 84.9M overestimates by 746.6/509.6 ≈ 1.465. An inflated FLOP count also inflates the reported MFU."
+  },
+  {
+    "id": "07.P4-009",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part A — Counting parameters and the 6N rule",
+    "question": "In GPT-2, the token embedding matrix is reused (tied) as the output head. What is the FLOP situation?",
+    "options": [
+      "Both uses are free: sharing the matrix means its multiply-adds are counted once in the blocks",
+      "Both uses cost about 2VC forward FLOPs per token, and the 6N rule already includes both of them",
+      "The input lookup is free, but the output head costs about 2VC forward FLOPs per token, which 6N drops",
+      "Tying removes the output head matmul entirely, since logits are read straight from the lookup table"
+    ],
+    "answer_index": 2,
+    "explanation": "Sharing the matrix saves memory, not compute. The lookup at the input costs no multiply-adds, but the output projection to V logits is a real C×V matmul. The 6N convention intentionally excludes it; you should know it is there, especially for small models with big vocabularies."
+  },
+  {
+    "id": "07.P4-010",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part B — The attention scores 6N leaves out",
+    "question": "Compared with the causal-optimized count, what does a naive attention that computes the full T×T matrix and then masks it cost in score FLOPs for GPT-2 small at T = 1024?",
+    "options": [
+      "Twice as much (≈22% of 6N instead of 11%), half of it wasted on masked entries",
+      "The same as the causal count, since masked entries are skipped by the softmax kernel",
+      "Four times as much (≈44% of 6N), because masking needs an extra pass over the T×T matrix",
+      "Half as much (≈6% of 6N), because the full matrix runs as one large efficient kernel"
+    ],
+    "answer_index": 0,
+    "explanation": "Without skipping masked blocks, each token does the work for all T keys, so the score cost is 12·n_layer·T·C instead of about 6·n_layer·T·C. The ratio to 6N doubles from about 0.11 to 0.22, and half of that work produces entries that are then masked out."
+  },
+  {
+    "id": "07.P4-011",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part B — The attention scores 6N leaves out",
+    "question": "Why can wider models handle longer contexts before attention-score FLOPs dominate the 6N cost?",
+    "options": [
+      "Wider models use fewer heads per layer, so the per-token score cost shrinks",
+      "The crossover context length T = 12C grows with the width C",
+      "Wider models skip the softmax on long sequences, removing most score FLOPs",
+      "The score cost per token falls as C grows, while 6N stays fixed per layer"
+    ],
+    "answer_index": 1,
+    "explanation": "The score-to-6N ratio is T/(12C), so the break-even context is T = 12C. Larger C pushes that point further out: for C = 4096 it is about 49,152 tokens. Score cost per token actually grows with C (≈6·n_layer·T·C), but 6N grows faster, with C²."
+  },
+  {
+    "id": "07.P4-012",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part B — The attention scores 6N leaves out",
+    "question": "The same model is trained at T = 2048 and at T = 8192. Which quantities change between the two runs?",
+    "options": [
+      "N and 6N grow 4× with the context; score FLOPs per token stay the same as before",
+      "Everything grows 4×, including N, because position embeddings scale with T",
+      "Nothing changes, since FLOPs per token depend only on the weights, not on T",
+      "N and 6N stay fixed; score FLOPs per token grow 4×, so 6N understates more"
+    ],
+    "answer_index": 3,
+    "explanation": "N and 6N depend only on the weights. The causal score cost per token is linear in T, so it grows 4× from 2048 to 8192. The true total per token therefore rises and the 6N estimate understates it more. At GPT-2 small's width the ratio would rise from about 0.22 to 0.89."
+  },
+  {
+    "id": "07.P4-013",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part C — Throughput and MFU",
+    "question": "With micro-batch size b, sequence length T, gradient accumulation steps G, on one GPU, how many tokens are in one optimizer step?",
+    "options": [
+      "b × T × G",
+      "b × T × G ÷ number of layers",
+      "b × G",
+      "b × T ÷ G"
+    ],
+    "answer_index": 0,
+    "explanation": "Each micro-batch has b sequences of T tokens, and G micro-batches are accumulated before each optimizer step, so a step has b·T·G tokens. With multiple data-parallel GPUs you multiply further by the number of GPUs. For b = 16, T = 1024, G = 32 that is 524,288 tokens."
+  },
+  {
+    "id": "07.P4-014",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part C — Throughput and MFU",
+    "question": "To find the tokens/sec a GPU must reach for a target MFU on a given model, which formula do you use?",
+    "options": [
+      "tokens/sec = 6N × peak FLOP/s ÷ MFU",
+      "tokens/sec = MFU × peak FLOP/s ÷ 6N",
+      "tokens/sec = MFU × 6N ÷ peak FLOP/s",
+      "tokens/sec = peak FLOP/s ÷ (MFU × 6N)"
+    ],
+    "answer_index": 1,
+    "explanation": "Rearranging MFU = 6N·tokens/sec ÷ peak gives tokens/sec = MFU·peak ÷ 6N. For GPT-2 small on one A100 at 40% MFU, that is about 245,000 tokens/sec, about 5× the 50,000 that gives 8.2% MFU."
+  },
+  {
+    "id": "07.P4-015",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part C — Throughput and MFU",
+    "question": "Classify these quantities: 6N, 6ND, 312 TFLOP/s, tokens/sec × 6N, and MFU.",
+    "options": [
+      "6N and 6ND are rates; 312 TFLOP/s and tokens/sec × 6N are counts; MFU is in FLOP/s",
+      "All five are rates measured in FLOP/s, since each one describes training throughput",
+      "6N is a unitless ratio; 6ND and 312 TFLOP/s are rates; MFU is a count of FLOPs",
+      "6N and 6ND are counts; 312 TFLOP/s and tokens/sec × 6N are rates; MFU is a ratio"
+    ],
+    "answer_index": 3,
+    "explanation": "6N is FLOPs per token and 6ND is total FLOPs, both counts of work. The GPU peak and achieved FLOP/s (tokens/sec × 6N) are rates. MFU divides one rate by another, so it has no unit."
+  },
+  {
+    "id": "07.P4-016",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "A model with P parameters is trained in fp32 with AdamW. How many stored numbers and how many bytes make up the fixed state?",
+    "options": [
+      "4P numbers and 4P bytes",
+      "16P numbers and 64P bytes",
+      "4P numbers and 16P bytes",
+      "2P numbers and 8P bytes"
+    ],
+    "answer_index": 2,
+    "explanation": "Params P + grads P + Adam m P + Adam v P = 4P numbers. In fp32 each is 4 bytes, giving 16P bytes. For P = 1000 that is 4000 numbers and 16,000 bytes."
+  },
+  {
+    "id": "07.P4-017",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "Ignoring activations, which statement about fitting fp32 AdamW fixed state (16P bytes) on GPUs is correct?",
+    "options": [
+      "A 7B model (≈112 GB) fits on 80 GB once the weights are stored, with roughly 30 GB to spare",
+      "A 1.3B model (≈20.8 GB) fits on 24 GB with little room left; a 7B model (≈112 GB) exceeds 80 GB",
+      "A 1.3B model (≈83 GB) does not fit even on 80 GB, so it needs at least two GPUs to train",
+      "A 350M model (≈24 GB) needs at least a 24 GB GPU, and a 1.3B model needs about 80 GB"
+    ],
+    "answer_index": 1,
+    "explanation": "16P gives 5.6 GB for 350M, 20.8 GB for 1.3B and 112 GB for 7B. The 1.3B state fits on 24 GB with only about 3 GB left for activations, and the 7B state exceeds an 80 GB GPU before any activation."
+  },
+  {
+    "id": "07.P4-018",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "Ignoring activations, how do you find the largest model whose fp32 AdamW fixed state fits in a GPU's memory?",
+    "options": [
+      "Divide the GPU memory in bytes by 4, since only the fp32 weights must stay resident",
+      "Divide the GPU memory in bytes by 6, matching the 6 in the 6N FLOPs-per-token rule",
+      "Divide the GPU memory in bytes by 16; activations make the real limit lower",
+      "Multiply the GPU memory in GB by 16 to get the parameter count in billions"
+    ],
+    "answer_index": 2,
+    "explanation": "Fixed state is 16 bytes per parameter, so P_max = memory ÷ 16: about 1.5B on 24 GB and 5B on 80 GB. Activations also need memory, so the practical limit is lower. The 6 in 6N is about FLOPs, not bytes."
+  },
+  {
+    "id": "07.P4-019",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "For GPT-2 small at T = 1024, what happens when you double the batch from 8 to 16, and when you switch logits from fp32 to bf16?",
+    "options": [
+      "Doubling B doubles the logits (≈1.65 → 3.29 GB) but not the 1.99 GB fixed state; bf16 halves logits",
+      "Doubling B doubles both the logits (≈3.29 GB) and the fixed state (≈3.98 GB); bf16 halves only logits",
+      "Doubling B leaves the logits at ≈1.65 GB since they depend only on T and V; bf16 quarters them",
+      "Both changes leave memory unchanged, because logits are recomputed during backward instead of stored"
+    ],
+    "answer_index": 0,
+    "explanation": "Logits are B·T·V elements, linear in B, and bf16 uses 2 bytes instead of 4, halving them. The fixed state (params + grads + Adam) has nothing to do with batch size."
+  },
+  {
+    "id": "07.P4-020",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "In PyTorch, what is the shape of the .grad of a Linear layer mapping 768 → 3072?",
+    "options": [
+      "(768, 3072), because PyTorch stores gradients transposed from the weight",
+      "(B, T, 768), matching the input, since .grad is the gradient of the input x",
+      "(B, T, 3072), matching the output, since .grad holds one row per token",
+      "(3072, 768), the same as the weight, which is stored as out × in"
+    ],
+    "answer_index": 3,
+    "explanation": "nn.Linear stores its weight as (out_features, in_features), and .grad always matches the parameter's shape: (3072, 768), 2,359,296 numbers, about 9.4 MB in fp32. (B, T, 768) is the shape of the input gradient ∂L/∂x, which is not stored in .grad."
+  },
+  {
+    "id": "07.P4-021",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "For a Linear layer during backward, which gradient grows with batch size, and which one is kept until the optimizer step?",
+    "options": [
+      "∂L/∂x grows with batch and is freed once used; ∂L/∂W is batch-independent and kept until the step",
+      "∂L/∂W grows with batch and is freed immediately after use; ∂L/∂x is accumulated and kept until the step",
+      "Both grow with batch, and both are accumulated across micro-batches and kept until the optimizer step",
+      "Neither depends on batch size; both are freed after each micro-batch and recomputed for the step"
+    ],
+    "answer_index": 0,
+    "explanation": "∂L/∂x has the activation's shape (B, T, C), so it grows with B, but it lives only until the earlier layer has consumed it. ∂L/∂W has the weight's shape, is accumulated across tokens and micro-batches, and is kept until the optimizer step."
+  },
+  {
+    "id": "07.P4-022",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part D — Memory accounting",
+    "question": "The backward pass does about 4 FLOPs per parameter per token, and fixed memory is 4P numbers. How are these two \"4\"s related?",
+    "options": [
+      "They are the same: one stored number is written for every backward FLOP performed",
+      "The memory 4 is derived from the FLOP 4 by dividing the backward FLOPs by tokens",
+      "Both count the multiply-adds Adam performs per parameter during each update step",
+      "Unrelated: one counts operations per token, the other stored slots per parameter"
+    ],
+    "answer_index": 3,
+    "explanation": "The FLOP 4 is multiplies and adds performed with each weight for each token (two matmuls × 2 FLOPs). The memory 4 is one weight, one gradient, one m and one v per parameter. Millions of token contributions accumulate into one gradient slot, so the match is a coincidence."
+  },
+  {
+    "id": "07.P4-023",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part E — Putting it together",
+    "question": "If a model's fp32 params, gradients and optimizer state are sharded evenly across 8 GPUs (ZeRO/FSDP style), how much of that fixed state does each GPU hold?",
+    "options": [
+      "The full 112 GB, since each GPU needs all parameters",
+      "One-half, because only the optimizer state is sharded",
+      "One-eighth of the total, e.g. 112 GB ÷ 8 = 14 GB for a 7B model",
+      "One-sixty-fourth, because each GPU also shards across tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "Even sharding divides the fixed state by the number of GPUs, so a 7B model's 112 GB becomes 14 GB per GPU, leaving room for activations. Without sharding, plain data parallelism replicates the full state on every GPU."
+  },
+  {
+    "id": "07.P4-024",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part E — Putting it together",
+    "question": "How do you compute GPU-hours for a training run?",
+    "options": [
+      "Wall-clock hours divided by the number of GPUs",
+      "Wall-clock hours multiplied by the number of GPUs",
+      "Total FLOPs divided by one GPU's peak, ignoring MFU",
+      "Number of optimizer steps times the number of GPUs"
+    ],
+    "answer_index": 1,
+    "explanation": "GPU-hours measure total accelerator time consumed: wall-clock hours × GPUs. For a 7B model on 64 A100s taking about 204.5 hours, that is about 13,090 GPU-hours. Ignoring MFU would understate the time needed."
+  },
+  {
+    "id": "07.P4-025",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part E — Putting it together",
+    "question": "A GPT-2 small run on one A100 reaches about 13.6% MFU, below the 30–50% reported for well-tuned large runs. Why would a model this small sit lower?",
+    "options": [
+      "Small models must run in fp32, which gets no tensor-core acceleration on the A100",
+      "MFU cannot exceed about 15% on a single GPU, regardless of model size or tuning",
+      "Kernels do little math, so overheads and work 6N omits take a larger share of time",
+      "The A100 throttles its clock at small batch sizes, lowering the achieved FLOP/s"
+    ],
+    "answer_index": 2,
+    "explanation": "With small matmuls, kernel-launch and Python overhead, elementwise and memory-bound work, and data loading are a bigger fraction of step time. And 6N-based MFU does not credit the large LM head and score work. Single-GPU MFU is not capped at 15%."
+  },
+  {
+    "id": "07.P4-026",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "Comparing 12·n_layer·C² with the exact sum of parameters inside GPT-2 small's transformer blocks, the estimate is about 0.14% low. What does the estimate leave out?",
+    "options": [
+      "The W_O output projection in every block, which is a C × C matrix",
+      "The second MLP linear (4C → C) in every block, which is 4C² weights",
+      "The token and position embeddings, which feed the first block",
+      "The Linear biases and the two LayerNorms' gains and biases per block"
+    ],
+    "answer_index": 3,
+    "explanation": "All the weight matrices are counted in 12C². What is missing are O(C) parameters: one bias per Linear output and the LayerNorm gains and biases. Embeddings are outside the blocks and are excluded on purpose, not by error."
+  },
+  {
+    "id": "07.P4-027",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "In a GPT model, which parameters are outside the transformer blocks but are not embeddings, and so appear in a full non-embedding count but not in a sum over the blocks?",
+    "options": [
+      "The attention output projection W_O, with C² parameters",
+      "The final LayerNorm (ln_f), with 2C parameters",
+      "The MLP's C → 4C expansion layer, with 4C² parameters",
+      "The per-block LayerNorm before attention, with 2C parameters"
+    ],
+    "answer_index": 1,
+    "explanation": "The final LayerNorm sits after the last block and has a gain and bias of length C, 2C parameters (1,536 for GPT-2 small). It is why a full non-embedding count (85,056,000) is slightly larger than the sum over the blocks (85,054,464)."
+  },
+  {
+    "id": "07.P4-028",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "After one AdamW step in PyTorch, what entries does opt.state[p] hold for a parameter tensor p, and which are per-parameter?",
+    "options": [
+      "exp_avg and exp_avg_sq, each shaped like p, plus one scalar step counter per tensor",
+      "Only exp_avg, shaped like p; the second moment is recomputed from the gradient each step",
+      "exp_avg, exp_avg_sq and a full copy of p's gradient history from all previous steps",
+      "A single fused buffer of shape (2,) per tensor, holding the mean m and variance v"
+    ],
+    "answer_index": 0,
+    "explanation": "AdamW stores exp_avg (m) and exp_avg_sq (v), each matching p's shape, so the state is 2× the parameter bytes. The other entry, step, is one scalar per parameter tensor, not per number, so it is negligible."
+  },
+  {
+    "id": "07.P4-029",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "When timing GPU training steps in PyTorch with a wall-clock timer, why call torch.cuda.synchronize() before reading the clock?",
+    "options": [
+      "It frees cached GPU memory so each timed step starts from a clean allocator",
+      "It forces the model into evaluation mode so dropout does not skew the timing",
+      "It switches the GPU from bf16 to fp32 so the timer reads full-precision results",
+      "Kernels launch asynchronously, so the clock may stop before the GPU finishes"
+    ],
+    "answer_index": 3,
+    "explanation": "PyTorch queues GPU kernels and returns to Python immediately, so the CPU's clock can be read while the GPU is still working. Synchronizing waits for queued work to finish so the measured time reflects real compute. It does not free memory or change modes."
+  },
+  {
+    "id": "07.P4-030",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "When measuring tokens/sec, why skip the first few training steps?",
+    "options": [
+      "The first steps process only padding tokens while the data loader fills its prefetch buffer",
+      "They include one-time costs like allocation and kernel setup that distort the steady rate",
+      "The optimizer does not update parameters during the first steps, so they do less work",
+      "The first steps run on the CPU by default until PyTorch moves the model onto the GPU"
+    ],
+    "answer_index": 1,
+    "explanation": "Early iterations include one-time costs, such as memory allocation, lazy initialization of optimizer state and kernel selection, that do not recur. Excluding them gives a representative steady-state throughput."
+  },
+  {
+    "id": "07.P4-031",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "A tiny GPT (C = 64, two layers) trained on a laptop shows MFU well under 5%. What is the main reason?",
+    "options": [
+      "The model's 6N cost per step exceeds the laptop's peak FLOP/s, so it stalls",
+      "Tiny models cannot compute embedding gradients efficiently on laptop hardware",
+      "Matmuls are tiny, so time goes to Python, kernel launches and elementwise ops",
+      "Laptops lack fused AdamW kernels, so the optimizer step dominates step time"
+    ],
+    "answer_index": 2,
+    "explanation": "With C = 64 there is very little arithmetic per kernel, so fixed costs dominate each step. Also, 6N ignores the logits matmul, which for V = 256 and C = 64 is about 17% extra work that MFU does not credit."
+  },
+  {
+    "id": "07.P4-032",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part F — PyTorch",
+    "question": "To compare peak GPU memory across several batch sizes in one PyTorch process, what should you call between measurements?",
+    "options": [
+      "torch.cuda.reset_peak_memory_stats(), then read max_memory_allocated() after each run",
+      "torch.manual_seed(), which resets the allocator and its peak counter for each run",
+      "model.eval() before each run, which drops stored activations and resets the peak",
+      "torch.cuda.synchronize() only, which waits for kernels and also resets the peak"
+    ],
+    "answer_index": 0,
+    "explanation": "max_memory_allocated() reports the highest allocation since the last reset, so you must reset the peak stats between runs or every reading shows the largest one so far. Synchronize waits for kernels; it does not reset the counter. After subtracting fixed state, activation memory grows roughly linearly with B."
+  },
+  {
+    "id": "07.P4-033",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part G — Debugging",
+    "question": "Someone reports 4.1% MFU for a dense A100 run where you compute 8.2%. They divided by 624 TFLOP/s. What went wrong?",
+    "options": [
+      "624 TFLOP/s is the A100's fp32 peak, which should be the denominator for any training run",
+      "624 TFLOP/s is the aggregate peak of two A100s, so the run must have used two GPUs",
+      "624 is the bf16 peak with 2:4 sparsity, unusable by a dense run; use the dense 312",
+      "624 TFLOP/s is the correct dense bf16 peak, so the 8.2% figure is the one that is wrong"
+    ],
+    "answer_index": 2,
+    "explanation": "The A100's quoted 624 TFLOP/s bf16 figure assumes 2:4 structured sparsity. Dense training reaches at most 312, so dividing by 624 halves the reported MFU. Always state the dtype and dense vs sparse when reporting MFU."
+  },
+  {
+    "id": "07.P4-034",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part G — Debugging",
+    "question": "A 1.3B-parameter run budgeted as weights + grads (10.4 GB) on a 16 GB GPU completes the forward and backward pass but runs out of memory at the first opt.step(). Why exactly there?",
+    "options": [
+      "The first step() copies all saved activations into the optimizer state, doubling memory",
+      "The backward pass frees no gradients until step() has been called twice, so memory piles up",
+      "The first step() upcasts all weights to fp64 for the update, doubling weight memory",
+      "AdamW allocates its m and v buffers (another 10.4 GB) lazily inside the first step()"
+    ],
+    "answer_index": 3,
+    "explanation": "Adam's state is 8P bytes in fp32, as large as weights + grads, bringing the fixed total to 16P ≈ 20.8 GB. Those buffers do not exist until the optimizer first needs them, inside the first step(), so earlier passes succeed and the allocation fails there."
+  },
+  {
+    "id": "07.P4-035",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part G — Debugging",
+    "question": "On one A100, a 125M-param run reports 200,000 tokens/sec and a 1.3B-param run reports 30,000 tokens/sec. Which uses the GPU better?",
+    "options": [
+      "The 1.3B run: about 75% MFU vs about 48%, despite far fewer tokens/sec",
+      "The 125M run, since it processes about 6.7× more tokens per second on the same GPU",
+      "They are equal, since both runs saturate the same A100 at its peak throughput",
+      "Neither can be compared without knowing each run's dataset and sequence length"
+    ],
+    "answer_index": 0,
+    "explanation": "MFU = 6N × tokens/sec ÷ peak. 6 × 1.25×10⁸ × 2×10⁵ = 1.5×10¹⁴ FLOP/s (≈48%), and 6 × 1.3×10⁹ × 3×10⁴ = 2.34×10¹⁴ FLOP/s (≈75%). Tokens/sec alone favors small models; MFU normalizes by work per token."
+  },
+  {
+    "id": "07.P4-036",
+    "chapter": "07.P4",
+    "chapter_name": "07.4 Practice set",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/practice-04.md",
+    "section": "Part G — Debugging",
+    "question": "A real training log shows about 75% MFU on a single A100. What is the sensible first reaction?",
+    "options": [
+      "Accept it, since modern GPUs routinely exceed 70% MFU on well-tuned single-GPU runs",
+      "Check the FLOP count and the peak denominator, since 75% is unusually high",
+      "Lower the batch size so MFU falls back into the normal 30–50% range for training",
+      "Conclude the model is too small for the GPU and move the run to a smaller card"
+    ],
+    "answer_index": 1,
+    "explanation": "Well-tuned large runs typically report about 30–50% MFU, so 75% is suspicious. A common cause is an inflated FLOP count (e.g. using total params with embeddings) or a too-small peak denominator (e.g. the fp32 rather than bf16 peak). Verify the inputs before trusting it."
+  }
+]

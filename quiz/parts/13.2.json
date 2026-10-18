@@ -1,0 +1,1010 @@
+[
+  {
+    "id": "13.2-001",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Prerequisites / overview",
+    "question": "Why is a single benchmark accuracy number said to 'hide more than it shows'?",
+    "options": [
+      "Contamination can make a mediocre model look brilliant, miscalibration yields confident wrong answers, and the wrong metric rewards the wrong behavior",
+      "Accuracy is always computed on the training set, so it overstates generalization, and the harness silently drops every item the model gets wrong from the denominator",
+      "Accuracy cannot be computed for multiple-choice tasks, only perplexity can, so a single accuracy number mixes two incompatible metrics together",
+      "Accuracy depends on the GPU and kernel versions used, so it is not reproducible across labs, and ties between options are broken at random each run"
+    ],
+    "answer_index": 0,
+    "explanation": "A score can be inflated by leaked test items, can say nothing about whether the model's confidence is trustworthy, and depends on the metric chosen. Knowing what each number does and does not measure is the core skill of an evaluation engineer. Accuracy is normally computed on held-out benchmarks, not the training set."
+  },
+  {
+    "id": "13.2-002",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "What is benchmark contamination?",
+    "options": [
+      "Noise injected into benchmark labels by annotators who disagree, so a share of the gold answers are wrong before any model is evaluated",
+      "Training data that contains toxic or low-quality content, which drags benchmark scores down when it is mixed into the pretraining corpus",
+      "Using a different tokenizer for the benchmark than for training, so test questions are split into tokens the model rarely saw in pretraining",
+      "Benchmark test questions, and often their answers, ending up in the pretraining data, typically via web scrapes like Common Crawl"
+    ],
+    "answer_index": 3,
+    "explanation": "Benchmarks are published on GitHub, in papers, on leaderboards, and in blog posts, and Common Crawl scoops all of it up, so test items leak into training. It is the evaluation-side twin of training-set deduplication. Label noise and toxicity are different problems."
+  },
+  {
+    "id": "13.2-003",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "What does a contaminated benchmark actually measure?",
+    "options": [
+      "Calibration of the model's confidence on familiar items",
+      "The model's ability to generalize to novel inputs",
+      "Memorization of the test set rather than task ability",
+      "The tokenizer's compression rate on the benchmark text"
+    ],
+    "answer_index": 2,
+    "explanation": "If the model saw the exact items during pretraining it can score high by recalling them rather than reasoning, and that inflated score transfers to nothing. So it measures memorization, not generalization or task ability."
+  },
+  {
+    "id": "13.2-004",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "In which direction, and how visibly, does contamination distort benchmark scores?",
+    "options": [
+      "Downward and loudly — contaminated items cause the evaluation harness to crash with a duplicate-item error",
+      "Upward and silently — there is no error; you only discover it when the model fails on genuinely novel inputs",
+      "Randomly up or down, with a contamination warning printed by the harness whenever overlapping items are found",
+      "Downward and silently, because memorized answers are often stale versions that no longer match the gold labels"
+    ],
+    "answer_index": 1,
+    "explanation": "Contamination inflates scores, and nothing flags it: the model simply reports a higher number than it deserves. The problem surfaces when the model fails on novel inputs that 'should' have been easy given its benchmark score."
+  },
+  {
+    "id": "13.2-005",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "How does the standard n-gram / substring-overlap decontamination pass work?",
+    "options": [
+      "Shuffle the n-grams of each test item before evaluation so the model cannot recognize memorized text, then score the shuffled items as usual",
+      "Flag test items whose text appears as a long enough n-gram in the training corpus, then drop those items or remove the matching training documents",
+      "Replace every n-gram in the training corpus that also appears in any benchmark with a hashed placeholder token, then retrain the tokenizer on the masked result",
+      "Train a classifier on benchmark items to predict whether each test item is too easy, then drop the flagged items from the reported benchmark"
+    ],
+    "answer_index": 1,
+    "explanation": "Decontamination by overlap searches the training corpus for long n-grams from each test item; matches are dropped from the benchmark or the matching documents are dropped from training. GPT-3, Llama, and others report doing this."
+  },
+  {
+    "id": "13.2-006",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "Why is near-duplicate detection (e.g. MinHash / Jaccard) used in addition to exact n-gram matching for decontamination?",
+    "options": [
+      "Exact matching misses paraphrases and reformattings that are close but not identical",
+      "Near-duplicate detection is the only method that works on numbers and code, since n-grams ignore digits",
+      "Exact matching produces too many false negatives only on short questions, which MinHash handles by padding",
+      "MinHash removes the need for any training-corpus scan, since it compares only the benchmark items to each other"
+    ],
+    "answer_index": 0,
+    "explanation": "Exact n-gram overlap only catches verbatim copies. MinHash estimates Jaccard similarity between shingle sets and catches items that are close but reformatted. It still scans the corpus; it just compares sets approximately."
+  },
+  {
+    "id": "13.2-007",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "What is a canary string in the context of benchmark contamination?",
+    "options": [
+      "A special token appended to every benchmark prompt that makes a model refuse to answer if it was trained on that benchmark's files",
+      "A deliberately wrong answer inserted into a few benchmark items so that annotators who copy answers instead of labeling can be detected",
+      "A checksum string shipped with each benchmark release so that users can verify their downloaded copy of the files was not corrupted",
+      "A unique random string (canary GUID) embedded in released benchmark files so anyone can grep a corpus and know the benchmark leaked in"
+    ],
+    "answer_index": 3,
+    "explanation": "Benchmark authors include a unique GUID in their files; finding it in a training corpus proves the benchmark files were scraped. It is a detection tool, not a refusal trigger or a download checksum."
+  },
+  {
+    "id": "13.2-008",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "What is described as the most robust defense against benchmark contamination?",
+    "options": [
+      "Running the n-gram overlap filter twice with different n, so both short and long overlaps are caught",
+      "Evaluating with more few-shot examples, which drowns out any memorized answer with in-context evidence",
+      "Test sets created after the training cutoff or kept entirely private, so they cannot have been seen",
+      "Publishing the benchmark answers separately from the questions, so scraped copies never contain the gold labels"
+    ],
+    "answer_index": 2,
+    "explanation": "A post-cutoff or private test set cannot be in the training data, so it is the strongest defense; this is why leaderboards increasingly rotate to new, time-stamped question sets. Filters remain imperfect, and publishing answers separately still leaks them to the web."
+  },
+  {
+    "id": "13.2-009",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "Why is decontamination described as best-effort rather than a guarantee?",
+    "options": [
+      "Decontamination can only be run on corpora smaller than about one billion tokens, so web-scale pretraining sets are never fully scanned",
+      "Removing contaminated items always lowers scores to chance level, so labs keep some of them in to report meaningful numbers",
+      "Paraphrases, translations, reordered multiple-choice options, and reformatted problems slip past n-gram filters",
+      "Canary strings are stripped out by every tokenizer during preprocessing, so the grep step never finds them in the training data"
+    ],
+    "answer_index": 2,
+    "explanation": "Overlap filters target surface text, so semantically identical but reworded or translated items evade them. Therefore a headline benchmark number from a web-trained model should be treated as an upper bound on true ability."
+  },
+  {
+    "id": "13.2-010",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "How should you treat a headline public benchmark number from a web-trained model?",
+    "options": [
+      "As a lower bound, since decontamination usually removes some of the easiest items from the benchmark",
+      "As an upper bound on true ability, trusting a private or post-cutoff evaluation far more",
+      "As an exact measure of ability, provided the lab reports having run an n-gram decontamination filter",
+      "As meaningless, since every public benchmark is fully contaminated in every web-scale pretraining corpus"
+    ],
+    "answer_index": 1,
+    "explanation": "Because contamination inflates scores and decontamination is imperfect, public numbers are best read as upper bounds. A private or post-cutoff evaluation is far more trustworthy. That does not make public numbers meaningless — just optimistic."
+  },
+  {
+    "id": "13.2-011",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "1. Contamination: when the test leaks into training",
+    "question": "What do the Llama and GPT-3 papers document regarding contamination?",
+    "options": [
+      "Their decontamination procedures and how much scores move once contaminated items are removed",
+      "That contamination stops affecting scores once models pass a certain scale, so large models need no decontamination",
+      "That embedding canary strings in benchmark files is sufficient on its own to guarantee a clean evaluation set",
+      "That few-shot prompting removes the effect of contamination, since in-context examples override memorized answers"
+    ],
+    "answer_index": 0,
+    "explanation": "Both papers describe their decontamination procedures and report the score changes after removing contaminated items, showing how seriously frontier labs treat the issue and how much a clean number can differ from the raw one."
+  },
+  {
+    "id": "13.2-012",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2. Calibration: does confidence match accuracy?",
+    "question": "What question does calibration ask that accuracy does not?",
+    "options": [
+      "How often is the model's top prediction correct across the whole held-out test set?",
+      "How many tokens does the model need to generate before reaching the correct final answer?",
+      "Does the model's accuracy keep improving as more few-shot examples are added to the prompt?",
+      "When the model says it is, say, 80% sure, is it actually right about 80% of the time?"
+    ],
+    "answer_index": 3,
+    "explanation": "Accuracy asks how often the model is right; calibration asks whether its stated confidence matches its empirical accuracy at each confidence level. They are orthogonal questions."
+  },
+  {
+    "id": "13.2-013",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2. Calibration: does confidence match accuracy?",
+    "question": "In classification-style evaluation, how is a model's confidence in a prediction usually read off?",
+    "options": [
+      "As the entropy of the softmax distribution over classes, where lower entropy means higher confidence in the choice",
+      "As the raw logit of the chosen class, before the softmax, since logits are already on a probability scale",
+      "As the difference between the two largest logits, the margin by which the chosen class beats the runner-up",
+      "As the max softmax probability — the probability mass placed on the chosen (most likely) class"
+    ],
+    "answer_index": 3,
+    "explanation": "After choosing the most likely class, confidence is the probability the softmax put on that class. Entropy and logit margins are related uncertainty signals, but ECE as described uses the max softmax probability."
+  },
+  {
+    "id": "13.2-014",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2. Calibration: does confidence match accuracy?",
+    "question": "Which pair correctly illustrates that accuracy and calibration are independent?",
+    "options": [
+      "A model 70% correct claiming 70% confidence is overconfident and miscalibrated; one 40% correct claiming 99% confidence is honest",
+      "A model with high accuracy is always well-calibrated by construction; a model with low accuracy is always overconfident about its picks",
+      "A model 70% correct claiming 99% confidence is accurate but overconfident; one 40% correct claiming ~40% is inaccurate but honest",
+      "Calibration is just accuracy measured again on a second held-out set, so a 70%-accurate model has ECE 0.70 on any split it is given"
+    ],
+    "answer_index": 2,
+    "explanation": "Calibration compares confidence to accuracy, regardless of the accuracy level. A 70%-accurate model claiming 99% is overconfident; a 40%-accurate model claiming 40% is well-calibrated though inaccurate. Neither property implies the other."
+  },
+  {
+    "id": "13.2-015",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2. Calibration: does confidence match accuracy?",
+    "question": "For which kind of system does calibration matter as much as accuracy?",
+    "options": [
+      "Systems that only ever use the argmax prediction and discard all probabilities, such as plain multiple-choice leaderboard scoring",
+      "Any system that acts on the model's probability, such as flagging low-confidence answers for review, abstaining, or routing to a human",
+      "Systems that evaluate perplexity on held-out text, since perplexity is just calibration of next-token probabilities at every position",
+      "Systems that train with a fixed learning rate, since an uncalibrated model makes the loss scale and therefore the step size unpredictable"
+    ],
+    "answer_index": 1,
+    "explanation": "When a human or downstream component uses the model's confidence to decide what to do, miscalibrated confidence leads to bad decisions; a confident wrong answer is worse than an unconfident one. If only the argmax is used, calibration matters much less."
+  },
+  {
+    "id": "13.2-016",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.1 Expected Calibration Error (ECE)",
+    "question": "In computing Expected Calibration Error, what two quantities are attached to each of the N predictions?",
+    "options": [
+      "A confidence c_i in [0,1] (the max softmax probability) and a correctness y_i in {0,1}",
+      "A raw logit z_i for the chosen class and a temperature T_i fitted per prediction on held-out data",
+      "A loss in nats for the prediction and the perplexity exp of that loss, both computed on the true label",
+      "A bin index b_i in {1,...,M} and the gradient norm of the loss with respect to that prediction's logits"
+    ],
+    "answer_index": 0,
+    "explanation": "ECE needs, for each prediction, its confidence (max softmax probability) and whether it was correct (0 or 1). Predictions are then grouped by confidence."
+  },
+  {
+    "id": "13.2-017",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.1 Expected Calibration Error (ECE)",
+    "question": "How are predictions grouped when computing ECE?",
+    "options": [
+      "Into M equal-width confidence bins across [0,1], e.g. (0.0,0.1], (0.1,0.2], … for M = 10",
+      "Into M bins holding equal numbers of predictions, sorted by loss rather than by confidence",
+      "Into one bin per class label, so each bin holds every prediction that chose that class",
+      "Into bins by input length in tokens, e.g. (0,64], (64,128], … so long prompts are compared fairly"
+    ],
+    "answer_index": 0,
+    "explanation": "The standard recipe uses equal-width confidence bins; for M = 10 the bins are (0.0,0.1], (0.1,0.2], and so on. Grouping by class or by loss would not compare confidence to accuracy."
+  },
+  {
+    "id": "13.2-018",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.1 Expected Calibration Error (ECE)",
+    "question": "What is the ECE formula?",
+    "options": [
+      "ECE = (1/M) Σ_b |acc(b) − conf(b)|, ignoring bin sizes",
+      "ECE = max_b |acc(b) − conf(b)|, the single worst bin",
+      "ECE = Σ_b (acc(b) − conf(b))², summed over bins",
+      "ECE = Σ_b (|B_b| / N) · |acc(b) − conf(b)|"
+    ],
+    "answer_index": 3,
+    "explanation": "ECE is the average per-bin gap between accuracy and average confidence, weighted by the fraction of predictions in each bin, |B_b|/N. The unweighted mean ignores bin populations, the max is a different metric (maximum calibration error), and squared gaps are not ECE."
+  },
+  {
+    "id": "13.2-019",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.1 Expected Calibration Error (ECE)",
+    "question": "In the ECE formula, what is |B_b|, and what ECE does a perfectly calibrated model get?",
+    "options": [
+      "|B_b| is the width of bin b, e.g. 0.1 for M = 10; a perfectly calibrated model has acc(b) = 1 in every bin, so ECE = 1",
+      "|B_b| is the number of correct predictions in bin b; a perfectly calibrated model has ECE = 0.5 because half of each bin is right",
+      "|B_b| is the number of predictions in bin b; a perfectly calibrated model has acc(b) = conf(b) in every bin, so ECE = 0",
+      "|B_b| is the average confidence in bin b; a perfectly calibrated model has ECE equal to its accuracy"
+    ],
+    "answer_index": 2,
+    "explanation": "|B_b| counts the predictions that fall in bin b, giving the weight |B_b|/N. Perfect calibration means every bin's accuracy equals its average confidence, so every gap and thus ECE is 0."
+  },
+  {
+    "id": "13.2-020",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.2 Worked example — ECE by hand",
+    "question": "Ten predictions: five at confidence 0.6 (3 correct), four at 0.8 (2 correct), one at 0.95 (correct). With width-0.1 bins, what is the ECE?",
+    "options": [
+      "0.30",
+      "0.125",
+      "0.05",
+      "0.1875"
+    ],
+    "answer_index": 1,
+    "explanation": "Bin (0.5,0.6]: gap 0.00, weight 0.5. Bin (0.7,0.8]: accuracy 0.50 vs confidence 0.80, gap 0.30, weight 0.4 → 0.12. Bin (0.9,1.0]: gap 0.05, weight 0.1 → 0.005. Total 0.125, meaning confidence is off by about 12.5 percentage points on average."
+  },
+  {
+    "id": "13.2-021",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.2 Worked example — ECE by hand",
+    "question": "In that ECE worked example, what does the (0.7, 0.8] bin show about the model?",
+    "options": [
+      "It is under-confident there: it claims 80% confidence but is right more often than that, so the bin lowers the ECE",
+      "It is overconfident there: it claims 80% confidence but is right only half the time, and that bin dominates the ECE",
+      "It is perfectly calibrated there, with accuracy equal to confidence, so the bin contributes nothing to the total ECE",
+      "It is overconfident there, but the bin holds so few predictions that its weighted gap barely changes the total ECE"
+    ],
+    "answer_index": 1,
+    "explanation": "Four predictions at 0.8 with only 2 correct give a 0.30 gap with weight 0.4, contributing 0.12 of the 0.125 total. The (0.5,0.6] bin is perfectly calibrated, and the (0.9,1.0] bin is slightly under-confident but rare."
+  },
+  {
+    "id": "13.2-022",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.2 Worked example — ECE by hand",
+    "question": "In that same example, the (0.9, 1.0] bin holds one prediction at confidence 0.95 that is correct. How does it affect ECE?",
+    "options": [
+      "It is slightly under-confident (accuracy 1.00 vs 0.95) but rare, so it adds only 0.005",
+      "It is heavily overconfident, claiming 0.95 when right, and it dominates the total",
+      "It is perfectly calibrated because the prediction is correct, so it adds exactly 0",
+      "It is excluded from the sum, because bins holding a single prediction are dropped from ECE"
+    ],
+    "answer_index": 0,
+    "explanation": "Accuracy 1.00 versus confidence 0.95 gives a 0.05 gap, weighted by 1/10, contributing 0.005. Being right more often than claimed is under-confidence. Single-prediction bins are not dropped; they are just lightly weighted."
+  },
+  {
+    "id": "13.2-023",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.2 Worked example — ECE by hand",
+    "question": "Why must ECE be reported alongside a reliability diagram rather than alone?",
+    "options": [
+      "ECE is always exactly 0 for models trained with plain cross-entropy, so a reliability diagram is the only way to see any miscalibration in them",
+      "ECE can only be computed for binary classification, so multi-class models need a reliability diagram per class instead of a single number",
+      "ECE is numerically identical to 1 minus accuracy, so a diagram is needed to show the calibration information that the number leaves out",
+      "ECE depends on the bin count, can read 0 even when over- and under-confident bins cancel, and says nothing about which direction the model errs"
+    ],
+    "answer_index": 3,
+    "explanation": "Too few bins hide miscalibration, too many leave bins nearly empty and noisy; aggregate gaps can mask problems; and the absolute value hides direction. A reliability diagram (accuracy vs confidence per bin) shows where and how the model is miscalibrated."
+  },
+  {
+    "id": "13.2-024",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.2 Worked example — ECE by hand",
+    "question": "How does the choice of number of bins affect ECE?",
+    "options": [
+      "More bins always give a more accurate ECE estimate, with no downside at any sample size",
+      "The bin count has no effect on ECE, because each bin's gap is weighted by its size",
+      "Too few bins hide miscalibration; too many leave bins nearly empty and noisy",
+      "Fewer bins always increase ECE, because wider bins mix more confidence levels together"
+    ],
+    "answer_index": 2,
+    "explanation": "Coarse bins average away miscalibration within each bin, while very fine bins contain few predictions and give noisy accuracy estimates. ECE is therefore bin-dependent, which is why the bin count should be reported."
+  },
+  {
+    "id": "13.2-025",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "2.3 In code",
+    "question": "What known-answer cases does code/tests/test_eval.py use to check expected_calibration_error?",
+    "options": [
+      "100 predictions at confidence 1.0 all correct give ECE 1.0; 100 predictions at confidence 0.5 all wrong give ECE 0",
+      "Any set of 100 predictions with accuracy above 90% gives ECE 0, whatever their confidences, since calibration simply follows accuracy",
+      "100 predictions at confidence 0.5 with exactly half correct give ECE 0; 100 predictions at confidence 0.9 all wrong give ECE 0.9",
+      "100 random confidences drawn uniformly from [0,1] with random correctness always give ECE 0.5, matching the expected gap"
+    ],
+    "answer_index": 2,
+    "explanation": "At confidence 0.5 with half correct, accuracy equals confidence, so ECE = 0. At confidence 0.9 with all wrong, accuracy is 0 and the gap is 0.9 for all predictions, so ECE = 0.9. These are cases computable by hand."
+  },
+  {
+    "id": "13.2-026",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "How is instruction-following typically evaluated after supervised fine-tuning?",
+    "options": [
+      "By exact match against a single gold answer written for each instruction, with a fuzzy match for minor wording differences",
+      "With held-out instruction sets and, increasingly, a strong model as judge (LLM-as-judge), which is fast but inherits the judge's biases",
+      "By measuring perplexity on the pretraining validation set, since better instruction-following always lowers held-out loss",
+      "By pass@k against unit tests written for each instruction, which counts a response as correct if any of its k samples passes the tests"
+    ],
+    "answer_index": 1,
+    "explanation": "Instruction-following is judged on held-out instruction sets and often by LLM-as-judge. It scales well but the judge's preferences and biases become part of the metric. Exact match and pass@k suit verifiable tasks instead."
+  },
+  {
+    "id": "13.2-027",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "How are math and logic reasoning tasks with a single verifiable answer (GSM8K, MATH) usually graded?",
+    "options": [
+      "Exact match on the extracted final answer against the gold answer",
+      "Human pairwise preference between two full reasoning traces",
+      "Perplexity of the reference worked solution under the model",
+      "LLM-as-judge rating of the reasoning trace's style, clarity, and rigor"
+    ],
+    "answer_index": 0,
+    "explanation": "Reasoning benchmarks with a verifiable answer are graded by extracting the final answer and comparing it to the gold. It is objective and cheap but blind to how the model got there."
+  },
+  {
+    "id": "13.2-028",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "What is the main blind spot of exact-match grading on reasoning tasks?",
+    "options": [
+      "It is too expensive to run on more than a few hundred problems, since every answer needs a human check",
+      "It rewards longer answers over shorter ones, because longer outputs contain the gold string more often",
+      "It cannot be applied to numerical answers, because floating-point values never match a gold string exactly",
+      "It ignores how the answer was reached, so a right answer from wrong reasoning still scores"
+    ],
+    "answer_index": 3,
+    "explanation": "Exact match checks only the final answer, so lucky guesses or invalid reasoning that lands on the right number get full credit. It is cheap and objective, and works fine on numbers once formats are normalized."
+  },
+  {
+    "id": "13.2-029",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "What does tool-use evaluation check when a model calls tools or functions?",
+    "options": [
+      "Only whether the generated text matches a reference transcript of the tool session exactly, token for token, including call formatting",
+      "The perplexity of the tool documentation under the model, since a model that predicts the docs well is assumed to call the tools well",
+      "How many tools the model can list and describe from memory when asked, scored by recall against the full registry of available tools",
+      "Whether it picked the right tool, formed valid arguments, and used the results correctly — often via task success in a sandbox"
+    ],
+    "answer_index": 3,
+    "explanation": "Tool-use evaluation measures tool selection, argument validity, and correct use of results, often by whether the task succeeds in a sandbox rather than by a text match."
+  },
+  {
+    "id": "13.2-030",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "How is open-ended quality (helpfulness, style, safety) evaluated when there is no single correct string?",
+    "options": [
+      "By exact match against the most common human-written answer, collected from several annotators per prompt",
+      "By pass@k with a reward model acting as the verifier, counting a prompt as solved if any of k responses scores high",
+      "By collecting pairwise human preferences between two responses and aggregating them, e.g. into win rates or Elo",
+      "By measuring ECE on the responses, since a helpful and safe model is one whose stated confidence matches its accuracy"
+    ],
+    "answer_index": 2,
+    "explanation": "Human/preference evaluation asks which of two responses is better and aggregates the judgments into win rates or Elo ratings. This same preference data trains reward models and drives RLHF."
+  },
+  {
+    "id": "13.2-031",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "Besides evaluation, what is pairwise human preference data used for?",
+    "options": [
+      "Building the tokenizer's merge vocabulary",
+      "Training reward models and driving RLHF",
+      "Choosing the number of ECE bins to report",
+      "Decontaminating the pretraining corpora"
+    ],
+    "answer_index": 1,
+    "explanation": "Pairwise preferences are the data that trains reward models, which in turn drive reinforcement learning from human feedback. They have nothing to do with tokenizers or decontamination."
+  },
+  {
+    "id": "13.2-032",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "3. A map of task-evaluation families",
+    "question": "What is meant by 'the metric encodes what you reward'?",
+    "options": [
+      "Choosing a metric is choosing an objective: exact match rewards final answers, LLM-as-judge what the judge prefers, win rate what annotators like",
+      "Metrics are added directly to the training loss as a reward term, so whatever is measured is also what gradient descent optimizes",
+      "The metric with the highest number is always the right one to report, since a higher score means the model is rewarded for real ability",
+      "Every metric measures the same underlying capability on a different scale, so exact match, judge scores and win rates rank models identically"
+    ],
+    "answer_index": 0,
+    "explanation": "Each metric has its own notion of good behavior; optimizing or selecting on it pushes the model toward that notion and away from what it ignores. Pick the metric matching the behavior you want and be honest about what it leaves out."
+  },
+  {
+    "id": "13.2-033",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4. pass@k for code and reasoning",
+    "question": "What does pass@k measure for code and reasoning tasks?",
+    "options": [
+      "The probability that at least one of k sampled attempts is correct",
+      "The fraction of k attempts that are all correct",
+      "The probability that the k-th attempt is correct",
+      "The average number of attempts needed before the first correct one, capped at k"
+    ],
+    "answer_index": 0,
+    "explanation": "pass@k is the chance that at least one of k samples passes the verifier. It reflects that a model allowed several attempts on a checkable task is more useful than one judged on a single try."
+  },
+  {
+    "id": "13.2-034",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4. pass@k for code and reasoning",
+    "question": "What is wrong with estimating pass@k by sampling exactly k completions and scoring 1 if any passed?",
+    "options": [
+      "It always returns 0 for problems that have any wrong samples among the k",
+      "It can only be computed for k = 1, since larger k needs the closed-form estimator",
+      "It requires a reward model as the verifier instead of the problem's unit tests",
+      "It is a noisy and biased estimate, especially for small k and rare successes"
+    ],
+    "answer_index": 3,
+    "explanation": "One draw of exactly k samples per problem gives a 0/1 per-problem estimate that is high-variance and biased. The Codex fix is to sample n ≥ k once and compute the expected pass@k analytically."
+  },
+  {
+    "id": "13.2-035",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4. pass@k for code and reasoning",
+    "question": "With n samples generated and c of them correct, what is the unbiased pass@k estimator from the Codex paper?",
+    "options": [
+      "c / n raised to the power k",
+      "1 − (1 − c/n)",
+      "1 − C(n−c, k) / C(n, k)",
+      "C(c, k) / C(n, k)"
+    ],
+    "answer_index": 2,
+    "explanation": "pass@k = 1 − C(n−c, k)/C(n, k). C(c,k)/C(n,k) would be the chance that all k picks are correct, and (c/n)^k is a with-replacement 'all correct' probability, not 'at least one'."
+  },
+  {
+    "id": "13.2-036",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4. pass@k for code and reasoning",
+    "question": "In the unbiased pass@k estimator, what does the ratio C(n−c, k) / C(n, k) represent?",
+    "options": [
+      "The probability that every one of the k chosen samples is among the c correct ones, so pass@k counts only perfect subsets",
+      "The probability that a random size-k subset of the n samples contains none of the c correct ones",
+      "The fraction (n−c)/n of samples that are incorrect, raised to the power k to account for drawing k samples independently",
+      "The expected number of correct samples in a random size-k subset, divided by k to turn it into a per-sample success rate"
+    ],
+    "answer_index": 1,
+    "explanation": "C(n−c, k) counts subsets drawn entirely from the n−c wrong samples, and C(n, k) counts all size-k subsets, so the ratio is the chance of missing every correct sample; one minus it is the chance of at least one correct."
+  },
+  {
+    "id": "13.2-037",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4. pass@k for code and reasoning",
+    "question": "Why does generating n > k samples and applying the analytic pass@k formula help?",
+    "options": [
+      "It lets you use a weaker, faster verifier without affecting the result, since averaging over subsets cancels false passes",
+      "It averages over all size-k subsets of the n samples, giving a far lower-variance estimate than repeatedly drawing exactly k",
+      "It guarantees that the estimated pass@k equals pass@1 times k, which makes results comparable across different values of k",
+      "It removes the need to check every sample with the verifier, since the formula only needs a few checked samples to extrapolate"
+    ],
+    "answer_index": 1,
+    "explanation": "Using all n samples and computing the expectation over size-k subsets uses far more information than one draw of k, sharply reducing variance. Every sample still has to be checked to count c."
+  },
+  {
+    "id": "13.2-038",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4.1 Worked example",
+    "question": "With n = 5 samples of which c = 2 are correct, what is pass@3 by the unbiased estimator, and why?",
+    "options": [
+      "0.9 — of the C(5,3) = 10 size-3 subsets, only C(3,3) = 1 consists of all wrong samples",
+      "0.4 — two correct out of five samples, and the subset size does not change it",
+      "0.6 — three draws out of five, each of which could be one of the correct ones",
+      "1.0 — any three of the five samples must include at least one of the two correct samples"
+    ],
+    "answer_index": 0,
+    "explanation": "pass@3 = 1 − C(3,3)/C(5,3) = 1 − 1/10 = 0.9. Exactly one 3-subset avoids both correct samples, so a random draw of 3 attempts succeeds 90% of the time; it is not certain."
+  },
+  {
+    "id": "13.2-039",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4.1 Worked example",
+    "question": "Why does pass@k require a reliable verifier?",
+    "options": [
+      "Because the estimator divides by the number of verifier calls, so a verifier that times out on some samples makes the estimate blow up",
+      "Because the verifier sets the value of k, choosing how many samples to draw per problem based on how hard it judges the problem to be",
+      "Because pass@k is undefined if any sample fails to run, so the verifier must repair broken samples before the estimator is applied",
+      "It counts any solution that passes the checker, so weak unit tests let wrong solutions count as passes and overstate capability"
+    ],
+    "answer_index": 3,
+    "explanation": "pass@k measures whether the model can produce a passing answer in k tries, not whether the answer is good. A leaky or incomplete checker inflates pass@k, and comparisons are meaningful only with the same n, k, and verifier."
+  },
+  {
+    "id": "13.2-040",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4.1 Worked example",
+    "question": "When are pass@k comparisons between two evaluations meaningful?",
+    "options": [
+      "Whenever both report pass@k for the same k, regardless of which verifier was used",
+      "Only when n equals k in both evaluations, so that no subset averaging is involved",
+      "When both use the same n, the same k, and the same verifier",
+      "Only when k = 1 in both evaluations, since pass@k for larger k depends on sampling temperature"
+    ],
+    "answer_index": 2,
+    "explanation": "pass@k depends on the sampling budget and especially on the verifier; different tests or settings produce numbers on different scales. Matching n, k, and verifier makes them comparable. n = k is in fact the worse estimator."
+  },
+  {
+    "id": "13.2-041",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "4.1 Worked example",
+    "question": "Which paper introduced pass@k and its unbiased estimator?",
+    "options": [
+      "The GPT-3 paper, 'Language Models are Few-Shot Learners' (Brown et al., 2020)",
+      "The Llama paper, 'LLaMA: Open and Efficient Foundation Language Models' (Touvron et al., 2023)",
+      "The Codex paper, 'Evaluating Large Language Models Trained on Code' (Chen et al., 2021)",
+      "The GPT-2 paper, 'Language Models are Unsupervised Multitask Learners' (Radford et al., 2019)"
+    ],
+    "answer_index": 2,
+    "explanation": "pass@k and the unbiased estimator 1 − C(n−c,k)/C(n,k) come from the Codex paper by Chen et al., 2021. The same idea of a checkable answer reappears in RL with verifiable rewards."
+  },
+  {
+    "id": "13.2-042",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "5. Staying honest about what a metric measures",
+    "question": "What does perplexity measure — and not measure?",
+    "options": [
+      "Task ability on downstream benchmarks — not raw token prediction on held-out text",
+      "Token prediction on held-out text — not task ability, truthfulness, or reasoning",
+      "Calibration of the model's stated confidence — not its accuracy on any task",
+      "Reasoning quality across multi-step problems — not memorization of the training set"
+    ],
+    "answer_index": 1,
+    "explanation": "Perplexity is a token-prediction metric on held-out text. A low perplexity does not certify task ability, truthfulness, or reasoning; those need other evaluations."
+  },
+  {
+    "id": "13.2-043",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "5. Staying honest about what a metric measures",
+    "question": "What is the blind spot of multiple-choice accuracy?",
+    "options": [
+      "It measures ranking among given options — not whether the model could produce the answer unaided — and depends on the scoring rule and option order",
+      "It measures free-form generation quality, since the model must write out its full answer, but it ignores which options were offered and in what order",
+      "It measures ranking among the given options and is insensitive to how they are scored or ordered, so it fully captures unaided problem solving",
+      "It measures calibration rather than ranking — whether the probability placed on each option matches how often that option is the right one"
+    ],
+    "answer_index": 0,
+    "explanation": "Choosing among provided options is easier than generating an answer, and the result depends on the scoring rule (summed vs normalized) and option order. It is a ranking metric, not a generation or calibration metric."
+  },
+  {
+    "id": "13.2-044",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "5. Staying honest about what a metric measures",
+    "question": "Which statement about exact-match grading of reasoning answers is correct?",
+    "options": [
+      "It penalizes broken reasoning even when the final answer is correct, and it accepts any phrasing of a correct answer automatically",
+      "It accepts any phrasing of a correct answer automatically, so '1/2' and '0.5' match, but it cannot be applied to numeric answers",
+      "It measures the quality of each reasoning step against a gold solution, so a correct answer reached by broken reasoning fails",
+      "A correct answer from broken reasoning still scores, and a correct answer phrased differently from the gold string wrongly fails"
+    ],
+    "answer_index": 3,
+    "explanation": "Exact match looks only at the final string: wrong reasoning with a right answer passes, and right answers in a different format fail unless normalized. It does not inspect steps."
+  },
+  {
+    "id": "13.2-045",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "5. Staying honest about what a metric measures",
+    "question": "What does pass@k measure, according to its blind spot?",
+    "options": [
+      "The quality of the single best solution among the k, judged independently of the verifier that was used",
+      "The average quality of all k sampled solutions, weighted by how many of the verifier's tests each one passes",
+      "Whether all k sampled solutions pass the verifier, so a single failing sample drives the score for that problem to 0",
+      "Reachability of a passing answer within k tries under a specific verifier — not solution quality"
+    ],
+    "answer_index": 3,
+    "explanation": "pass@k only says whether some attempt among k passes the given checker. It does not measure how good, efficient, or correct-in-untested-cases the solution is."
+  },
+  {
+    "id": "13.2-046",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "5. Staying honest about what a metric measures",
+    "question": "What reporting practice follows from the fact that every metric is partial?",
+    "options": [
+      "Report only the single metric that gives the highest score, and describe how it was computed so readers trust that one number over the rest",
+      "Report only perplexity on a private held-out set, since it is the one metric with no blind spots and needs no choice of bins, normalization or n/k",
+      "Report several metrics, state how each was computed (bins, normalization, n/k, decontamination), and keep a private or post-cutoff set you trust",
+      "Avoid reporting computation details such as bins, normalization or n/k, so results stay comparable with papers that did not report them"
+    ],
+    "answer_index": 2,
+    "explanation": "None of the metrics is wrong, but each is partial. Reporting several with their computation details lets readers judge them, and a private or post-cutoff evaluation guards against contamination."
+  },
+  {
+    "id": "13.2-047",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Exercise",
+    "question": "You sample n = 6 completions of a coding problem and c = 2 pass. What is pass@2 by the unbiased estimator?",
+    "options": [
+      "0.4",
+      "0.6",
+      "0.333",
+      "0.8"
+    ],
+    "answer_index": 1,
+    "explanation": "pass@2 = 1 − C(4,2)/C(6,2) = 1 − 6/15 = 0.6. Of the 15 pairs, 6 are drawn entirely from the 4 failing samples; the other 9 include a correct one, so 9/15 = 0.6. 0.4 is the miss probability."
+  },
+  {
+    "id": "13.2-048",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is estimating pass@k by literally sampling k completions and checking 'any pass' a common mistake?",
+    "options": [
+      "It is biased and high-variance; you should sample n > k and use the analytic estimator",
+      "It always underestimates pass@1, since one passing sample out of k is counted as only 1/k",
+      "It requires a GPU with more memory than the analytic estimator, since all k samples are kept",
+      "It cannot handle problems with zero correct samples, where the any-pass indicator is undefined"
+    ],
+    "answer_index": 0,
+    "explanation": "The single-draw approach gives noisy 0/1 per-problem estimates and a biased average. Sampling more completions once and computing 1 − C(n−c,k)/C(n,k) is the recommended fix."
+  },
+  {
+    "id": "13.2-049",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "A reasoning grader compares strings exactly, and answers '0.5', '1/2', and '½' are graded differently. What is the mistake?",
+    "options": [
+      "Not normalizing the answer format before exact match, so equivalent answers fail a naive string compare",
+      "Using exact match instead of the perplexity of the gold answer for grading these reasoning tasks",
+      "Using too few ECE bins, so near-equal answers fall into the same bin and get merged",
+      "Using pass@1 instead of pass@k, so equivalent answers appearing in the other samples are never counted"
+    ],
+    "answer_index": 0,
+    "explanation": "Exact-match grading must normalize answer formats; otherwise semantically identical answers like 0.5, 1/2, and ½ are scored as wrong. Perplexity or ECE do not address this."
+  },
+  {
+    "id": "13.2-050",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Which practice reflects a common mistake about accuracy and calibration?",
+    "options": [
+      "Reporting ECE together with a reliability diagram and the number of confidence bins used to compute it",
+      "Treating public benchmark numbers from web-trained models as an upper bound on true ability",
+      "Using the max softmax probability as each prediction's confidence when computing ECE bins",
+      "Assuming a highly accurate model is also well-calibrated, instead of measuring calibration separately"
+    ],
+    "answer_index": 3,
+    "explanation": "Accuracy and calibration are independent; a very accurate model can be badly calibrated and vice versa, so each needs its own measurement. The other options are recommended practices."
+  },
+  {
+    "id": "13.2-051",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A pass@10 evaluation samples exactly 10 completions per problem and scores 1.0 if any pass. What is the first problem?",
+    "options": [
+      "The code computes pass@1, not pass@10, because 'any pass' over 10 samples is the per-sample rate c/n",
+      "The code double-counts problems with multiple passing samples, so scores can exceed 1.0 on easy problems where many of the samples pass",
+      "This is pass@10 with n = k = 10 — the biased, high-variance estimator; sampling a larger n and computing pass@10 analytically is more stable",
+      "The verifier is called on only the first of the 10 completions, so the other nine samples never affect the score reported for that problem"
+    ],
+    "answer_index": 2,
+    "explanation": "With n = k each problem contributes a 0 or 1, giving a noisy average. Sampling, e.g., n = 100 and applying the unbiased estimator for k = 10 is far more stable. The 'any pass' indicator over 10 samples is pass@10, not pass@1."
+  },
+  {
+    "id": "13.2-052",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A team reports 'pass@1' using the same 'any of 10 samples passed' indicator they computed for pass@10. What is wrong and how should pass@1 be estimated?",
+    "options": [
+      "Nothing is wrong; pass@1 and pass@10 are equal whenever n = 10, since both average over the same ten samples per problem",
+      "That indicator is pass@10 and massively overstates pass@1; pass@1 should be c/n, the fraction of individual samples that pass",
+      "The indicator is fine for pass@10, but pass@1 should be estimated as 1 − c/n, the fraction of individual samples that fail the tests",
+      "The indicator is fine for pass@10, but pass@1 should be estimated as (c/n)^10, the chance that all ten samples pass"
+    ],
+    "answer_index": 1,
+    "explanation": "The probability that one of ten attempts works is far higher than the probability a single attempt works. With the estimator at k = 1, 1 − C(n−c,1)/C(n,1) = c/n, the fraction of passing samples."
+  },
+  {
+    "id": "13.2-053",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A web-trained model scores 92% on a public multiple-choice benchmark but 61% on a private set of freshly written questions of the same difficulty. What is the most likely explanation?",
+    "options": [
+      "The private set is mislabeled: freshly written questions usually contain annotation errors, so 92% is the true ability and 61% is just label noise",
+      "Contamination: the public benchmark likely leaked into pretraining, so 92% partly reflects memorization and 61% is the more honest estimate",
+      "Miscalibration: the model is overconfident on the private set, and its overconfidence lowers accuracy on unfamiliar questions",
+      "The private set uses a different tokenizer and prompt template, which lowers accuracy, so the 31-point gap is a formatting artifact"
+    ],
+    "answer_index": 1,
+    "explanation": "A large gap between public and fresh private questions of equal difficulty is the signature of contamination. The private, post-hoc set could not have been seen, so its score is the honest one; the 31-point gap is the inflation contamination bought."
+  },
+  {
+    "id": "13.2-054",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Model A is 85% accurate with ECE 0.20; model B is 80% accurate with ECE 0.02. Which is likely better for a system that abstains when confidence is low?",
+    "options": [
+      "B, because the system acts on confidence and B's confidence is trustworthy, so it routes the right cases to a human",
+      "A, because higher accuracy always wins regardless of how the system uses confidence, and 5 points outweighs the ECE gap",
+      "A, because a higher ECE means the model is more confident overall, which makes its abstention decisions more decisive",
+      "Neither, because ECE measures average calibration and cannot be used to judge abstention decisions for a deployed system"
+    ],
+    "answer_index": 0,
+    "explanation": "In an abstention system, decisions depend on confidence, so calibration is critical. A's confidence is off by about 20 points, so it will confidently emit wrong answers and abstain on the wrong cases. If confidence were never used, A's accuracy would win."
+  },
+  {
+    "id": "13.2-055",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Check yourself",
+    "question": "You sample n = 4 completions and 0 pass. What is pass@k for any k ≤ 4 by the unbiased estimator?",
+    "options": [
+      "1/4 for every k, since each sample has an equal chance of passing",
+      "k/4, since drawing more samples raises the chance linearly in k",
+      "Undefined, because the estimator divides by c, which must be positive",
+      "0, since every size-k subset consists entirely of failing samples"
+    ],
+    "answer_index": 3,
+    "explanation": "With c = 0, pass@k = 1 − C(n,k)/C(n,k) = 0. No selection of failing samples can contain a correct one, matching intuition. The formula is well-defined for c = 0."
+  },
+  {
+    "id": "13.2-056",
+    "chapter": "13.2",
+    "chapter_name": "Contamination, calibration, task eval",
+    "module": "13",
+    "module_name": "Evaluation",
+    "source": "lessons/module-13/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why does process-based evaluation exist alongside exact-match grading for reasoning?",
+    "options": [
+      "Exact match is too slow to run on large benchmarks, so process-based grading samples only a few steps per problem to save compute",
+      "Exact match requires human annotators to grade every problem, so process-based evaluation was introduced to automate grading",
+      "Exact match measures answer correctness under a fixed format, not reasoning quality, so a separate approach is needed to evaluate the steps",
+      "Exact match cannot be applied to math problems with numeric answers, so process-based grading checks each intermediate step's arithmetic instead"
+    ],
+    "answer_index": 2,
+    "explanation": "Exact match scores only the final answer string, blind to the reasoning path, so invalid steps that reach the right number score fully. Process-based evaluation addresses reasoning quality directly."
+  }
+]

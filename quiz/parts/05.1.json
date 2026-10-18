@@ -1,0 +1,1226 @@
+[
+  {
+    "id": "05.1-001",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In a GPT-style language model, what does every layer after the embedding layer actually see as its input?",
+    "options": [
+      "The original text characters of the prompt, re-read at each layer",
+      "Vectors produced by the embedding layer, never the raw text or ids",
+      "The integer token ids, rescaled to [0, 1] by dividing by vocab_size",
+      "One-hot vectors of length vocab_size, one per position in the batch"
+    ],
+    "answer_index": 1,
+    "explanation": "Embeddings are the model's entire interface to language: after the lookup, every downstream layer operates only on real-valued vectors of shape (B, T, C). The integer ids and the text are gone. One-hot vectors are never materialized — the lookup is the efficient form of one-hot times a matrix."
+  },
+  {
+    "id": "05.1-002",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What role do positional embeddings play in a GPT-style transformer?",
+    "options": [
+      "They compress the vocabulary so the token table needs far fewer rows for rare words",
+      "They normalize every token vector to unit length so attention scores stay in a fixed range",
+      "They turn a permutation-blind bag of vectors into a representation of an ordered sequence",
+      "They replace the token embedding entirely for every position after the first one in a sequence"
+    ],
+    "answer_index": 2,
+    "explanation": "Attention by itself treats its input as a set, so without position information word order is invisible. Positional embeddings add a per-position signal so the same token at different positions yields different vectors. They do not replace or normalize the token embedding; they are added to it."
+  },
+  {
+    "id": "05.1-003",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "1. Intuition: from integers to meaning",
+    "question": "Why is it misleading to treat token id 3797 as 'bigger' than token id 464?",
+    "options": [
+      "Because ids are sorted by corpus frequency, so a larger id means a rarer token",
+      "Because ids are hashed by the tokenizer and change on every training run",
+      "Because larger ids always refer to subword fragments rather than whole words",
+      "Because token ids are names (indices into the vocabulary), not quantities"
+    ],
+    "answer_index": 3,
+    "explanation": "A token id is just an index into the vocabulary; its numeric value carries no meaning. 3797 is not 'more' than 464 in any useful sense. That is why ids must be converted into learned vectors before a network, which computes with quantities, can use them."
+  },
+  {
+    "id": "05.1-004",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "1. Intuition: from integers to meaning",
+    "question": "What is a token embedding, in the simplest terms?",
+    "options": [
+      "A lookup table with one learned row (a vector of C numbers) per vocabulary entry",
+      "A fixed hash function mapping each id to a random but unchanging vector of C numbers",
+      "A small neural network that predicts a C-vector from the decimal digits of the id",
+      "A frequency count of each token in the training corpus, normalized to sum to one"
+    ],
+    "answer_index": 0,
+    "explanation": "An embedding is a lookup table: token id i selects row i, a vector of C numbers. Those rows start random and are trained by gradient descent with the rest of the model. It is not a fixed hash and not computed from the id's digits — it is a learned parameter matrix."
+  },
+  {
+    "id": "05.1-005",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "1. Intuition: from integers to meaning",
+    "question": "After training, how are the embedding rows for 'cat', 'dog' and 'parliament' expected to relate?",
+    "options": [
+      "All three are mutually orthogonal, since embedding tables are kept orthonormal in training",
+      "'cat' and 'dog' sit near each other while 'cat' and 'parliament' sit far apart",
+      "They are identical vectors, since meaning is only added later by the attention layers",
+      "'cat' and 'parliament' are closest because their ids happen to be adjacent in the vocab"
+    ],
+    "answer_index": 1,
+    "explanation": "Because the rows are trained by gradient descent, tokens used in similar ways end up with similar vectors, so 'cat' and 'dog' end up close and 'cat' and 'parliament' far apart. Nothing forces embeddings to be orthogonal, and id adjacency is irrelevant to meaning."
+  },
+  {
+    "id": "05.1-006",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "1. Intuition: from integers to meaning",
+    "question": "How are the values in a token embedding table initialized and updated?",
+    "options": [
+      "They are copied from a pretrained word2vec model and kept frozen during training",
+      "They are set to one-hot vectors at initialization and never change afterwards",
+      "They start random and are trained by gradient descent along with the rest of the model",
+      "They are computed once from character n-gram counts when the tokenizer itself is trained"
+    ],
+    "answer_index": 2,
+    "explanation": "The embedding rows start as random numbers and are learned jointly with every other parameter by gradient descent. That is why the table ends up encoding meaning: similar usage yields similar gradients and similar rows. They are not frozen or derived from counts."
+  },
+  {
+    "id": "05.1-007",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "1. Intuition: from integers to meaning",
+    "question": "What are the shape and meaning of the token embedding table `wte` in GPT?",
+    "options": [
+      "(n_embd, vocab_size); column i is the vector for token i",
+      "(block_size, n_embd); row t is the vector for position t",
+      "(vocab_size, vocab_size); a learned token-to-token similarity matrix",
+      "(vocab_size, n_embd); row i is the vector for token id i"
+    ],
+    "answer_index": 3,
+    "explanation": "`wte` has shape (vocab_size, n_embd): one row per vocabulary entry, each of width C = n_embd. Looking up id i means 'take row i'. The (block_size, n_embd) shape describes the positional table `wpe`, not `wte`."
+  },
+  {
+    "id": "05.1-008",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "2. Why raw ids cannot feed a network",
+    "question": "Why would feeding raw token ids directly into a linear layer Wx be a problem regarding magnitude?",
+    "options": [
+      "The layer would treat the arbitrary id value as a magnitude, so large ids give huge activations",
+      "The linear layer cannot accept integer inputs at all, so the forward pass raises a dtype error first",
+      "Large ids would overflow float16 and small ids underflow to zero, so the inputs lose precision",
+      "The linear layer would round every id to the nearest power of two, merging unrelated tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "A linear layer multiplies its input by weights, so id 50000 would yield an activation 100x larger than id 500 purely because of an arbitrary id assignment. The numeric value of an id encodes no useful structure, so this magnitude is meaningless noise. The issue is semantic, not a dtype error."
+  },
+  {
+    "id": "05.1-009",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "2. Why raw ids cannot feed a network",
+    "question": "Why can a single scalar token id not express that two tokens play similar roles?",
+    "options": [
+      "Because scalars cannot be differentiated by autograd, so similar tokens never get gradients",
+      "Adjacent ids can be unrelated words, and one number cannot encode similarity geometrically",
+      "Because ids are assigned as unique primes, so no two ids share any arithmetic relationship",
+      "Because measuring similarity between tokens requires complex numbers rather than real ones"
+    ],
+    "answer_index": 1,
+    "explanation": "Ids 464 and 465 might be 'the' and 'zebra' — adjacent numbers, unrelated meanings. A single scalar cannot express similarity, but a C-dimensional vector can, because similarity becomes geometric closeness. Scalars are perfectly differentiable; the problem is representational."
+  },
+  {
+    "id": "05.1-010",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "2. Why raw ids cannot feed a network",
+    "question": "Why is one number per token too little capacity, compared to a C = 768 vector?",
+    "options": [
+      "Because a single number cannot be stored precisely in float32, so nearby token ids collide in memory",
+      "Because GPU tensor cores require vector inputs of length at least 768 before they will run matrix multiplies",
+      "Word usage has many facets (syntax, topic, sentiment, formality); a vector gives each its own directions",
+      "Because 768 is the number of characters needed to spell out the longest token in the vocabulary"
+    ],
+    "answer_index": 2,
+    "explanation": "Word usage has many facets — syntax, topic, sentiment, formality, and more. A single scalar cannot hold all of them, while a 768-dimensional vector can devote different directions to different facets. The limitation is capacity, not hardware or precision."
+  },
+  {
+    "id": "05.1-011",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "2. Why raw ids cannot feed a network",
+    "question": "If onehot(i) is a length-V row vector and W has shape (V, C), what is onehot(i) W?",
+    "options": [
+      "The sum of all rows of W",
+      "Column i of W",
+      "A V-by-C matrix with only row i non-zero",
+      "Exactly row i of W, a C-vector"
+    ],
+    "answer_index": 3,
+    "explanation": "A one-hot row vector with a 1 at position i selects row i when multiplied by W: onehot(i) W = W_i. That is why an embedding lookup is mathematically a one-hot times a weight matrix. It yields a C-vector, not a column or a matrix."
+  },
+  {
+    "id": "05.1-012",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "2. Why raw ids cannot feed a network",
+    "question": "How does an embedding lookup relate to multiplying a one-hot vector by a weight matrix?",
+    "options": [
+      "It computes the same result without materializing the V-long one-hot or multiplying by zeros",
+      "It is an approximation of the one-hot product that is only exact for small vocabularies of a few thousand",
+      "It is unrelated; embedding tables use hashing into buckets rather than matrix algebra",
+      "It performs the full one-hot by matrix multiply, but in a fused kernel on the GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Indexing row i gives exactly onehot(i) W, so the lookup is the efficient form of that multiplication: it skips building the huge one-hot and doing the wasteful multiply-by-zeros. The result is exact, not an approximation, and no full multiply happens at runtime."
+  },
+  {
+    "id": "05.1-013",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "3. The token embedding table `wte`",
+    "question": "In GPT-2 small, what are typical values of V (vocab_size) and C (n_embd) for the token embedding table W_te in R^(V x C)?",
+    "options": [
+      "V = 768, C = 50257",
+      "V = 50257, C = 768",
+      "V = 1024, C = 768",
+      "V = 50257, C = 1024"
+    ],
+    "answer_index": 1,
+    "explanation": "GPT-2 uses a vocabulary of 50257 tokens and an embedding width of 768 for the small model, so W_te is 50257 x 768. The value 1024 is GPT-2's block_size (max context length), which sizes the positional table, not the token table."
+  },
+  {
+    "id": "05.1-014",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "3. The token embedding table `wte`",
+    "question": "Given token ids idx of shape (B, T), what does the lookup tok[b, t, :] = W_te[idx[b, t]] produce?",
+    "options": [
+      "A tensor of shape (B, C) — the C-vectors of each sequence averaged over its T positions",
+      "A tensor of shape (T, C) that is shared across every sequence in the batch",
+      "A tensor of shape (B, T, C) where each scalar id is replaced by its C-vector row",
+      "A tensor of shape (B, T, V) holding a probability for every vocabulary entry"
+    ],
+    "answer_index": 2,
+    "explanation": "Each scalar id at position (b, t) is replaced by the whole C-vector in that id's row, so the shape grows by one trailing axis: (B, T) becomes (B, T, C). It does not pool over positions, and (B, T, V) is the shape of the output logits, not the embedding."
+  },
+  {
+    "id": "05.1-015",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "3. The token embedding table `wte`",
+    "question": "What dtype must the token-id tensor idx have when fed to the embedding lookup?",
+    "options": [
+      "float32, to match the dtype of the table",
+      "bfloat16, to halve the memory of the index",
+      "bool, as a mask selecting vocabulary rows",
+      "int64 (long), since it is used for indexing"
+    ],
+    "answer_index": 3,
+    "explanation": "idx holds integer row indices, dtype int64/long. Indexing an embedding with floats raises an error because a fractional row number makes no sense. The output, however, has the table's dtype (float32)."
+  },
+  {
+    "id": "05.1-016",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "3. The token embedding table `wte`",
+    "question": "What is the (B, T, C) tensor that every later GPT layer operates on commonly called?",
+    "options": [
+      "The residual stream",
+      "The attention mask",
+      "The logit buffer",
+      "The key-value cache tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "After the embedding lookup, all later layers read and write the (B, T, C) tensor known as the residual stream. The integers are gone from this point on. The KV cache, attention mask and logits are other objects with different shapes and roles."
+  },
+  {
+    "id": "05.1-017",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "5. The order problem: attention is permutation-blind",
+    "question": "What happens to attention's outputs if you shuffle the positions of its input vectors (with no positional information)?",
+    "options": [
+      "The outputs become random noise, since the attention weights get scrambled too",
+      "The outputs are shuffled the same way but the computed values are the same",
+      "The outputs are unchanged and stay in the original, unshuffled order",
+      "Attention raises an error because its input positions must be sorted"
+    ],
+    "answer_index": 1,
+    "explanation": "Attention treats its input as a set: permuting the inputs permutes the outputs identically without changing their values (permutation equivariance). It has no built-in notion that position 1 precedes position 2. This is why position must be injected explicitly."
+  },
+  {
+    "id": "05.1-018",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "5. The order problem: attention is permutation-blind",
+    "question": "Without positional information, why would 'dog bites man' and 'man bites dog' be a problem for attention?",
+    "options": [
+      "Attention would assign the two sentences to different vocabularies based on word order",
+      "Attention would crash on repeated tokens, since keys must be unique",
+      "They would produce the same bag of vectors, so the model could not tell them apart",
+      "The tokenizer would merge each whole sentence into a single shared token"
+    ],
+    "answer_index": 2,
+    "explanation": "Both sentences contain the same tokens, so without position they form the same set of vectors and permutation-blind attention sees no difference. Since order is meaning in language, this is fatal. Positional information must be injected into the vectors before attention sees them."
+  },
+  {
+    "id": "05.1-019",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "5. The order problem: attention is permutation-blind",
+    "question": "When must position information be injected in a GPT-2-style model?",
+    "options": [
+      "Only in the final output layer, just before the softmax over the vocabulary",
+      "Only during inference, since training batches already arrive in order",
+      "Inside the loss function, as a penalty term on out-of-order predictions",
+      "Into the input vectors themselves, before attention ever sees them"
+    ],
+    "answer_index": 3,
+    "explanation": "Because attention is order-blind, each position's vector must already carry 'which token and where' when it enters the first block. GPT-2 does this by adding a positional embedding to the token embedding at the input. Adding it only at the output or only at inference would leave attention order-blind."
+  },
+  {
+    "id": "05.1-020",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "6. Learned absolute positional embeddings `wpe`",
+    "question": "What is GPT-2's positional embedding table `wpe`?",
+    "options": [
+      "A second learned table of shape (block_size, n_embd), indexed by position",
+      "A fixed table of sine and cosine values computed directly from the position index",
+      "A learned table of shape (vocab_size, n_embd), indexed by token id",
+      "A single learned scalar per position that scales the token embedding"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2 keeps a second learned table W_pe in R^(T_max x C), with T_max = block_size (e.g. 1024). Row t is a learned vector for 'what it means to be at position t'. Sinusoidal encodings are the original Transformer's fixed alternative, not GPT-2's."
+  },
+  {
+    "id": "05.1-021",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "6. Learned absolute positional embeddings `wpe`",
+    "question": "How are the token and positional embeddings combined in GPT-2?",
+    "options": [
+      "They are concatenated along the channel axis, giving width 2C",
+      "They are added elementwise: h[b,t] = W_te[idx[b,t]] + W_pe[t]",
+      "They are multiplied elementwise, so position gates each channel",
+      "The positional vector replaces the token vector at even positions"
+    ],
+    "answer_index": 1,
+    "explanation": "GPT-2 simply adds the positional vector to the token vector at each position. Both are C-vectors, so the sum stays width C and the tensor stays (B, T, C). Concatenation would double the width; multiplication is not used."
+  },
+  {
+    "id": "05.1-022",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "6. Learned absolute positional embeddings `wpe`",
+    "question": "Why does the positional term W_pe[t] broadcast across the batch?",
+    "options": [
+      "Because the batch size is always 1 during pretraining, so there is nothing to broadcast over",
+      "Because PyTorch duplicates the positional table B times in memory before the addition",
+      "Position t gets the same vector in every sequence — the table has no batch dependence",
+      "Because each sequence in the batch uses its own block_size, so positions must be shared"
+    ],
+    "answer_index": 2,
+    "explanation": "The positional table depends only on position, not on which sequence it is, so position t receives the same W_pe[t] in every sequence. A (T, C) positional tensor therefore broadcasts against the (B, T, C) token tensor. Broadcasting does not copy the data B times."
+  },
+  {
+    "id": "05.1-023",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "Why is adding the raw position number t (e.g. t = 1023) to the token embedding a bad idea?",
+    "options": [
+      "Because t is an integer tensor, and PyTorch cannot add integers to float32 embeddings at all",
+      "Because adding a scalar to every channel makes the forward pass several times slower",
+      "Because positions must be negative and centred on zero for the attention softmax to work correctly",
+      "Its magnitude swamps the small (~±1) token-embedding entries, drowning token identity late on"
+    ],
+    "answer_index": 3,
+    "explanation": "Token-embedding entries are around ±1, while the raw position near the end of a GPT-2 context is about 1023. Adding it turns [-0.70, 0.80, 0.90] into roughly [1022, 1024, 1024], so the token identity becomes a rounding error. Early positions barely change while late ones drown everything."
+  },
+  {
+    "id": "05.1-024",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "What can a linear layer compute from a single raw position scalar t, and why is that insufficient?",
+    "options": [
+      "Only things proportional to t, while the model needs categorical facts like 'am I first?'",
+      "Only the parity of t (odd or even), which collapses most positions into two classes",
+      "Nothing at all, because scalar inputs cannot pass through a linear layer's weight matrix in PyTorch",
+      "Only exponentials of t, which overflow float32 once t passes a few hundred positions"
+    ],
+    "answer_index": 0,
+    "explanation": "A single number lets a linear layer compute quantities proportional to t. But useful positional facts — 'am I first?', 'is this the token right after the previous one?', 'am I near the sentence start?' — are categorical and not straight-line functions of t. A per-position C-vector can encode all of them in different directions."
+  },
+  {
+    "id": "05.1-025",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "Why do neighbouring raw positions such as 500 and 501 make a poor positional signal?",
+    "options": [
+      "Because the model treats neighbouring positions as the same token id once they are embedded",
+      "They differ by only ~0.2%, so mixed into many channels 'the token right before me' is hard to see",
+      "Because odd positions are ignored by attention, so position 501 never contributes a signal",
+      "Because float32 cannot represent 501 exactly, so it rounds to the same value as position 500"
+    ],
+    "answer_index": 1,
+    "explanation": "Positions 500 and 501 differ by about 0.2%; once mixed into 768 channels by a weight matrix that difference is tiny relative to everything else. Yet 'the token right before me' is the single most useful positional relation in language. Float32 represents both integers exactly — the problem is relative scale."
+  },
+  {
+    "id": "05.1-026",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "Why does normalizing the position as t / T not rescue the raw-position approach?",
+    "options": [
+      "Because dividing by the sequence length is not differentiable, so no gradient reaches the input",
+      "Because dividing t by T makes every position equal to exactly 1 once the whole sequence is full",
+      "The same value then means different places at different lengths (0.5 is 5 of 10 or 500 of 1000)",
+      "Because t / T always exceeds the token embedding's magnitude, swamping the token identity"
+    ],
+    "answer_index": 2,
+    "explanation": "Dividing by the length fixes the size problem but changes the meaning: 0.5 is position 5 in a 10-token sequence and position 500 in a 1000-token sequence. The same input value no longer denotes the same place. Division is differentiable and the values stay in [0, 1], so those are not the issue."
+  },
+  {
+    "id": "05.1-027",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "How does the sinusoidal positional encoding handle the raw-position problem differently from GPT-2's learned `wpe`?",
+    "options": [
+      "It ignores position entirely and relies on the causal mask alone to recover word order",
+      "It learns a separate vector for each position from scratch, exactly like a learned lookup table",
+      "It adds the raw integer t to every channel but clips the result to a maximum value of 1",
+      "It maps the real number t through C sines and cosines of different frequencies, kept in [-1, 1]"
+    ],
+    "answer_index": 3,
+    "explanation": "Sinusoidal encoding does use the actual number t, but maps it through sines and cosines at many frequencies across C channels. Each value stays in [-1, 1] and nearby positions remain distinguishable. Learning a separate vector per position is what `wpe` does instead."
+  },
+  {
+    "id": "05.1-028",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why not just feed the real position number?",
+    "question": "In what sense is the learned positional table `wpe` the same trick as the token embedding table?",
+    "options": [
+      "Each position is a category with its own learned C-vector; indexing is 'one-hot times a matrix'",
+      "Both tables share the same rows, so position t and token id t always use exactly one learned vector",
+      "Both tables are computed from the characters of the token, so no rows are learned for either",
+      "Both tables are frozen right after initialization, so neither is updated by gradient descent"
+    ],
+    "answer_index": 0,
+    "explanation": "Just as for token ids, each position is treated as a category and given its own learned C-vector, and indexing the table is equivalent to multiplying a one-hot by the matrix. Rows have the same scale as token vectors and can differ as much as training needs. The two tables are separate parameters, both trained."
+  },
+  {
+    "id": "05.1-029",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why add rather than concatenate?",
+    "question": "Why does GPT-2 add the positional embedding to the token embedding rather than concatenate them?",
+    "options": [
+      "Concatenation is not supported by autograd, so gradients could not flow back into either table",
+      "Adding keeps the width at C; concatenating would double it and widen every downstream matrix",
+      "Adding makes the positional signal fade after the first layer, which acts as a useful regularizer",
+      "Concatenation would make the model permutation-invariant again, undoing the positional signal"
+    ],
+    "answer_index": 1,
+    "explanation": "Adding keeps the residual width at C, whereas concatenation would double it and widen every downstream matrix. Because both tables are learned jointly, the model can carve out separate directions for positional and token information. Concatenation is fully differentiable; the reason is cost."
+  },
+  {
+    "id": "05.1-030",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why add rather than concatenate?",
+    "question": "If token and positional vectors are added into the same C-dimensional space, how can the model still use both?",
+    "options": [
+      "It cannot; the positional signal is lost in the sum and only the token identity survives the add",
+      "A fixed projection matrix separates the two signals again at the start of every transformer block",
+      "Both tables are learned jointly, so the model carves out separate directions for position and token",
+      "The positional vectors are constrained to be orthogonal to all token vectors by construction"
+    ],
+    "answer_index": 2,
+    "explanation": "Both tables are trained together, so the model can learn to use certain directions in the C-dimensional space for positional signal and others for token identity. Nothing forces exact orthogonality and there is no fixed separating projection — the separability is learned."
+  },
+  {
+    "id": "05.1-031",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Why add rather than concatenate?",
+    "question": "Why is GPT-2's positional scheme called 'absolute'?",
+    "options": [
+      "Because positions are measured in absolute bytes of raw text rather than in tokens",
+      "Because the encoding takes the absolute values of sines to keep every entry positive",
+      "Because it encodes the absolute distance between every pair of tokens in the sequence",
+      "Because each position 0, 1, 2, ... gets its own free vector, learned from scratch"
+    ],
+    "answer_index": 3,
+    "explanation": "It is absolute because it answers 'where am I' with a per-position vector: position 0 has one vector, position 1 another, each learned independently. Relative schemes like RoPE instead make attention depend on the distance between positions."
+  },
+  {
+    "id": "05.1-032",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "In a GPT-2-style model whose `wpe` has block_size rows, what position vectors exist at inference?",
+    "options": [
+      "Only positions 0 to block_size − 1; there is no vector for position block_size or beyond",
+      "Any position at all, because extra rows are generated on demand from the trained ones",
+      "Positions up to 2 × block_size, since rows are mirrored around the final trained index",
+      "Only even positions have rows; odd positions are interpolated from their two trained neighbours"
+    ],
+    "answer_index": 0,
+    "explanation": "`wpe` has exactly block_size rows, so there is no vector for position block_size or beyond. Unlike a formula-based encoding, a learned table cannot generate new rows on demand."
+  },
+  {
+    "id": "05.1-033",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "If you build `wpe` with 8192 rows but only train on 1024-token sequences, what happens to rows 1024 to 8191?",
+    "options": [
+      "They are learned by interpolation from the neighbouring trained rows",
+      "They never receive a gradient and stay at their random initialization",
+      "They are automatically copied from rows 0–1023 when the model is loaded",
+      "They are pruned away at the end of training to save parameter memory"
+    ],
+    "answer_index": 1,
+    "explanation": "Row t of `wpe` only gets a gradient when some training sequence has a token at position t. With 1024-token training sequences, rows 1024 onward never get updated and stay random, so at inference position 5000 gets noise. The usable context is the longest sequence length you trained on, not the table size."
+  },
+  {
+    "id": "05.1-034",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "Why do people often train on shorter sequences than the positional table could support?",
+    "options": [
+      "Because longer sequences overflow the tokenizer's maximum input length",
+      "Because the embedding table grows quadratically with sequence length",
+      "Because attention cost grows as T squared, so long-sequence training is expensive",
+      "Because positional embeddings only work for lengths that are powers of two"
+    ],
+    "answer_index": 2,
+    "explanation": "Attention's cost grows quadratically with sequence length, so training on long sequences is expensive. That is why a model may be trained at 1024 tokens even if more rows exist. The positional table itself only grows linearly with length."
+  },
+  {
+    "id": "05.1-035",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "Why can you not cheaply extend a trained GPT-2 from 1024 to 4096 tokens by adding rows to `wpe`?",
+    "options": [
+      "Because PyTorch does not allow resizing an nn.Embedding once the model has been trained and saved",
+      "Because the token table would also need to quadruple in size to keep the two tables aligned row by row",
+      "Because the new rows would collide with the ids reserved for special tokens such as <|endoftext|>",
+      "The new rows are untrained and nothing learned for rows 0–1023 transfers, so long training is needed"
+    ],
+    "answer_index": 3,
+    "explanation": "You can add 3072 rows, but they are untrained, and knowledge in the existing rows does not transfer to them. The fix is substantial training at the new length, costing close to a real training run. Resizing is mechanically possible; it is the learning that is expensive."
+  },
+  {
+    "id": "05.1-036",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "Why is a RoPE model much cheaper to extend to longer contexts than a learned `wpe` model?",
+    "options": [
+      "RoPE has nothing per-position to learn: one formula covers every position, so rescale it and fine-tune briefly",
+      "RoPE models never degrade beyond their trained length, so any context size works without further training",
+      "RoPE stores a much larger positional table from the start, so the extra rows are already trained at pretraining",
+      "RoPE removes attention's quadratic cost, so training directly at the longer length becomes cheap enough"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE computes each position's rotation from a formula, so position 5000 uses the same rule as position 5. Methods like position interpolation and YaRN rescale the formula so long positions map onto angles the model saw, and a short fine-tune suffices — how real models go from 4K–8K pretraining to 128K. RoPE still degrades if used naively far beyond its trained length."
+  },
+  {
+    "id": "05.1-037",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "What happens to a RoPE model used naively far beyond its training length, without any adjustment?",
+    "options": [
+      "It works perfectly, since the rotation formula is defined for every position",
+      "It also degrades, because it meets rotation angles it never saw in training",
+      "It raises an IndexError at the first unseen position, just as a learned table would",
+      "It automatically switches to sinusoidal encoding beyond its limit"
+    ],
+    "answer_index": 1,
+    "explanation": "Neither scheme runs past its trained length for free. A RoPE model used naively far beyond that length meets unseen rotation angles and degrades. The difference from `wpe` is that fixing it is cheap — rescale the formula and fine-tune briefly — rather than training new rows from scratch."
+  },
+  {
+    "id": "05.1-038",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "Why is learning the relation 'the token right before me' inefficient with a learned absolute `wpe` table?",
+    "options": [
+      "Because `wpe` cannot represent adjacent positions at all, since neighbouring rows are tied together",
+      "Because the relation has to be encoded in the token table instead, which has no positional rows",
+      "It must learn it separately for each pair of rows: (W_pe[10], W_pe[11]), (W_pe[500], W_pe[501]), …",
+      "Because attention ignores the positional table after the first layer, so the relation is lost early"
+    ],
+    "answer_index": 2,
+    "explanation": "With absolute rows, the relative fact 'one step back' must be learned again for every adjacent pair of positions. RoPE makes the attention score depend directly on the distance i − j, so the relation is learned once and holds everywhere."
+  },
+  {
+    "id": "05.1-039",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "The real limit: a row is only as good as its training",
+    "question": "Overall, how does extending context differ between learned absolute positions and RoPE?",
+    "options": [
+      "Learned positions can be extended freely by appending rows, while RoPE models cannot be extended at all",
+      "Both can be extended with no additional training, since the trained weights generalize to new positions",
+      "Both require identical full retraining from scratch, because the attention weights depend on the length",
+      "A difference of degree: both need training, but RoPE needs a short fine-tune and a table needs new rows trained"
+    ],
+    "answer_index": 3,
+    "explanation": "Neither lets a trained model exceed its limit on demand. But a RoPE extension only rescales a formula and keeps everything learned about relative distance, so a short fine-tune works, while a learned table needs new rows trained from scratch at the new length. That cost gap is why modern models switched."
+  },
+  {
+    "id": "05.1-040",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "7. Numerical example: adding position",
+    "question": "After adding positional embeddings, what happens if the same token id appears at two different positions?",
+    "options": [
+      "It produces two different input vectors h, so the model can tell the occurrences apart",
+      "It produces identical vectors, since the token id is the same at both positions",
+      "The second occurrence is dropped as a duplicate before reaching the first block",
+      "The two vectors are averaged together into one shared representation of the token"
+    ],
+    "answer_index": 0,
+    "explanation": "h = token embedding + position embedding, and the position embeddings differ between positions, so the same token at two positions yields two different h vectors. That is how order information enters the vectors. Nothing is deduplicated or averaged."
+  },
+  {
+    "id": "05.1-041",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "7. Numerical example: adding position",
+    "question": "What is the tensor h = tok + pos used for in GPT-2?",
+    "options": [
+      "It is the final output that is fed to the softmax",
+      "It is the input to the first transformer block",
+      "It is the target used to compute the loss",
+      "It is cached as the key tensor for later attention"
+    ],
+    "answer_index": 1,
+    "explanation": "h, the sum of token and positional embeddings, is the position-aware input to the first transformer block. The softmax operates on logits at the end of the model, and keys are computed later inside attention from the block's inputs."
+  },
+  {
+    "id": "05.1-042",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "8. From scratch in PyTorch",
+    "question": "What does PyTorch's `nn.Embedding(V, C)` hold and return?",
+    "options": [
+      "It holds a (C, V) matrix and returns the dense matrix product of that matrix with the input ids",
+      "It holds a hash table and returns a fresh random vector for each id on every forward call",
+      "Its .weight is a (V, C) matrix, and calling it with integer indices returns the selected rows",
+      "It holds V scalar weights and returns their sum over the ids in each input sequence"
+    ],
+    "answer_index": 2,
+    "explanation": "`nn.Embedding(V, C)` is exactly the lookup table: its .weight is a (V, C) matrix, and calling it with integer indices gathers the corresponding rows. The same class with (T_max, C) serves as the positional table."
+  },
+  {
+    "id": "05.1-043",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "8. From scratch in PyTorch",
+    "question": "In the from-scratch GPT input layer, what does `wpe(torch.arange(T))` produce?",
+    "options": [
+      "A (B, T, C) tensor holding one positional block for each sequence",
+      "A (T,) tensor of the position indices 0 to T−1, unchanged",
+      "A (V, C) copy of the token embedding table's weight matrix",
+      "A (T, C) tensor of positional vectors for positions 0 to T−1"
+    ],
+    "answer_index": 3,
+    "explanation": "`torch.arange(T)` builds the position indices [0, 1, ..., T−1], and `wpe(...)` gathers their rows into a (T, C) tensor. It has no batch axis; it broadcasts across the batch when added to the (B, T, C) token tensor."
+  },
+  {
+    "id": "05.1-044",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "8. From scratch in PyTorch",
+    "question": "In `h = tok + pos` with tok of shape (B, T, C) and pos of shape (T, C), what does broadcasting do?",
+    "options": [
+      "It reuses the same positional vectors for every sequence in the batch",
+      "It raises a shape error, because the two tensors have different ranks",
+      "It sums pos over T first, then adds that one vector to every position",
+      "It adds pos only to the first sequence in the batch and zero to the rest"
+    ],
+    "answer_index": 0,
+    "explanation": "Broadcasting aligns trailing dimensions, treating pos as (1, T, C) and applying it to every sequence in the batch. The same positional vectors are reused for all B sequences. Differing ranks are fine under broadcasting rules when trailing dims match."
+  },
+  {
+    "id": "05.1-045",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "8. From scratch in PyTorch",
+    "question": "What does `nn.Embedding` actually do at runtime when you call it on token ids?",
+    "options": [
+      "A full one-hot by weight-matrix multiply executed as one dense GEMM on the GPU",
+      "An indexed gather that reads the selected rows directly from the (V, C) weight buffer",
+      "A softmax over the vocabulary followed by a weighted sum of all the table's rows",
+      "A sparse matrix multiply between a CSR-format one-hot and the weight matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "`nn.Embedding` is an indexed gather, not a matrix multiply: it reads the selected rows directly from the weight buffer. The one-hot multiply is short-circuited into a memory read. That makes embedding a token O(C) work rather than O(V·C)."
+  },
+  {
+    "id": "05.1-046",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "8. From scratch in PyTorch",
+    "question": "What is the computational cost of embedding one token with `nn.Embedding(V, C)`?",
+    "options": [
+      "O(V · C), the cost of a one-hot multiply",
+      "O(V), one comparison per vocabulary entry",
+      "O(C), reading one row of C floats",
+      "O(C squared), due to a projection"
+    ],
+    "answer_index": 2,
+    "explanation": "Because the lookup is a direct row read, embedding a token costs O(C) — just copying C floats. The O(V·C) cost would apply only to an explicit one-hot multiply, which is never performed."
+  },
+  {
+    "id": "05.1-047",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "9. Tensor shapes, dtype, device — the full accounting",
+    "question": "Which statement about dtypes in the GPT embedding layer is correct?",
+    "options": [
+      "idx is float32 to match the table, and the output tok is int64",
+      "Both idx and the output tok are int64, since lookups copy indices",
+      "Both idx and the output are bfloat16 by default in a GPT model",
+      "idx is int64, while wte.weight, tok, pos and h are float32"
+    ],
+    "answer_index": 3,
+    "explanation": "Token ids are integers (int64) because they are row indices; the tables and all gathered or summed vectors are float32 by default. The output takes the table's dtype, not the index dtype."
+  },
+  {
+    "id": "05.1-048",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "9. Tensor shapes, dtype, device — the full accounting",
+    "question": "Why does indexing an embedding table with a float tensor raise an error?",
+    "options": [
+      "Because you cannot use a fractional row number as an index",
+      "Because float tensors always live on the CPU, not the GPU",
+      "Because embeddings only accept bool masks over the vocabulary",
+      "Because float inputs would first require a softmax over rows"
+    ],
+    "answer_index": 0,
+    "explanation": "Embedding lookup selects rows by index, and a row number must be an integer; a fractional index makes no sense. So idx must be an int64/long tensor. Device placement is a separate concern."
+  },
+  {
+    "id": "05.1-049",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "9. Tensor shapes, dtype, device — the full accounting",
+    "question": "On a GPU model, what goes wrong if you write `pos = self.wpe(torch.arange(T))` without a device argument?",
+    "options": [
+      "The positions are silently reversed on the GPU, so the last token in the sequence gets row 0 of wpe",
+      "torch.arange creates a CPU tensor, so the lookup or the add fails with a device mismatch",
+      "The whole positional table is silently copied back to the CPU on every forward step",
+      "Nothing goes wrong; PyTorch automatically moves the new tensor onto the model's GPU"
+    ],
+    "answer_index": 1,
+    "explanation": "`torch.arange(T)` defaults to the CPU, while the model and idx are on the GPU, so you get a device-mismatch error. The fix is `torch.arange(T, device=idx.device)`. PyTorch does not silently move tensors across devices for you."
+  },
+  {
+    "id": "05.1-050",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "9. Tensor shapes, dtype, device — the full accounting",
+    "question": "What happens if a token id in idx is greater than or equal to vocab_size?",
+    "options": [
+      "The id silently wraps around modulo vocab_size, so it reads the embedding of an unrelated token",
+      "The embedding returns an all-zero vector for that id, and training continues without any warning",
+      "It indexes past the table's end: an IndexError on CPU, often a corrupted-memory crash on CUDA",
+      "The table automatically grows to fit the new id, initializing the added row with random values"
+    ],
+    "answer_index": 2,
+    "explanation": "An out-of-range id indexes past the end of `wte`. On CPU you get a clear IndexError; on CUDA the error often surfaces later as a memory-corruption crash far from the real cause. A common source is a special token the vocab wasn't sized for, so asserting idx.max() < vocab_size helps debugging."
+  },
+  {
+    "id": "05.1-051",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "9. Tensor shapes, dtype, device — the full accounting",
+    "question": "Which simple debugging assertion helps catch out-of-range token ids before they hit the embedding table?",
+    "options": [
+      "assert idx.dtype == torch.float32",
+      "assert idx.min() > 0",
+      "assert idx.shape[1] == vocab_size",
+      "assert idx.max() < vocab_size"
+    ],
+    "answer_index": 3,
+    "explanation": "Asserting idx.max() < vocab_size catches ids (e.g. forgotten special tokens) that would index past the end of `wte`. idx must be int64, not float32, and id 0 is a valid id, so idx.min() > 0 would be wrong."
+  },
+  {
+    "id": "05.1-052",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "Approximately how many parameters does GPT-2 small's token embedding table `wte` contain?",
+    "options": [
+      "About 38.6 million (50257 × 768)",
+      "About 0.79 million (1024 × 768)",
+      "About 124 million (the full model)",
+      "About 3.9 million (50257 × 77)"
+    ],
+    "answer_index": 0,
+    "explanation": "`wte` is 50257 × 768 ≈ 38.6M parameters. The positional table `wpe` is 1024 × 768 ≈ 0.79M. 124M is the whole GPT-2 small model."
+  },
+  {
+    "id": "05.1-053",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "Roughly what fraction of GPT-2 small's 124M parameters is the token embedding table?",
+    "options": [
+      "About 3%",
+      "About 31%",
+      "About 65%",
+      "About 90%"
+    ],
+    "answer_index": 1,
+    "explanation": "38.6M / 124M ≈ 31%, so the token table is a large fraction of GPT-2 small. Embeddings are not a footnote in parameter count, which is one motivation for weight tying."
+  },
+  {
+    "id": "05.1-054",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "How does GPT-2 avoid paying twice for its 38.6M-parameter token embedding?",
+    "options": [
+      "It quantizes the embedding table to 4-bit integers once pretraining has finished",
+      "It shares the table across layers, reusing it as attention keys",
+      "It ties the `wte` matrix to the output projection, reusing it at both ends",
+      "It drops rare tokens from the vocabulary to shrink the number of table rows"
+    ],
+    "answer_index": 2,
+    "explanation": "GPT-2 ties `wte` to the output (unembedding) projection, so the same matrix maps ids to vectors at the input and vectors to logits at the output. This reuses the 38.6M parameters rather than paying for a separate output matrix."
+  },
+  {
+    "id": "05.1-055",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "In the backward pass of an embedding lookup, which rows of `wte.weight` receive gradient?",
+    "options": [
+      "All rows equally, each scaled by 1/V of the total",
+      "Only row 0, the padding row, which absorbs all gradient",
+      "Rows chosen at random each step, as a form of regularization",
+      "Only the rows for ids that actually appear in the batch"
+    ],
+    "answer_index": 3,
+    "explanation": "The lookup gathers only the rows for ids present in the batch, so the backward pass writes gradients into only those rows (via a scatter-add). A token absent from the batch gets zero gradient that step and its embedding does not move."
+  },
+  {
+    "id": "05.1-056",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "Why do rare tokens' embeddings tend to be noisier than common tokens' embeddings?",
+    "options": [
+      "They are updated only on the rare steps they appear, so they get far fewer gradient updates",
+      "Because rare tokens are given a smaller learning rate by design to avoid overfitting to them",
+      "Because rare tokens are initialized with larger variance so they stand out from common ones",
+      "Because the optimizer skips low-frequency tokens entirely until they have appeared enough times"
+    ],
+    "answer_index": 0,
+    "explanation": "A token's row only gets gradient when that token appears in a batch, so a token seen five times gets far fewer updates than one seen five million times. Its embedding therefore learns slowly and stays noisy. No special learning rate or initialization is involved."
+  },
+  {
+    "id": "05.1-057",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "How does autograd accumulate gradients into an embedding table after a lookup?",
+    "options": [
+      "It multiplies the incoming gradient by a dense one-hot matrix of shape (B·T, V)",
+      "It performs a scatter-add of incoming gradients into wte.weight at the used row indices",
+      "It averages the incoming gradients and spreads them evenly over the whole vocabulary",
+      "It recomputes the forward pass once for every vocabulary row to get exact gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "The backward of a gather is a scatter-add: incoming gradients for each (b, t) position are added into the row of wte.weight corresponding to that position's id. Repeated ids accumulate their gradients in the same row. No dense one-hot is formed."
+  },
+  {
+    "id": "05.1-058",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "10. Under the hood: memory, parameters, and gradients",
+    "question": "What is the main cost of the embedding layer: compute or memory?",
+    "options": [
+      "Compute, because the lookup is a large (B·T, V) by (V, C) matrix multiply",
+      "Neither; embedding tables are free in both compute and memory terms",
+      "Memory: the big tables cost far more than the B·T row reads and B·T·C additions",
+      "Compute, because adding positional vectors is quadratic in the length T"
+    ],
+    "answer_index": 2,
+    "explanation": "The forward lookup is B·T row reads of C floats and the positional add is B·T·C additions — negligible compared to the block's matrix multiplies. But the tables themselves are large (38.6M parameters for wte), so the layer's cost is mostly memory."
+  },
+  {
+    "id": "05.1-059",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "How did the original Transformer paper encode position, compared with GPT-2?",
+    "options": [
+      "With learned per-position vectors identical to GPT-2's, trained jointly with the rest of the model",
+      "With RoPE rotations applied to the queries and keys inside every attention layer of the model",
+      "With no position encoding at all, relying on the decoder's causal mask to supply word order",
+      "With fixed sinusoidal encodings, sin(t / 10000^(2j/C)) and cos, computed rather than learned"
+    ],
+    "answer_index": 3,
+    "explanation": "The original Transformer used fixed sinusoidal encodings: deterministic sine and cosine functions of position t and channel j. GPT-2 instead learns a vector for each position. RoPE came later."
+  },
+  {
+    "id": "05.1-060",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "What is an advantage of sinusoidal positional encoding over GPT-2's learned table?",
+    "options": [
+      "It is defined for any position, even beyond training, and nearby positions are smoothly related",
+      "It always gives better perplexity than a learned table at every model size and context length",
+      "It has more trainable parameters than a learned table, which makes it strictly more flexible",
+      "It makes attention cost linear in sequence length, since the encodings are computed on the fly"
+    ],
+    "answer_index": 0,
+    "explanation": "Because sinusoidal encoding is a formula, it produces a vector for any position, including ones never seen in training, and nearby positions have smoothly related values. It has zero trainable parameters, so flexibility is the learned table's advantage, not sinusoidal's."
+  },
+  {
+    "id": "05.1-061",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "What is the advantage of GPT-2's learned absolute positional embeddings over sinusoidal ones?",
+    "options": [
+      "They work for positions beyond the training length, since learned rows extrapolate",
+      "Flexibility: the model can shape each position vector however training finds useful",
+      "They require no memory at all, because rows are computed on the fly when needed",
+      "They encode relative distance directly inside the attention scores at every layer"
+    ],
+    "answer_index": 1,
+    "explanation": "A learned table lets training shape each position vector freely. Sinusoidal encodings are the ones defined for any position. Encoding relative distance in the attention score is what RoPE does."
+  },
+  {
+    "id": "05.1-062",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "What do sinusoidal and learned absolute positional encodings have in common?",
+    "options": [
+      "Both rotate the query and key vectors inside attention by an angle proportional to position",
+      "Both are learned from data by gradient descent, so neither has a closed-form definition",
+      "Both are absolute: they add a per-position vector to the token embedding to answer 'where am I'",
+      "Both make attention scores depend only on the distance between tokens, not their positions"
+    ],
+    "answer_index": 2,
+    "explanation": "Both schemes are absolute: each position has its own vector, added to the token embedding at the input. One is computed, the other learned. Rotating Q and K so scores depend on distance is RoPE, a relative scheme."
+  },
+  {
+    "id": "05.1-063",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "How does RoPE (Rotary Position Embedding) encode position?",
+    "options": [
+      "By adding a learned vector to the input token embedding once, before the first transformer block",
+      "By appending the integer position index as an extra channel to every token's embedding vector",
+      "By masking out all future positions so each token can only attend to the tokens before it",
+      "By rotating queries and keys inside attention so the score depends only on the distance between positions"
+    ],
+    "answer_index": 3,
+    "explanation": "RoPE rotates Q and K by position-dependent angles inside attention, so their dot product depends on the relative distance between positions rather than absolute indices. It is applied at every layer, not once at the input like `wpe`."
+  },
+  {
+    "id": "05.1-064",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "11. A brief contrast: sinusoidal and what comes later",
+    "question": "Where is GPT-2's `wpe` applied, compared with RoPE?",
+    "options": [
+      "`wpe` is a learned lookup added once at the input; RoPE rotates Q and K at every layer",
+      "Both are added once to the token embeddings at the input, before the first block runs",
+      "`wpe` is re-added at every transformer layer, while RoPE is applied only at the input",
+      "Both are applied only to the output logits, after the final layer norm of the model"
+    ],
+    "answer_index": 0,
+    "explanation": "`wpe` is added to the token embeddings once, before the first block. RoPE instead rotates the queries and keys inside every attention layer. This is the key contrast to remember when reading the RoPE paper (Su et al., 2021)."
+  },
+  {
+    "id": "05.1-065",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Exercise",
+    "question": "For a model with wte of shape (50257, 768), what is the shape and dtype of tok = wte(idx) when idx has shape (4, 128)?",
+    "options": [
+      "(4, 128), int64, same as idx",
+      "(4, 128, 768), float32",
+      "(4, 768), float32, pooled",
+      "(128, 768), float32"
+    ],
+    "answer_index": 1,
+    "explanation": "The lookup keeps the (B, T) = (4, 128) axes and appends a trailing channel axis of length 768, giving (4, 128, 768). The dtype is the table's float32, even though idx is int64. A (128, 768) tensor is the positional lookup, which broadcasts over the batch."
+  },
+  {
+    "id": "05.1-066",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A learner writes `self.wpe = nn.Embedding(cfg.n_head, cfg.n_embd)` in a GPT input layer. What goes wrong?",
+    "options": [
+      "The token embeddings silently become position-dependent, because the two tables now share their rows",
+      "Nothing; in GPT-2 n_head equals block_size, so the table has exactly the right number of rows anyway",
+      "Once T exceeds n_head (e.g. 12), torch.arange(T) indexes past wpe: IndexError on CPU or a CUDA crash",
+      "The model becomes permutation-invariant again, since 12 rows cannot distinguish any token positions"
+    ],
+    "answer_index": 2,
+    "explanation": "The positional table must have one row per position slot, so it should be nn.Embedding(cfg.block_size, cfg.n_embd). Sizing it by n_head (e.g. 12) means any sequence longer than 12 tokens indexes out of range. In GPT-2, n_head = 12 while block_size = 1024."
+  },
+  {
+    "id": "05.1-067",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does adding wpe[t] solve the problem that attention is permutation-invariant?",
+    "options": [
+      "It sorts the tokens into position order before attention runs, so the set becomes an ordered list",
+      "It makes attention ignore repeated tokens, so each distinct word is only attended to a single time",
+      "It removes the softmax from attention, so the scores become linear and keep track of token order",
+      "It gives each position a distinct signature, so one token at different positions gets different vectors"
+    ],
+    "answer_index": 3,
+    "explanation": "Attention treats an unordered set of vectors, so order must be in the vectors themselves. Adding wpe[t] makes each position's vector distinct, so the model can use word order. It does not change attention's mechanics."
+  },
+  {
+    "id": "05.1-068",
+    "chapter": "05.1",
+    "chapter_name": "Embeddings & positional encoding",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In GPT-2, what is the shape of wpe.weight and what does it depend on?",
+    "options": [
+      "(block_size, n_embd): one row per position slot up to the maximum context length",
+      "(vocab_size, n_embd): one row per token, shared with the token embedding table",
+      "(n_head, n_embd): one row per attention head, broadcast over the positions",
+      "(B, T): one learned scalar per token position in the current training batch"
+    ],
+    "answer_index": 0,
+    "explanation": "wpe.weight is (T_max, C) = (block_size, n_embd), one learned row per position slot. Its size depends on maximum context length, not on vocab size, number of heads, or the batch."
+  }
+]

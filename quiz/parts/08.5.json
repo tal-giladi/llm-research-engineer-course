@@ -1,0 +1,1658 @@
+[
+  {
+    "id": "08.5-001",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How does a fused linear cross-entropy relate to the plain lm_head followed by F.cross_entropy?",
+    "options": [
+      "It replaces cross-entropy with a cheaper surrogate loss",
+      "It computes the same loss but only for the last position of each sequence",
+      "It computes exactly the same loss without holding the full logits tensor",
+      "It computes an approximate loss that converges to the same optimum"
+    ],
+    "answer_index": 2,
+    "explanation": "Fused linear cross-entropy is an exact reimplementation: the lm_head + F.cross_entropy loss remains the definition, and fused versions reproduce that number (up to rounding order) while never materializing all logits. The plain version is still the right code for small models."
+  },
+  {
+    "id": "08.5-002",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which earlier technique does fused linear cross-entropy reuse to avoid the full logits tensor?",
+    "options": [
+      "Low-rank factorization of the LM-head weight into two thin matrices, so V×C is never formed",
+      "Top-k sampling of the vocabulary during training, keeping only the k largest logits per position",
+      "Gradient checkpointing of every transformer block, discarding activations and recomputing them",
+      "The online-softmax recurrence from FlashAttention (running max, running sum, correction)"
+    ],
+    "answer_index": 3,
+    "explanation": "The softmax denominator over the vocabulary can be accumulated tile by tile with a running max and running sum, corrected by α when the max rises, exactly as FlashAttention does over keys. This is exact, unlike low-rank or top-k approximations."
+  },
+  {
+    "id": "08.5-003",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is the gradient of the cross-entropy loss of one position with respect to its logits z?",
+    "options": [
+      "log softmax(z) − onehot(y)",
+      "onehot(y) − softmax(z)",
+      "softmax(z) · onehot(y)",
+      "softmax(z) − onehot(y)"
+    ],
+    "answer_index": 3,
+    "explanation": "Differentiating lse(z) − z_y gives softmax(z) for the logsumexp term and −1 at the target index, so the gradient is softmax(z) − onehot(y). Its sign matters: the negative of this is the gradient of log p_y."
+  },
+  {
+    "id": "08.5-004",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why are the logits often the single largest activation in modern LLM training?",
+    "options": [
+      "The logits are duplicated once per attention head before the loss",
+      "The logits are stored in fp64 to keep the softmax numerically stable",
+      "The logits must be kept for every layer, not just the final layer",
+      "Vocabularies of 128k–262k tokens make the (B, T, V) tensor enormous"
+    ],
+    "answer_index": 3,
+    "explanation": "The logits tensor has one entry per position per vocabulary token, so with V in the hundreds of thousands it can exceed all per-layer activations of a small model. It exists only once, at the output head, and is normally fp32 for the loss, not fp64."
+  },
+  {
+    "id": "08.5-005",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which training frameworks are listed as integrating Liger Kernel's fused linear cross-entropy?",
+    "options": [
+      "Hugging Face Trainer, TRL, Axolotl and LLaMA-Factory",
+      "Megatron-LM, DeepSpeed, JAX/Flax and Keras 3",
+      "vLLM, TensorRT-LLM, ONNX Runtime and llama.cpp",
+      "PyTorch Lightning, fairseq, MosaicML Composer and JAX"
+    ],
+    "answer_index": 0,
+    "explanation": "Liger Kernel's fused linear cross-entropy is integrated into the Hugging Face Trainer, TRL, Axolotl and LLaMA-Factory, among others. vLLM and TensorRT-LLM are inference engines, which need full logits for sampling."
+  },
+  {
+    "id": "08.5-006",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What did TRL v1.15.0 (October 2026) change regarding the LM head?",
+    "options": [
+      "It made the LM head run on CPU to save GPU memory",
+      "It made full fp32 logits the default for all trainers",
+      "It removed the LM head and used embedding similarity instead",
+      "It made a fused LM head the default in six trainers"
+    ],
+    "answer_index": 3,
+    "explanation": "TRL v1.15.0 added a fused LM head that projects hidden states in tiles and reduces directly to per-token log-probs and entropy, and turned it on by default across its SFT, DPO, KTO, GRPO, RLOO and Distillation trainers."
+  },
+  {
+    "id": "08.5-007",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Hardware track",
+    "question": "What is needed to get the real speed and memory benefit of fused cross-entropy, as opposed to verifying the algorithm?",
+    "options": [
+      "A pure-PyTorch implementation running on a many-core CPU with plenty of RAM",
+      "A larger batch size, so that each row chunk is bigger and its overhead is better amortized",
+      "Running the naive loss in bf16 instead of fp32 to halve the size of the logits tensor",
+      "A GPU kernel such as Liger Kernel, Cut Cross-Entropy or TRL's fused LM head"
+    ],
+    "answer_index": 3,
+    "explanation": "A pure-PyTorch from-scratch implementation proves the algorithm and runs on CPU, but the speed and memory win comes from GPU kernels that keep tiles on-chip and avoid HBM round trips. Using bf16 for the naive path only halves the size and loses precision."
+  },
+  {
+    "id": "08.5-008",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "How is the cross-entropy loss of a single position expressed in terms of its logits z and target y?",
+    "options": [
+      "softmax(z)_y − 1",
+      "logsumexp(z) − z_y",
+      "z_y − logsumexp(z)",
+      "log(z_y) − Σ_j z_j"
+    ],
+    "answer_index": 1,
+    "explanation": "Cross-entropy is −log softmax(z)_y = −(z_y − logsumexp(z)) = logsumexp(z) − z_y: the log of the softmax denominator minus the target logit. The reverse sign is the log-probability, which is negative."
+  },
+  {
+    "id": "08.5-009",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "How many numbers per position are actually needed to compute the cross-entropy loss?",
+    "options": [
+      "Two: one log-normalizer and one target logit",
+      "C: one per hidden dimension of the final state",
+      "One: just the target logit, with no normalizer",
+      "V: one logit per vocabulary entry, all stored"
+    ],
+    "answer_index": 0,
+    "explanation": "The loss is lse(z) − z_y, which needs only the log-normalizer and the target logit. The naive code nonetheless builds and stores all V logits per position, which is what fused methods avoid."
+  },
+  {
+    "id": "08.5-010",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "For N = 32,768 tokens and a vocabulary of V = 151,936 in fp32, roughly how large is the full logits tensor?",
+    "options": [
+      "About 19.9 GB",
+      "About 131 KB",
+      "About 622 MB",
+      "About 2.5 GB"
+    ],
+    "answer_index": 0,
+    "explanation": "32,768 × 151,936 × 4 bytes ≈ 19.9 GB. 622 MB is the size of a 1,024-row chunk, and 131 KB is the size of one (N,) fp32 statistic, which is what vocabulary tiling keeps."
+  },
+  {
+    "id": "08.5-011",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "Besides building all V logits per position, what extra memory does the naive cross-entropy path keep for backward?",
+    "options": [
+      "Nothing; backward recomputes everything from the hidden states",
+      "A same-size (N, V) tensor of saved softmax or gradient",
+      "A copy of the full transformer activations in fp64",
+      "An (N, N) attention matrix for the LM head"
+    ],
+    "answer_index": 1,
+    "explanation": "The naive path writes the logits, reads them back for logsumexp, and keeps an (N, V)-sized tensor (softmax or gradient) for the backward pass, doubling the problem. Recomputing in backward is what the vocabulary-tiled method does."
+  },
+  {
+    "id": "08.5-012",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "How is the target logit z_y computed without building all V logits?",
+    "options": [
+      "As the logsumexp of the full logit row minus the per-position loss value",
+      "As the average of all logits in the row, which tracks the target logit on average",
+      "As a single dot product h · w_y between the hidden state and the target's weight row",
+      "As the maximum over all logits in the row, found with a running max over the vocabulary tiles"
+    ],
+    "answer_index": 2,
+    "explanation": "z_y = h · w_y needs only the target token's row of the LM-head weight, so it costs O(C) per position instead of O(CV). The max of the row is the stabilizer for logsumexp, not the target logit."
+  },
+  {
+    "id": "08.5-013",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "What does the row-chunked approach to fused cross-entropy (Liger Kernel) do?",
+    "options": [
+      "Computes the loss on a random subset of positions per step and rescales it to the full batch",
+      "Stores logits for all positions but in 8-bit precision, dequantizing them for the backward pass",
+      "Builds full (n, V) logits for n positions at a time, computes loss and gradients, then discards them",
+      "Walks across the vocabulary B_v columns at a time keeping only a running max and sum for all positions"
+    ],
+    "answer_index": 2,
+    "explanation": "Chunking the rows means each chunk has complete logits for its positions, which is enough for an exact loss and exact gradients for those rows. Memory is one chunk. Walking the vocabulary with running statistics is the vocabulary-tiled (Cut Cross-Entropy) approach."
+  },
+  {
+    "id": "08.5-014",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "What does the vocabulary-tiled approach to fused cross-entropy (Cut Cross-Entropy) do?",
+    "options": [
+      "Stores logits for all positions in pinned CPU memory and streams them back to the GPU tile by tile during backward",
+      "For all positions, walks the vocabulary B_v columns at a time with running statistics; recomputes tiles in backward",
+      "Prunes the vocabulary to the most frequent tokens before the LM head, so the logits are much narrower",
+      "Builds full logits for a chunk of positions at a time and computes that chunk's gradients in the forward pass"
+    ],
+    "answer_index": 1,
+    "explanation": "Tiling the columns keeps only O(N) per-row statistics (running max and sum) in forward, then recomputes each tile in backward. That is Cut Cross-Entropy. Computing gradients in the forward pass per row chunk is the Liger approach."
+  },
+  {
+    "id": "08.5-015",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "1. Intuition: you need two numbers per row, not V",
+    "question": "How does a production fused cross-entropy GPU kernel typically tile the (N, V) logits matrix?",
+    "options": [
+      "Not at all; it streams the full matrix through L2 cache",
+      "Only along the position axis, with full rows in HBM",
+      "Only along the vocabulary axis, with full columns in HBM",
+      "Along both axes, so each tile lives in on-chip SRAM"
+    ],
+    "answer_index": 3,
+    "explanation": "A real kernel tiles both N and V so each tile fits in SRAM; a pure row-chunk or column-tile scheme is the simplified algorithm. Keeping tiles on-chip is what avoids HBM round trips."
+  },
+  {
+    "id": "08.5-016",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.1 The loss",
+    "question": "What is the shape and layout of the LM-head weight W in the cross-entropy formulation z_ij = h_i · w_j?",
+    "options": [
+      "(V, V), mapping each vocabulary token to every other token",
+      "(V, C), with row w_j for token j, the nn.Linear(C, V) layout",
+      "(C, V), with column w_j for token j, the transpose of nn.Linear",
+      "(N, V), one row of weights per position in the flattened batch"
+    ],
+    "answer_index": 1,
+    "explanation": "nn.Linear(C, V) stores its weight as (out_features, in_features) = (V, C), so each row w_j is token j's output vector. With weight tying this same matrix is the token embedding. (N, V) is the logits shape, not the weight."
+  },
+  {
+    "id": "08.5-017",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.1 The loss",
+    "question": "With weight tying in a GPT-style model, what else is the LM-head weight W?",
+    "options": [
+      "The attention output projection",
+      "The token embedding matrix",
+      "The final layer-norm weight",
+      "The positional embedding matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "Weight tying shares one (V, C) matrix between the input token embedding (wte) and the output LM head. That sharing has consequences for gradients: both uses must contribute to the same parameter's gradient."
+  },
+  {
+    "id": "08.5-018",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.1 The loss",
+    "question": "In a batch with ignored target positions, what is the cross-entropy loss divided by?",
+    "options": [
+      "The vocabulary size V, so the loss is a per-class average",
+      "The total number of positions in the batch, including ignored ones",
+      "The number of valid positions in each chunk, applied chunk by chunk",
+      "The global number of valid (non-ignored) positions in the batch"
+    ],
+    "answer_index": 3,
+    "explanation": "The loss is (1/|V_valid|) Σ_{i valid} (lse_i − z_{i y_i}), using the global valid count. A chunked implementation must use the same global denominator in every chunk; dividing per chunk gives a mean of means, which is wrong."
+  },
+  {
+    "id": "08.5-019",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.1 The loss",
+    "question": "In fused cross-entropy, what is lse_i?",
+    "options": [
+      "The plain sum Σ_j z_ij of position i's logits over the vocabulary",
+      "log Σ_j exp(z_ij), the log-normalizer of position i's logits",
+      "The largest logit at position i, max_j z_ij, used as the stabilizer",
+      "The logit of the target token at position i, h_i · w_{y_i}"
+    ],
+    "answer_index": 1,
+    "explanation": "lse_i = log Σ_{j=1}^V exp(z_ij) is the log of the softmax denominator. The loss per position is lse_i minus the target logit. The max is used only to compute lse stably."
+  },
+  {
+    "id": "08.5-020",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "What is the derivative of lse_i = log Σ_j exp(z_ij) with respect to the logit z_ij?",
+    "options": [
+      "The indicator 1[j = y_i]: 1 at the target and 0 elsewhere",
+      "1 for every j, because the log of a sum is linear in each z",
+      "The softmax probability p_ij = exp(z_ij − lse_i)",
+      "exp(z_ij), the unnormalized exponential of that logit"
+    ],
+    "answer_index": 2,
+    "explanation": "∂/∂z_ij log Σ exp(z) = exp(z_ij)/Σ exp(z) = p_ij. The indicator 1 at j = y_i comes from the −z_{i y_i} term, not from lse."
+  },
+  {
+    "id": "08.5-021",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "What is the gradient g_ij of the batch cross-entropy loss with respect to logit z_ij, including masking?",
+    "options": [
+      "(1[i valid]/|V_valid|)·(p_ij − 1[j = y_i])",
+      "(1[i valid]/|V_valid|)·(1[j = y_i] − p_ij)",
+      "p_ij − 1[j = y_i], with no masking or scaling",
+      "(1/N)·(p_ij − 1[j = y_i]), counting ignored positions"
+    ],
+    "answer_index": 0,
+    "explanation": "Each valid row contributes p_ij − onehot, scaled by the global mean factor 1/|V_valid|; ignored rows contribute zero. Dividing by N would wrongly count ignored positions, and flipping the sign gives the gradient of log-prob."
+  },
+  {
+    "id": "08.5-022",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "Given z = H W^T with H of shape (N, C) and W of shape (V, C), what is the gradient of the loss with respect to H?",
+    "options": [
+      "G^T H, of shape (V, C)",
+      "G W, of shape (N, C)",
+      "H G^T, of shape (N, N)",
+      "W G, of shape (C, N)"
+    ],
+    "answer_index": 1,
+    "explanation": "Backprop through z = H W^T gives ∂L/∂H = G W, with G the (N, V) logit gradient; the shape matches H. G^T H is the gradient with respect to W."
+  },
+  {
+    "id": "08.5-023",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "Given z = H W^T with H of shape (N, C) and W of shape (V, C), what is the gradient of the loss with respect to W?",
+    "options": [
+      "H^T G, of shape (C, V)",
+      "G^T H, of shape (V, C)",
+      "W^T G, of shape (C, N)",
+      "G W, of shape (N, C)"
+    ],
+    "answer_index": 1,
+    "explanation": "∂L/∂W = G^T H, a (V, C) matrix matching W. It is a sum over rows i of outer products g_i h_i^T, which is why chunks can each add their contribution. H^T G has the transposed shape (C, V)."
+  },
+  {
+    "id": "08.5-024",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "Why are row chunks of the logits matrix self-contained for computing cross-entropy gradients?",
+    "options": [
+      "Each row's gradient depends on all other rows through the softmax, so chunks are only approximately independent",
+      "Row chunks share no parameters at all, so their gradients are independent and need no accumulation",
+      "Row i of G needs only row i's logits and lse_i, so a chunk's gradients can be computed immediately",
+      "Each chunk uses its own private copy of the LM-head weight, which is averaged after backward"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax is row-wise, so g_i depends only on row i's logits and its normalizer (plus the global valid count). Once a chunk's logits exist, its rows of G, its rows of ∂L/∂H, and its contribution to ∂L/∂W can all be computed. The chunks do share W, which is why ∂W contributions are added."
+  },
+  {
+    "id": "08.5-025",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "How does a row chunk contribute to the gradient of the LM-head weight ∂L/∂W in chunked cross-entropy?",
+    "options": [
+      "It contributes nothing; with tied weights W's gradient comes only from the embedding lookup",
+      "It overwrites ∂L/∂W with G_chunk^T H_chunk, so the last chunk's value is the gradient",
+      "It adds G_chunk^T H_chunk, an additive contribution accumulated over chunks",
+      "It contributes only after all chunks' logits are concatenated into one (N, V) tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "∂L/∂W = G^T H is a sum over rows, so each chunk's G_chunk^T H_chunk is added to a running total. Overwriting would keep only the last chunk's gradient, a common bug."
+  },
+  {
+    "id": "08.5-026",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.2 The gradient with respect to the logits",
+    "question": "Why can the vocabulary-tiled backward compute gradients without storing any logits?",
+    "options": [
+      "For a vocabulary tile, g_ij needs only that tile's logits and the saved scalar lse_i, so tiles are recomputed",
+      "The gradient for each tile can be read back from the optimizer's saved first-moment state for the weight W",
+      "The gradient is identical across vocabulary tiles, so computing one tile and broadcasting it to the rest suffices",
+      "The gradient does not depend on the logits at all, only on the targets and the global valid count"
+    ],
+    "answer_index": 0,
+    "explanation": "g_ij = (exp(z_ij − lse_i) − 1[j = y_i])/|V_valid|. Saving lse_i from forward is enough; backward recomputes z for each tile from h_i and w_j and discards it. That is the recomputation trade."
+  },
+  {
+    "id": "08.5-027",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.3 Online logsumexp over vocabulary tiles",
+    "question": "In online logsumexp over vocabulary tiles, how is the running sum ℓ updated when tile k arrives?",
+    "options": [
+      "ℓ^(k) = ℓ^(k−1)·exp(m^(k) − m^(k−1)) + Σ_{j in tile} exp(z_j − m^(k−1))",
+      "ℓ^(k) = ℓ^(k−1) + Σ_{j in tile} exp(z_j), with no max subtracted at all",
+      "ℓ^(k) = ℓ^(k−1)·exp(m^(k−1) − m^(k)) + Σ_{j in tile} exp(z_j − m^(k))",
+      "ℓ^(k) = max(ℓ^(k−1), Σ_{j in tile} exp(z_j − m^(k)))"
+    ],
+    "answer_index": 2,
+    "explanation": "The old sum is rescaled by α = exp(m_old − m_new) ≤ 1 to the new max, and the tile's terms are exponentiated against the new max. Summing raw exp(z) would overflow; the reversed exponent would grow rather than shrink the old sum."
+  },
+  {
+    "id": "08.5-028",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.3 Online logsumexp over vocabulary tiles",
+    "question": "After processing all vocabulary tiles with online logsumexp, how is the log-normalizer lse obtained from the running max m and running sum ℓ?",
+    "options": [
+      "lse = ℓ − m",
+      "lse = log m + ℓ",
+      "lse = m · ℓ",
+      "lse = m + log ℓ"
+    ],
+    "answer_index": 3,
+    "explanation": "ℓ = Σ exp(z − m), so log Σ exp(z) = log(exp(m)·ℓ) = m + log ℓ. Adding m back undoes the max subtraction used for stability."
+  },
+  {
+    "id": "08.5-029",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.3 Online logsumexp over vocabulary tiles",
+    "question": "In online logsumexp over vocabulary tiles, what are the initial values of the running max and running sum?",
+    "options": [
+      "m^(0) = −∞ and ℓ^(0) = 1",
+      "m^(0) = −∞ and ℓ^(0) = 0",
+      "m^(0) = 0 and ℓ^(0) = 1",
+      "m^(0) = 0 and ℓ^(0) = 0"
+    ],
+    "answer_index": 1,
+    "explanation": "With m = −∞ the first tile's max becomes the running max, and α = exp(−∞) = 0 multiplies the empty ℓ = 0, so nothing spurious is carried forward. Starting ℓ at 1 would add a phantom term to the denominator."
+  },
+  {
+    "id": "08.5-030",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "Why do RL and distillation trainers need per-token log-probabilities log p_{i y_i} rather than just a loss?",
+    "options": [
+      "For computing a per-token learning-rate schedule during the update",
+      "For selecting which transformer layers to freeze in each step",
+      "For building the causal attention mask over generated tokens",
+      "For importance ratios, KL penalties and distillation divergences"
+    ],
+    "answer_index": 3,
+    "explanation": "RL objectives such as PPO/GRPO use importance ratios between policy log-probs, KL penalties against a reference model, and distillation divergences, all of which need per-token log-probs. These trainers score tokens rather than just training on a mean loss."
+  },
+  {
+    "id": "08.5-031",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "In GRPO-style trainers, what is per-token entropy H_i used for?",
+    "options": [
+      "As the learning rate for each token",
+      "As the main policy-gradient reward",
+      "As a monitoring signal and an optional bonus",
+      "As the denominator of the advantage normalization"
+    ],
+    "answer_index": 2,
+    "explanation": "Entropy indicates how spread out the policy's distribution is, making it a useful monitoring signal (for example, to spot collapse), and some trainers add it as an optional bonus. It is not the reward itself."
+  },
+  {
+    "id": "08.5-032",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "How is the per-token log-probability log p_{i y_i} computed from the log-normalizer?",
+    "options": [
+      "lse_i − z_{i y_i}",
+      "log(z_{i y_i}) − log(lse_i)",
+      "z_{i y_i} / lse_i",
+      "z_{i y_i} − lse_i"
+    ],
+    "answer_index": 3,
+    "explanation": "log p_y = log(exp(z_y)/Σ exp(z)) = z_y − lse. The opposite sign, lse − z_y, is the cross-entropy loss."
+  },
+  {
+    "id": "08.5-033",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "How can the per-token entropy H_i = −Σ_j p_ij log p_ij be computed online from running statistics?",
+    "options": [
+      "H_i = s_i − lse_i, where s_i = Σ_j exp(z_ij) is the raw running sum",
+      "H_i = m_i − log ℓ_i, using only the running max and running sum",
+      "H_i = lse_i − s_i/ℓ_i, where s_i = Σ_j exp(z_ij − m_i)·z_ij",
+      "H_i = lse_i + s_i·ℓ_i, where s_i = Σ_j z_ij is the plain logit sum"
+    ],
+    "answer_index": 2,
+    "explanation": "Substituting log p = z − lse gives H = lse − Σ_j p_j z_j, and Σ p z = s/ℓ with s the running exp-weighted sum of logits. So the entropy needs one extra running sum s besides m and ℓ."
+  },
+  {
+    "id": "08.5-034",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "In online entropy computation over vocabulary tiles, how is the extra running sum s = Σ exp(z − m)·z updated when the running max rises?",
+    "options": [
+      "It is divided by α = exp(m_old − m_new) instead of multiplied, so the old terms grow to match",
+      "It is multiplied by the same correction α = exp(m_old − m_new) as ℓ, then the tile's terms are added",
+      "It is reset to zero and recomputed from the new tile only, since older terms are now negligible",
+      "It is left unchanged, because the logits z inside s do not depend on the running max"
+    ],
+    "answer_index": 1,
+    "explanation": "s has the same exp(z − m) weights as ℓ, so re-referencing it to a new max requires the same α. Leaving it unchanged would mix terms referenced to different maxima."
+  },
+  {
+    "id": "08.5-035",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "2.4 Entropy and log-probs, online",
+    "question": "How many running numbers per row are needed to compute both the log-prob and the entropy without the (N, V) logits tensor?",
+    "options": [
+      "V: one stored probability per vocabulary entry, kept for backward",
+      "Two: the running sum ℓ and the target logit, nothing else needed",
+      "Three: m, ℓ and s (plus the target logit by a dot product)",
+      "One: the running max m, from which both lse and entropy follow"
+    ],
+    "answer_index": 2,
+    "explanation": "m and ℓ give lse = m + log ℓ, which with the target logit gives the log-prob; s gives Σ p z, and H = lse − s/ℓ. Three per-row numbers suffice."
+  },
+  {
+    "id": "08.5-036",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "When computing cross-entropy with vocabulary tiles, why does the target logit need no tile at all?",
+    "options": [
+      "It is a single dot product h · w_y that can be computed directly",
+      "It is recovered afterwards from the loss as lse minus the loss value",
+      "It is always exactly zero after the running max has been subtracted",
+      "It is always the largest logit, so it simply equals the running max m"
+    ],
+    "answer_index": 0,
+    "explanation": "z_y = h · w_y only needs the target's weight row, so it can be computed independently of the vocabulary loop. The target logit is not necessarily the largest logit."
+  },
+  {
+    "id": "08.5-037",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "In the vocabulary-tiled backward of fused cross-entropy, what does each vocabulary tile need to produce its rows of ∂L/∂W?",
+    "options": [
+      "The full softmax matrix stored during the forward pass, read back tile by tile",
+      "The upstream gradient of the next transformer layer's attention output",
+      "Only its own logits (recomputed) and the scalar log-normalizer lse per position",
+      "The recomputed logits of every other tile, to renormalize this tile's softmax"
+    ],
+    "answer_index": 2,
+    "explanation": "g for tile J is exp(z_J − lse) − onehot restricted to J, which needs only that tile's recomputed logits and lse. Then grad_w[J] = g^T h. No other tile or stored softmax is required."
+  },
+  {
+    "id": "08.5-038",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "In what unit is entropy expressed when computed with natural logarithms, as in H = lse − Σ p z?",
+    "options": [
+      "Nats",
+      "Bytes",
+      "Decibels",
+      "Bits"
+    ],
+    "answer_index": 0,
+    "explanation": "Using natural log (base e), as logsumexp does, yields entropy in nats. Bits would correspond to log base 2."
+  },
+  {
+    "id": "08.5-039",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "What dtype and ignore convention are used for targets in fused cross-entropy?",
+    "options": [
+      "int8, with 0 marking ignored positions to save memory on the targets",
+      "float32, with NaN marking ignored positions so they drop out of sums",
+      "bool, with False marking ignored positions and True marking valid ones",
+      "int64, with −100 (or −1 in the course GPT) marking ignored positions"
+    ],
+    "answer_index": 3,
+    "explanation": "Targets are int64 token ids; −100 is PyTorch's default ignore_index and the course GPT uses −1. Ignored rows contribute neither loss nor gradient and are excluded from the valid count."
+  },
+  {
+    "id": "08.5-040",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In fused cross-entropy, what is the shape and dtype of the per-row state lse, m, l and s?",
+    "options": [
+      "(N,), fp32",
+      "(V,), bf16",
+      "(N, C), bf16",
+      "(N, V), fp32"
+    ],
+    "answer_index": 0,
+    "explanation": "These are one scalar per position, so (N,), and they are kept in fp32 for precision. They are the only per-row state the vocabulary-tiled method keeps."
+  },
+  {
+    "id": "08.5-041",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In fused cross-entropy, what are the sizes of grad_h and grad_w?",
+    "options": [
+      "(C, N) and (C, V), the transposes of the input shapes",
+      "(N, V) and (V, C), since grad_h is built from logits",
+      "(N, C) and (V, C), the same as the inputs, never (N, V)",
+      "(N, V) and (V, V), one entry per logit and per token pair"
+    ],
+    "answer_index": 2,
+    "explanation": "grad_h matches h and grad_w matches the LM-head weight. The point of fused methods is that no (N, V) tensor is materialized, even for gradients."
+  },
+  {
+    "id": "08.5-042",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "Why should fused cross-entropy accumulate in fp32 even when the hidden states and LM-head weight are bf16?",
+    "options": [
+      "Summing exp terms over ~150k vocabulary entries and G^T H over thousands of rows loses precision in bf16",
+      "bf16 cannot represent negative logits, so the max-subtracted exponents underflow to exactly zero in every tile",
+      "bf16 matmuls are not supported by tensor cores for the tall, skinny LM-head shape used in the loss",
+      "fp32 accumulation makes the kernel execute fewer FLOPs, because each exp needs fewer correction steps"
+    ],
+    "answer_index": 0,
+    "explanation": "bf16 has few mantissa bits, so long sums lose digits; the logsumexp over a huge vocabulary and the weight gradient summed over many rows are exactly such long sums. bf16 represents negative numbers fine; the issue is precision, not range or support."
+  },
+  {
+    "id": "08.5-043",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In the vocabulary-tiled path of fused cross-entropy, what is the shape of one vocabulary tile of logits?",
+    "options": [
+      "(N, B_v), all positions by one block of vocabulary columns",
+      "(B_v, C), one block of LM-head weight rows for B_v tokens",
+      "(n, V), one chunk of positions against the whole vocabulary",
+      "(N, V), the whole logits matrix, built once and then sliced"
+    ],
+    "answer_index": 0,
+    "explanation": "A vocabulary tile covers all N positions and B_v columns; a GPU kernel would additionally tile N. (n, V) is a row chunk in the row-chunked scheme."
+  },
+  {
+    "id": "08.5-044",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the row-chunked fused cross-entropy implemented as a custom torch.autograd.Function, what does the forward pass save for backward?",
+    "options": [
+      "The softmax probabilities of each chunk, in bf16 to save space",
+      "Only the scalar loss, from which backward rederives the gradients",
+      "Only grad_h and grad_w, already computed during forward",
+      "The full (N, V) logits tensor, so backward can recompute softmax"
+    ],
+    "answer_index": 2,
+    "explanation": "The forward loop computes the loss and the gradients chunk by chunk and saves only the gradients (which are the size of the inputs). Saving logits or softmax would defeat the memory saving."
+  },
+  {
+    "id": "08.5-045",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In row-chunked fused cross-entropy, what does the backward pass do?",
+    "options": [
+      "It multiplies the saved gradients by the upstream scalar grad_out",
+      "It recomputes the loss from the saved logits to verify that it matches",
+      "It does nothing; the gradients were already written directly into .grad",
+      "It recomputes every chunk's logits and softmax, then forms G^T H again"
+    ],
+    "answer_index": 0,
+    "explanation": "Because gradients were computed in forward, backward only scales them by grad_out. This works because the loss is the last operation, so any later transformation is a scalar multiplication captured by grad_out."
+  },
+  {
+    "id": "08.5-046",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Why does computing cross-entropy gradients during the forward pass cost nothing extra?",
+    "options": [
+      "The optimizer recomputes the gradients regardless",
+      "Backward would need the same softmax anyway",
+      "The forward pass already runs on idle tensor cores",
+      "Gradients are free because they are always zero for most rows"
+    ],
+    "answer_index": 1,
+    "explanation": "The gradient is softmax − onehot; computing the softmax for the loss and immediately forming the gradient avoids storing it. The work simply moves from backward into forward."
+  },
+  {
+    "id": "08.5-047",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In row-chunked fused cross-entropy, what does the line g *= (v / n_valid)[:, None] accomplish?",
+    "options": [
+      "It converts the gradient to bf16 before it is accumulated into grad_w",
+      "It zeroes ignored rows and applies the global mean over valid positions",
+      "It scales the gradient by the learning rate so the optimizer step is correct",
+      "It normalizes each row's softmax probabilities so that they sum to one"
+    ],
+    "answer_index": 1,
+    "explanation": "v is a 0/1 validity mask and n_valid is the global count of valid positions, so multiplying applies both the mask and the global-mean scaling of the loss. This is what avoids the per-chunk-mean bug."
+  },
+  {
+    "id": "08.5-048",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In row-chunked fused cross-entropy, how is the LM-head weight gradient grad_w handled across chunks?",
+    "options": [
+      "grad_w is set to zero because the weight is tied",
+      "grad_w = g^T @ hc, overwritten by each chunk",
+      "grad_w += g^T @ hc, accumulated over chunks",
+      "grad_w is computed once after all chunks from stored logits"
+    ],
+    "answer_index": 2,
+    "explanation": "∂L/∂W is a sum over all rows, so each chunk adds its g^T h contribution. Overwriting would keep only the last chunk; storing logits would defeat the purpose."
+  },
+  {
+    "id": "08.5-049",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does the forward pass of the vocabulary-tiled fused cross-entropy keep for backward?",
+    "options": [
+      "grad_h and grad_w, precomputed during the forward pass",
+      "Only the per-row log-normalizer lse (plus inputs)",
+      "The full softmax matrix, stored compactly in bf16",
+      "Every vocabulary tile of logits, kept in HBM for reuse"
+    ],
+    "answer_index": 1,
+    "explanation": "The vocabulary-tiled forward runs the online logsumexp and saves lse; backward recomputes each tile. Precomputing grad_h and grad_w is the row-chunked method."
+  },
+  {
+    "id": "08.5-050",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What trade does the vocabulary-tiled backward make, analogous to FlashAttention?",
+    "options": [
+      "Fewer optimizer steps per epoch in exchange for proportionally larger batches",
+      "Storing logits in pinned CPU memory instead of GPU HBM, at the cost of PCIe transfers",
+      "One extra matmul to recompute logit tiles instead of storing a huge intermediate",
+      "Lower-precision fp8 arithmetic in the tiles instead of exact gradients in fp32"
+    ],
+    "answer_index": 2,
+    "explanation": "Backward recomputes z for each tile, forms exp(z − lse) − onehot, and accumulates grad_h and grad_w, never storing logits. Recomputing is cheap compute; storing is scarce memory and bandwidth. This is the FlashAttention bargain."
+  },
+  {
+    "id": "08.5-051",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does fused_logprobs_and_entropy(h, weight, targets, block_v, temperature) return, and is it differentiable?",
+    "options": [
+      "Per-token (logprobs, entropy), computed under torch.no_grad()",
+      "The full (N, V) log-softmax tensor, differentiable via autograd",
+      "Per-token logits for the target token only, differentiable end to end",
+      "A scalar mean loss over valid positions with full autograd support"
+    ],
+    "answer_index": 0,
+    "explanation": "It runs the online loop with the extra running sum s and returns per-token log-probs and entropy for scoring, under no_grad. Making it differentiable for the log-prob output is left as a follow-up exercise."
+  },
+  {
+    "id": "08.5-052",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Run it",
+    "question": "When naive, row-chunked and vocabulary-tiled cross-entropy are run on random data with N = 2048, C = 256 and V = 32,000, the loss is about 10.686. Why is it close to log 32000 ≈ 10.37?",
+    "options": [
+      "The random targets always happen to be the most likely token at each position",
+      "The fused methods approximate the loss by log V instead of computing it exactly",
+      "Random small weights give a near-uniform distribution over the vocabulary",
+      "The loss is clipped from above to the log of the vocabulary size for stability"
+    ],
+    "answer_index": 2,
+    "explanation": "With random small LM-head weights the logits are nearly equal, so softmax is close to uniform and cross-entropy is close to log V; random weight noise adds a little. All three methods print the same value because they are exact."
+  },
+  {
+    "id": "08.5-053",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Run it",
+    "question": "For N = 2048 and V = 32,000 in fp32, how does the largest intermediate change from naive logits to a 256-row chunk or a 4096-wide vocabulary tile?",
+    "options": [
+      "From about 262 MB to about 33 MB",
+      "From about 33 MB to about 262 MB",
+      "From about 262 MB to about 131 KB",
+      "From about 19.9 GB to about 622 MB"
+    ],
+    "answer_index": 0,
+    "explanation": "2048 × 32,000 × 4 ≈ 262 MB for the full logits; 256 × 32,000 × 4 and 2048 × 4096 × 4 are each about 33 MB. The 19.9 GB and 622 MB figures are for the much larger Qwen-size configuration."
+  },
+  {
+    "id": "08.5-054",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Run it",
+    "question": "On a CPU, what is the point of comparing naive, row-chunked and vocabulary-tiled cross-entropy?",
+    "options": [
+      "Measuring the SRAM usage of each method with the CPU profiler and cache counters",
+      "Showing that the fused methods reach a lower loss than the naive path on the same data",
+      "Demonstrating that the fused methods are roughly 10× faster than naive even on CPU",
+      "Which tensors exist (memory), not speed; timings are similar and vary by machine"
+    ],
+    "answer_index": 3,
+    "explanation": "All three give the same loss and gradient norm; on CPU timings are of the same order and their order varies. The demonstration is about which intermediates are allocated. Speed benefits require GPU kernels."
+  },
+  {
+    "id": "08.5-055",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "What does Liger Kernel's LigerFusedLinearCrossEntropyLoss implement?",
+    "options": [
+      "A Triton row-chunked scheme with the gradient computed in the forward pass",
+      "A CPU kernel that streams logits to disk and reads them back for backward",
+      "A CUDA vocabulary-tiled scheme with recomputation of logit tiles in backward",
+      "An approximate sampled softmax over a random subset of the vocabulary each step"
+    ],
+    "answer_index": 0,
+    "explanation": "Liger (LinkedIn) chunks over positions and computes gradients in forward, in Triton. Vocabulary tiling with recomputation is Cut Cross-Entropy's approach."
+  },
+  {
+    "id": "08.5-056",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "What memory and throughput results are reported for Liger Kernel (authors' measurements)?",
+    "options": [
+      "Higher peak memory from extra buffers, but roughly 2× training throughput across all of its kernels",
+      "About 10% memory reduction for fused-linear kernels, with no measurable throughput change overall",
+      "Up to 99% memory reduction and 5× throughput for every kernel, including RMSNorm, RoPE and SwiGLU",
+      "Up to 80% memory reduction for fused-linear kernels; about 60% less memory and 20% more throughput overall"
+    ],
+    "answer_index": 3,
+    "explanation": "The README reports up to 80% memory reduction for the fused-linear kernels, and the paper reports about 60% lower memory and 20% higher throughput for its kernel set against Hugging Face baselines. These are publicly documented authors' measurements."
+  },
+  {
+    "id": "08.5-057",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "How does Cut Cross-Entropy (Apple; Wijmans et al., ICLR 2025) compute the loss?",
+    "options": [
+      "It computes only the target logit and a blockwise logsumexp in SRAM, never writing logits to global memory",
+      "It quantizes the logits to 4 bits before storing them in HBM, then dequantizes them again in the backward pass",
+      "It chunks positions and stores each chunk's full logits in HBM, computing gradients in the forward pass",
+      "It samples a subset of the vocabulary per step and estimates the softmax denominator from that sample"
+    ],
+    "answer_index": 0,
+    "explanation": "CCE implements the vocabulary-tiled scheme as an SRAM-resident kernel: target logit via indexed dot product plus blockwise logsumexp. It is exact, not a sampled approximation. It also skips gradient entries too small to matter at the working precision."
+  },
+  {
+    "id": "08.5-058",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "What extra optimization does Cut Cross-Entropy apply in its backward pass?",
+    "options": [
+      "It drops the onehot target term for the most frequent tokens in the batch",
+      "It stores the full softmax in fp8 so the backward pass avoids recomputation",
+      "It averages gradients across vocabulary tiles instead of summing them",
+      "It skips gradient entries too small to matter at the working precision"
+    ],
+    "answer_index": 3,
+    "explanation": "Most softmax probabilities over a large vocabulary are tiny, so their gradient contributions vanish at bf16/fp16 precision; CCE skips them. It does not store the softmax, which is the point of recomputation."
+  },
+  {
+    "id": "08.5-059",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "For Gemma 2 2B, what loss-computation memory reduction does the Cut Cross-Entropy paper report?",
+    "options": [
+      "From about 24 GB to about 12 GB",
+      "From about 24 GB to about 1 MB",
+      "From about 80 GB to about 24 GB",
+      "From about 1 GB to about 1 MB"
+    ],
+    "answer_index": 1,
+    "explanation": "The paper reports loss-computation memory falling from about 24 GB to about 1 MB, and classifier-head training memory from 28 GB to 1 GB, without slowing training or hurting convergence (authors' measurements)."
+  },
+  {
+    "id": "08.5-060",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "Which TRL v1.15.0 trainers got the fused LM head by default?",
+    "options": [
+      "Only SFT and DPO, the two offline trainers",
+      "PPO, ORPO and reward modeling, but no others",
+      "Only GRPO, for its RL log-prob scoring pass",
+      "SFT, DPO, KTO, GRPO, RLOO and Distillation"
+    ],
+    "answer_index": 3,
+    "explanation": "TRL v1.15.0 added the fused LM head to six trainers — SFT, DPO, KTO, GRPO, RLOO and Distillation — and turned it on by default. It reduces directly to per-token log-probs and entropy."
+  },
+  {
+    "id": "08.5-061",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "What improvements did TRL v1.15.0 report for its fused LM head on gemma-3-1b (262k vocabulary, one 79 GiB GPU, bf16, batch 1)?",
+    "options": [
+      "About 10% higher throughput for every trainer, with no change in peak memory or maximum sequence length",
+      "Max trainable sequence length up 100× across all trainers and about 99% lower peak memory at 8,192 tokens",
+      "Max trainable sequence length unchanged, but roughly 2× faster training steps for DPO, KTO, GRPO and RLOO",
+      "Max sequence length up 4.0–6.9× for DPO, KTO, GRPO and RLOO scoring; 52–82% lower peak memory at 8,192 tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "The notes report 5.8× (DPO), 6.9× (KTO), 4.0× (GRPO scoring) and 4.3× (RLOO scoring) longer max sequence length versus v1.14.2, and peak memory drops of 52–82% at 8,192 tokens. These are maintainer measurements."
+  },
+  {
+    "id": "08.5-062",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "In TRL v1.15.0, what happened to SFT's existing default chunked_nll loss?",
+    "options": [
+      "It was removed in favor of the naive lm_head loss path",
+      "It was already memory-efficient and was left unchanged",
+      "It was replaced by Liger's fused kernel as the new default",
+      "It was renamed and rewritten to run about 2× faster"
+    ],
+    "answer_index": 1,
+    "explanation": "SFT already used a memory-efficient chunked_nll loss by default, so its behavior did not change. The big gains were in preference and RL trainers."
+  },
+  {
+    "id": "08.5-063",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "6. What production kernels do, and the cost",
+    "question": "Which conditions did the TRL v1.15.0 release notes say were not measured for the fused LM head?",
+    "options": [
+      "The DPO and KTO trainers on long sequences",
+      "bf16 precision and a batch size of exactly 1",
+      "Multi-GPU training and real generation",
+      "Single-GPU training on purely synthetic data"
+    ],
+    "answer_index": 2,
+    "explanation": "The notes explicitly say multi-GPU and real generation were not measured; their numbers come from one 79 GiB GPU in bf16 at batch size 1. Reading what was not measured is part of interpreting such claims."
+  },
+  {
+    "id": "08.5-064",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "What are the FLOPs of the LM-head matmul in forward and backward, regardless of the cross-entropy scheme?",
+    "options": [
+      "4NCV in forward and 2NCV in backward",
+      "2NCV in forward and 2NCV in backward",
+      "2NCV in forward and 4NCV in backward",
+      "NCV in forward and NCV in backward"
+    ],
+    "answer_index": 2,
+    "explanation": "Forward is one (N, C) × (C, V) matmul, 2NCV FLOPs. Backward has two matmuls of the same size, for ∂H and ∂W, so 4NCV. Fused schemes do not change this baseline."
+  },
+  {
+    "id": "08.5-065",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "How many extra FLOPs does the row-chunked (Liger) cross-entropy scheme add?",
+    "options": [
+      "+2NCV, to recompute logits in backward",
+      "+NV, to recompute the softmax",
+      "None; backward work is moved into forward",
+      "+4NCV, to recompute both gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "The row-chunked scheme computes gradients during forward from the same chunk logits, so no extra matmul is needed. Recomputing logits (+2NCV) is the vocabulary-tiled scheme's cost."
+  },
+  {
+    "id": "08.5-066",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "How many extra FLOPs does the vocabulary-tiled (Cut Cross-Entropy) scheme add?",
+    "options": [
+      "None, because tiles are cached in SRAM",
+      "+4NCV, to recompute both gradient matmuls",
+      "+NC, for the target-logit dot products only",
+      "+2NCV, to recompute the logit tiles in backward"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward must recompute z = h W^T for each tile, one extra forward-sized matmul of 2NCV FLOPs. In exchange it keeps only O(N) statistics instead of (N, V) logits."
+  },
+  {
+    "id": "08.5-067",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "For V = 151,936 in fp32, how large is a 1,024-row chunk of logits, and how does it compare with full logits for N = 32,768?",
+    "options": [
+      "About 131 KB, a 150,000× reduction from about 19.9 GB",
+      "About 622 MB, a 32× reduction from about 19.9 GB",
+      "About 6.2 GB, a 3× reduction from about 19.9 GB",
+      "About 62 MB, a 320× reduction from about 19.9 GB"
+    ],
+    "answer_index": 1,
+    "explanation": "1,024 × 151,936 × 4 ≈ 622 MB, and 32,768/1,024 = 32, so a 32× reduction. 131 KB is the size of one (N,) fp32 statistic for vocabulary tiling."
+  },
+  {
+    "id": "08.5-068",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "Why are fused cross-entropy kernels usually faster, not just smaller, than the naive path on a GPU?",
+    "options": [
+      "Softmax and logsumexp are memory-bound, so avoiding the round trip of NV floats through HBM saves time",
+      "They skip the backward matmuls entirely, since the gradients are derived analytically from the loss",
+      "They use integer arithmetic for the softmax, which runs faster than floating point on the GPU's tensor cores",
+      "They perform far fewer matmul FLOPs than the naive path, because only the target logit is ever formed"
+    ],
+    "answer_index": 0,
+    "explanation": "At a few FLOPs per element the softmax/logsumexp is limited by bytes moved; keeping logits on-chip removes those HBM round trips. The matmul FLOPs are the same or slightly higher."
+  },
+  {
+    "id": "08.5-069",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "Why must the row-chunked cross-entropy scheme know that the loss is final?",
+    "options": [
+      "It deletes the hidden states after forward, so they are gone before backward can use them",
+      "It requires the optimizer step to run inside forward, right after the gradients are computed",
+      "It cannot compute the scalar loss value itself until the backward pass has fully finished",
+      "It computes ∂W in forward, so any later change to the loss must be folded into the kernel"
+    ],
+    "answer_index": 3,
+    "explanation": "Gradients are computed during forward assuming the loss is the last op; a later scalar multiply is handled by grad_out, but anything else applied to the logits or loss (a second loss term, a weight) must be implemented inside the kernel."
+  },
+  {
+    "id": "08.5-070",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "Why do logit soft-capping, z-loss, label smoothing and temperature have to be implemented explicitly inside a fused cross-entropy kernel?",
+    "options": [
+      "They change the logit gradient g_ij, and the logits are never available outside the kernel",
+      "They only apply at inference time, so the training kernel must emulate them for consistency",
+      "They require the full vocabulary to be sorted by logit, which only the kernel can do on-chip",
+      "They are incompatible with fp32 accumulation, so the kernel must switch them to bf16 internally"
+    ],
+    "answer_index": 0,
+    "explanation": "Each of these transforms the logits or the loss, which changes g_ij. Since fused kernels never expose the logits, a trainer cannot apply them afterwards; the kernel must implement them."
+  },
+  {
+    "id": "08.5-071",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Cost",
+    "question": "Why does TRL's fused LM head force Liger's fused_linear_cross_entropy off?",
+    "options": [
+      "Both try to own the same LM-head computation",
+      "Liger's kernel does not support bf16 inputs",
+      "TRL's fused head only works on CPU, not GPU",
+      "Liger's kernel is numerically incorrect at long T"
+    ],
+    "answer_index": 0,
+    "explanation": "Both kernels take over the hidden-states-to-loss computation through the LM head, so only one can be active. The release notes state this explicitly."
+  },
+  {
+    "id": "08.5-072",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "7. Side by side, and when to keep the original",
+    "question": "Which cross-entropy scheme makes the full logits available?",
+    "options": [
+      "All three make the full (N, V) logits available after the forward pass",
+      "Naive: yes; row-chunked: per chunk only; vocabulary-tiled: never",
+      "None of the three ever forms logits, even for a single chunk or tile",
+      "Naive: never; row-chunked: yes; vocabulary-tiled: per tile only"
+    ],
+    "answer_index": 1,
+    "explanation": "The naive path builds the entire (N, V) logits; the row-chunked path has full logits for one chunk at a time; the vocabulary-tiled path keeps only per-row statistics and never has a full logit row."
+  },
+  {
+    "id": "08.5-073",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "7. Side by side, and when to keep the original",
+    "question": "Which cross-entropy schemes need a custom backward?",
+    "options": [
+      "Row-chunked and vocabulary-tiled; the naive path uses ordinary autograd",
+      "None of them; all three use ordinary autograd on the scalar loss value",
+      "Only the naive path, because it is the one that stores the full logits tensor",
+      "Only the row-chunked path; the vocabulary-tiled path uses plain autograd instead"
+    ],
+    "answer_index": 0,
+    "explanation": "The naive path is lm_head + F.cross_entropy under autograd. Row-chunked computes gradients in forward and vocabulary-tiled recomputes tiles in backward, both via a custom autograd.Function."
+  },
+  {
+    "id": "08.5-074",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "7. Side by side, and when to keep the original",
+    "question": "When should you keep the naive lm_head + F.cross_entropy instead of a fused cross-entropy?",
+    "options": [
+      "When you need logits: generation, logging the full distribution, storing teacher top-k logits, or a small model",
+      "Whenever the sequence length exceeds 8k tokens, because fused kernels lose precision on long rows of positions",
+      "Whenever the vocabulary exceeds 100k tokens, because the fused vocabulary tiles no longer fit in on-chip SRAM",
+      "Whenever training uses bf16 weights, because fused kernels require fp32 hidden states and fp32 LM-head parameters"
+    ],
+    "answer_index": 0,
+    "explanation": "Sampling (top-k, top-p), logging distributions, and saving teacher top-k logits for offline distillation all need logits, and small models have cheap logits. Large vocabularies and long contexts are exactly when fused methods help most. The naive path is also the reference for tests."
+  },
+  {
+    "id": "08.5-075",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "7. Side by side, and when to keep the original",
+    "question": "When is each fused cross-entropy scheme a good choice?",
+    "options": [
+      "Both are only appropriate for small vocabularies, where the extra kernel overhead is negligible",
+      "Row-chunked only for generation-time scoring; vocabulary-tiled only for debugging the naive path",
+      "Row-chunked as a simple robust default; vocabulary-tiled for the largest V and N with minimal memory",
+      "Row-chunked for the largest V and N with minimal memory; vocabulary-tiled for small, short-context models"
+    ],
+    "answer_index": 2,
+    "explanation": "Row chunking is simple and robust; vocabulary tiling minimizes memory to O(N) statistics at the cost of recomputation, which pays off at the largest vocabularies and token counts."
+  },
+  {
+    "id": "08.5-076",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Exercise: add z-loss to the vocabulary-tiled path",
+    "question": "What is PaLM's auxiliary z-loss, and what is it for?",
+    "options": [
+      "λ·H_i per valid row, an entropy bonus that encourages exploration",
+      "λ·z_{i y_i}^2 per valid row, to keep the target logit itself near zero",
+      "λ·lse_i^2 per valid row (λ ≈ 1e-4), to keep the log-normalizer near zero",
+      "λ·||W||^2 summed over the LM-head weight, an L2 penalty on its rows"
+    ],
+    "answer_index": 2,
+    "explanation": "z-loss penalizes the squared log-normalizer, encouraging lse to stay near zero for numerical stability. It is not weight decay or an entropy bonus."
+  },
+  {
+    "id": "08.5-077",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Exercise: add z-loss to the vocabulary-tiled path",
+    "question": "Adding z-loss λ·lse_i^2 to cross-entropy changes the logit gradient how?",
+    "options": [
+      "The whole gradient g_ij is multiplied by λ·lse_i^2; nothing else changes",
+      "The factor multiplying p_ij becomes (1 + 2λ·lse_i); the onehot term is unchanged",
+      "A constant 2λ is added to every g_ij, independent of the probabilities",
+      "The onehot term is multiplied by (1 + 2λ·lse_i); the p_ij term is unchanged"
+    ],
+    "answer_index": 1,
+    "explanation": "∂(λ lse_i^2)/∂z_ij = 2λ lse_i·p_ij, so g_ij becomes (1 + 2λ lse_i)p_ij − 1[j = y_i], scaled as before. lse is already saved in forward, so the (N,) factor is computed once outside the tile loop."
+  },
+  {
+    "id": "08.5-078",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Debugging exercise",
+    "question": "A chunked loss computes F.cross_entropy(..., ignore_index=-100) per chunk (mean per chunk), sums chunks and divides by the number of chunks. Why is it wrong on SFT batches with masked prompts?",
+    "options": [
+      "It is a mean of means, which over-weights tokens in chunks with few valid tokens",
+      "It double-counts the ignored tokens in every chunk's denominator and numerator",
+      "It computes a gradient of the wrong sign for any chunk that contains masked rows",
+      "It divides by the vocabulary size instead of the number of valid tokens in the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Each chunk is averaged over its own valid count, then chunks get equal weight, so tokens in sparsely valid chunks count more. This equals the global mean only when every chunk has the same number of valid tokens."
+  },
+  {
+    "id": "08.5-079",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Debugging exercise",
+    "question": "In a chunked cross-entropy that averages per chunk with ignore_index, what happens to a chunk whose targets are all prompt tokens set to −100?",
+    "options": [
+      "It returns zero and is harmless",
+      "It returns NaN (0/0) and poisons the total loss",
+      "It raises an exception before the forward pass",
+      "It returns the log of the vocabulary size"
+    ],
+    "answer_index": 1,
+    "explanation": "With no valid tokens, the per-chunk mean is 0/0 = NaN, and adding NaN to the running loss makes the whole loss NaN. Summing per-row losses and dividing once by the global valid count avoids this."
+  },
+  {
+    "id": "08.5-080",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Debugging exercise",
+    "question": "What is the correct fix for a chunked cross-entropy over masked SFT batches?",
+    "options": [
+      "Average per chunk, then multiply by the number of chunks and divide by N",
+      "Drop any chunk that contains masked tokens, so all chunks are fully valid",
+      "Sum per-row losses with reduction='sum' and divide once by the global valid count",
+      "Use a smaller chunk size so each chunk has one token and the means coincide"
+    ],
+    "answer_index": 2,
+    "explanation": "Summing per-row losses and dividing by the global count reproduces the true mean over valid tokens. This is the same 'normalize by what?' question as Dr. GRPO's length normalization and gradient accumulation."
+  },
+  {
+    "id": "08.5-081",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "Which weight-tying mistake can arise with a hand-written fused cross-entropy?",
+    "options": [
+      "Tying makes the LM-head gradient always zero, because the embedding lookup absorbs all of it",
+      "Tying requires the logits to be stored in fp64, which a hand-written fused kernel cannot provide",
+      "Writing .grad by hand can overwrite the embedding's gradient instead of adding the LM-head one",
+      "Tying doubles the effective vocabulary size, so every fused vocabulary tile must be twice as wide"
+    ],
+    "answer_index": 2,
+    "explanation": "With tied embeddings, the shared weight receives gradient from both the embedding lookup and the LM head, and they must be summed. Returning grad_w from a custom autograd.Function lets autograd add it; writing .grad manually can silently clobber the embedding's contribution."
+  },
+  {
+    "id": "08.5-082",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "Why does the fused cross-entropy test multiply the loss by 2.5 before calling backward?",
+    "options": [
+      "To catch implementations that ignore the upstream gradient grad_out",
+      "To simulate a learning-rate warmup factor applied to the loss",
+      "To check that the gradients are invariant to scaling the loss",
+      "To make the loss large enough that fp32 rounding cannot hide errors"
+    ],
+    "answer_index": 0,
+    "explanation": "If the loss is scaled (loss scaling, gradient accumulation by loss/k), precomputed gradients must be multiplied by grad_out. A test with 2.5·loss catches backward functions that return the unscaled saved gradients."
+  },
+  {
+    "id": "08.5-083",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "What happens if a trainer applies temperature or soft-capping to logits when using a fused cross-entropy kernel that does not implement them?",
+    "options": [
+      "The modifier is applied only in the backward pass, so loss and gradients disagree",
+      "It either errors out or silently skips the modifier, because the logits no longer exist",
+      "The modifier is applied twice, once by the trainer and once again inside the kernel",
+      "The kernel automatically detects the modifier from the trainer config and applies it itself"
+    ],
+    "answer_index": 1,
+    "explanation": "Fused kernels never expose the logits, so a modifier meant to act on them has nothing to operate on; the trainer may raise an error or quietly skip it. Modifiers must be implemented inside the kernel."
+  },
+  {
+    "id": "08.5-084",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "What to read / what to skip",
+    "question": "When reading the Cut Cross-Entropy paper, which parts deserve focus and which can be skimmed?",
+    "options": [
+      "Read the indexed-matmul plus blockwise-logsumexp method and the memory table; skim gradient filtering and vocabulary sorting",
+      "Read the gradient filtering and vocabulary sorting sections closely; skim the indexed-matmul method and the memory table",
+      "Read only the related-work section and the abstract closely; skim the rest, since the method mirrors Liger's chunking",
+      "Read the RMSNorm, RoPE and SwiGLU kernel benchmarks closely; skim the blockwise-logsumexp loss method and the memory table"
+    ],
+    "answer_index": 0,
+    "explanation": "The core idea is computing the loss as an indexed matmul (target logit) plus a blockwise logsumexp, and the memory table shows the impact. Gradient filtering and vocabulary sorting are kernel-writer details."
+  },
+  {
+    "id": "08.5-085",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "What to read / what to skip",
+    "question": "When reading the Liger Kernel paper, what is recommended to skip?",
+    "options": [
+      "The fused linear cross-entropy section and its chunking scheme",
+      "The per-kernel benchmarks for RMSNorm, RoPE and SwiGLU",
+      "The description of chunking with the gradient computed in forward",
+      "The memory reduction results for the fused-linear kernels"
+    ],
+    "answer_index": 1,
+    "explanation": "For this topic, the fused linear cross-entropy section (chunking, gradient in forward) is what matters; the other kernels' benchmarks are not needed."
+  },
+  {
+    "id": "08.5-086",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Code this after reading",
+    "question": "What is the gradient of the per-token log-probability log p_{i y_i} with respect to the logits z_ij?",
+    "options": [
+      "p_ij − 1[j = y_i], exactly the same as the cross-entropy gradient",
+      "−(p_ij − 1[j = y_i]), the negative of the cross-entropy gradient",
+      "p_ij, the softmax probability, with no target term at all",
+      "1[j = y_i], the onehot target, since lse does not depend on z"
+    ],
+    "answer_index": 1,
+    "explanation": "log p_y = z_y − lse, whose gradient is 1[j = y] − p_j = −(p_j − onehot). A GRPO loss multiplies this by an upstream per-token gradient."
+  },
+  {
+    "id": "08.5-087",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Research connection",
+    "question": "In discussions of how closed labs compute the LM-head loss, which claim falls under inference rather than public documentation?",
+    "options": [
+      "That Liger lists the Hugging Face Trainer and TRL among its integrations",
+      "That Cut Cross-Entropy and Liger report their own memory savings",
+      "That a given closed lab uses one specific fused cross-entropy scheme",
+      "That TRL v1.15.0 enables a fused LM head by default in six trainers"
+    ],
+    "answer_index": 2,
+    "explanation": "The CCE and Liger results, Liger's integrations and TRL v1.15.0's defaults are all publicly documented. Which scheme a closed lab uses is inference, since labs rarely say and the schemes produce the same numbers."
+  },
+  {
+    "id": "08.5-088",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Research connection",
+    "question": "Which practices around LM-head loss computation are classified as reasonable industry practice?",
+    "options": [
+      "Using sampled-softmax approximations of the loss for all large-vocabulary pretraining runs",
+      "Disabling weight tying whenever a fused kernel is used, so the LM head has its own gradient",
+      "Storing all logits in fp64 for exact bitwise reproducibility across different GPU types",
+      "fp32 accumulation inside fused kernels and never materializing logits at long context or large V"
+    ],
+    "answer_index": 3,
+    "explanation": "Accumulating in fp32 and avoiding full logits in large-vocabulary or long-context training are reasonable industry practice. The other options are not supported practices."
+  },
+  {
+    "id": "08.5-089",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Check yourself",
+    "question": "Why can the row-chunked scheme compute ∂L/∂W during the forward pass?",
+    "options": [
+      "∂W does not depend on the hidden states at all, only on the targets and the global valid count",
+      "The forward pass stores the full logits anyway, so a separate backward pass is simply unnecessary",
+      "The LM-head weight is frozen during training, so its gradient can be precomputed once up front",
+      "g_ij depends only on that row's logits and the global valid count, and ∂W = G^T H sums over rows"
+    ],
+    "answer_index": 3,
+    "explanation": "Once a chunk's logits exist, its G rows are known and its contribution G_chunk^T H_chunk can be added to ∂W immediately. The only assumption is that the loss is final apart from a scalar, which grad_out handles."
+  },
+  {
+    "id": "08.5-090",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Check yourself",
+    "question": "The vocabulary-tiled backward recomputes every logit tile. Why is that a good trade?",
+    "options": [
+      "Recomputation is free, because GPUs cache recent matmul results in L2 and return them on reuse",
+      "The recompute is one compute-bound 2NCV matmul; storing logits costs NV floats and HBM round trips",
+      "Storing logits is impossible in fp32 on any current GPU, so recomputation is the only option left",
+      "Recomputation produces more accurate gradients than stored logits, because rounding errors cancel"
+    ],
+    "answer_index": 1,
+    "explanation": "A compute-bound matmul runs fast on tensor cores, whereas storing logits uses scarce memory and makes the memory-bound softmax shuttle bytes. Trading cheap FLOPs for scarce bytes is the roofline argument and FlashAttention's choice."
+  },
+  {
+    "id": "08.5-091",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Check yourself",
+    "question": "What is the cost of computing all target logits z_{i y_i} directly, compared with computing all logits?",
+    "options": [
+      "O(CV) instead of O(NCV)",
+      "O(NV) instead of O(NCV)",
+      "O(N) instead of O(NC)",
+      "O(NC) instead of O(NCV)"
+    ],
+    "answer_index": 3,
+    "explanation": "Gathering row y_i of W and taking one C-dimensional dot product per position costs O(NC), a factor of V less than building every logit."
+  },
+  {
+    "id": "08.5-092",
+    "chapter": "08.5",
+    "chapter_name": "Fused linear cross-entropy: the loss without the logits",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-05.md",
+    "section": "Next",
+    "question": "What common pattern do FlashAttention and fused cross-entropy share?",
+    "options": [
+      "Store the big intermediate in pinned CPU memory and stream it back to the GPU when needed",
+      "Never materialize the big intermediate, trading a little recomputation for far fewer bytes",
+      "Approximate the big intermediate with a low-rank factorization whose error is provably bounded",
+      "Compute the big intermediate in fp8 and store it, halving the bytes relative to bf16"
+    ],
+    "answer_index": 1,
+    "explanation": "FlashAttention avoids the T×T scores and fused cross-entropy avoids the N×V logits; both use online-softmax statistics and recomputation instead of storing the intermediate. The same trade reappears when scaling to many GPUs."
+  }
+]

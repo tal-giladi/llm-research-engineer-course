@@ -1,0 +1,1010 @@
+[
+ {
+  "id": "16.2-001",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Prerequisites / why this matters",
+  "question": "What does RLVR stand for?",
+  "options": [
+   "Reinforcement Learning with Value Regression",
+   "Reinforcement Learning with Verifiable Rewards",
+   "Reward-Learned Value Refinement for reasoning",
+   "Rejection Learning via Verified Rollouts (RLVR)"
+  ],
+  "answer_index": 1,
+  "explanation": "RLVR is RL with Verifiable Rewards: the learned reward model is replaced by an automatic checker that knows the right answer. It is typically paired with GRPO. 'Value regression' would describe training a critic, which RLVR does not need."
+ },
+ {
+  "id": "16.2-002",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Prerequisites / why this matters",
+  "question": "What single change is credited with making RL for reasoning take off?",
+  "options": [
+   "Adding a larger critic network to PPO so value estimates on long chains stop drifting",
+   "Training the reward model on far more human preference pairs collected on math problems",
+   "Removing the KL penalty from the objective so the policy can explore new reasoning freely",
+   "Swapping the learned reward model for a cheap, exact rule that knows the right answer"
+  ],
+  "answer_index": 3,
+  "explanation": "The key change was replacing the fragile, gameable learned reward model with a cheap, exact, rule-based check of correctness. That is why math and code, where correctness is checkable by a program, are where reasoning RL first worked."
+ },
+ {
+  "id": "16.2-003",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Prerequisites / why this matters",
+  "question": "Why were math and code the first domains where reasoning RL worked?",
+  "options": [
+   "Correctness in those domains is checkable by a program",
+   "Their texts are shorter, so rollouts are cheap to sample",
+   "They have the most human preference data of any domain",
+   "Their tokenizers have the smallest vocabularies to search"
+  ],
+  "answer_index": 0,
+  "explanation": "In math and code, a program can check whether an answer is right (compare to the true value, run unit tests). That gives an exact, cheap reward with no proxy to hack. It has nothing to do with text length or preference data volume."
+ },
+ {
+  "id": "16.2-004",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "In RLHF, what does the reward model output for a completion?",
+  "options": [
+   "A binary correct/incorrect label computed by a hand-written rule that knows the answer",
+   "A probability distribution over the next token, used to re-rank the policy's samples",
+   "A scalar 'how good is this completion' score learned from human preference pairs",
+   "The KL divergence of the completion from the reference model, used as a quality proxy"
+  ],
+  "answer_index": 2,
+  "explanation": "An RLHF reward model is a network trained on human preference pairs to output a scalar quality score. It is learned, not a rule. A binary correctness label computed by a rule is what an RLVR verifier produces."
+ },
+ {
+  "id": "16.2-005",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "For which kind of task does an RLHF learned reward model make sense despite its weaknesses?",
+  "options": [
+   "Single-digit arithmetic, where the true answer can be computed exactly",
+   "Code generation, where each completion is run against hidden unit tests",
+   "Open-ended helpfulness, where there is no ground truth to check against",
+   "Formal proofs, which a proof assistant can type-check line by line"
+  ],
+  "answer_index": 2,
+  "explanation": "A learned reward model is useful where no ground truth exists, such as open-ended helpfulness. Arithmetic, tested code and type-checkable proofs all have checkable correctness, so a verifier is preferable there."
+ },
+ {
+  "id": "16.2-006",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "What structural weakness of a learned reward model does a policy exploit?",
+  "options": [
+   "It is a proxy that only approximates what a human would prefer",
+   "It is too slow to evaluate on every sample during RL training",
+   "It can only score completions shorter than its own context window",
+   "It assigns nearly the same score to every completion it is shown"
+  ],
+  "answer_index": 0,
+  "explanation": "The reward model only approximates human preference, so it is a proxy. Optimized hard against it, the policy learns to maximize the proxy's score in ways that diverge from what it was meant to measure. Speed and length limits are not the structural issue."
+ },
+ {
+  "id": "16.2-007",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "What is reward hacking when optimizing against a learned reward model?",
+  "options": [
+   "The reward model overfits its preference data and its loss stops decreasing during training",
+   "The critic's value predictions diverge from the observed returns, so the advantages explode",
+   "The KL penalty grows so large that the policy stops changing from the reference altogether",
+   "The policy produces text that scores high with the reward model but is actually worse"
+  ],
+  "answer_index": 3,
+  "explanation": "Reward hacking is when the policy maximizes the proxy's score through behaviours the proxy wrongly likes, producing outputs that are actually worse. It is the central failure mode of optimizing a learned reward. Critic divergence is a PPO training problem, not reward hacking."
+ },
+ {
+  "id": "16.2-008",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "Which behaviours are typical symptoms of reward hacking against a learned reward model?",
+  "options": [
+   "Shorter answers, heavily hedged language, and refusals that the reward model happened to like",
+   "Over-long answers, confident-sounding nonsense, and formatting tricks the reward model liked",
+   "Exact copies of the SFT demonstrations with no variation, because those scored highest",
+   "Random token outputs with near-uniform probabilities, as the policy collapses to maximum entropy"
+  ],
+  "answer_index": 1,
+  "explanation": "A policy optimizing a learned proxy tends to find whatever the proxy over-rewards, such as length, confident tone, or particular formatting. These score high but are worse in reality. Exact copying of SFT data or random outputs are not the characteristic pattern."
+ },
+ {
+  "id": "16.2-009",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "What do reasoning tasks have that open-ended RLHF tasks lack, making a verifier possible?",
+  "options": [
+   "Many more human preference labels per prompt",
+   "Many problems have a checkable ground-truth answer",
+   "Shorter prompts that fit easily in the context window",
+   "A pretrained critic network that can grade each step"
+  ],
+  "answer_index": 1,
+  "explanation": "For reasoning, many problems have a checkable answer: 3 + 4 is 7, a function passes its tests or not, a proof type-checks or not. When the truth is checkable, there is no need to guess the reward with a network."
+ },
+ {
+  "id": "16.2-010",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "1. The problem with a learned reward",
+  "question": "Why can a verifiable reward not be hacked the way a learned reward can?",
+  "options": [
+   "It is regularized with a much stronger KL penalty to the reference",
+   "It is retrained every step on fresh samples to stay ahead of the policy",
+   "It gives partial credit for near answers, which removes any incentive to exploit it",
+   "It is not a proxy: it measures the actual correctness of the answer"
+  ],
+  "answer_index": 3,
+  "explanation": "A learned reward model is a proxy that can be gamed. An exact verifier checks the ground truth itself, so there is no proxy gap: the only way to score is to be correct. This holds as long as the verifier is exact and its parsing is sound."
+ },
+ {
+  "id": "16.2-011",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2. A verifier is a tiny function",
+  "question": "What is the type signature of a verifier in the llmre codebase?",
+  "options": [
+   "(problem, answer) -> {0.0, 1.0}",
+   "(prompt, logits) -> scalar reward tensor",
+   "(answer_a, answer_b) -> preference probability",
+   "(problem) -> correct answer string"
+  ],
+  "answer_index": 0,
+  "explanation": "A verifier takes a problem and an answer and returns 1.0 if correct, 0.0 if wrong. No network, no parameters, no training. A pairwise preference probability is what a preference/reward model handles."
+ },
+ {
+  "id": "16.2-012",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2. A verifier is a tiny function",
+  "question": "What type does an llmre verifier return, and how are these values used in the training loop?",
+  "options": [
+   "A torch scalar tensor with requires_grad=True, so gradients reach the verifier",
+   "A Python bool that the loop casts to an integer per prompt before the update",
+   "A Python float; the loop assembles many of them into a tensor",
+   "A numpy array of per-token rewards, one entry for each token of the answer"
+  ],
+  "answer_index": 2,
+  "explanation": "Verifiers return a plain Python float in {0.0, 1.0}. The training loop stacks many of these into a rewards tensor. They have no gradient: the reward is just a number that weights log-probs."
+ },
+ {
+  "id": "16.2-013",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2. A verifier is a tiny function",
+  "question": "How many trainable parameters does an llmre verifier have?",
+  "options": [
+   "As many as the policy, since it shares the policy's weights",
+   "Only a small scalar head trained on top of the frozen policy",
+   "None; it is a plain function with no network or training",
+   "One temperature parameter tuned jointly during RL training"
+  ],
+  "answer_index": 2,
+  "explanation": "A verifier is just a function that checks the answer. No network, no parameters, no training. That is the contrast with a learned reward model."
+ },
+ {
+  "id": "16.2-014",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "What do most math RLVR rewards amount to, at bottom?",
+  "options": [
+   "Extract the final answer and compare it to the gold answer",
+   "Score each intermediate step with a learned model",
+   "Measure the perplexity of the solution under the reference model",
+   "Count the reasoning steps in the solution"
+  ],
+  "answer_index": 0,
+  "explanation": "Most math RLVR rewards extract the final answer and compare it to a gold answer, which is what exact_match does. Scoring each step is a process reward, a different approach. Perplexity and step counts are not correctness checks."
+ },
+ {
+  "id": "16.2-015",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "In llmre's `exact_match(pred, gold)`, when is the numeric comparison path used?",
+  "options": [
+   "Always, with non-numeric strings first converted to their character codes",
+   "Only when gold contains a decimal point, so that integers stay strings",
+   "Only when pred is longer than gold, to tolerate extra trailing zeros",
+   "When both pred and gold parse as numbers; their float values are compared"
+  ],
+  "answer_index": 3,
+  "explanation": "exact_match first tries to parse both sides as numbers; if both succeed it compares their values, so \"3\", \"3.0\" and \"+3\" all match 3. Otherwise it falls back to comparing normalized strings."
+ },
+ {
+  "id": "16.2-016",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "Why does `exact_match` compare numeric values rather than raw strings when both sides are numbers?",
+  "options": [
+   "Float comparison is much faster than string comparison for long answers",
+   "A model emits strings, and you do not want \"7.0\" marked wrong against gold \"7\"",
+   "Python strings cannot be compared with == at all unless they are normalized",
+   "It lets the verifier award partial credit for answers that are numerically close"
+  ],
+  "answer_index": 1,
+  "explanation": "Model outputs are strings, and equivalent numbers can be written many ways. Comparing values means \"7.0\" matches gold \"7\". There is no partial credit: values must be exactly equal."
+ },
+ {
+  "id": "16.2-017",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "What does `exact_match`'s string path do via `_normalize`?",
+  "options": [
+   "Removes all punctuation and digits, then compares what is left",
+   "Trims whitespace, lowercases, and drops a leading plus sign",
+   "Converts the string to a float and rounds it to six decimal places",
+   "Sorts the characters so that anagrams of the gold answer also match"
+  ],
+  "answer_index": 1,
+  "explanation": "_normalize trims whitespace, lowercases, and drops a leading +, so \" Cat \" matches \"cat\". It does not strip all punctuation or sort characters, and converting to float is the numeric path."
+ },
+ {
+  "id": "16.2-018",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "What do exact_match(\"+7\", \"7\") and exact_match(\" Cat \", \"cat\") return?",
+  "options": [
+   "0.0 and 1.0",
+   "1.0 and 0.0",
+   "0.0 and 0.0",
+   "1.0 and 1.0"
+  ],
+  "answer_index": 3,
+  "explanation": "\"+7\" parses as the number 7, so the numeric path matches. \" Cat \" is not numeric, so the string path normalizes it to \"cat\", which matches. Both return 1.0."
+ },
+ {
+  "id": "16.2-019",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.1 exact_match — the outcome check",
+  "question": "Why does `exact_match` return a Python float rather than a tensor?",
+  "options": [
+   "Rewards are cheap scalars that the caller stacks into a tensor",
+   "Torch tensors cannot hold the exact values 0 and 1 in float32",
+   "Python floats carry gradients back so the verifier can be trained",
+   "The optimizer requires plain Python floats as losses, not tensors"
+  ],
+  "answer_index": 0,
+  "explanation": "Each verifier call grades one answer and returns a cheap scalar; the loop collects these into a reward tensor. Floats carry no gradient, and the verifier has nothing to train."
+ },
+ {
+  "id": "16.2-020",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "What makes `arithmetic_verifier` a self-contained verifiable reward?",
+  "options": [
+   "It looks up the correct answer in a stored dataset of labels keyed by the exact problem string",
+   "It asks a small learned reward model to grade the answer against the problem",
+   "It recomputes the true result from the problem string itself, so no labels are needed",
+   "It compares the answer to the frozen reference model's greedy output on the problem"
+  ],
+  "answer_index": 2,
+  "explanation": "arithmetic_verifier parses the two-operand expression, computes the truth, and defers to exact_match. Given only the problem and the model's answer, it regenerates the correct answer: no labels and no learned reward model. That is the essence of a verifiable reward."
+ },
+ {
+  "id": "16.2-021",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "Which operators does llmre's `arithmetic_verifier` accept?",
+  "options": [
+   "+, -, *, and /, with / meaning integer division",
+   "+ and - only",
+   "+, -, *, and x, with x meaning multiply",
+   "Any Python expression evaluated with eval"
+  ],
+  "answer_index": 2,
+  "explanation": "The regex accepts + - * x, with x treated as multiplication. It also allows optional whitespace and an optional trailing =. Division is not supported, and it does not use eval."
+ },
+ {
+  "id": "16.2-022",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "Which of these problem strings does `arithmetic_verifier` parse successfully?",
+  "options": [
+   "\"5 - 2 =\"",
+   "\"5 / 2\"",
+   "\"3 + 4 + 5\"",
+   "\"what is 3 + 4?\""
+  ],
+  "answer_index": 0,
+  "explanation": "The parser accepts a two-operand integer expression with + - * x, optional whitespace, and an optional trailing =, so \"5 - 2 =\" parses. Division, three operands, and surrounding words do not match the pattern."
+ },
+ {
+  "id": "16.2-023",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "What does `arithmetic_verifier` do when given a problem it cannot parse?",
+  "options": [
+   "It returns 0.0 silently",
+   "It returns 1.0 by default",
+   "It returns None to the loop",
+   "It raises ValueError"
+  ],
+  "answer_index": 3,
+  "explanation": "It raises ValueError on unparseable input, and a unit test checks this. A verifier that silently returned 0 for malformed input would hide bugs: you could not tell a wrong answer from a broken problem."
+ },
+ {
+  "id": "16.2-024",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "Why is it better for a verifier to raise on malformed input than to silently return 0?",
+  "options": [
+   "Raising is faster than computing and returning a reward value",
+   "Silently returning 0 would hide bugs in the problem strings or parser",
+   "Returning 0 for malformed input would give the policy a positive advantage",
+   "The optimizer cannot handle zero rewards and would produce NaN gradients"
+  ],
+  "answer_index": 1,
+  "explanation": "If malformed problems silently scored 0, a broken parser or bad dataset would look like the model getting answers wrong, hiding the bug. Raising fails loudly so it gets fixed. Zero rewards are normal and handled fine."
+ },
+ {
+  "id": "16.2-025",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "What does arithmetic_verifier(\"6 x 7\", \"42\") return?",
+  "options": [
+   "0.0, since the answer is a string and must be an int to match",
+   "1.0, since x means multiply and the answer \"42\" matches",
+   "ValueError, since x is not one of the accepted operators",
+   "0.0, since only the * symbol is treated as multiplication"
+  ],
+  "answer_index": 1,
+  "explanation": "x is accepted as multiplication, so the truth is 42. The answer is converted with str() and compared via exact_match, so the string \"42\" matches. String answers are fine."
+ },
+ {
+  "id": "16.2-026",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
+  "question": "How does a real math verifier differ from the toy `arithmetic_verifier`?",
+  "options": [
+   "It returns a continuous similarity score between 0 and 1 instead of a hard 0/1 correctness label",
+   "It is a learned neural network fine-tuned on graded solutions rather than a plain function",
+   "It needs no answer extraction at all, because models are trained to output bare numbers",
+   "Its parsing is far hairier (LaTeX, fractions, units, often a CAS), but the signal is still 0/1"
+  ],
+  "answer_index": 3,
+  "explanation": "Real verifiers normalize LaTeX, parse fractions and surds, handle plus-minus, units and equivalent forms, and often call a computer-algebra system for symbolic equality. The signal shape is still (problem, answer) -> 0/1. The parsing is where the engineering and the false-positive bugs live."
+ },
+ {
+  "id": "16.2-027",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3. The RLVR loop, end to end",
+  "question": "What two components does the RLVR training loop combine?",
+  "options": [
+   "A verifier for the reward and GRPO for the update",
+   "A learned reward model and PPO with a value critic",
+   "A verifier and supervised fine-tuning on all samples",
+   "A critic network and rejection sampling of the best"
+  ],
+  "answer_index": 0,
+  "explanation": "The RLVR loop in llmre/reasoning/rlvr.py assembles the verifier (reward) and GRPO (group-relative advantages plus clipped objective). Verifier plus SFT on accepted samples is rejection sampling, a different method."
+ },
+ {
+  "id": "16.2-028",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.1 A toy policy so the algorithm is unobscured",
+  "question": "In llmre's toy RLVR loop, what is the 'policy'?",
+  "options": [
+   "A small GPT that emits answer tokens one at a time",
+   "A lookup table holding the correct answer for each prompt",
+   "A table of logits: one row per prompt over a small answer space",
+   "A learned critic that predicts each answer's expected reward"
+  ],
+  "answer_index": 2,
+  "explanation": "To keep the algorithm visible, the toy policy is a (num_prompts, num_answers) logits tensor: a categorical distribution over answers per prompt. Wiring GRPO to a GPT emitting tokens is engineering, not new algorithm. It is not an answer table; it has to learn."
+ },
+ {
+  "id": "16.2-029",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.1 A toy policy so the algorithm is unobscured",
+  "question": "What are the shape, dtype, and device of the toy RLVR policy's logits?",
+  "options": [
+   "(num_answers,), int64, CPU",
+   "(num_prompts, group_size), float16, GPU",
+   "(num_prompts, num_answers), float32, CPU",
+   "(batch, seq_len, vocab), float32, GPU"
+  ],
+  "answer_index": 2,
+  "explanation": "logits = torch.zeros(num_prompts, num_answers, requires_grad=True) gives a float32 CPU tensor; row p is the answer distribution for problem p. group_size appears in the sampled tensor, not the logits."
+ },
+ {
+  "id": "16.2-030",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.1 A toy policy so the algorithm is unobscured",
+  "question": "Why does the toy RLVR policy start at chance accuracy?",
+  "options": [
+   "Its logits start at zero, so softmax is uniform over the answers",
+   "Its logits start random, so it guesses an arbitrary answer per prompt",
+   "Its verifier rejects every answer for the first few warm-up steps",
+   "Its learning rate starts at zero and warms up over the first steps"
+  ],
+  "answer_index": 0,
+  "explanation": "All-zero logits give a uniform softmax, so each answer has probability 1/num_answers. With the default 10-answer space, chance is about 0.1. Logits are zeros, not random."
+ },
+ {
+  "id": "16.2-031",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.1 A toy policy so the algorithm is unobscured",
+  "question": "If the toy categorical policy is swapped for a GPT that emits answer tokens, what changes in the RLVR loop?",
+  "options": [
+   "The whole loop must be redesigned around a learned critic that values each token",
+   "The verifier must become a learned model, since a GPT's outputs are free-form text",
+   "GRPO must be replaced with DPO, since token-level groups cannot be standardized",
+   "Only sampling and log-prob scoring change: generate tokens and sum their log-probs"
+  ],
+  "answer_index": 3,
+  "explanation": "The outer loop is unchanged. Sampling becomes generation, and the log-prob of an answer becomes the sum of its token log-probs. The verifier and GRPO stay the same."
+ },
+ {
+  "id": "16.2-032",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "How does the toy RLVR loop sample a group of answers for one prompt?",
+  "options": [
+   "It takes the top-G answers by logit value, so the group always holds the most likely ones",
+   "It softmaxes that prompt's logits and draws G answers with torch.multinomial, with replacement",
+   "It samples G distinct answers without replacement, so no answer appears twice in a group",
+   "It enumerates every answer in the space and weights each by its softmax probability"
+  ],
+  "answer_index": 1,
+  "explanation": "_sample_group softmaxes one prompt's logits and draws G indices with replacement. The stacked result is a (num_prompts, group_size) long tensor of indices. Top-G or without-replacement sampling would not be a Monte-Carlo estimate of the policy."
+ },
+ {
+  "id": "16.2-033",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "In the toy RLVR loop, what is the dtype and meaning of the `sampled` tensor?",
+  "options": [
+   "float log-probabilities of every answer, shape (num_prompts, num_answers)",
+   "long indices into the answer space, shape (num_prompts, group_size)",
+   "float 0/1 rewards from the verifier, shape (num_prompts, group_size)",
+   "bool masks marking the correct answers, shape (num_answers,) per prompt"
+  ],
+  "answer_index": 1,
+  "explanation": "`sampled` holds long indices into the answers list, one row per prompt and one column per group member. The verifier is called on answers[idx], the value, not the index. Rewards are a separate float tensor of the same shape."
+ },
+ {
+  "id": "16.2-034",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "In the toy RLVR loop, what is the verifier called on for each sampled entry?",
+  "options": [
+   "The problem and the sampled index idx, which it treats as the answer",
+   "The full logits row for that prompt, so it can grade the distribution",
+   "The log-probability of the sampled answer, thresholded at a cutoff",
+   "The problem and the sampled answer's value, answers[idx]"
+  ],
+  "answer_index": 3,
+  "explanation": "The loop calls verifier(problems[p], answers[sampled[p, g].item()]): the actual answer value, not its index. With answer space range(10) index and value coincide, but in general they differ."
+ },
+ {
+  "id": "16.2-035",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "What does the toy RLVR loop log to `history` at each step?",
+  "options": [
+   "The mean of the rewards tensor, i.e. the fraction correct this step",
+   "The scalar loss value, i.e. the negated GRPO objective for the step",
+   "The KL divergence of the policy to the frozen reference this step",
+   "The largest group-relative advantage in the batch for that step"
+  ],
+  "answer_index": 0,
+  "explanation": "history.append(rewards.mean().item()) records the fraction of all sampled answers that were correct this step. That is the correct-rate you watch climb. The loss is not logged there."
+ },
+ {
+  "id": "16.2-036",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "In the toy RLVR loop's update, why is `torch.gather(logp_all, 1, sampled)` used?",
+  "options": [
+   "To select the log-prob of the correct answer for each prompt, which the loss then pushes up",
+   "To sum the log-probs over every answer in the space, giving one total per prompt for the loss",
+   "To pick each sampled answer's log-prob, a (num_prompts, group_size) tensor matching the advantages",
+   "To pick the answer with the highest log-prob per prompt, which then becomes the group's baseline"
+  ],
+  "answer_index": 2,
+  "explanation": "logp_all is (num_prompts, num_answers). gather along dim 1 with the sampled indices picks the log-prob of each answer actually taken, aligned with the advantages. The policy gradient needs log-probs of the taken actions, not of the correct answer or all answers."
+ },
+ {
+  "id": "16.2-037",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "What is the large-LLM analogue of `torch.gather(logp_all, 1, sampled)` in the toy RLVR loop?",
+  "options": [
+   "Computing the attention scores between the prompt tokens and the generated answer tokens",
+   "Applying the KL penalty against the frozen reference model's token distribution",
+   "Reading off each generated token's log-prob, where the 'answers' are vocabulary tokens",
+   "Selecting the top-k vocabulary tokens to keep before sampling the next position"
+  ],
+  "answer_index": 2,
+  "explanation": "In a real LLM policy-gradient step you read the log-prob of the token actually generated at each position from the log-softmax over the vocabulary. That is the same gather idea, with tokens instead of answers."
+ },
+ {
+  "id": "16.2-038",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "Why does the toy RLVR loop pass `logp.detach()` as old_logprobs to `grpo_objective`?",
+  "options": [
+   "It makes the ratio exactly 1 (on-policy), so the step is the plain group-baselined gradient",
+   "It stops the verifier's reward from receiving any gradients through the clipped objective",
+   "It freezes a detached copy of the policy to act as the reference model for the KL penalty",
+   "It prevents the advantages from changing between the forward and backward passes"
+  ],
+  "answer_index": 0,
+  "explanation": "Using the current log-probs, detached, as the old log-probs gives ratio exp(logp - logp) = 1 while gradients still flow through the numerator. The objective is then the group-baselined policy gradient. Rewards have no gradients anyway, and no reference model is used in the toy."
+ },
+ {
+  "id": "16.2-039",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.2 The four steps, each mapped to 16.1",
+  "question": "In the toy RLVR loop, what optimizer and loss sign are used?",
+  "options": [
+   "SGD on the verifier's parameters, with loss = obj",
+   "Adam on the logits, with loss = obj so it goes down",
+   "No optimizer; logits are set directly to the best answer",
+   "Adam on the logits, with loss = -obj"
+  ],
+  "answer_index": 3,
+  "explanation": "opt = torch.optim.Adam([logits], lr=lr), and loss = -obj because the optimizer minimizes while we want to maximize the GRPO objective. Using loss = obj would make the policy worse. The verifier has no parameters."
+ },
+ {
+  "id": "16.2-040",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "In the default llmre RLVR run (four single-digit additions, 10-answer space, G = 8, 150 steps, seed 0), what are the initial and final correct-rates?",
+  "options": [
+   "About 0.5 initially and 0.9 finally",
+   "About 0.156 initially and 1.0 finally",
+   "0.0 initially and 0.5 finally",
+   "About 0.1 initially and 0.3 finally"
+  ],
+  "answer_index": 1,
+  "explanation": "The run starts at 0.15625, a hair above 1/10 chance, and by around step 30 samples the verifier-accepted answer essentially every time, ending at 1.0."
+ },
+ {
+  "id": "16.2-041",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "In the default toy RLVR run, roughly when does the policy reach a correct-rate of about 1.0?",
+  "options": [
+   "Around step 1",
+   "Around step 30",
+   "Around step 140",
+   "It never reaches 1.0"
+  ],
+  "answer_index": 1,
+  "explanation": "history shows about 0.156 at step 0, 0.75 at step 10, and 1.0 by step 30, staying there through step 149. Learning is fast because the toy problem is tiny."
+ },
+ {
+  "id": "16.2-042",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "How does the toy RLVR policy learn which answer is right?",
+  "options": [
+   "The answer key is fed to the optimizer as supervised cross-entropy targets each step",
+   "The verifier's gradient flows back into the logits, pointing toward the right answer",
+   "A small critic learns the correct answer and then distills it into the policy logits",
+   "Correct samples are rewarded more; only a yes/no checker is used, never an answer key"
+  ],
+  "answer_index": 3,
+  "explanation": "No answer key is ever handed to the optimizer. The verifier says yes or no on sampled answers, GRPO turns those into advantages, and correct samples are pushed up. The verifier has no gradient, and there is no critic."
+ },
+ {
+  "id": "16.2-043",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "What does the unit test in code/tests/test_reasoning_rl.py assert about the RLVR run?",
+  "options": [
+   "initial_correct_rate < 0.4, final_correct_rate > 0.9, and improvement > 0.5",
+   "final_correct_rate == 1.0 exactly at step 30, and initial rate == 0.15625",
+   "the loss decreases monotonically on every step and ends below a fixed bound",
+   "initial_correct_rate == 0.1 exactly, and every group has nonzero advantages"
+  ],
+  "answer_index": 0,
+  "explanation": "The test asserts a clear margin: starts below 0.4, ends above 0.9, improves by more than 0.5. It is reproducible from a fixed seed and holds across seeds. It does not require exact values or monotone loss."
+ },
+ {
+  "id": "16.2-044",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "What are the hardware requirements of the toy RLVR run?",
+  "options": [
+   "A single GPU with 24 GB of memory, about an hour",
+   "A multi-GPU cluster running for several days",
+   "CPU-only, under one second, a few MB of memory",
+   "A GPU with 8 GB of memory, about ten minutes"
+  ],
+  "answer_index": 2,
+  "explanation": "The toy runs on CPU in under a second with a few MB of memory and is reproducible from the seed. Real reasoning RLVR on a full policy needs many GPUs, but the algorithm is identical."
+ },
+ {
+  "id": "16.2-045",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "3.3 Watch the correct-rate climb",
+  "question": "Why does real reasoning RLVR need many GPUs even though the algorithm matches the toy?",
+  "options": [
+   "It must also train a critic as large as the policy, doubling the memory and the backward passes",
+   "Its verifier is a large neural network that must run on its own GPUs next to the policy",
+   "It samples G long completions per prompt, then runs policy fwd/bwd plus a reference forward",
+   "It must store every completion from the whole run in GPU memory for replay at later steps"
+  ],
+  "answer_index": 2,
+  "explanation": "Real RLVR samples a group of long completions per prompt, which is generation-bound, then runs the policy forward/backward and a frozen reference forward for the KL term, repeated over large batches. GRPO has no critic, and the verifier is a rule, not a network."
+ },
+ {
+  "id": "16.2-046",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "4. Why verifiable domains, and the honest caveats",
+  "question": "Where does RLVR not directly apply, and what must be used instead?",
+  "options": [
+   "Unverifiable tasks like essay quality; use a learned reward model or preference methods",
+   "Arithmetic tasks, where answers are too short; use a critic network to shape the reward",
+   "Code tasks, where tests are too slow to run; use offline rejection sampling only instead",
+   "Math proofs, where steps cannot be checked; use more pretraining on proof corpora instead"
+  ],
+  "answer_index": 0,
+  "explanation": "RLVR needs an automatic correctness check. Where none exists, such as essay quality or open-ended helpfulness, you are back to a learned reward model or preference methods from Module 15. Code and math are exactly where RLVR applies."
+ },
+ {
+  "id": "16.2-047",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "4. Why verifiable domains, and the honest caveats",
+  "question": "Which statement about DeepSeekMath and DeepSeek-R1 rewards is publicly documented?",
+  "options": [
+   "They use a learned process reward model to score every step during the reasoning RL stage",
+   "Their exact verifier internals, reward shaping, and data filtering are all fully published",
+   "They use paid human raters to score each sampled completion during the reasoning RL stage",
+   "They use rule-based rewards (correctness, plus format for R1), not a learned reward model"
+  ],
+  "answer_index": 3,
+  "explanation": "Both papers state that the reasoning RL stage uses rule-based rewards, answer correctness, plus format rules for R1, rather than a learned reward model. The precise verifier internals, shaping and filtering are mostly not public."
+ },
+ {
+  "id": "16.2-048",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "4. Why verifiable domains, and the honest caveats",
+  "question": "Which of these is reasonable industry practice for RLVR, rather than publicly documented fact or speculation?",
+  "options": [
+   "Using a specific frontier lab's exact reward-shaping recipe as the published standard",
+   "Using unit tests as the verifier for code and pairing verifiable rewards with GRPO",
+   "Avoiding any format reward entirely, since format rules always cause reward hacking",
+   "Training a value critic alongside the verifier to reduce variance in every RLVR run"
+  ],
+  "answer_index": 1,
+  "explanation": "Pairing a verifiable reward with GRPO, using unit tests as the code verifier, and combining an outcome reward with light format rewards are reasonable industry practice. Specific labs' exact recipes are not public."
+ },
+ {
+  "id": "16.2-049",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "4. Why verifiable domains, and the honest caveats",
+  "question": "What should you assume about a given lab's precise RLVR verifier internals and reward shaping?",
+  "options": [
+   "That they match DeepSeekMath's published verifier and shaping exactly",
+   "Little beyond 'the reward is rule-based and checks correctness'",
+   "That they quietly use a learned reward model behind the scenes anyway",
+   "That they are essentially identical to llmre's own exact_match function"
+  ],
+  "answer_index": 1,
+  "explanation": "The precise verifier internals, reward shaping and filtering any given lab uses are mostly not public. Do not assume a specific recipe beyond a rule-based correctness reward."
+ },
+ {
+  "id": "16.2-050",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "4. Why verifiable domains, and the honest caveats",
+  "question": "In DeepSeek-R1's reasoning RL, what makes up the reward?",
+  "options": [
+   "A learned reward model's score plus a KL penalty to the SFT reference",
+   "Human preference scores collected on each sampled completion in the group",
+   "A process reward model that scores each intermediate step of the chain",
+   "Answer correctness plus format rules, with no learned reward model"
+  ],
+  "answer_index": 3,
+  "explanation": "R1 uses pure RL from the base model with rule-based rewards: answer correctness plus format. No learned reward model is used in that stage."
+ },
+ {
+  "id": "16.2-051",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Exercise",
+  "question": "If the toy RLVR loop is given problems like \"12 + 7\" and \"34 + 5\" with answer space range(10), what happens to the correct-rate?",
+  "options": [
+   "It stays at 0.0, because the correct answers are outside the answer space",
+   "It climbs to 1.0, only more slowly than it does on single-digit problems",
+   "It climbs to about 0.5, since one of the two problems is still solvable",
+   "It oscillates randomly between 0 and 1 as the groups keep being resampled"
+  ],
+  "answer_index": 0,
+  "explanation": "19 and 39 are not in range(10), so no sampled answer is ever accepted. Every group is unanimously wrong, grpo_advantages returns all zeros, and the policy never moves. Neither problem is solvable within the space."
+ },
+ {
+  "id": "16.2-052",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Exercise",
+  "question": "What general lesson does an RLVR run with an unreachable correct answer teach?",
+  "options": [
+   "RLVR always needs a critic for hard problems",
+   "RLVR works better with a smaller answer space",
+   "RLVR can only teach answers the policy is capable of producing",
+   "RLVR can discover answers outside the policy's output space given enough steps"
+  ],
+  "answer_index": 2,
+  "explanation": "If the reward is never 1 for any reachable output, every group is unanimous and there is no signal. You must make a correct answer sampleable, e.g. answer_space=range(100). The real-world version: if a task is so hard the policy never stumbles onto a correct chain, verifiable RL has nothing to bootstrap from."
+ },
+ {
+  "id": "16.2-053",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Common mistakes",
+  "question": "In the RLVR group sampling, why is it fine that the same answer can appear several times in a group?",
+  "options": [
+   "Duplicates are removed before the group mean and standard deviation are computed",
+   "The verifier only scores the first occurrence and skips the repeats",
+   "The group is sampled with replacement, a Monte-Carlo estimate of the policy",
+   "Duplicates guarantee the group's reward standard deviation is non-zero"
+  ],
+  "answer_index": 2,
+  "explanation": "Sampling uses replacement=True, so repeats are expected; the group estimates the policy's distribution. Duplicates are not removed or ignored, and they do not guarantee non-zero std."
+ },
+ {
+  "id": "16.2-054",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Common mistakes",
+  "question": "Why should you not call .item() on a verifier's output in the RLVR loop?",
+  "options": [
+   "The verifier already returns a Python float, not a tensor",
+   "Because .item() detaches the gradient from the reward",
+   "Because .item() rounds the reward to an integer",
+   "Because .item() moves the value to the GPU"
+  ],
+  "answer_index": 0,
+  "explanation": "The verifier returns a Python float; .item() is a tensor method, so calling it on a float fails. The loop assembles floats into the rewards tensor. Rewards carry no gradient."
+ },
+ {
+  "id": "16.2-055",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Check yourself",
+  "question": "In the default toy RLVR run, why is the first-step correct-rate 0.156 rather than exactly 0.1?",
+  "options": [
+   "The verifier gives partial credit for answers within one of the true result",
+   "The logits are initialized slightly toward the correct answer for each prompt",
+   "One of the four problems has two answers that the verifier accepts as correct",
+   "The uniform policy is right with probability 0.1; 0.156 includes sampling noise"
+  ],
+  "answer_index": 3,
+  "explanation": "The policy starts uniform over 10 answers, so each sample is correct with probability about 0.1. The measured fraction over a finite set of groups (4 prompts × 8 samples) fluctuates, giving 0.156. The logits start at exactly zero."
+ },
+ {
+  "id": "16.2-056",
+  "chapter": "16.2",
+  "chapter_name": "RLVR & verifiable rewards",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-02.md",
+  "section": "Check yourself",
+  "question": "If the answer space is range(5) and the problem is \"6 + 3\", what happens during RLVR training?",
+  "options": [
+   "The policy learns to output 4, the closest reachable answer, and plateaus there",
+   "The correct-rate stays at 0, since 9 is unreachable and every advantage is 0",
+   "The verifier raises ValueError because the true answer lies outside the space",
+   "The correct-rate climbs slowly because exact_match accepts nearby answers too"
+  ],
+  "answer_index": 1,
+  "explanation": "6 + 3 = 9 is not in range(5), so no answer is ever verified correct. Every reward is 0, every group is unanimous with zero advantage, and nothing is learned. The problem parses fine, and exact_match gives no partial credit."
+ }
+]

@@ -1,0 +1,884 @@
+[
+  {
+    "id": "15.1-001",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In an RLHF pipeline, what role does the reward model play?",
+    "options": [
+      "It defines 'good' numerically; the policy is optimized to maximize its score",
+      "It generates the high-quality demonstrations that the SFT stage imitates token by token",
+      "It replaces the policy's tokenizer so each completion can be scored one token at a time",
+      "It is the frozen reference copy used only to compute the KL penalty during PPO updates"
+    ],
+    "answer_index": 0,
+    "explanation": "The reward model turns human preferences into a scalar score, and RL (e.g. PPO) then optimizes the policy to maximize that score. If the reward model encodes the wrong notion of quality, the policy will faithfully optimize the wrong thing. It does not produce demonstrations, and the KL reference model is a separate frozen copy of the SFT policy."
+  },
+  {
+    "id": "15.1-002",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is the Bradley-Terry reward-model loss relevant even to DPO, which trains no explicit reward model?",
+    "options": [
+      "DPO is derived from the Bradley-Terry preference loss, so it inherits that same foundation",
+      "DPO first trains a Bradley-Terry reward model, then distills it into the policy and discards it",
+      "DPO uses the Bradley-Terry loss only as an evaluation metric after training",
+      "DPO replaces Bradley-Terry with an absolute-score regression on human ratings"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO substitutes an implicit reward (a log-ratio of policy to reference probabilities) into the Bradley-Terry loss, so its objective is literally the Bradley-Terry negative log-likelihood. No separate reward model is ever trained. That is why understanding Bradley-Terry is the foundation for the whole preference-learning module."
+  },
+  {
+    "id": "15.1-003",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The causal story: imitation has a ceiling",
+    "question": "What is the structural blind spot of supervised fine-tuning (SFT) by imitation?",
+    "options": [
+      "It cannot learn to follow instructions at all, because next-token loss only continues text",
+      "It needs a separately trained reward model to label every demonstration with a scalar score",
+      "It only updates the final unembedding layer, so it cannot change the model's behavior much",
+      "Every demonstration counts as equally correct, so it never learns one answer beats another"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT's next-token cross-entropy only says 'make this exact response more likely'. It never compares two responses, so it can teach a way to answer but not a preference for a good answer over a mediocre one. SFT does teach instruction following; the gap is ranking, not instruction following."
+  },
+  {
+    "id": "15.1-004",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The causal story: imitation has a ceiling",
+    "question": "What capability does SFT on (prompt, ideal response) pairs give a pretrained language model?",
+    "options": [
+      "It makes the model rank two candidate answers by human preference",
+      "It guarantees the model's answers exceed the quality of the demonstrations",
+      "It makes the model answer instructions instead of merely continuing the text",
+      "It trains a scalar head that scores whole sequences"
+    ],
+    "answer_index": 2,
+    "explanation": "Imitation via next-token cross-entropy on demonstrations turns a text-continuer into an instruction follower, which is a real capability jump. But it cannot rank answers, and it can at best reach the quality of its demonstrations. A scalar scoring head belongs to the reward model, not SFT."
+  },
+  {
+    "id": "15.1-005",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The causal story: imitation has a ceiling",
+    "question": "Why are human labelers better used for comparisons than for writing gold responses?",
+    "options": [
+      "Comparisons need no prompt, so labelers can work much faster without reading any context",
+      "Judging which of two answers is better is far easier and more reliable than writing the ideal one",
+      "Writing gold responses leaks label information into the reward model's scalar head during training",
+      "Comparisons produce absolute scores that stay well calibrated across different labelers and over time"
+    ],
+    "answer_index": 1,
+    "explanation": "Writing an ideal explanation of, say, quantum tunneling for a child is hard, while deciding which of two explanations is better is easy. Humans are therefore far more reliable at comparisons. Comparisons still need the prompt for context, and they produce a direction rather than a calibrated absolute score."
+  },
+  {
+    "id": "15.1-006",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The causal story: imitation has a ceiling",
+    "question": "Why can preference optimization in principle surpass SFT in output quality?",
+    "options": [
+      "Preference optimization uses a larger learning rate, so it escapes SFT's local minimum and converges to a better optimum",
+      "Imitation is capped by its demonstrations, while ranking signals can push past them toward what humans prefer",
+      "Preference optimization trains on many more tokens per example than SFT, so it sees more of each good answer",
+      "SFT cannot use the chat template during training, so its outputs are always lower quality than preference-tuned ones"
+    ],
+    "answer_index": 1,
+    "explanation": "The best behavior may lie off the SFT data distribution. Imitation is capped by the demonstrations, but optimizing against a ranking signal can move the model past them toward responses humans prefer most. The advantage is about the signal (ranking vs imitation), not learning rates or token counts."
+  },
+  {
+    "id": "15.1-007",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Preference data: pairs, not scores",
+    "question": "Why are preference datasets collected as pairwise comparisons rather than absolute scores like 'rate 7.3/10'?",
+    "options": [
+      "Absolute scores cannot be stored in the standard JSON preference format, so pairs are used instead",
+      "Pairwise data lets the reward model skip reading the prompt, which halves the cost of each forward",
+      "Absolute scores would make the Bradley-Terry loss non-differentiable, so gradients could not flow",
+      "Humans are unreliable at absolute scores (calibration drifts) but reliable at saying A beats B"
+    ],
+    "answer_index": 3,
+    "explanation": "Labelers' numeric scales drift between people and over time, so absolute ratings are noisy. Comparisons are much more consistent, and the Bradley-Terry model only needs comparisons. Storage format and differentiability are not the reason."
+  },
+  {
+    "id": "15.1-008",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Preference data: pairs, not scores",
+    "question": "In a preference record (x, y_w, y_l), what do the three elements denote?",
+    "options": [
+      "x is the reward value, y_w the policy output, y_l the reference model output",
+      "x is the prompt, y_w the completion with higher length, y_l the shorter completion",
+      "x is the prompt, y_w the chosen (winning) completion, y_l the rejected (losing) completion",
+      "x is the label, y_w the importance weight of the pair, y_l the per-pair loss value"
+    ],
+    "answer_index": 2,
+    "explanation": "Each preference record is a triple: the prompt x (possibly with conversation history), the chosen completion y_w (w for win), and the rejected completion y_l (l for lose). A labeler saw both completions for the same prompt and marked y_w as better. Length plays no role in the definition."
+  },
+  {
+    "id": "15.1-009",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Preference data: pairs, not scores",
+    "question": "What information does a single pairwise preference label carry?",
+    "options": [
+      "An absolute quality score for each of the two completions, on a shared calibrated scale",
+      "Only a direction (which completion is better), not a magnitude of how much better",
+      "A per-token correctness mask marking which tokens of the chosen completion were right",
+      "The exact reward margin r_w - r_l that the reward model should output for that pair"
+    ],
+    "answer_index": 1,
+    "explanation": "The label is just 'y_w is better than y_l' — a direction, not a magnitude. The reward model must learn scalar rewards whose differences explain these directions. No absolute scores or target margins are provided."
+  },
+  {
+    "id": "15.1-010",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Preference data: pairs, not scores",
+    "question": "Which well-known datasets have exactly the (prompt, chosen, rejected) shape?",
+    "options": [
+      "Anthropic's HH-RLHF and OpenAI's InstructGPT preference data",
+      "ImageNet and CIFAR-10, the standard labeled image-classification sets",
+      "The Pile and C4, the large web-text pretraining corpora",
+      "SQuAD and Natural Questions, the extractive QA benchmarks"
+    ],
+    "answer_index": 0,
+    "explanation": "Anthropic's helpful/harmless HH-RLHF data and OpenAI's InstructGPT comparison data consist of thousands of (prompt, chosen, rejected) rows. The Pile and C4 are raw pretraining text, and SQuAD-style datasets are extractive QA with span labels, not preferences."
+  },
+  {
+    "id": "15.1-011",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Preference data: pairs, not scores",
+    "question": "Why must a reward function be written r(x, y) rather than r(y)?",
+    "options": [
+      "Because the reward model needs the prompt x to build its tokenizer vocabulary for each batch",
+      "Because scoring r(y) alone would require two forward passes per completion instead of one",
+      "A preference is always relative to a prompt; an answer is only 'good for this question'",
+      "Because the prompt x carries the label that tells the model which completion actually won"
+    ],
+    "answer_index": 2,
+    "explanation": "The two completions in a pair share the same prompt, and quality only makes sense in context: a great answer to one question is a bad answer to another. So the reward always conditions on both prompt and completion. The prompt does not carry the label; the ordering (chosen vs rejected) does."
+  },
+  {
+    "id": "15.1-012",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "What does the Bradley-Terry model say about the probability that y_w beats y_l?",
+    "options": [
+      "It is the ratio r(x, y_w) / r(x, y_l) of the two rewards, clipped to lie in [0, 1]",
+      "It is a hard step: 1 if r(x, y_w) > r(x, y_l) and 0 otherwise, with no in-between",
+      "It is the sigmoid (smooth and increasing) of the difference r(x, y_w) - r(x, y_l)",
+      "It is the softmax of the two rewards taken over the whole vocabulary at the last token"
+    ],
+    "answer_index": 2,
+    "explanation": "Bradley-Terry sets P(y_w > y_l | x) = sigmoid(r_w - r_l). A large positive margin makes the win nearly certain; equal rewards give 0.5, a coin flip. It is smooth, not a hard step, and it uses the difference, not the ratio, of rewards."
+  },
+  {
+    "id": "15.1-013",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "In the Bradley-Terry model, what is the logistic sigmoid and what is sigma(0)?",
+    "options": [
+      "sigma(z) = e^{z}/(1+e^{z})^2, mapping reals to (0,1), with sigma(0) = 0.25",
+      "sigma(z) = 1/(1+e^{-z}), mapping reals to (0,1), with sigma(0) = 0.5",
+      "sigma(z) = max(0, z), mapping reals to [0, infinity), with sigma(0) = 0",
+      "sigma(z) = tanh(z), mapping reals to (-1,1), with sigma(0) = 0"
+    ],
+    "answer_index": 1,
+    "explanation": "The logistic sigmoid is 1/(1+exp(-z)), the same function used in logistic regression. It maps any real margin into a probability in (0,1), and at zero margin it gives exactly 0.5. e^z/(1+e^z)^2 is the sigmoid's derivative, whose value at 0 is 0.25."
+  },
+  {
+    "id": "15.1-014",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "In P(y_w ≻ y_l | x), how is the symbol ≻ read?",
+    "options": [
+      "'is preferred to'",
+      "'is longer than'",
+      "'is generated after'",
+      "'is a prefix of'"
+    ],
+    "answer_index": 0,
+    "explanation": "The symbol ≻ denotes a preference relation: y_w ≻ y_l reads 'y_w is preferred to y_l'. The whole expression is the probability, given prompt x, that the chosen completion is preferred over the rejected one."
+  },
+  {
+    "id": "15.1-015",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "What is the 'reward margin' in the Bradley-Terry model, and what role does it play?",
+    "options": [
+      "r(x, y_w) + r(x, y_l); it normalizes the probability to sum to one",
+      "The gap between the reward and the KL penalty; it sets the learning rate",
+      "The absolute value of r(x, y_w); it decides whether the completion is accepted",
+      "r(x, y_w) - r(x, y_l); it is the only quantity the preference probability depends on"
+    ],
+    "answer_index": 3,
+    "explanation": "The margin is the chosen reward minus the rejected reward, and P(y_w ≻ y_l | x) = sigmoid(margin). Nothing else about the rewards enters the probability. That is why only differences, not absolute reward levels, are learned."
+  },
+  {
+    "id": "15.1-016",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "If a constant c is added to every reward (r → r + c), what happens to the Bradley-Terry probabilities?",
+    "options": [
+      "All probabilities shift toward 1 by an amount that grows in proportion to c",
+      "All probabilities are multiplied by e^c and then renormalized to sum to one",
+      "The loss becomes undefined unless c is zero, since sigmoid needs centered inputs",
+      "Nothing; every margin is unchanged, so every probability is unchanged"
+    ],
+    "answer_index": 3,
+    "explanation": "Adding c to both r_w and r_l cancels in r_w - r_l, and the probability depends only on that difference. Hence r and r + c give identical preferences and identical loss. The reward is therefore defined only up to an additive constant."
+  },
+  {
+    "id": "15.1-017",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "What does it mean that a Bradley-Terry reward is 'defined only up to an additive constant'?",
+    "options": [
+      "The reward is always shifted during training so that its mean over the dataset is exactly zero",
+      "Absolute reward values are meaningless; training only determines differences between rewards",
+      "The reward must be added to a fixed constant baseline before it can be used as a PPO signal",
+      "The reward head has a bias term that is frozen at its initial value throughout training"
+    ],
+    "answer_index": 1,
+    "explanation": "Because the loss depends only on margins, training can never pin down the absolute level of the reward — any shift gives the same loss. A reward of +4.2 alone is uninterpretable; only comparisons are meaningful. Nothing forces zero mean; that would be an additional normalization choice."
+  },
+  {
+    "id": "15.1-018",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "How is the reward-model training objective derived from the Bradley-Terry model?",
+    "options": [
+      "By maximum likelihood of the observed preferences, i.e. minimizing -E[log sigmoid(r_w - r_l)]",
+      "By regression: minimize the squared error between r_w and a human-assigned absolute 1-10 score",
+      "By maximizing r_w alone with gradient ascent, ignoring r_l since it carries no signal",
+      "By minimizing the KL divergence between the reward model's outputs and the SFT model's"
+    ],
+    "answer_index": 0,
+    "explanation": "Training chooses r to maximize the likelihood of the preferences actually observed. Taking the log and negating gives L_RM = -E[log sigmoid(r(x,y_w) - r(x,y_l))]. There are no human scores to regress on, and maximizing r_w alone would ignore the comparison."
+  },
+  {
+    "id": "15.1-019",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "The per-pair Bradley-Terry loss -log sigmoid(r_w - r_l) is equivalent to which familiar loss?",
+    "options": [
+      "Mean squared error between the two rewards, pushing r_w and r_l toward each other",
+      "Multiclass cross-entropy over the full vocabulary, computed at the last real token of y_w",
+      "Hinge loss max(0, 1 - (r_w - r_l)), with a fixed margin of one between the rewards",
+      "Binary cross-entropy with the reward margin as logit and the label always 'chosen wins'"
+    ],
+    "answer_index": 3,
+    "explanation": "Logistic regression's binary cross-entropy with logit z and positive label is -log sigmoid(z). Here z is the reward margin and the target is always 1 (chosen wins). It is smooth, unlike a hinge loss, and has nothing to do with vocabulary cross-entropy."
+  },
+  {
+    "id": "15.1-020",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "What is the Bradley-Terry loss when the reward margin is exactly zero?",
+    "options": [
+      "0, because the two rewards agree so there is nothing to correct",
+      "1, because sigmoid(0) = 1 and the loss equals that probability",
+      "log 2 ≈ 0.693, the maximum-uncertainty coin-flip value",
+      "Infinity, because sigmoid(0) = 0 and log(0) is undefined"
+    ],
+    "answer_index": 2,
+    "explanation": "At margin 0, sigmoid(0) = 0.5, so the loss is -log 0.5 = log 2 ≈ 0.693147. That corresponds to the model being completely unsure which completion wins. The loss is zero only in the limit of an infinitely large positive margin."
+  },
+  {
+    "id": "15.1-021",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "How does the Bradley-Terry loss -log sigmoid(r_w - r_l) behave as the margin grows?",
+    "options": [
+      "It is strictly decreasing and approaches 0 as the margin goes to +infinity",
+      "It is minimized at margin 0 and grows in both directions, like a squared error",
+      "It drops to exactly 0 once the margin is positive and stays constant after that",
+      "It increases with the margin, penalizing overconfident reward models"
+    ],
+    "answer_index": 0,
+    "explanation": "As the margin increases, sigmoid(margin) → 1 and -log of it → 0; e.g. margin 1 gives 0.313, margin 4 gives 0.018. So minimizing the loss pushes the chosen reward above the rejected one. It never becomes exactly constant, and it does not penalize large positive margins."
+  },
+  {
+    "id": "15.1-022",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "Two pairs have rewards (r_w, r_l) = (2.0, 1.0) and (1.5, 0.5). How do their Bradley-Terry losses compare?",
+    "options": [
+      "They are identical, since both have margin 1.0",
+      "The first is larger because its rewards are larger",
+      "The second is larger because its rejected reward is smaller",
+      "They cannot be compared without knowing the prompt"
+    ],
+    "answer_index": 0,
+    "explanation": "The Bradley-Terry loss depends only on r_w - r_l. Both pairs have margin 1.0, so both give sigmoid(1.0) = 0.731 and loss 0.313. Absolute reward levels play no role."
+  },
+  {
+    "id": "15.1-023",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "Why should the Bradley-Terry loss be computed as -F.logsigmoid(margin) rather than -torch.log(torch.sigmoid(margin))?",
+    "options": [
+      "logsigmoid is faster because it skips the backward pass and computes only the forward value",
+      "torch.sigmoid has no autograd support, so the loss would train nothing without the fused op",
+      "log(sigmoid(x)) gives a different mathematical value than logsigmoid(x), so results would be systematically biased",
+      "Large negative margins make sigmoid underflow to 0 so log gives -inf; logsigmoid is one stable kernel"
+    ],
+    "answer_index": 3,
+    "explanation": "Mathematically they are equal, but numerically sigmoid of a very negative number underflows to 0.0 and its log becomes -infinity. F.logsigmoid computes the result in one stable kernel using the softplus identity log(1+exp(.)) and never overflows. It still supports backprop normally."
+  },
+  {
+    "id": "15.1-024",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "The Bradley-Terry model",
+    "question": "Which identity does F.logsigmoid use internally to stay numerically stable?",
+    "options": [
+      "The identity log sigmoid(x) = x - x^2/2 (Taylor expansion)",
+      "Clamping sigmoid(x) to at least 1e-8 before taking the log",
+      "The softplus identity: log sigmoid(x) = -log(1 + exp(-x))",
+      "Computing sigmoid in float64 and casting back"
+    ],
+    "answer_index": 2,
+    "explanation": "log sigmoid(x) = -softplus(-x) = -log(1+exp(-x)), and softplus can be evaluated stably with standard tricks. This is the same reasoning as the stable log-softmax: avoid forming a probability that underflows and then taking its log. Clamping or upcasting are hacks, not what the kernel does."
+  },
+  {
+    "id": "15.1-025",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "Mechanically, how does a reward model differ from a GPT language model?",
+    "options": [
+      "It has no attention layers, only an MLP over the pooled embeddings",
+      "Its lm_head of shape (C → V) is replaced by a scalar head of shape (C → 1)",
+      "It uses a bidirectional encoder instead of causal self-attention",
+      "It adds a second vocabulary head that predicts special reward tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "A reward model is the same transformer backbone with its vocabulary head swapped for a linear head that outputs one number. That head reads one position's hidden state and outputs the reward for the whole sequence. The backbone, including causal attention, is unchanged."
+  },
+  {
+    "id": "15.1-026",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "At which position is the scalar reward read off the transformer's hidden states?",
+    "options": [
+      "At the first token of the prompt",
+      "At the last (real, non-pad) token",
+      "At the mean of all positions",
+      "At the first token of the completion"
+    ],
+    "answer_index": 1,
+    "explanation": "The reward summarizes the entire prompt+completion, so it is read at the final real token. This is the convention used by InstructGPT and HH-RLHF. Reading at a pad token or the first token would miss information or read garbage."
+  },
+  {
+    "id": "15.1-027",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "Why is the last token's hidden state the natural place to read a sequence-level reward in a causal transformer?",
+    "options": [
+      "The last token has the largest hidden-state norm, so the reward read there is numerically more stable",
+      "The last token is always the end-of-sequence token, which carries the preference label itself",
+      "Earlier tokens' hidden states are discarded after the forward pass, so only the last remains",
+      "With causal attention only the final token has attended over the entire prompt+completion"
+    ],
+    "answer_index": 3,
+    "explanation": "In causal attention each token attends only to itself and earlier tokens. Therefore only the final token's hidden state depends on every token of the sequence, making it the right place to pool into one score. Norms and EOS labels are not the reason."
+  },
+  {
+    "id": "15.1-028",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "Given backbone hidden state h_T in R^C at the last position, what is the reward model's output?",
+    "options": [
+      "r(x) = softmax(W h_T) with W in R^{V×C}",
+      "r(x) = ||h_T||_2, the norm of the final hidden state",
+      "r(x) = w^T h_T + b, with w in R^C and b a scalar",
+      "r(x) = sum over t of w^T h_t, summing over all positions"
+    ],
+    "answer_index": 2,
+    "explanation": "The scalar head is a single linear map: one dot product with a weight vector w plus a bias b, applied to the last hidden state. That is the entire reward model on top of the backbone. It does not use a vocabulary softmax or sum over positions."
+  },
+  {
+    "id": "15.1-029",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "For a reward model on a batch of token ids of shape (B, T), what are the shapes of the hidden states, the head output, and the final rewards?",
+    "options": [
+      "Hidden (B, C); head output (B, 1); rewards (B, T), one reward per token position",
+      "Hidden (B, T, C); head output (B, T, 1) squeezed to (B, T); rewards (B,)",
+      "Hidden (B, T, V); head output (B, T, V); rewards (B, V), one per vocabulary entry",
+      "Hidden (T, C); head output (T,); rewards a single scalar for the whole batch"
+    ],
+    "answer_index": 1,
+    "explanation": "Token ids are (B, T) int64; the backbone produces (B, T, C) float hidden states; nn.Linear(C, 1) gives (B, T, 1), squeezed to (B, T); then one position per row is picked, giving a (B,) vector of rewards — one float per sequence. V-sized outputs belong to the language-model head, not the reward head."
+  },
+  {
+    "id": "15.1-030",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "With right-padded batches of mixed lengths, how should the reward be gathered per sequence?",
+    "options": [
+      "Index each row at seq_lengths - 1, the last real token, instead of a blanket -1",
+      "Always index position -1, because padding tokens have zero hidden states and do not interfere",
+      "Average the scores over all positions including padding, so every token contributes equally",
+      "Index position 0 for every row, since padding is only on the right and position 0 is always real"
+    ],
+    "answer_index": 0,
+    "explanation": "With right padding, position -1 may be a pad token for shorter sequences, so the reward would be read at garbage. Gathering at seq_lengths - 1 per row reads the last real token. Pad hidden states are not zero, and position 0 sees only the first token."
+  },
+  {
+    "id": "15.1-031",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "In reward_from_hidden, what does the code scores[rows, idx] with rows = torch.arange(B) and idx = (seq_lengths - 1).clamp(min=0) compute?",
+    "options": [
+      "A (B, B) matrix holding every row's score at every other row's last index",
+      "The maximum score over each row's valid tokens, ignoring the padding positions",
+      "For each row b, the score at that row's last real token, giving a (B,) tensor",
+      "The score at position 0 for every row, with the clamp zeroing out empty sequences"
+    ],
+    "answer_index": 2,
+    "explanation": "Advanced indexing with paired index vectors picks one element per row: scores[b, idx[b]]. With idx = seq_lengths - 1, that is the last non-pad position, and the clamp prevents negative indices for empty sequences. Pairing two (B,) index tensors yields (B,), not (B, B)."
+  },
+  {
+    "id": "15.1-032",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "In the from-scratch RewardModel, what does 'backbone-agnostic' mean?",
+    "options": [
+      "It works without any hidden states at all, scoring the raw token ids with a lookup table",
+      "It automatically converts any model's vocabulary head into a scalar head at load time",
+      "It accepts any backbone returning (B, T, C) hidden states, or takes hidden states directly",
+      "It can only be used with the GPT-2 backbone from Module 6, whose hidden size it hard-codes"
+    ],
+    "answer_index": 2,
+    "explanation": "RewardModel only needs (B, T, C) hidden states: either from a provided backbone or passed in directly via reward_from_hidden (as in the unit tests with backbone=None). The scalar head and last-token gather are all it adds. It does not operate on raw ids alone."
+  },
+  {
+    "id": "15.1-033",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "What is a reward model, mechanically?",
+    "question": "What does one training step of a reward model on a preference pair consist of?",
+    "options": [
+      "Generate a completion from the reward model, score it, and update with a REINFORCE gradient",
+      "Forward chosen and rejected, compute -logsigmoid(r_w - r_l), backprop, optimizer step",
+      "Forward only the chosen completion and maximize its next-token likelihood, as in SFT",
+      "Compute the KL between chosen and rejected token distributions and minimize it with Adam"
+    ],
+    "answer_index": 1,
+    "explanation": "Reward-model training is ordinary supervised learning on pairs: two forwards (chosen and rejected), the Bradley-Terry loss on their reward margin, backward, and step. Over iterations the margin grows and the loss falls. No generation or RL is involved at this stage."
+  },
+  {
+    "id": "15.1-034",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Under the hood / cost",
+    "question": "How is a reward model usually initialized in practice?",
+    "options": [
+      "From the SFT model, so it already understands language and the chat format",
+      "From random weights, so the reward model does not inherit the SFT model's biases",
+      "From the pretrained base model's vocabulary head only, with a freshly initialized backbone",
+      "From a smaller distilled model, to save compute on the many reward forward passes"
+    ],
+    "answer_index": 0,
+    "explanation": "Starting from the SFT checkpoint means the backbone already understands language and the chat template; only the scalar head needs to be taught and the backbone lightly adapted to rank. This reuse is why the reward model and policy are usually the same size. Training from scratch would waste the existing capability."
+  },
+  {
+    "id": "15.1-035",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Under the hood / cost",
+    "question": "Why are the reward model and policy in RLHF usually the same size?",
+    "options": [
+      "PPO requires their parameter counts to match exactly to compute the KL",
+      "The reward model's scalar head must have as many weights as the policy's vocabulary head",
+      "Smaller reward models cannot represent the sigmoid function",
+      "Both are initialized from the same SFT model"
+    ],
+    "answer_index": 3,
+    "explanation": "The reward model is typically initialized from the SFT model, which is also the starting point of the policy, so they share the backbone architecture and size. Nothing in PPO's math requires equal sizes; it is a consequence of reuse."
+  },
+  {
+    "id": "15.1-036",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Under the hood / cost",
+    "question": "What is the compute cost of reward-model training per preference pair?",
+    "options": [
+      "One forward pass plus autoregressive generation of a new completion",
+      "One forward pass of the scalar head only, since the backbone is frozen",
+      "Four forward passes: policy, reference, reward, and value models",
+      "Two full forward passes (chosen and rejected), with no generation involved"
+    ],
+    "answer_index": 3,
+    "explanation": "Each reward evaluation is one full backbone forward, the same FLOPs as an SFT forward, and a pair needs two. There is no sampling, which makes reward-model training far cheaper than the PPO loop. Four models are the PPO setup, not reward-model training."
+  },
+  {
+    "id": "15.1-037",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Under the hood / cost",
+    "question": "How many parameters does the scalar reward head add to GPT-2 small (C = 768)?",
+    "options": [
+      "768 × 50257 ≈ 38.6M, the same size as the vocabulary head it replaces",
+      "769 (768 weights plus one bias), negligible next to the backbone's ~124M",
+      "About 124M, because the head duplicates the whole backbone and doubles the model",
+      "768 × 768 ≈ 590K, a full square projection followed by mean pooling"
+    ],
+    "answer_index": 1,
+    "explanation": "nn.Linear(768, 1) has 768 weights and 1 bias = 769 parameters. That is tiny compared with the 124M-parameter backbone. The vocabulary head (768 × 50257) is what gets thrown away."
+  },
+  {
+    "id": "15.1-038",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Under the hood / cost",
+    "question": "What hardware is recommended for training a 7B reward model from an SFT checkpoint, and can CPU be used?",
+    "options": [
+      "1× A100 40GB recommended; CPU only suffices for the tiny unit tests, not a useful model",
+      "8× H100 recommended; CPU is fine for a 7B reward model as long as LoRA adapters are used",
+      "A single 8GB consumer GPU is enough, and CPU runs reward-model training equally fast",
+      "No GPU is needed at all, because the scalar head adds only C + 1 trainable parameters"
+    ],
+    "answer_index": 0,
+    "explanation": "The hardware guidance is min 1× 24GB GPU for a ~1B backbone with LoRA and recommended 1× A100 40GB for a 7B backbone, taking a few hours over ~100k pairs. The from-scratch RewardModel tests run in milliseconds on CPU, but training a useful reward model on CPU is impractical. The head is tiny but the backbone forward passes are not."
+  },
+  {
+    "id": "15.1-039",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if a right-padded batch reads the reward with scores[:, -1]?",
+    "options": [
+      "The loss becomes negative, because pad tokens produce negative scores that flip the margin",
+      "The gradient flows only to the head's bias term, so the backbone never gets updated",
+      "Nothing; causal attention makes pad positions identical to the last real token's state",
+      "Shorter sequences have their reward read at a pad token instead of their last real token"
+    ],
+    "answer_index": 3,
+    "explanation": "With right padding, the final position of shorter rows is padding, so scores[:, -1] reads a meaningless value. Passing seq_lengths lets the code gather at the last real token. Pad positions are not equivalent to real tokens."
+  },
+  {
+    "id": "15.1-040",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why should one never threshold a Bradley-Terry reward model's absolute reward across different prompts?",
+    "options": [
+      "Absolute rewards are always negative after training, so any positive threshold is meaningless",
+      "Thresholding makes the reward non-differentiable, so PPO could no longer backprop through it",
+      "Only margins are trained; the absolute level is arbitrary and not comparable across prompts",
+      "Absolute rewards are only valid at the first token, not at the last real token of the reply"
+    ],
+    "answer_index": 2,
+    "explanation": "The reward is defined only up to an additive constant, and nothing in training ties the level for one prompt to another. A reward of +4.2 on its own carries no meaning. Comparisons within a prompt are what the model learned."
+  },
+  {
+    "id": "15.1-041",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why do reward models in RLHF need to be periodically refreshed?",
+    "options": [
+      "The improving policy produces completions unlike any the reward model saw (distribution shift)",
+      "Reward-model weights slowly decay numerically over time when they are stored in bfloat16",
+      "The Bradley-Terry loss diverges after one epoch, so the model must be retrained from scratch",
+      "The policy's tokenizer changes during PPO, so old reward models can no longer read its outputs"
+    ],
+    "answer_index": 0,
+    "explanation": "The reward model was trained on completions from earlier policies. As RLHF moves the policy, it generates outputs off that training distribution, where the reward model's scores are unreliable. Refreshing with new preference data on current-policy samples keeps the reward model relevant."
+  },
+  {
+    "id": "15.1-042",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Exercise",
+    "question": "What is 'preference accuracy' for a reward model?",
+    "options": [
+      "The fraction of pairs where the model already ranks chosen above rejected (r_w > r_l)",
+      "The average of sigmoid(r_w - r_l) over the dataset, i.e. the mean predicted win probability",
+      "The fraction of tokens where the reward model predicts the next token correctly",
+      "The correlation between the model's rewards and human absolute 1-10 quality ratings"
+    ],
+    "answer_index": 0,
+    "explanation": "Preference accuracy counts how often the margin is positive: (margin > 0).float().mean(). It only needs the sign of the margin, not the sigmoid. It is the standard metric reported next to the reward-model loss."
+  },
+  {
+    "id": "15.1-043",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Exercise",
+    "question": "What preference accuracy is typical at the start of reward-model training versus for a well-trained model on held-out human data?",
+    "options": [
+      "About 0.0 at the start; about 0.99 when well trained",
+      "About 0.5 at the start; about 0.95 when well trained",
+      "About 0.25 at the start; about 0.5 when well trained",
+      "About 0.5 at the start; about 0.65–0.75 when well trained"
+    ],
+    "answer_index": 3,
+    "explanation": "An untrained model ranks pairs at random, giving ~0.5. A good reward model reaches roughly 0.65–0.75 on held-out human preferences. Expecting ~0.95+ is unrealistic because human labelers themselves only agree about 70% of the time."
+  },
+  {
+    "id": "15.1-044",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Exercise",
+    "question": "Why is ~70% held-out accuracy close to the ceiling for a reward model trained on human preferences?",
+    "options": [
+      "The sigmoid saturates at 0.7 for typical margins, capping accuracy",
+      "The reward head has only C + 1 parameters, too few to fit the data better",
+      "Human labelers themselves only agree with each other about 70% of the time",
+      "Distribution shift always costs about 30% accuracy on held-out data"
+    ],
+    "answer_index": 2,
+    "explanation": "Preference labels are noisy: different humans disagree on roughly 30% of pairs. No model can consistently predict a label that humans themselves cannot agree on, so ~0.65–0.75 accuracy approaches the achievable limit. The sigmoid does not saturate at 0.7."
+  },
+  {
+    "id": "15.1-045",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A reward model's loss is stuck exactly at 0.6931 with non-zero gradients. What does this value indicate?",
+    "options": [
+      "The learning rate is too large, so the loss oscillates and its running mean sits at 0.6931",
+      "Every margin r_w - r_l is zero, since 0.6931 = log 2 = -log sigmoid(0)",
+      "The model perfectly separates every pair, and 0.6931 is the floor of the loss",
+      "The loss is being computed with torch.log instead of F.logsigmoid, which adds log 2"
+    ],
+    "answer_index": 1,
+    "explanation": "-log sigmoid(0) = log 2 ≈ 0.6931, so a loss pinned there means the chosen and rejected rewards are identical for every pair. The reward model cannot see any difference between the inputs. A perfect model would have loss near 0."
+  },
+  {
+    "id": "15.1-046",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "What bugs typically cause a reward-model loss pinned at exactly log 2?",
+    "options": [
+      "Using plain SGD instead of Adam, which cannot move the reward margin away from zero",
+      "Chosen and rejected inputs end up identical (same tensor twice, or both read at shared padding)",
+      "Initializing from the SFT checkpoint, whose language-model features cannot distinguish two completions",
+      "Reading the reward at the last real token instead of position 0, where the prompt begins"
+    ],
+    "answer_index": 1,
+    "explanation": "A margin of exactly zero for every pair means both rewards come from the same input: the same tensor passed twice, chosen/rejected swapped into the same variable, or the last-token index landing on a shared pad position. The fix is to check that reward_chosen and reward_rejected come from genuinely different inputs. Optimizer choice and SFT initialization would not produce exact zero margins."
+  },
+  {
+    "id": "15.1-047",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Research connection",
+    "question": "Which papers are core readings for the reward-modeling part of RLHF?",
+    "options": [
+      "Attention Is All You Need (Vaswani et al. 2017) and BERT (Devlin et al. 2019)",
+      "Chinchilla (Hoffmann et al. 2022) and Kaplan scaling laws (2020)",
+      "FlashAttention (Dao et al. 2022) and ZeRO (Rajbhandari et al. 2020)",
+      "InstructGPT (Ouyang et al. 2022) and Anthropic HH-RLHF (Bai et al. 2022)"
+    ],
+    "answer_index": 3,
+    "explanation": "InstructGPT's reward-model section defines the Bradley-Terry loss and the 'reward at the final token' convention, and Anthropic's HH-RLHF describes collecting helpful/harmless preference data at scale. The recommendation is to read the reward-modeling subsections closely and skim the RL details. The other pairs cover architecture, scaling, or systems."
+  },
+  {
+    "id": "15.1-048",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does the Bradley-Terry model fit pairwise labels naturally?",
+    "options": [
+      "It requires an absolute quality score per completion, which each labeled pair provides for both sides",
+      "It models the probability of each token in the chosen completion, conditioned on the prompt",
+      "It maps a pair of rewards to sigmoid(r_w - r_l), the exact event a comparison label supervises",
+      "It ignores the rejected completion entirely and only pushes up the chosen completion's score"
+    ],
+    "answer_index": 2,
+    "explanation": "Bradley-Terry needs only comparisons: P(y_w ≻ y_l) = sigmoid(r_w - r_l). A pairwise label 'y_w won' is exactly the event whose likelihood it models. It never needs absolute scores, and it uses both completions."
+  },
+  {
+    "id": "15.1-049",
+    "chapter": "15.1",
+    "chapter_name": "Bradley-Terry & the reward model",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-01.md",
+    "section": "Check yourself",
+    "question": "What does the scalar reward head of a reward model consist of?",
+    "options": [
+      "An nn.Linear(C, V) followed by a softmax over the vocabulary",
+      "An nn.Linear(C, 1) applied to the last real token's hidden state",
+      "A two-layer MLP applied to every token and summed",
+      "A learned embedding table indexed by the last token id"
+    ],
+    "answer_index": 1,
+    "explanation": "The head is a single linear map from the hidden dimension C to one output, applied at the last non-pad position. It turns the summary hidden state into a scalar reward. A C → V head with softmax is the language-model head that was removed."
+  }
+]

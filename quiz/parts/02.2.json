@@ -1,0 +1,1082 @@
+[
+  {
+    "id": "02.2-001",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In reverse-mode autodiff, backpropagation through a network is carried out as what kind of computation?",
+    "options": [
+      "A single large Jacobian matrix built for the whole network and then inverted",
+      "A sequence of Jacobian–vector products evaluated from the input forward",
+      "A sequence of vector–Jacobian products evaluated right to left through the network",
+      "A finite-difference estimate computed separately for each parameter"
+    ],
+    "answer_index": 2,
+    "explanation": "Backprop is the chain rule applied to the chain of vector→vector layers, done as successive VJPs from the loss back toward the input, so it never builds or stores a giant Jacobian. Jacobian–vector products are forward mode. Finite differences need one pass per parameter."
+  },
+  {
+    "id": "02.2-002",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Understanding vector–Jacobian products explains which two facts about loss.backward()?",
+    "options": [
+      "Why it is cheap enough for billion-parameter models, and why the loss is a scalar",
+      "Why it must run on a GPU for large models, and why it requires float64 precision",
+      "Why it is exact only for linear models, and why it needs a batch size of one",
+      "Why it overwrites .grad on each call, and why it never needs cached activations"
+    ],
+    "answer_index": 0,
+    "explanation": "VJPs carry only a vector backward, which makes backprop cheap, and that works because a scalar loss gives a length-1 seed. Backward does not require GPUs or float64, it accumulates rather than overwrites .grad, and it does need cached activations."
+  },
+  {
+    "id": "02.2-003",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "1. Intuition: layers are vector→vector, the loss is the one scalar",
+    "question": "In a typical neural network, which quantity is a single scalar?",
+    "options": [
+      "Only the loss at the very end",
+      "Every layer's input activation",
+      "Every layer's output activation",
+      "Each weight matrix after training"
+    ],
+    "answer_index": 0,
+    "explanation": "Layers map vectors to vectors (n activations in, m out); stacking them gives a composition of vector→vector functions. Only the loss at the end is a scalar, because training needs one number to push down."
+  },
+  {
+    "id": "02.2-004",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "1. Intuition: layers are vector→vector, the loss is the one scalar",
+    "question": "For a vector→vector layer, what replaces the single-number derivative of the scalar chain rule?",
+    "options": [
+      "A scalar equal to the determinant of the layer's weights",
+      "A single number equal to the average partial derivative",
+      "A whole matrix of partial derivatives, the Jacobian",
+      "A vector holding only the diagonal partial derivatives"
+    ],
+    "answer_index": 2,
+    "explanation": "When a step maps n inputs to m outputs, its derivative is the m×n matrix of all partials, the Jacobian. Averaging or keeping only the diagonal would lose information, and the determinant is unrelated."
+  },
+  {
+    "id": "02.2-005",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "1. Intuition: layers are vector→vector, the loss is the one scalar",
+    "question": "What is the central trick of reverse-mode autodiff with respect to layer Jacobians?",
+    "options": [
+      "Approximating each Jacobian with its diagonal, which is exact for elementwise layers",
+      "Materializing every layer's Jacobian and multiplying them all together at the very end",
+      "Applying the chain rule through the chain without materializing the Jacobians",
+      "Skipping the Jacobians of layers that have no parameters, since they need no gradient"
+    ],
+    "answer_index": 2,
+    "explanation": "Reverse mode applies the chain rule using vector–Jacobian products, so the Jacobians never need to exist in memory. It is exact, not a diagonal approximation, and parameter-free layers still need their VJPs for gradients to flow through them."
+  },
+  {
+    "id": "02.2-006",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "2. Mathematics: the Jacobian and its shape",
+    "question": "For f: R^n → R^m, what does the Jacobian entry J_ij represent?",
+    "options": [
+      "∂x_j/∂f_i, the partial of input j with respect to output i",
+      "f_i · x_j, the product of output i and input j",
+      "∂f_j/∂x_i, the partial of output j with respect to input i",
+      "∂f_i/∂x_j, the partial of output i with respect to input j"
+    ],
+    "answer_index": 3,
+    "explanation": "J_ij = ∂f_i/∂x_j: rows index outputs, columns index inputs. Swapping indices transposes the matrix, which is the most common orientation mistake. Inverse partials or products of values are not Jacobian entries."
+  },
+  {
+    "id": "02.2-007",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "2. Mathematics: the Jacobian and its shape",
+    "question": "What is the shape of the Jacobian of f: R^n → R^m?",
+    "options": [
+      "(n, m): inputs by outputs",
+      "(n, n): inputs by inputs",
+      "(m, n): outputs by inputs",
+      "(m, m): outputs by outputs"
+    ],
+    "answer_index": 2,
+    "explanation": "The Jacobian is (outputs, inputs) = (m, n). Saying this orientation out loud every time is most of the battle. Square shapes only arise when m = n."
+  },
+  {
+    "id": "02.2-008",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "2. Mathematics: the Jacobian and its shape",
+    "question": "In the Jacobian of f: R^n → R^m, what is row i?",
+    "options": [
+      "The value of output f_i at every input coordinate",
+      "The sum of all outputs' partials with respect to input x_i",
+      "The gradient of all outputs with respect to the single input x_i",
+      "The gradient of the single output f_i with respect to all inputs"
+    ],
+    "answer_index": 3,
+    "explanation": "Row i contains ∂f_i/∂x_1, ..., ∂f_i/∂x_n, which is the gradient of output f_i. Column j (not row i) collects all outputs' partials with respect to one input."
+  },
+  {
+    "id": "02.2-009",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "2. Mathematics: the Jacobian and its shape",
+    "question": "Which relation explains why the Jacobian of f: R^n → R^m must have shape (m, n)?",
+    "options": [
+      "J·J^T must be the identity matrix of size n, which forces J to be (m, n)",
+      "J must be square so that it can be inverted to map Δf back to Δx",
+      "Δf ≈ J·Δx, and (m,n)×(n,1) = (m,1) is the only shape that type-checks",
+      "Δx ≈ J·Δf, and (n,m)×(m,1) = (n,1) is the product that must type-check"
+    ],
+    "answer_index": 2,
+    "explanation": "The Jacobian linearly maps a small input change to the resulting output change, Δf ≈ JΔx. Δx is (n,1) and Δf is (m,1), so J must be (m,n). It need not be square or invertible."
+  },
+  {
+    "id": "02.2-010",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "2. Mathematics: the Jacobian and its shape",
+    "question": "What is the Jacobian of a scalar-valued function f: R^n → R (m = 1)?",
+    "options": [
+      "A single row: the gradient ∇f laid on its side",
+      "An n×n identity matrix, one entry per input pair",
+      "A single number equal to the sum of the partials",
+      "A single column of all ones, one per input x_i"
+    ],
+    "answer_index": 0,
+    "explanation": "With one output the Jacobian is (1, n), a single row of partials, which is exactly the gradient as a row vector. So the gradient is the special case of the Jacobian for scalar-valued functions."
+  },
+  {
+    "id": "02.2-011",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "3. Numerical example: a 3×2 Jacobian",
+    "question": "For f(a_1, a_2) = [a_1^2, a_1·a_2, a_2^2], what is the Jacobian in terms of a_1, a_2?",
+    "options": [
+      "[[a_1^2, 0], [a_1·a_2, 0], [0, a_2^2]]",
+      "[[2a_1, 0], [a_2, a_1], [0, 2a_2]]",
+      "[[2a_1, a_2, 0], [0, a_1, 2a_2]]",
+      "[[2a_1, 0], [a_1, a_2], [0, 2a_2]]"
+    ],
+    "answer_index": 1,
+    "explanation": "Three outputs, two inputs, so J is (3, 2). Row 1: ∂(a_1^2) = [2a_1, 0]; row 2: ∂(a_1a_2) = [a_2, a_1]; row 3: [0, 2a_2]. The (2, 3) option is the transpose, and the middle-row swap gets ∂(a_1a_2)/∂a_1 = a_2 wrong."
+  },
+  {
+    "id": "02.2-012",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "3. Numerical example: a 3×2 Jacobian",
+    "question": "In the Jacobian of f(a_1, a_2) = [a_1^2, a_1·a_2, a_2^2], why is the first row's second entry 0?",
+    "options": [
+      "Because a_2 is held at zero when differentiating",
+      "Output a_1^2 does not depend on a_2 at all",
+      "Because the Jacobian is always lower-triangular",
+      "Because a_1 and a_2 are equal at the evaluation point"
+    ],
+    "answer_index": 1,
+    "explanation": "a_1^2 ignores a_2, so ∂(a_1^2)/∂a_2 = 0 at every point. Holding a_2 constant is not the same as setting it to zero, and Jacobians are not structurally triangular."
+  },
+  {
+    "id": "02.2-013",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "3. Numerical example: a 3×2 Jacobian",
+    "question": "How many entries does the Jacobian of f: R^n → R^m have?",
+    "options": [
+      "m·n",
+      "max(m, n)",
+      "m^2·n",
+      "m + n"
+    ],
+    "answer_index": 0,
+    "explanation": "The Jacobian has one partial for every (output, input) pair, so m·n entries; e.g. 3×2 = 6. This count grows fast for real layers, which is why reverse mode avoids forming it."
+  },
+  {
+    "id": "02.2-014",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "4. The chain rule as a product of Jacobians",
+    "question": "For a composition x → y → z of vector→vector maps, how is the chain rule written?",
+    "options": [
+      "J_{z/x} = J_{z/y} ⊙ J_{y/x}, an elementwise product of the two Jacobians",
+      "J_{z/x} = J_{y/x} · J_{z/y}, since matrix products of Jacobians commute",
+      "J_{z/x} = J_{z/y} + J_{y/x}, a sum of the Jacobians of the two stages",
+      "J_{z/x} = J_{z/y} · J_{y/x}, a matrix product where order matters"
+    ],
+    "answer_index": 3,
+    "explanation": "The scalar product dz/dy·dy/dx becomes a matrix product of Jacobians, with the later stage on the left. Matrix multiplication does not commute, so order matters. Sums and elementwise products are not the chain rule."
+  },
+  {
+    "id": "02.2-015",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "4. The chain rule as a product of Jacobians",
+    "question": "In the Jacobian chain for a deep network ending in a scalar loss, what is the shape of the leftmost factor J_{L/L_k}?",
+    "options": [
+      "(1, d_k), because the loss is one scalar",
+      "(d_k, d_k), because layers are square",
+      "(d_k, 1), because gradients are column vectors",
+      "(d_k, d_0), because it spans the whole network"
+    ],
+    "answer_index": 0,
+    "explanation": "The leftmost Jacobian is of the scalar loss with respect to the last layer's d_k outputs, so it has 1 row and d_k columns. That row-vector shape is what makes reverse mode cheap."
+  },
+  {
+    "id": "02.2-016",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "Evaluating the Jacobian-chain product left to right versus right to left gives what result, and at what cost?",
+    "options": [
+      "Different answers, but the same computational cost",
+      "Different answers and different costs, so only one order is correct",
+      "The identical answer at exactly the same cost",
+      "The identical answer by associativity, but wildly different cost"
+    ],
+    "answer_index": 3,
+    "explanation": "Matrix multiplication is associative, so either order yields the same gradient. The cost differs hugely: right to left propagates full matrices, while left to right from a scalar loss carries only a row vector."
+  },
+  {
+    "id": "02.2-017",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "When the Jacobian chain is multiplied right to left (starting from the first layer's Jacobian), what is propagated?",
+    "options": [
+      "Only the diagonal entries of each Jacobian, multiplied together elementwise",
+      "A single scalar equal to the loss, rescaled at every layer it passes through",
+      "Full matrices, effectively building a Jacobian per input",
+      "A single row vector of length d_k, the same object reverse mode carries"
+    ],
+    "answer_index": 2,
+    "explanation": "Starting from the (d_1, d_0) Jacobian and multiplying onward keeps full matrices as intermediates, which is forward mode's cost profile here. Carrying a row vector is what happens in the left-to-right (reverse) order."
+  },
+  {
+    "id": "02.2-018",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "In reverse mode, what is the shape after multiplying a (1, d_k) row vector by a (d_k, d_{k−1}) Jacobian?",
+    "options": [
+      "(1, d_{k−1}), still a row vector",
+      "(d_{k−1}, 1), now a column vector",
+      "(d_k, d_{k−1}), a full matrix",
+      "(1, d_k), unchanged in shape"
+    ],
+    "answer_index": 0,
+    "explanation": "(1, d_k)×(d_k, d_{k−1}) = (1, d_{k−1}). Every step in reverse mode keeps a row vector; you are only ever carrying a vector, never a matrix."
+  },
+  {
+    "id": "02.2-019",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "What is a vector–Jacobian product (VJP)?",
+    "options": [
+      "A Jacobian J times a column vector v, giving J v",
+      "A row vector v^T times a Jacobian J, giving another row vector v^T J",
+      "The elementwise product of a vector with the Jacobian's diagonal",
+      "The outer product of a vector with itself, giving a matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "A VJP is v^T J, whose j-th entry is Σ_i v_i ∂f_i/∂x_j. J v is a Jacobian–vector product, used by forward mode. Diagonal and outer products are different operations."
+  },
+  {
+    "id": "02.2-020",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "What is the j-th entry of the vector–Jacobian product v^T J for f: R^n → R^m?",
+    "options": [
+      "Π_i v_i · ∂f_i/∂x_j, a product over the outputs i",
+      "Σ_j v_j · ∂f_i/∂x_j, summed over the inputs j",
+      "Σ_i v_i · ∂f_i/∂x_j, summed over the outputs i",
+      "v_j · ∂f_j/∂x_j, using only the diagonal entry"
+    ],
+    "answer_index": 2,
+    "explanation": "Left-multiplying J by v^T weights each row (output) by v_i and sums down a column, giving Σ_i v_i ∂f_i/∂x_j for input j. Summing over inputs would be J v. Only-diagonal and product forms are wrong."
+  },
+  {
+    "id": "02.2-021",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "In reverse-mode autodiff, what does each op need to know how to compute?",
+    "options": [
+      "How to build its full Jacobian matrix explicitly, so the chain can be multiplied out",
+      "How to compute its output's value for every possible input, stored as a lookup table",
+      "How to estimate its own derivative by finite differences around the cached input",
+      "How to map the loss gradient wrt its output into the loss gradient wrt its input"
+    ],
+    "answer_index": 3,
+    "explanation": "Each op only needs its VJP: given ∂L/∂(output), produce ∂L/∂(input). That map is the VJP itself, so no full Jacobian is ever built. Finite differences are not used in autodiff."
+  },
+  {
+    "id": "02.2-022",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "5. Why reverse mode computes VJPs, not Jacobians",
+    "question": "In reverse mode for a scalar loss, what seed vector does the backward pass start with?",
+    "options": [
+      "v equal to the vector of parameters",
+      "v equal to the loss value",
+      "v = [0]",
+      "v = [1]"
+    ],
+    "answer_index": 3,
+    "explanation": "The backward pass seeds v = [1], the loss's sensitivity to itself, then threads a vector through the graph right to left. Seeding 0 gives all-zero gradients, and using the loss value would scale gradients incorrectly."
+  },
+  {
+    "id": "02.2-023",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Why forming J would be ruinous",
+    "question": "How many numbers is the Jacobian of a single 2048 → 2048 linear layer for one example?",
+    "options": [
+      "About 2,048, one per output unit",
+      "About 8.4 billion",
+      "About 4.2 million",
+      "About 4,096, one per input and output"
+    ],
+    "answer_index": 2,
+    "explanation": "2048 × 2048 ≈ 4.2 million entries, for one layer and one example. Multiply by dozens of layers and storing Jacobians becomes hopeless. 4,096 is 2048 + 2048, not their product."
+  },
+  {
+    "id": "02.2-024",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Why forming J would be ruinous",
+    "question": "For a 2048 → 2048 layer, what does the VJP require compared with forming the Jacobian?",
+    "options": [
+      "A 2048×2048 matrix in and a 2048×2048 matrix out, the full Jacobian each time",
+      "A 2048-vector in and a 2048-vector out — kilobytes, not megabytes",
+      "A 4.2-million-entry vector in and a 2048-vector out, the flattened Jacobian",
+      "A single scalar in and a single scalar out, the loss value at that layer"
+    ],
+    "answer_index": 1,
+    "explanation": "The VJP takes the incoming 2048-vector gradient and produces another 2048-vector, the same gradient the Jacobian would give, without the Jacobian ever existing in memory. This is what makes training possible, not a minor optimization."
+  },
+  {
+    "id": "02.2-025",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "6. Numerical example: a VJP by hand",
+    "question": "For J = [[4, 0], [3, 2], [0, 6]] and v = [1, 1, 1], what is the VJP v^T J?",
+    "options": [
+      "[4, 6]",
+      "[7, 8]",
+      "[7, 8, 6]",
+      "[4, 5, 6]"
+    ],
+    "answer_index": 1,
+    "explanation": "v^T J sums each column weighted by v: [4+3+0, 0+2+6] = [7, 8]. The result is (1,3)×(3,2) = (1,2), one gradient number per input, so a length-3 result is impossible."
+  },
+  {
+    "id": "02.2-026",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "6. Numerical example: a VJP by hand",
+    "question": "In a VJP v^T J for f: R^n → R^m, what does choosing v = [1, 1, ..., 1] correspond to?",
+    "options": [
+      "A loss equal to the mean of the inputs, (a_1 + ... + a_n)/n",
+      "A loss equal to the largest output, max(f_1, ..., f_m)",
+      "A loss equal to the sum of all outputs, f_1 + ... + f_m",
+      "A loss equal to the product of all outputs, f_1 · f_2 · ... · f_m"
+    ],
+    "answer_index": 2,
+    "explanation": "v_i is how much the loss increases per unit of output i; all ones means L = Σ f_i. For f = [a_1^2, a_1a_2, a_2^2] at (2,3), this gives ∂L/∂a = [2a_1 + a_2, a_1 + 2a_2] = [7, 8]."
+  },
+  {
+    "id": "02.2-027",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "6. Numerical example: a VJP by hand",
+    "question": "For J = [[4, 0], [3, 2], [0, 6]], what is the VJP with seed v = [1, 0, 2]?",
+    "options": [
+      "[8, 12]",
+      "[7, 8]",
+      "[4, 12]",
+      "[4, 6]"
+    ],
+    "answer_index": 2,
+    "explanation": "v^T J = [1·4 + 0·3 + 2·0, 1·0 + 0·2 + 2·6] = [4, 12]. This corresponds to the loss f_1 + 2f_3. A different seed selects a different weighted combination of outputs."
+  },
+  {
+    "id": "02.2-028",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "6. Numerical example: a VJP by hand",
+    "question": "What does the VJP check for L = a_1^2 + a_1·a_2 + a_2^2 demonstrate about the Jacobian?",
+    "options": [
+      "The Jacobian equals the gradient for any vector-valued function, so they are interchangeable",
+      "The gradient comes out right using only J's action on v, never J as a stored object",
+      "The Jacobian must be stored as an explicit matrix to get the correct gradient",
+      "The VJP only approximates the gradient for nonlinear functions like a_1·a_2"
+    ],
+    "answer_index": 1,
+    "explanation": "Differentiating L directly gives [2a_1 + a_2, a_1 + 2a_2] = [7, 8], matching v^T J with v = [1,1,1]. So we never needed J as an object, only its effect on v. The VJP is exact, not an approximation."
+  },
+  {
+    "id": "02.2-029",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "In a computational graph as described for autodiff, what are nodes and edges?",
+    "options": [
+      "Nodes are layers; edges are weight matrices",
+      "Nodes are operations; edges are tensors flowing between ops",
+      "Nodes are tensors; edges are operations applied to them",
+      "Nodes are parameters; edges are their gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "The computational graph is a DAG whose nodes are operations (+, *, matmul, tanh, softmax) and whose edges are tensors from one op's output into the next op's input. Swapping these roles is a common confusion."
+  },
+  {
+    "id": "02.2-030",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "What kind of graph is the computational graph that autodiff records?",
+    "options": [
+      "A directed acyclic graph (DAG)",
+      "A tree in which every tensor is used exactly once",
+      "An undirected graph with cycles",
+      "A complete graph connecting every tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "The graph is directed (data flows from inputs to outputs) and acyclic (no op depends on its own output). It is not a tree: a tensor can feed several ops (fan-out), as a_1 does in L = a_1^2 + a_1a_2 + a_2^2."
+  },
+  {
+    "id": "02.2-031",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "In the computational graph for training, what are the leaves and the root?",
+    "options": [
+      "Leaves are the gradients of each op; the root is the parameter with the most entries",
+      "Leaves are intermediate activations; the root is the optimizer that consumes them",
+      "Leaves are inputs and parameters (requires_grad=True); the root is the scalar loss",
+      "Leaves are the loss and the labels; the root is the first layer's input batch"
+    ],
+    "answer_index": 2,
+    "explanation": "Leaf nodes are the inputs and parameters, and the root is the scalar loss. Building the graph is the forward pass; walking it from the root toward the leaves, applying each op's VJP, is the backward pass."
+  },
+  {
+    "id": "02.2-032",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "What do the forward pass and the backward pass correspond to in terms of the computational graph?",
+    "options": [
+      "Both passes build new graphs, which autograd merges into one at the end of the step",
+      "Forward builds the graph; backward walks it from the loss to the leaves via VJPs",
+      "Forward walks an existing graph backward; backward then builds it from the leaves",
+      "Forward deletes the previous graph; backward rebuilds it from the cached values"
+    ],
+    "answer_index": 1,
+    "explanation": "Executing the forward computation is what records the graph. The backward pass then sweeps from the scalar loss toward the leaves, each op contributing its VJP to its inputs' gradients."
+  },
+  {
+    "id": "02.2-033",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "If a tensor a_1 feeds three different ops on the way to the loss, how is its gradient formed?",
+    "options": [
+      "As the product of the three contributions, one per path to the loss",
+      "As only the largest of the three contributions, since it dominates",
+      "As the sum of the gradient contributions arriving along all three edges",
+      "As the contribution from the last op executed, overwriting the rest"
+    ],
+    "answer_index": 2,
+    "explanation": "The chain rule sums contributions over every path from a tensor to the loss. For L = a_1^2 + a_1a_2 + a_2^2: 2a_1 + a_2 + 0. Overwriting would discard paths and give the wrong gradient."
+  },
+  {
+    "id": "02.2-034",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "Why does PyTorch accumulate into .grad rather than overwrite it?",
+    "options": [
+      "To keep a running history of every previous gradient, which momentum optimizers read",
+      "Fan-in: a tensor used by several ops must receive the sum of all their contributions",
+      "Because overwriting a tensor in place is slower on GPUs than adding into it",
+      "To average gradients across epochs automatically, smoothing out noisy batches"
+    ],
+    "answer_index": 1,
+    "explanation": "Gradient contributions from multiple paths must be summed, so autograd adds into .grad. A consequence is that you must zero gradients between optimizer steps, or gradients from earlier steps leak in. It is not averaging or a momentum history."
+  },
+  {
+    "id": "02.2-035",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "7. The computational graph: nodes and edges",
+    "question": "What must you do between optimizer steps because PyTorch accumulates gradients into .grad?",
+    "options": [
+      "Zero the gradients",
+      "Rebuild every parameter tensor from scratch",
+      "Convert all gradients to float64",
+      "Call .backward() twice to cancel the old values"
+    ],
+    "answer_index": 0,
+    "explanation": "Since backward adds into .grad, leftovers from the previous step would be summed into the new gradient. Zeroing (e.g. optimizer.zero_grad()) resets them. Calling backward twice doubles, not cancels."
+  },
+  {
+    "id": "02.2-036",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "When out is a vector, what does out.backward(v) compute?",
+    "options": [
+      "The full Jacobian J of out with respect to the inputs, stored into out.grad",
+      "The norm of v times the gradient of out.sum(), stored into the inputs' .grad",
+      "The Jacobian–vector product J v, stored into v.grad for the next step",
+      "The vector–Jacobian product v^T J, stored into the inputs' .grad"
+    ],
+    "answer_index": 3,
+    "explanation": "Passing a seed vector v to .backward() makes PyTorch compute v^T J and accumulate it into the leaves' .grad. It does not build the full Jacobian or compute a forward-mode product."
+  },
+  {
+    "id": "02.2-037",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "For out of shape (3,), what shape must the seed v in out.backward(v) have, and why?",
+    "options": [
+      "(3,), because v is the incoming gradient for each output component",
+      "(2,), because the seed must match the input's shape, not the output's",
+      "(3, 2), because the seed must match the shape of the full Jacobian",
+      "(1,), because seeds are always scalars, then broadcast to the output"
+    ],
+    "answer_index": 0,
+    "explanation": "The seed holds ∂L/∂(output) for each output, so it matches out's shape (3,). The resulting gradient in a.grad has the input's shape. A scalar seed is only valid for a scalar output."
+  },
+  {
+    "id": "02.2-038",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "With a = [2.0, 3.0] (requires_grad), out = stack([a0^2, a0*a1, a1^2]) and out.backward(torch.tensor([1.,1.,1.])), what is a.grad?",
+    "options": [
+      "[7.0, 8.0]",
+      "[4.0, 6.0]",
+      "[4.0, 6.0, 9.0]",
+      "[19.0]"
+    ],
+    "answer_index": 0,
+    "explanation": "This computes v^T J with v = [1,1,1] and J = [[4,0],[3,2],[0,6]], giving [7, 8], with shape (2,) matching a. [4, 6, 9] is out itself, and 19 is the sum of out, not a gradient."
+  },
+  {
+    "id": "02.2-039",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "What seed does PyTorch implicitly supply when loss.backward() is called on a scalar loss?",
+    "options": [
+      "The loss value itself",
+      "torch.tensor(1.0)",
+      "A vector of ones the length of the parameters",
+      "torch.tensor(0.0)"
+    ],
+    "answer_index": 1,
+    "explanation": "loss.backward() is loss.backward(torch.tensor(1.0)). That single 1 is the v reverse mode threads backward as a VJP. It is not the loss value, and it is length 1 because the loss is a scalar."
+  },
+  {
+    "id": "02.2-040",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "How does torch.autograd.functional.jacobian(f, a) build the full Jacobian for f: R^2 → R^3?",
+    "options": [
+      "By running finite differences with a small step for each entry",
+      "By running the backward machinery three times, one VJP per output row",
+      "By running the backward machinery twice, once per input column",
+      "By running the backward machinery once and reading all rows at once"
+    ],
+    "answer_index": 1,
+    "explanation": "Building the full Jacobian requires one VJP per output row, so m = 3 backward calls here. This is concrete evidence that the Jacobian is m stacked VJPs, and that a scalar loss (m = 1) needs only one."
+  },
+  {
+    "id": "02.2-041",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "When is it appropriate to build the full Jacobian with torch.autograd.functional.jacobian?",
+    "options": [
+      "Every training step, to get exact gradients",
+      "Only on GPU, where it costs the same as one VJP",
+      "Whenever the loss is a scalar, since it is cheaper than backward",
+      "Rarely, for small analyses — never inside training"
+    ],
+    "answer_index": 3,
+    "explanation": "The full Jacobian costs m VJPs and m·n memory, so it is only for small analyses. Training uses a single VJP via loss.backward(), which gives the same gradient far more cheaply."
+  },
+  {
+    "id": "02.2-042",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "8. From-scratch PyTorch: computing a VJP directly",
+    "question": "What is the concrete meaning of 'the loss must be a scalar' for reverse-mode backward?",
+    "options": [
+      "A scalar loss guarantees that every gradient entry is positive, so steps always descend",
+      "A scalar gives a length-1 seed, so the backward pass carries vectors, not matrices",
+      "A scalar loss lets PyTorch skip caching activations entirely during the forward pass",
+      "A scalar loss is required for the forward pass to record a graph in the first place"
+    ],
+    "answer_index": 1,
+    "explanation": "With a scalar loss, the seed is the single number 1, and each VJP maps a vector to a vector. With m outputs you'd carry an m-row object. A scalar loss doesn't affect caching or the gradients' signs."
+  },
+  {
+    "id": "02.2-043",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Why does one backward pass cost only a small constant (about 2×) times one forward pass?",
+    "options": [
+      "Because backward runs at lower precision than forward, roughly halving each op's cost",
+      "Because backward reuses the forward outputs directly as its gradients, with no new math",
+      "Because backward skips every node that has no parameters, which is most of the graph",
+      "Each op does a fixed amount of extra work (its VJP) and the sweep visits each node once"
+    ],
+    "answer_index": 3,
+    "explanation": "The backward sweep touches each graph node once, and each node's VJP costs a constant multiple of its forward work. That gives total backward ≈ 2× forward. Parameter-free nodes still need their VJPs."
+  },
+  {
+    "id": "02.2-044",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "What does 'backward cost is independent of the number of parameters' actually mean?",
+    "options": [
+      "The backward/forward cost ratio stays about 2× whether the model has 10^6 or 10^9 parameters",
+      "Backward cost depends only on the number of layers, not their width or parameter count",
+      "Backward takes the same wall-clock time for a 1M and a 1B parameter model on the same GPU",
+      "Backward cost is constant regardless of model size or batch size, unlike the forward pass"
+    ],
+    "answer_index": 0,
+    "explanation": "It is a claim about the ratio. A 1B model is ~1000× more expensive than a 1M one in both forward and backward, but backward stays ≈ 2× forward. The slow perturbation method instead needs P extra forward passes for P parameters."
+  },
+  {
+    "id": "02.2-045",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Relative to one forward pass, how does the cost of the 'perturb each parameter' method scale with P parameters?",
+    "options": [
+      "It stays at about 2 forward passes, like reverse mode",
+      "It shrinks as P grows because each perturbation is smaller",
+      "It grows with P: about P extra forward passes",
+      "It grows with log P because perturbations can be batched"
+    ],
+    "answer_index": 2,
+    "explanation": "Perturbing each parameter and re-running the forward pass costs P extra passes, so the ratio grows with parameter count. Reverse mode gets all P gradients for ~2 forward passes."
+  },
+  {
+    "id": "02.2-046",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Why must the forward pass cache intermediate tensors for training?",
+    "options": [
+      "So the optimizer can compute momentum from activations as well as from gradients",
+      "So the next forward pass can skip recomputing layers whose inputs have not changed",
+      "So the forward pass can be replayed exactly from that point if the loss comes out NaN",
+      "Each op's VJP needs some forward values, e.g. mul both inputs, tanh its output"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward formulas depend on forward values: a product's derivative needs the other input, matmul's weight gradient needs the input activation, tanh's derivative uses its output. These saved activations must be kept until backward runs."
+  },
+  {
+    "id": "02.2-047",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Which of these does the tanh op need to cache in the forward pass for its VJP?",
+    "options": [
+      "The loss value",
+      "Its output",
+      "Its weight matrix",
+      "Nothing at all"
+    ],
+    "answer_index": 1,
+    "explanation": "tanh's derivative is expressed in terms of its output (1 − tanh^2), so the output is saved. mul needs both inputs; matmul needs the input activation. tanh has no weight matrix."
+  },
+  {
+    "id": "02.2-048",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Why does training memory grow with network depth and batch size?",
+    "options": [
+      "The cache of saved activations needed for backward grows with both",
+      "Each weight matrix is copied once per example in the batch",
+      "Gradients are stored separately once per example in the batch",
+      "The optimizer stores one full copy of the model per layer and example"
+    ],
+    "answer_index": 0,
+    "explanation": "Saved activations are kept per layer and per example, so they grow with depth and batch size; they are the single biggest consumable in large-model training. Parameter count does not depend on batch size."
+  },
+  {
+    "id": "02.2-049",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "What does gradient (activation) checkpointing trade?",
+    "options": [
+      "Lower numerical precision in exchange for faster backward",
+      "Fewer parameters in exchange for more training steps",
+      "Extra recomputation in exchange for a smaller activation cache",
+      "A larger activation cache in exchange for less recomputation"
+    ],
+    "answer_index": 2,
+    "explanation": "Checkpointing stores fewer activations and recomputes the missing ones during backward, saving memory at the cost of compute. It does not change precision or parameter count."
+  },
+  {
+    "id": "02.2-050",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "What does forward-mode autodiff compute, and when is it efficient?",
+    "options": [
+      "Full Jacobians; efficient whenever the network is deep",
+      "Vector–Jacobian products; efficient with many inputs and one output",
+      "Hessian–vector products; efficient for any scalar loss",
+      "Jacobian–vector products; efficient with few inputs and many outputs"
+    ],
+    "answer_index": 3,
+    "explanation": "Forward mode propagates J v from inputs forward, so its cost scales with the number of inputs; it suits few inputs, many outputs. Reverse mode computes v^T J and suits many inputs, one output."
+  },
+  {
+    "id": "02.2-051",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "9. Under the hood: cost, memory, and the forward-vs-reverse choice",
+    "question": "Why does every deep-learning framework default to reverse-mode autodiff?",
+    "options": [
+      "Reverse mode needs no memory for cached activations, unlike forward mode",
+      "Reverse mode is the only mode that gives exact gradients rather than estimates",
+      "Training has many inputs (parameters) and one scalar output, which suits reverse mode",
+      "Training has few parameters and many outputs, which matches reverse mode's cost profile"
+    ],
+    "answer_index": 2,
+    "explanation": "With one scalar loss, a single reverse sweep gives gradients for all millions of parameters. Forward mode would need one pass per input. Both modes are exact, and reverse mode does need cached activations."
+  },
+  {
+    "id": "02.2-052",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Exercise",
+    "question": "For f(x_1, x_2) = [x_1 + x_2, x_1·x_2] at (3, 4), what is the Jacobian?",
+    "options": [
+      "[[1, 1], [4, 3]]",
+      "[[7, 12], [1, 1]]",
+      "[[1, 1], [3, 4]]",
+      "[[1, 4], [1, 3]]"
+    ],
+    "answer_index": 0,
+    "explanation": "J = [[∂(x_1+x_2)/∂x_1, ∂(x_1+x_2)/∂x_2], [∂(x_1x_2)/∂x_1, ∂(x_1x_2)/∂x_2]] = [[1, 1], [x_2, x_1]] = [[1,1],[4,3]]. Note ∂(x_1x_2)/∂x_1 = x_2 = 4, not x_1."
+  },
+  {
+    "id": "02.2-053",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Exercise",
+    "question": "For f(x_1, x_2) = [x_1 + x_2, x_1·x_2] at (3, 4) and v = [1, 1], what is v^T J?",
+    "options": [
+      "[7, 12]",
+      "[4, 5]",
+      "[2, 7]",
+      "[5, 4]"
+    ],
+    "answer_index": 3,
+    "explanation": "v^T J = [1,1]·[[1,1],[4,3]] = [1+4, 1+3] = [5, 4]. Cross-check with L = (x_1+x_2) + x_1x_2: ∂L/∂x_1 = 1 + x_2 = 5, ∂L/∂x_2 = 1 + x_1 = 4."
+  },
+  {
+    "id": "02.2-054",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Calling y.backward() where y = x * 3 is a shape-(2,) vector raises an error. Why?",
+    "options": [
+      "There is no implicit seed for a non-scalar output, so the VJP is unspecified",
+      "Multiplication by a constant has no defined gradient, so autograd refuses it",
+      "x does not have requires_grad=True, so no graph was built to walk backward",
+      "The graph was already freed by an earlier backward call on the same tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "A non-scalar output makes .backward() under-specified: it hides which vector to push back, so PyTorch raises 'grad can be implicitly created only for scalar outputs'. The graph exists and multiplication is differentiable."
+  },
+  {
+    "id": "02.2-055",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "For x = [1.0, 2.0] (requires_grad) and y = x * 3, what does y.backward(torch.tensor([1.0, 1.0])) put in x.grad?",
+    "options": [
+      "[6.0, 6.0]",
+      "[3.0, 6.0]",
+      "[1.0, 1.0]",
+      "[3.0, 3.0]"
+    ],
+    "answer_index": 3,
+    "explanation": "Passing the seed computes v^T J; J is 3·I, so with v = [1,1] the result is [3, 3]. [3, 6] is y itself, not a gradient."
+  },
+  {
+    "id": "02.2-056",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Which fix for y.backward() on a vector y is appropriate when y is really meant to become a loss?",
+    "options": [
+      "Convert y to a Python list first, so autograd can treat it as a plain number",
+      "Reduce to a scalar first, e.g. y.sum().backward() or y.mean().backward()",
+      "Call y.backward() repeatedly, once per element, until the error disappears",
+      "Wrap y in torch.no_grad() before calling backward so it stops checking shapes"
+    ],
+    "answer_index": 1,
+    "explanation": "If you actually have a loss, reduce to a scalar; y.sum() is exactly the case v = [1, 1]. The other fix, when you want a specific VJP, is to pass the seed explicitly. no_grad would disable graph recording entirely."
+  },
+  {
+    "id": "02.2-057",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Calling y.sum().backward() on a vector y is equivalent to which explicit seed for y.backward(v)?",
+    "options": [
+      "v = y itself, the current output values",
+      "v = a vector of ones with y's shape",
+      "v = the scalar 1 / len(y), broadcast over y",
+      "v = a vector of zeros with y's shape"
+    ],
+    "answer_index": 1,
+    "explanation": "The sum's derivative with respect to each component is 1, so y.sum().backward() equals y.backward(torch.ones_like(y)). y.mean() would correspond to v = 1/len(y) in every entry, not a scalar seed."
+  },
+  {
+    "id": "02.2-058",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A layer maps R^512 → R^2048. What is the shape of its Jacobian and how many numbers is that?",
+    "options": [
+      "(512, 2048), which is 1,048,576 numbers",
+      "(2048, 512), which is 2,560 numbers",
+      "(2048, 2048), which is 4,194,304 numbers",
+      "(2048, 512), which is 1,048,576 numbers"
+    ],
+    "answer_index": 3,
+    "explanation": "Jacobian shape is (outputs, inputs) = (2048, 512), about a million numbers for one layer and one example. Reverse mode never builds it; its VJP takes a 2048-vector in and gives a 512-vector out."
+  },
+  {
+    "id": "02.2-059",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For a layer R^512 → R^2048, what are the input and output sizes of its VJP in the backward pass?",
+    "options": [
+      "A 2048-vector in, a 512-vector out",
+      "A 2048×512 matrix in, a 512-vector out",
+      "A 512-vector in, a 2048-vector out",
+      "A scalar in, a 2048-vector out"
+    ],
+    "answer_index": 0,
+    "explanation": "The VJP receives ∂L/∂(output), a 2048-vector, and returns ∂L/∂(input), a 512-vector. The direction is reversed relative to the forward pass, which maps 512 → 2048."
+  },
+  {
+    "id": "02.2-060",
+    "chapter": "02.2",
+    "chapter_name": "Jacobians, VJPs, computational graphs",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-02.md",
+    "section": "Check yourself",
+    "question": "If a network's output had m components instead of being a scalar loss, what would reverse mode have to carry backward?",
+    "options": [
+      "Still a single row vector, regardless of m",
+      "Only a scalar, the sum of the m outputs",
+      "A square m×m matrix at the output layer only",
+      "An m-row object instead of a single row vector"
+    ],
+    "answer_index": 3,
+    "explanation": "Reverse mode carries a (1, d) row vector because the leftmost Jacobian of a scalar loss has one row. With m outputs, that factor has m rows, so you'd carry an m-row object. Scalar loss ⇒ length-1 seed ⇒ vector."
+  }
+]

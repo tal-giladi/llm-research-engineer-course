@@ -1,0 +1,1172 @@
+[
+  {
+    "id": "06.1-001",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In a from-scratch GPT-2, which four named components does the full model consist of, besides the dropout after the embeddings?",
+    "options": [
+      "The embedding tables wte and wpe, n_layer blocks, a final LayerNorm ln_f, and lm_head",
+      "A tokenizer, an encoder stack over the prompt, a decoder stack, and a softmax output layer",
+      "The embedding table wte, a single wide attention layer, an MLP, and a learned softmax head",
+      "The embedding tables wte and wpe, a convolutional stem, a pooling layer, and lm_head"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2 is the token and position embeddings (wte, wpe), n_layer identical pre-norm blocks, a final LayerNorm ln_f, and a linear head lm_head that maps to vocabulary logits. There is no encoder/decoder split and no convolution; softmax is applied inside the loss or the sampler, not as a learned layer."
+  },
+  {
+    "id": "06.1-002",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In GPT-2's forward(idx, targets), what are the shapes of the input token ids and the output logits?",
+    "options": [
+      "idx is (B, T, C) floats and logits are (B, T, V) floats",
+      "idx is (B, T) integers and logits are (B, V), one per row",
+      "idx is (T,) integers and logits are (T, C)",
+      "idx is (B, T) integers and logits are (B, T, V)"
+    ],
+    "answer_index": 3,
+    "explanation": "The input is a batch of B sequences of T token ids, an integer tensor of shape (B, T). The model produces a score for every vocabulary token at every position, so logits are (B, T, V). Producing only (B, V) would mean predicting a single next token per sequence, which is what generation slices out afterward, not what forward returns."
+  },
+  {
+    "id": "06.1-003",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What does weight tying mean in GPT-2?",
+    "options": [
+      "The query, key and value projections in each block share one (C, C) weight matrix",
+      "All transformer blocks in the stack reuse one set of block weights, n_layer times over",
+      "The token-embedding table wte and the LM head lm_head share one weight tensor",
+      "The position embedding wpe is initialized as a copy of the first block_size rows of wte"
+    ],
+    "answer_index": 2,
+    "explanation": "Weight tying makes wte.weight and lm_head.weight the same Parameter object, both of shape (V, C). It does not share weights between Q/K/V or across blocks (that would be a different idea, cross-layer sharing), and it is aliasing rather than a one-time copy."
+  },
+  {
+    "id": "06.1-004",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is the assembled GPT-2 class described as the point where 'no more machinery is hiding'?",
+    "options": [
+      "Because GPT-2 adds a large hidden memory module on top of the stack that stores past contexts",
+      "Because a GPT is just an embedding, a stack of identical blocks, a norm, and a linear head",
+      "Because the class wraps the HF Transformers implementation, so nothing else needs explaining",
+      "Because all remaining computation is delegated to a pretrained tokenizer and its merges"
+    ],
+    "answer_index": 1,
+    "explanation": "Once the Module 5 block exists, the whole GPT is that block stacked plus thin translation layers at each end: embeddings in, final norm and linear head out. Every later model in the course is this class or a small variation of it, so it is a concrete object you can instantiate, count and call."
+  },
+  {
+    "id": "06.1-005",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "What does a single pre-norm Block do to the residual stream x?",
+    "options": [
+      "x = LayerNorm(x + attn(x)), then x = LayerNorm(x + MLP(x))",
+      "x = x + attn(LayerNorm(x)), then x = x + MLP(LayerNorm(x))",
+      "x = attn(LayerNorm(x)), then x = MLP(LayerNorm(x)) with no residual adds",
+      "x = x + LayerNorm(attn(x) + MLP(x)) computed in a single step"
+    ],
+    "answer_index": 1,
+    "explanation": "In a pre-norm block each sub-layer reads a normalized copy of the stream and its output is added back: normalize, attend, add back; normalize, MLP, add back. Placing the LayerNorm after the addition is the post-norm design of the original Transformer, not GPT-2's pre-norm block."
+  },
+  {
+    "id": "06.1-006",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "In the GPT-2 front end, how are the token embedding and position embedding combined before entering the block stack?",
+    "options": [
+      "They are added element-wise and then passed through dropout",
+      "They are concatenated along the channel axis to width 2C",
+      "They are multiplied element-wise and then layer-normalized",
+      "Only the token embedding is used; positions are added inside attention"
+    ],
+    "answer_index": 0,
+    "explanation": "x = wte(idx) + wpe(positions), followed by dropout, is the input to the stack. Concatenation would change the width to 2C and break the (B, T, C) invariant; GPT-2 uses learned absolute positions added at the input, not positions injected inside attention."
+  },
+  {
+    "id": "06.1-007",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "In a GPT training step, how are the next-token targets related to the inputs?",
+    "options": [
+      "Targets are identical to the inputs, so the model learns to reproduce each token in place",
+      "Targets are the inputs shifted right by one, so each position's target is the previous token",
+      "Targets are random tokens drawn from the vocabulary, used as negative samples for each position",
+      "Targets are the inputs shifted left by one, so each position's target is the following token"
+    ],
+    "answer_index": 3,
+    "explanation": "The language-modeling objective is next-token prediction: targets[b, t] is the token that follows position t. Building them by shifting the input sequence left by one achieves that. Using identical targets would make the task trivial copying, a classic data leak."
+  },
+  {
+    "id": "06.1-008",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "Inside the GPT-2 block pseudocode, which non-linearity sits between the two linear layers of the MLP?",
+    "options": [
+      "ReLU",
+      "Softmax",
+      "GELU",
+      "Tanh"
+    ],
+    "answer_index": 2,
+    "explanation": "The MLP is Linear2(GELU(Linear1(LayerNorm(x)))). GPT-2 uses GELU, a smooth relative of ReLU. Softmax appears in attention and in the loss, not in the MLP."
+  },
+  {
+    "id": "06.1-009",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "In the GPT training pseudocode, which part does Module 6 build, as opposed to the Module 7 training loop?",
+    "options": [
+      "Only the optimizer step, gradient clipping and the learning-rate schedule for each batch",
+      "Only the tokenizer and the data loader that produces shuffled (B, T) batches of ids",
+      "Everything between clearing gradients and the cross-entropy loss: the forward pass",
+      "The evaluation and model-saving steps that run after the training loop has finished"
+    ],
+    "answer_index": 2,
+    "explanation": "The outer loop (batching, backprop, clipping, weight and learning-rate updates) is Module 7. Module 6 builds the model itself: embeddings, blocks, final norm, head and loss, i.e. what runs between ClearGradients() and CrossEntropy."
+  },
+  {
+    "id": "06.1-010",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "In the GPT training pseudocode, which steps follow Backpropagate(loss) within each training batch?",
+    "options": [
+      "Clear gradients, re-embed the inputs, recompute the logits",
+      "Clip gradients, update the weights, update the learning rate",
+      "Save the model, evaluate, then tokenize new training text",
+      "Apply dropout, run the final LayerNorm, project to the vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "After the backward pass, each iteration clips gradients, applies the optimizer update, and advances the learning-rate schedule. Clearing gradients happens at the start of the iteration; evaluation and saving happen after the loop."
+  },
+  {
+    "id": "06.1-011",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "1. Intuition: a GPT is four things in a row",
+    "question": "Where in GPT-2 does essentially all of the 'thinking' happen, and what do the two ends do?",
+    "options": [
+      "In the stack of blocks; the ends only translate ids to vectors and vectors to scores",
+      "In the embedding tables; the blocks only smooth the embeddings toward the output head",
+      "In the final LayerNorm; the blocks and embeddings just prepare its normalized input",
+      "In the LM head; the blocks only compress the input into a small code for it to decode"
+    ],
+    "answer_index": 0,
+    "explanation": "The front end turns integer ids into C-dimensional vectors, and the back end turns the final vectors into a score per vocabulary token. All context mixing and computation happens in the repeated blocks; the ends are pure translation."
+  },
+  {
+    "id": "06.1-012",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "Why does GPT-2 look up a learned vector for each token id instead of feeding the integer id directly into the network?",
+    "options": [
+      "Integers cannot be stored in GPU memory, so ids must be converted to floats first",
+      "Embedding lookups are faster than any arithmetic performed on raw integer inputs",
+      "Feeding integers directly would make the model invariant to the order of the tokens",
+      "Integer ids carry no useful geometry: token 5 is not 'half of' token 10"
+    ],
+    "answer_index": 3,
+    "explanation": "Token ids are arbitrary indices into the vocabulary; their numeric values and differences mean nothing. A learned embedding table gives each token a vector whose geometry training can shape. GPUs handle integers fine; the issue is meaning, not storage."
+  },
+  {
+    "id": "06.1-013",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "In GPT-2, what are the shapes of the token-embedding table wte and the position-embedding table wpe?",
+    "options": [
+      "wte is (C, V) and wpe is (C, block_size), transposed",
+      "wte is (V, C) and wpe is (V, block_size)",
+      "wte is (block_size, C) and wpe is (V, C)",
+      "wte is (V, C) and wpe is (block_size, C)"
+    ],
+    "answer_index": 3,
+    "explanation": "Row i of wte is the C-dimensional vector for token id i, so wte has V rows. Row t of wpe is the vector for position t, and there are block_size positions. Both have width C so the two lookups can be added."
+  },
+  {
+    "id": "06.1-014",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "What does the input to GPT-2's transformer stack at batch b, position t equal?",
+    "options": [
+      "E_tok[idx[b, t]] * E_pos[t]: the token vector scaled element-wise by the position vector",
+      "E_tok[idx[b, t]] only; the position is supplied later by the causal mask",
+      "E_tok[idx[b, t]] + E_pos[t]: which token, plus which position",
+      "E_pos[idx[b, t]] + E_tok[t]: the position table indexed by token id"
+    ],
+    "answer_index": 2,
+    "explanation": "x[b, t] = wte[idx[b, t]] + wpe[t]: a per-position sum of 'what token is here' and 'where here is'. The causal mask restricts which positions attend to which, but it does not tell the model where a token sits."
+  },
+  {
+    "id": "06.1-015",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "Which property of self-attention makes positional embeddings necessary?",
+    "options": [
+      "Attention is non-differentiable with respect to the order of its input tokens",
+      "Attention is permutation-invariant: it treats its inputs as an unordered set",
+      "Attention only sees the last token, so earlier positions need explicit labels",
+      "Attention has quadratic cost in T, which positional embeddings help to reduce"
+    ],
+    "answer_index": 1,
+    "explanation": "Without position information, attention computes the same result for any reordering of tokens, so it could not tell 'the dog bit the man' from 'the man bit the dog'. Adding a position-dependent vector breaks that symmetry. Positional embeddings do not change attention's cost."
+  },
+  {
+    "id": "06.1-016",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "What kind of positional encoding does GPT-2 use?",
+    "options": [
+      "Learned absolute position embeddings: wpe is a table trained like any other weight",
+      "Fixed sinusoidal encodings computed from sine and cosine formulas, with no training",
+      "Rotary position embeddings that rotate the queries and keys by a position angle",
+      "Relative position biases added to the attention scores, one learned bias per offset"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2's wpe is just another nn.Embedding of shape (block_size, C), learned by gradient descent. Rotary embeddings (RoPE) replace it later in the course (Module 12); sinusoidal encodings were the original Transformer's choice."
+  },
+  {
+    "id": "06.1-017",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Intuition and math",
+    "question": "After the embedding step in GPT-2, what does everything downstream of the embeddings see about the input tokens?",
+    "options": [
+      "Only the summed embedding vectors; the integer ids are never seen again",
+      "Both the vectors and the raw integer ids, which attention uses as keys",
+      "Only the integer ids, re-embedded at the start of every block",
+      "Only the position vectors, since the token vectors are dropped after block 1"
+    ],
+    "answer_index": 0,
+    "explanation": "Once wte[idx] + wpe[positions] is formed, the blocks, ln_f and lm_head operate purely on those (B, T, C) vectors. The ids are not passed further; each block works on the residual stream it receives."
+  },
+  {
+    "id": "06.1-018",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Tensor shapes",
+    "question": "In GPT-2's front end, what is the positions tensor fed to wpe, and what is its dtype?",
+    "options": [
+      "arange(V) = 0 .. V-1, of dtype float32, shape (V,)",
+      "The token ids idx themselves, of dtype int64, shape (B, T)",
+      "arange(block_size) always, of dtype float32, shape (block_size,)",
+      "arange(T) = 0, 1, ..., T-1, of dtype int64, shape (T,)"
+    ],
+    "answer_index": 3,
+    "explanation": "Positions are just the indices 0 to T-1 for the current sequence length, an int64 vector of length T used as lookup indices into wpe. They do not depend on the token ids, and only the first T rows of wpe are used, not all block_size."
+  },
+  {
+    "id": "06.1-019",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Tensor shapes",
+    "question": "In GPT-2, tok_emb has shape (B, T, C) and pos_emb has shape (T, C). What happens when they are added?",
+    "options": [
+      "PyTorch raises a shape-mismatch error unless pos_emb is explicitly repeated B times",
+      "pos_emb broadcasts over the channel axis, giving each channel a different position",
+      "pos_emb broadcasts over the batch axis, so every sequence gets the same position vectors",
+      "The sum has shape (B, T, 2C), because the two embeddings' channels are stacked"
+    ],
+    "answer_index": 2,
+    "explanation": "Broadcasting aligns trailing dimensions: (T, C) matches the last two axes of (B, T, C) and is stretched across B. That is exactly correct, because position t means the same thing in every sequence of the batch."
+  },
+  {
+    "id": "06.1-020",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "2. The front end: two embedding tables — Tensor shapes",
+    "question": "What are the shape and dtype of wte(idx) in GPT-2 when idx is (B, T) int64?",
+    "options": [
+      "(B, T) floating point: one scalar weight per token",
+      "(B, T, C) floating point: one C-vector per token",
+      "(B, C) floating point: one vector per sequence",
+      "(B, T, V) int64: one-hot vectors over the vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "An embedding lookup replaces each integer id with its row from the (V, C) table, adding a trailing axis of size C. The output is a float tensor; the lookup never materializes one-hot (V-wide) vectors."
+  },
+  {
+    "id": "06.1-021",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "3. The back end: final norm and the LM head",
+    "question": "After the last transformer block of GPT-2, what shape is x, and what must the back end produce from it?",
+    "options": [
+      "x is (B, C) after pooling; the back end must produce one token id per sequence",
+      "x is (B, T, C); the back end must produce a length-V logit vector per position",
+      "x is (B, T, V) already; the back end only needs to apply a softmax over V",
+      "x is (B, T, C); the back end must produce a single scalar loss for each sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "The stack preserves (B, T, C): one refined vector per position. To predict the next token, each position needs a score for every vocabulary entry, so the back end (ln_f then lm_head) maps C to V, giving (B, T, V) logits."
+  },
+  {
+    "id": "06.1-022",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "3. The back end: final norm and the LM head",
+    "question": "Why does GPT-2 need the final LayerNorm ln_f before the LM head?",
+    "options": [
+      "With pre-norm blocks nothing normalizes the residual stream itself, so ln_f does it once",
+      "Because the LM head has no weights of its own and relies on ln_f's gamma and beta to project",
+      "Because the last block's MLP has no LayerNorm of its own, unlike all of the earlier blocks",
+      "Because cross-entropy requires inputs already normalized to sum to 1 across the vocabulary"
+    ],
+    "answer_index": 0,
+    "explanation": "In pre-norm blocks each LayerNorm sits on the branch feeding a sub-layer, never on the stream. So the stream leaving the final block has never been normalized; ln_f normalizes it once. Every block (including the last) has its two LayerNorms; and cross-entropy takes raw logits, not normalized probabilities."
+  },
+  {
+    "id": "06.1-023",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "3. The back end: final norm and the LM head",
+    "question": "What is GPT-2's lm_head layer?",
+    "options": [
+      "A two-layer MLP from C to 4C to V with a GELU between the two layers",
+      "A linear map from C to V with a bias, followed by a learned softmax layer",
+      "A linear map from V to C that compresses the vocabulary distribution to C",
+      "A linear map from C to V with no bias, whose weight has shape (V, C)"
+    ],
+    "answer_index": 3,
+    "explanation": "lm_head is a single nn.Linear(C, V, bias=False). Its weight is (V, C), so x @ W^T maps each C-vector to V scores. Having no bias is what lets it be exactly tied to the (V, C) embedding table."
+  },
+  {
+    "id": "06.1-024",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "3. The back end: final norm and the LM head",
+    "question": "How should row i of GPT-2's LM-head weight W_lm be interpreted?",
+    "options": [
+      "As the probability that token i appears anywhere in the training corpus, learned as a prior",
+      "As the position embedding for position i, reused by the head to locate the next token",
+      "As a detector for token i: its dot product with x_t scores token i coming next",
+      "As the attention weights that token i assigns to every other token in the context"
+    ],
+    "answer_index": 2,
+    "explanation": "logits[t, i] = x_t . W_lm[i], so each row acts as a template for one vocabulary token; a larger dot product means the model favors that token next. It is not a corpus frequency, a position vector, or an attention pattern."
+  },
+  {
+    "id": "06.1-025",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "3. The back end: final norm and the LM head",
+    "question": "What are GPT-2's logits fed into during training?",
+    "options": [
+      "A sigmoid and binary cross-entropy for each vocabulary token",
+      "A mean-squared-error loss against the target embeddings",
+      "Softmax and cross-entropy against the next-token targets",
+      "An argmax that is compared to the target for a 0/1 accuracy loss"
+    ],
+    "answer_index": 2,
+    "explanation": "The (B, T, V) logits are exactly the raw scores that softmax turns into a next-token distribution, scored by cross-entropy against the true next token. Argmax accuracy is not differentiable, and next-token prediction is multi-class, not independent binary classification."
+  },
+  {
+    "id": "06.1-026",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying: wte and lm_head are the same tensor",
+    "question": "In PyTorch, which single line implements GPT-2's weight tying?",
+    "options": [
+      "self.transformer.wte.weight.data.copy_(self.lm_head.weight.data)",
+      "self.transformer.wte.weight = self.lm_head.weight",
+      "self.lm_head.weight = self.transformer.wpe.weight",
+      "self.lm_head.weight.requires_grad = False"
+    ],
+    "answer_index": 1,
+    "explanation": "Assigning the Parameter object makes both attributes point to one tensor, sharing memory and gradient. copy_ would only copy values once, after which the two would drift apart; tying to wpe has the wrong shape; freezing the head is unrelated."
+  },
+  {
+    "id": "06.1-027",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying: wte and lm_head are the same tensor",
+    "question": "What happens to the gradients of wte and lm_head once they are tied in GPT-2?",
+    "options": [
+      "They share one gradient: the embedding and head contributions accumulate in one tensor",
+      "Each keeps its own gradient, and the two are averaged together before the optimizer step",
+      "Only the head receives a gradient; the embedding is effectively frozen once they are tied",
+      "Only the embedding receives a gradient; the head is effectively frozen once they are tied"
+    ],
+    "answer_index": 0,
+    "explanation": "Because both names refer to one Parameter, autograd adds the gradient from the input lookup and from the output projection into that single .grad. Nothing is averaged or frozen; one tensor is updated by both roles."
+  },
+  {
+    "id": "06.1-028",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying: wte and lm_head are the same tensor",
+    "question": "Why is tying GPT-2's wte and lm_head possible from a shape point of view?",
+    "options": [
+      "Both weights have shape (C, C), so they are square and interchangeable",
+      "The embedding is (V, C) and the head is (C, V), which are transposes stored identically",
+      "The head is padded to match the embedding's shape before tying",
+      "Both weights have shape (V, C), so one tensor can serve both"
+    ],
+    "answer_index": 3,
+    "explanation": "nn.Embedding(V, C).weight is (V, C), and nn.Linear(C, V).weight is also (V, C), because Linear stores weights as (out_features, in_features). So the same tensor fits both without reshaping or padding."
+  },
+  {
+    "id": "06.1-029",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — Why this is natural",
+    "question": "Why is weight tying a natural choice for a language model?",
+    "options": [
+      "Because the head must never learn anything beyond what the embedding table already learned",
+      "Because tying makes the model invariant to any permutation of the vocabulary's token ids",
+      "Because the embedding of a token should equal the average of the logits it produces",
+      "Both are organized around 'the vector for token i', so one dictionary can serve both"
+    ],
+    "answer_index": 3,
+    "explanation": "The embedding maps id i to row i; the head scores token i by dotting with row i. Using the same row for both directions makes the input and output maps transposes of one learned dictionary. Tying does not freeze the head or create any vocabulary-order invariance."
+  },
+  {
+    "id": "06.1-030",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — What it buys",
+    "question": "In GPT-2 small, roughly how many parameters does weight tying save?",
+    "options": [
+      "About 0.8M (one 1024 x 768 table), under one percent of the model",
+      "About 7M (one transformer block), under a tenth of the model",
+      "About 38.6M (one 50257 x 768 table), about a third",
+      "About 85M (all transformer blocks), more than half of the model"
+    ],
+    "answer_index": 2,
+    "explanation": "The token table is 50257 x 768 = 38.6M parameters. Untied, wte and lm_head would each pay for it; tied, it is paid once, saving about 40M of a 124M model. 0.8M is the size of wpe, and 85M is the whole block stack."
+  },
+  {
+    "id": "06.1-031",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — What it buys",
+    "question": "Besides saving parameters, what quality benefit is attributed to weight tying in language models?",
+    "options": [
+      "It removes the need for positional embeddings by encoding token order inside the head",
+      "It improves perplexity, partly because rare tokens' output vectors also train as inputs",
+      "It makes the model's logits exactly calibrated probabilities, with no softmax required",
+      "It guarantees that the model never predicts the same token twice in a row when sampling"
+    ],
+    "answer_index": 1,
+    "explanation": "Press and Wolf (2016) found tying improves language-model perplexity, and GPT-2 uses it. Keeping input and output representations consistent means a token's vector is trained by both roles, which particularly helps rarer tokens. It has nothing to do with position encoding or repetition."
+  },
+  {
+    "id": "06.1-032",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — What it buys",
+    "question": "Which paper is credited with showing that tying input and output embeddings improves language-model perplexity?",
+    "options": [
+      "Press and Wolf (2016)",
+      "Holtzman et al. (2020)",
+      "Vaswani et al. (2017)",
+      "Kaplan et al. (2020)"
+    ],
+    "answer_index": 0,
+    "explanation": "Press and Wolf 2016 introduced and evaluated output-embedding tying, and GPT-2 adopted it. Holtzman et al. 2020 is the nucleus-sampling paper; Vaswani et al. 2017 is the original Transformer; Kaplan et al. 2020 is about scaling laws."
+  },
+  {
+    "id": "06.1-033",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — What it buys",
+    "question": "Is weight tying in GPT-2 an aliasing of one tensor or a copy of values?",
+    "options": [
+      "Aliasing: two attributes point to one tensor, so reassigning either breaks the link",
+      "A copy: values are copied once at construction, and the two are then trained independently",
+      "A copy: values are re-copied from wte into lm_head after every single optimizer step",
+      "Aliasing that PyTorch automatically restores whenever either of the weights is reassigned"
+    ],
+    "answer_index": 0,
+    "explanation": "Tying is a Python assignment making both names refer to one Parameter. If you later assign a fresh tensor or module to either, they silently become separate tables. PyTorch does not re-tie for you, so you must redo the tie yourself."
+  },
+  {
+    "id": "06.1-034",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "4. Weight tying — What it buys",
+    "question": "After reloading or resetting one of GPT-2's tied weights, what must you do, and what symptom reveals that you forgot?",
+    "options": [
+      "Nothing, since the tie survives any reassignment; there is no visible symptom at all",
+      "Call model.eval() to restore the tie; forgetting shows up as dropout staying on",
+      "Re-run the initializer; forgetting shows up as a NaN loss on the very first step",
+      "Redo the tie afterward; forgetting shows up as about 38.6M extra parameters"
+    ],
+    "answer_index": 3,
+    "explanation": "Assigning a fresh tensor to lm_head.weight breaks the alias, so you end up training two separate (V, C) tables. The tell is that the parameter count grows by one table's worth (about 38.6M for GPT-2 small). The fix is to re-execute the tie line."
+  },
+  {
+    "id": "06.1-035",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass, end to end",
+    "question": "In the GPT-2 forward pass, what does the assertion at the top check?",
+    "options": [
+      "That the batch size B does not exceed block_size",
+      "That every token id is smaller than the embedding width C",
+      "That the sequence length T does not exceed block_size",
+      "That targets were provided whenever the model is in training mode"
+    ],
+    "answer_index": 2,
+    "explanation": "assert T <= self.cfg.block_size guards the position embedding: wpe has only block_size rows, so a longer sequence would index past the table. The vocabulary bound is V, not C, and targets are optional."
+  },
+  {
+    "id": "06.1-036",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass, end to end",
+    "question": "In the GPT-2 forward pass, what does the method return when targets is None?",
+    "options": [
+      "Only the sampled next token",
+      "The logits and a loss of None",
+      "The logits and a loss of zero",
+      "The pre-head hidden states and None"
+    ],
+    "answer_index": 1,
+    "explanation": "forward always computes logits of shape (B, T, V); the loss is only computed when targets is given, otherwise it stays None. Sampling is a separate generate method, and the return value is the projected logits, not pre-head hidden states."
+  },
+  {
+    "id": "06.1-037",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass, end to end",
+    "question": "In the from-scratch GPT-2 class, which Module 5 components are imported rather than re-implemented?",
+    "options": [
+      "Embedding and Linear",
+      "Block and LayerNorm",
+      "Dropout and cross_entropy",
+      "GPTConfig and ModuleDict"
+    ],
+    "answer_index": 1,
+    "explanation": "The GPT class imports the pre-norm Block and the LayerNorm built in Module 5 from llmre.model.block. Embedding, Linear, Dropout, ModuleDict and cross_entropy come from PyTorch itself, and GPTConfig is the config dataclass."
+  },
+  {
+    "id": "06.1-038",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass, end to end",
+    "question": "In GPT-2's forward pass, which modules are applied, in order, from token ids to logits?",
+    "options": [
+      "wte and wpe lookups, add, dropout, each block in h, ln_f, lm_head",
+      "wte lookup, each block in h, wpe lookup, ln_f, dropout, lm_head",
+      "wte and wpe lookups, add, ln_f, each block in h, dropout, lm_head",
+      "dropout, wte lookup, each block in h, lm_head, ln_f"
+    ],
+    "answer_index": 0,
+    "explanation": "Embeddings are looked up and summed, dropout is applied to the sum, the blocks run in sequence, the final LayerNorm normalizes the stream, and lm_head projects to the vocabulary. Applying ln_f before the blocks or after the head would put the normalization in the wrong place."
+  },
+  {
+    "id": "06.1-039",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass, end to end",
+    "question": "In the GPT-2 forward pass, why is the input token sequence's shape preserved throughout the block loop 'for block in self.transformer.h: x = block(x)'?",
+    "options": [
+      "Each block reduces T by one, and padding restores the original length",
+      "Each block widens C, and ln_f later projects it back to the original width",
+      "Each block outputs (B, V), and the loop re-embeds the result before the next block",
+      "Each block maps (B, T, C) to (B, T, C), so blocks can be stacked any number of times"
+    ],
+    "answer_index": 3,
+    "explanation": "A block reads and writes the residual stream at the same shape. That invariance is exactly why blocks are stackable: the output of one is valid input to the next. Only the two ends change the last axis."
+  },
+  {
+    "id": "06.1-040",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Why nn.ModuleDict",
+    "question": "Why does the GPT-2 class group its sub-modules under self.transformer as an nn.ModuleDict?",
+    "options": [
+      "It makes the forward pass faster by fusing all of the registered sub-modules into one kernel",
+      "It is required by PyTorch for any module that contains more than one layer of parameters",
+      "It names every weight like transformer.h.3.attn.c_proj.weight, matching OpenAI's checkpoints",
+      "It hides the sub-modules from model.parameters() so the embeddings are not trained"
+    ],
+    "answer_index": 2,
+    "explanation": "Module attribute names become state_dict keys. With this exact layout the keys match the official GPT-2 checkpoints, so the pretrained weights can be loaded directly. ModuleDict does not fuse kernels, is not mandatory, and its contents are registered as trainable parameters."
+  },
+  {
+    "id": "06.1-041",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Why nn.ModuleDict",
+    "question": "In the from-scratch GPT-2, why are the transformer blocks stored in an nn.ModuleList called h?",
+    "options": [
+      "A plain Python list would work identically, so using ModuleList here is purely cosmetic",
+      "ModuleList automatically shares one set of weights among all the blocks it contains",
+      "It registers each block and names them h.0, h.1, ... to match the checkpoint layout",
+      "ModuleList runs the blocks in parallel on separate streams instead of sequentially"
+    ],
+    "answer_index": 2,
+    "explanation": "nn.ModuleList registers each Block so its parameters are tracked, saved and moved with the model, and names them by index (transformer.h.3...), matching OpenAI's naming. A plain list would hide the blocks from parameters() and state_dict. It neither shares weights nor parallelizes."
+  },
+  {
+    "id": "06.1-042",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — The loss: flatten, then cross-entropy",
+    "question": "In GPT-2's loss computation, what does targets[b, t] contain?",
+    "options": [
+      "The token at position t in sequence b itself",
+      "The token that should follow position t in sequence b",
+      "The probability that position t in sequence b ends a sentence",
+      "The position index t, used to look up wpe"
+    ],
+    "answer_index": 1,
+    "explanation": "Targets are the next-token labels built by shifting the input left by one, so targets[b, t] is the token that comes after position t. Using the current token would be copying, not prediction."
+  },
+  {
+    "id": "06.1-043",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — The loss: flatten, then cross-entropy",
+    "question": "Why does GPT-2 flatten logits with logits.view(-1, logits.size(-1)) before F.cross_entropy?",
+    "options": [
+      "Cross-entropy expects (N, V) logits and (N,) targets, so B*T rows become independent classifications",
+      "Cross-entropy only accepts a single sequence at a time, so each batch element is otherwise processed alone",
+      "Flattening sums the logits over the time axis so that the loss is computed once per sequence",
+      "Flattening removes the vocabulary axis so that the loss is computed as one scalar per position"
+    ],
+    "answer_index": 0,
+    "explanation": "F.cross_entropy takes a 2-D (N, classes) input and a 1-D (N,) target. Reshaping (B, T, V) to (B*T, V) and targets to (B*T,) turns every position of every sequence into one V-way classification. Nothing is summed over time and the vocabulary axis is kept."
+  },
+  {
+    "id": "06.1-044",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — The loss: flatten, then cross-entropy",
+    "question": "What loss does GPT-2 compute from its flattened logits and targets?",
+    "options": [
+      "The sum over positions of the squared difference between the logits and the one-hot targets",
+      "The maximum over positions of -log softmax(logits[b,t])[targets[b,t]], the worst position",
+      "The mean over positions of the softmax probability assigned to each target token",
+      "The mean over positions of -log softmax(logits[b,t])[targets[b,t]]"
+    ],
+    "answer_index": 3,
+    "explanation": "L = (1/BT) sum over b,t of -log softmax(logits_{b,t})[target_{b,t}]. It is the average negative log-likelihood of the true next tokens, the same objective as in 01.4. Averaging probabilities or taking a max would not be the cross-entropy objective."
+  },
+  {
+    "id": "06.1-045",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — The loss: flatten, then cross-entropy",
+    "question": "What does passing ignore_index=-1 to F.cross_entropy do in GPT-2's loss?",
+    "options": [
+      "Positions whose target is -1 are treated as predicting the last vocabulary token, V - 1",
+      "The final position of every sequence is ignored, since it has no next token to predict",
+      "Tokens with id -1 in the inputs are skipped during the embedding lookup and the loss",
+      "Positions whose target is -1 (e.g. padding) add no loss and send no gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "ignore_index marks target values to exclude. Setting padded targets to -1 removes them from the average and from the backward pass. It acts on target values, not on positions by index or on input ids."
+  },
+  {
+    "id": "06.1-046",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "With ignore_index in cross-entropy, what does the 1/(BT) normalization actually divide by?",
+    "options": [
+      "Always the full B*T, so ignored positions count as zero loss in the average",
+      "The batch size B only, giving a per-sequence summed loss",
+      "The number of non-ignored positions, not the total B*T",
+      "The vocabulary size V, giving a per-class average"
+    ],
+    "answer_index": 2,
+    "explanation": "Ignored rows are excluded from both the numerator and the count. With 4 rows and one ignored, the mean is over 3 rows. Dividing by the full B*T would dilute the loss with zeros for padding."
+  },
+  {
+    "id": "06.1-047",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "For a single row of logits z with correct token y, what is the cross-entropy loss written in log-sum-exp form?",
+    "options": [
+      "z_y - log(sum_j exp(z_j))",
+      "log(sum_j exp(z_j)) - z_y",
+      "log(sum_j exp(z_j - z_y))^2",
+      "exp(z_y) / sum_j exp(z_j)"
+    ],
+    "answer_index": 1,
+    "explanation": "-log softmax(z)[y] = -(z_y - log sum_j e^{z_j}) = log sum_j e^{z_j} - z_y. The reversed sign would give the log-probability (non-positive), and exp(z_y)/sum is the probability itself, not the loss."
+  },
+  {
+    "id": "06.1-048",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "If a row of logits has all entries equal over a V-token vocabulary, what is its cross-entropy loss?",
+    "options": [
+      "log V, because the prediction is uniform with probability 1/V each",
+      "0, because equal logits mean the model is perfectly calibrated over V",
+      "1/V, because each token receives the same probability of exactly 1/V",
+      "V, because each of the V tokens contributes a loss of exactly 1 each"
+    ],
+    "answer_index": 0,
+    "explanation": "Equal logits give softmax probability 1/V for every token, so -log(1/V) = log V. For V = 3 that is about 1.0986. This 'uniform guess' value is what an untrained model scores."
+  },
+  {
+    "id": "06.1-049",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "What loss should you expect at step 0 from an untrained GPT-2 with V = 50257?",
+    "options": [
+      "About ln(50257), roughly 10.82",
+      "About 0, since the weights are near zero",
+      "About 1.0986, the same as any vocabulary",
+      "About 50257, one unit per token"
+    ],
+    "answer_index": 0,
+    "explanation": "An untrained model predicts roughly uniformly, so the loss is about log V. For GPT-2's vocabulary that is ln 50257, about 10.82. ln 3 = 1.0986 is only the value for a 3-token vocabulary."
+  },
+  {
+    "id": "06.1-050",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "In GPT-2's loss with ignore_index, what happens to a padding position whose logits strongly favor some token?",
+    "options": [
+      "Its loss is computed normally but scaled down by half before averaging",
+      "It is penalized for confidently predicting a token where padding should be",
+      "Its logits are reused as the target distribution for the previous position",
+      "Nothing: it adds no loss and sends no gradient, whatever its logits are"
+    ],
+    "answer_index": 3,
+    "explanation": "An ignored position is excluded entirely: no loss term, no contribution to the averaging denominator, and zero gradient into its logits. What it happens to predict is irrelevant."
+  },
+  {
+    "id": "06.1-051",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "In GPT-2's loss, after flattening logits of shape (B, T, V), how should each row be thought of?",
+    "options": [
+      "As one step of a recurrence whose loss depends on the previous row's prediction",
+      "As a regression target that is compared against the next token's embedding vector",
+      "As an independent V-way classification: which token comes next at this position",
+      "As a binary decision about whether the sequence continues past this position or ends"
+    ],
+    "answer_index": 2,
+    "explanation": "Every (b, t) position becomes its own row with one correct class out of V. The rows are scored independently and averaged, which is why all positions can be trained in parallel."
+  },
+  {
+    "id": "06.1-052",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "Why does logits.view(-1, logits.size(-1)) not copy data when collapsing (B, T, V) to (B*T, V)?",
+    "options": [
+      "view moves the tensor to a new buffer but PyTorch frees the old one immediately",
+      "view only reinterprets the strides of the existing contiguous memory",
+      "view stores only the last time step, discarding the rest",
+      "view converts the tensor to half precision so it fits in place"
+    ],
+    "answer_index": 1,
+    "explanation": "For a contiguous tensor, merging the leading axes is just a different indexing of the same memory, so view returns a new tensor header with different shape and strides. No data is moved, dropped, or recast."
+  },
+  {
+    "id": "06.1-053",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "How does F.cross_entropy compute log-softmax in a numerically stable way?",
+    "options": [
+      "It clips the logits to the range [-1, 1] before exponentiating them, so exp stays small",
+      "It subtracts the row maximum before exponentiating, so exp never overflows",
+      "It computes the softmax in float64 and then takes the logarithm of the probabilities",
+      "It adds a small epsilon inside the logarithm of the softmax output to avoid log(0)"
+    ],
+    "answer_index": 1,
+    "explanation": "log_softmax uses the max-subtraction (log-sum-exp) trick: z - max(z) has a maximum of 0, so exp never overflows, and the log is computed directly. It then gathers the target entry of each row, the negative-log-likelihood step. Clipping or epsilons would change the result."
+  },
+  {
+    "id": "06.1-054",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Numerical example: B = 2, T = 2, V = 3",
+    "question": "After computing log-softmax, what step does F.cross_entropy perform to get the per-row loss?",
+    "options": [
+      "It gathers the log-probability at each row's target index and negates it",
+      "It sums the log-probabilities over all V classes in each row and negates the sum",
+      "It takes the argmax of each row and compares it to the target for a 0/1 loss",
+      "It multiplies the log-probabilities by the logits and averages them over each row"
+    ],
+    "answer_index": 0,
+    "explanation": "Cross-entropy = log_softmax followed by negative log-likelihood: pick out the entry for the correct class in each row and negate it. Summing over all classes or using argmax would not be the cross-entropy loss."
+  },
+  {
+    "id": "06.1-055",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Full shape trace",
+    "question": "In GPT-2 small, which dimensions does the shape trace use for the embedding width C and vocabulary V?",
+    "options": [
+      "C = 1024 and V = 50257",
+      "C = 768 and V = 32000",
+      "C = 512 and V = 65536",
+      "C = 768 and V = 50257"
+    ],
+    "answer_index": 3,
+    "explanation": "GPT-2 small has n_embd = 768 and a 50257-token BPE vocabulary. 1024 is its block_size (context length), not its width."
+  },
+  {
+    "id": "06.1-056",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Full shape trace",
+    "question": "In a GPT-2 shape trace, which steps change the last axis of the tensor?",
+    "options": [
+      "Every block widens the last axis by C, and ln_f then shrinks it back to C",
+      "Only the attention layers, which map the last axis from C to T for scores",
+      "Only the two ends: wte maps an id to C, and lm_head maps C to V",
+      "Only ln_f, which maps the last axis from C to V just before the LM head"
+    ],
+    "answer_index": 2,
+    "explanation": "Inside the stack every tensor stays (B, T, C). The embedding turns ids into C-vectors and the head turns C-vectors into V scores; LayerNorm preserves shape."
+  },
+  {
+    "id": "06.1-057",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "5. The forward pass — Full shape trace",
+    "question": "For idx of shape (4, 128) and V = 50257, what shape do GPT-2's logits have, and what shape just before F.cross_entropy?",
+    "options": [
+      "(4, 50257), flattened to (4, 50257) with targets (4,)",
+      "(4, 128, 768), flattened to (512, 768) with targets (512,)",
+      "(4, 128, 50257), flattened to (512, 50257) with targets (512,)",
+      "(4, 128, 50257), flattened to (4, 6433024) with targets (4, 128)"
+    ],
+    "answer_index": 2,
+    "explanation": "Logits are (B, T, V) = (4, 128, 50257). Flattening batch and time gives 4 x 128 = 512 rows of 50257 scores, and the targets flatten to 512 labels. 768 would be the hidden width before the head."
+  },
+  {
+    "id": "06.1-058",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — The logits tensor is huge",
+    "question": "In GPT-2 small, by roughly what factor is the logits tensor larger than one activation inside the block stack?",
+    "options": [
+      "About 2x, since the head doubles the width",
+      "About 65x, since V / C = 50257 / 768",
+      "About 12x, one per transformer layer",
+      "About 1000x, since V is close to T squared"
+    ],
+    "answer_index": 1,
+    "explanation": "Activations are (B, T, C) while logits are (B, T, V). The ratio is V/C = 50257/768, about 65. So a single tensor at the end of the model dwarfs any one activation inside it."
+  },
+  {
+    "id": "06.1-059",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — The logits tensor is huge",
+    "question": "For B = 2, T = 1024 in fp32 with GPT-2 small dimensions, roughly how large is the logits tensor in memory?",
+    "options": [
+      "About 412 MB",
+      "About 6.3 MB",
+      "About 41 MB",
+      "About 4.1 GB"
+    ],
+    "answer_index": 0,
+    "explanation": "2 x 1024 x 50257 is about 103M floats; at 4 bytes each that is about 412 MB. 6.3 MB is the size of a (2, 1024, 768) activation inside the stack."
+  },
+  {
+    "id": "06.1-060",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — The logits tensor is huge",
+    "question": "During GPT-2 training, why is the vocabulary-sized logits memory paid more than once?",
+    "options": [
+      "Because each transformer block keeps its own copy of the logits to use during its backward",
+      "Because the optimizer stores two Adam momentum buffers for the logits tensor at every step",
+      "Because the logits are recomputed once per vocabulary token during the backward pass",
+      "Forward keeps logits and log-softmax for backward, which adds a same-sized logit gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "The forward pass holds the logits and the log-softmax that cross-entropy saves for backward, and the backward pass produces dLoss/dlogits, again (B, T, V). Logits are activations, not parameters, so the optimizer has no state for them."
+  },
+  {
+    "id": "06.1-061",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — The logits tensor is huge",
+    "question": "How does long-context training reduce the memory cost of GPT's final projection and cross-entropy?",
+    "options": [
+      "By shrinking the vocabulary to a few hundred tokens for the long-context training phase only",
+      "By skipping the final LayerNorm so that the head can run in place on the residual stream",
+      "By computing the loss only on the first position of each sequence instead of all T positions",
+      "By fusing them and computing the loss in chunks of positions, never forming all of (B, T, V)"
+    ],
+    "answer_index": 3,
+    "explanation": "The (B, T, V) logits scale with both B and T, so long sequences make them huge. Fusing the head with the loss and processing positions in chunks keeps only a slice in memory at a time. Dropping positions or the vocabulary would change the objective."
+  },
+  {
+    "id": "06.1-062",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — The logits tensor is huge",
+    "question": "In GPT-2 training, what happens to the logits-related memory if you double the sequence length T?",
+    "options": [
+      "It stays the same, because the logits tensor depends only on the sizes V and C",
+      "It quadruples, because the logits tensor scales with T squared like attention scores",
+      "It doubles, because the logits, log-softmax and logit gradient are all linear in T",
+      "It halves, because longer sequences are processed in fewer batches per optimizer step"
+    ],
+    "answer_index": 2,
+    "explanation": "Each of these tensors is (B, T, V), so its size is linear in T. Attention scores are what scale with T squared; the logits do not."
+  },
+  {
+    "id": "06.1-063",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "6. Under the hood — arange is on-device",
+    "question": "In GPT-2's forward pass, why must the positions be built with torch.arange(T, device=idx.device)?",
+    "options": [
+      "So the positions are float32 rather than int64, which nn.Embedding lookups require",
+      "So the positions are created on the model's device instead of the CPU default",
+      "So the positions are sorted in descending order, as the causal mask expects them",
+      "So the positions are cached on the module between calls and never recomputed"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.arange defaults to the CPU. If the model and idx are on a GPU, indexing wpe with a CPU tensor fails. Passing device=idx.device creates the indices where the data already lives. The dtype is long, and positions are ascending."
+  },
+  {
+    "id": "06.1-064",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Exercise",
+    "question": "You tie GPT-2's weights, load a checkpoint, then run model.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False). What goes wrong?",
+    "options": [
+      "The new Linear has its own fresh weight: the tie breaks, the head is random, and ~40M parameters are added",
+      "Nothing goes wrong; PyTorch re-establishes the tie automatically whenever lm_head is replaced on the model",
+      "The loaded embedding weights in wte are overwritten in place with the new head's random initial weights",
+      "The model raises an error at construction, because a tied lm_head must be created with a bias term"
+    ],
+    "answer_index": 0,
+    "explanation": "Creating a new nn.Linear allocates a separate weight, so wte and lm_head no longer share a tensor. The head starts from random init instead of the loaded weights, the two tables drift apart, and the parameter count rises by one table (about 38.6M). The fix is to re-run self.transformer.wte.weight = self.lm_head.weight afterwards."
+  },
+  {
+    "id": "06.1-065",
+    "chapter": "06.1",
+    "chapter_name": "Assembling GPT-2",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-01.md",
+    "section": "Check yourself",
+    "question": "With weight tying, how many parameters do GPT-2's token embedding (V, C) and LM head (V, C) contribute together?",
+    "options": [
+      "V * C, counted once, because they are the same tensor",
+      "2 * V * C, because each of the two keeps its own copy",
+      "V * C + V, because the head adds a bias",
+      "V + C, because tying stores only one row and one column"
+    ],
+    "answer_index": 0,
+    "explanation": "Tied weights are one Parameter, so their V * C entries count once: about 38.6M for GPT-2 small, not 77M. lm_head has no bias, so there is no extra V term."
+  }
+]

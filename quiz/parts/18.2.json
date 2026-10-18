@@ -1,0 +1,1064 @@
+[
+  {
+    "id": "18.2-001",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What is the sequence of the observation/action loop in LLM tool use?",
+    "options": [
+      "Runtime executes every registered tool up front, then the model reads all of the results once and writes its answer",
+      "Model proposes a call, runtime executes it, the result returns to context as an observation; repeat until a final answer",
+      "Model generates the final answer first, then tools verify it, then the model is fine-tuned on the verification result",
+      "Model and tools run in parallel on the same prompt, and whichever one finishes first has its output returned to the user"
+    ],
+    "answer_index": 1,
+    "explanation": "Each iteration: the model proposes an action, the runtime runs it, the result is appended as an observation, and the model runs again with it in context. The loop ends when the model returns a final answer with no tool call."
+  },
+  {
+    "id": "18.2-002",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How does the observation/action loop handle tool errors so the model can correct them?",
+    "options": [
+      "Failures are caught and fed back to the model as observations",
+      "Failures are retried silently in code until they finally succeed",
+      "Failures terminate the run and are reported only to the user",
+      "Failures are dropped and the model is told the tool succeeded"
+    ],
+    "answer_index": 0,
+    "explanation": "The loop catches failures and appends them to the context like any other observation. The model reads the error and can fix arguments, choose another tool, or explain the problem."
+  },
+  {
+    "id": "18.2-003",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is the observation/action loop described as the pattern behind every LLM agent?",
+    "options": [
+      "Agents never need more than one tool call per task, so a single model-tool round trip covers every realistic use case",
+      "Real work is a sequence (look up, compute, check, answer); the loop alternates thinking and acting, feeding results back",
+      "The loop replaces the model's forward pass with tool execution, so agents compute their answers without generating text",
+      "Agents are trained only on loop transcripts, so any agent must reproduce that format exactly to work at all"
+    ],
+    "answer_index": 1,
+    "explanation": "A single call rarely completes a task. Alternating model decisions with tool actions, and feeding observations into context, is the general mechanism that agents such as the SWE-agent build on."
+  },
+  {
+    "id": "18.2-004",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "1. The causal story: one call is not enough",
+    "question": "To answer 'What is the capital of France, and how many letters are in its name?', why is a loop needed?",
+    "options": [
+      "Each step depends on a previous tool result: search must return 'Paris' before letters can be counted",
+      "Search tools cannot return city names directly, so the model must first look up a country code and then map it",
+      "The calculator must be called before the search tool, because tools must run in the order they are registered",
+      "The model must answer in two separate messages to the user, one for the capital and one for the letter count"
+    ],
+    "answer_index": 0,
+    "explanation": "The model must search, read the observation, call a counting tool, read that, and only then answer. It cannot know 'Paris' in advance, so it must act, observe, and act again."
+  },
+  {
+    "id": "18.2-005",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "1. The causal story: one call is not enough",
+    "question": "When does the observation/action loop stop under normal operation?",
+    "options": [
+      "When every registered tool has been called at least once",
+      "When the model produces a plain answer instead of a tool call",
+      "After exactly two iterations, one to act and one to answer",
+      "When any tool returns an error observation to the context"
+    ],
+    "answer_index": 1,
+    "explanation": "Termination is signaled by output that contains no parsable tool call. Errors are fed back rather than terminating; a step budget is the separate hard stop."
+  },
+  {
+    "id": "18.2-006",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "1. The causal story: one call is not enough",
+    "question": "In the observation/action loop, what do the model and the loop each supply?",
+    "options": [
+      "The model supplies memory (its weights); the loop supplies intelligence by choosing which tools to run",
+      "The model supplies the tools it was trained with; the loop supplies the vocabulary and the chat template",
+      "The loop supplies everything, including the decisions; the model only formats the loop's output as text",
+      "The model supplies intelligence; the loop supplies memory (the growing context) and hands (the tools)"
+    ],
+    "answer_index": 3,
+    "explanation": "The model decides what to do next. The loop maintains the context that serves as memory and executes tools on the model's behalf."
+  },
+  {
+    "id": "18.2-007",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "2. Intuition: think, act, observe, repeat",
+    "question": "In the notepad analogy for the observation/action loop, what does the notepad represent?",
+    "options": [
+      "The context: everything said and seen so far, which the model rereads each turn",
+      "The model's weights, which are rewritten with each new observation the loop appends",
+      "The tool registry's list of JSON schemas, which the model consults before each call",
+      "A hidden scratch buffer that the model keeps across sessions and never shows the user"
+    ],
+    "answer_index": 0,
+    "explanation": "Each turn the person reads the whole notepad and decides one next thing. That notepad is the message list passed to the model."
+  },
+  {
+    "id": "18.2-008",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "2. Intuition: think, act, observe, repeat",
+    "question": "Why is 'the context is the only memory' true in the observation/action loop?",
+    "options": [
+      "The model stores tool results in a key-value cache that persists across every separate API call",
+      "The model is stateless between turns; everything it remembers is the message list passed to it",
+      "The model's weights receive a small gradient update after every turn that encodes the tool result",
+      "Tools write their results directly into the model's hidden state, bypassing the token context"
+    ],
+    "answer_index": 1,
+    "explanation": "The model has no persistent state across calls. Appending observations to the context is literally how it learns what tools returned."
+  },
+  {
+    "id": "18.2-009",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "2. Intuition: think, act, observe, repeat",
+    "question": "Why does the course's observation/action loop allow only one action per turn?",
+    "options": [
+      "Because models cannot generate two JSON objects",
+      "Because production systems forbid parallel tool calls",
+      "It makes the loop trivial to trace, test, and reason about",
+      "Because the registry can hold only one tool"
+    ],
+    "answer_index": 2,
+    "explanation": "One call per step keeps the trace simple and deterministic. Production systems sometimes allow parallel calls, but that is not needed to understand the mechanism."
+  },
+  {
+    "id": "18.2-010",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "2. Intuition: think, act, observe, repeat",
+    "question": "What is the purpose of a step budget (max_steps) in a tool-use loop?",
+    "options": [
+      "A hard stop so a model that keeps calling tools and never answers cannot loop forever",
+      "A limit on how many tokens each tool may return before its observation gets truncated",
+      "A cap on how many tools may be registered, since each schema consumes context tokens",
+      "A learning-rate schedule for the policy that decays over the steps of a tool-use episode"
+    ],
+    "answer_index": 0,
+    "explanation": "Without a cap, a policy that never emits a final answer would run indefinitely. max_steps turns that into a detectable failure."
+  },
+  {
+    "id": "18.2-011",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "In run_tool_loop, what is the `policy` argument?",
+    "options": [
+      "A dict mapping tool names to permission levels that the loop checks before every single tool call",
+      "A reward function that scores each tool call so the loop can stop early on low-quality actions",
+      "A callable policy(context) -> str giving the model's next text: a tool-call JSON or a prose answer",
+      "A list of allowed message roles that the loop uses to validate every entry it appends to the context"
+    ],
+    "answer_index": 2,
+    "explanation": "policy takes the current context and returns text. In production it is the LLM's forward pass plus decoding; in tests it is a small scripted function, making the loop deterministic and offline."
+  },
+  {
+    "id": "18.2-012",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "Which property of the ToolRegistry does the observation/action loop crucially rely on?",
+    "options": [
+      "That registry.call never raises, returning structured errors instead",
+      "That it executes independent tool calls in parallel within one step",
+      "That it caches tool results across runs so repeated calls are free",
+      "That it validates all arguments with constrained decoding before running"
+    ],
+    "answer_index": 0,
+    "explanation": "Because call never raises, a failing tool becomes an error dict the loop can turn into an observation. That keeps the driver from crashing."
+  },
+  {
+    "id": "18.2-013",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "What are the three message roles in the observation/action loop's context?",
+    "options": [
+      "system (the tool schemas), developer (the loop's instructions), and function (each tool's raw output)",
+      "user (the original prompt), assistant (each model output), and tool (each observation after a tool runs)",
+      "input (the prompt tokens), hidden (the model's reasoning), and output (the final answer to the user)",
+      "query (the model's request), key (the selected tool name), and value (the tool's returned result)"
+    ],
+    "answer_index": 1,
+    "explanation": "The context starts with the user prompt; each model emission is an assistant message; each tool result is appended as a tool message."
+  },
+  {
+    "id": "18.2-014",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "In the observation/action loop's pseudocode, what single branch decides whether the run ends?",
+    "options": [
+      "Whether the latest tool result dict has ok set to True, meaning the task is solved",
+      "Whether parse_tool_call(output) returns None, meaning the model answered in prose",
+      "Whether the output contains the phrase 'final answer' anywhere in its text",
+      "Whether the context has grown past the model's maximum token limit for the run"
+    ],
+    "answer_index": 1,
+    "explanation": "parse_tool_call returning None is the signal that the model answered. Anything else is an action to execute and feed back."
+  },
+  {
+    "id": "18.2-015",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "What does the observation/action loop return if it runs out of steps?",
+    "options": [
+      "The last tool result, returned as the answer with stopped set to final_answer",
+      "The first assistant message, returned as the answer since it holds the plan",
+      "No answer: the loop hits max_steps and returns without a final answer",
+      "An exception indicating the policy is broken, raised after the last step"
+    ],
+    "answer_index": 2,
+    "explanation": "If max_steps iterations pass without a prose output, the loop returns with no answer. In the course's code that is answer=None and stopped=\"max_steps\"."
+  },
+  {
+    "id": "18.2-016",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "In run_tool_loop, what is appended to the context immediately after each policy call?",
+    "options": [
+      "Nothing is appended until the tool has executed, so failed calls leave no trace",
+      "Only the parsed call dict, not the raw text, so the context stays compact",
+      "An assistant message with the model's output, whether it is a call or an answer",
+      "A system message with the remaining step count, so the model can plan ahead"
+    ],
+    "answer_index": 2,
+    "explanation": "The raw output is appended as {\"role\": \"assistant\", \"content\": output} right away. Then it is parsed to decide whether to execute a tool."
+  },
+  {
+    "id": "18.2-017",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "How does _observation_text format a successful tool result?",
+    "options": [
+      "As \"RESULT=<result>; OK\"",
+      "As a JSON object {\"ok\": true, \"result\": ...}",
+      "As \"OBSERVATION: <result>\"",
+      "As \"TOOL <name> RETURNED <result>\""
+    ],
+    "answer_index": 2,
+    "explanation": "On success it returns f\"OBSERVATION: {result['result']}\". This plain text is what the model reads on its next turn."
+  },
+  {
+    "id": "18.2-018",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "How does _observation_text format a failed tool result?",
+    "options": [
+      "It returns an empty string so the model ignores it",
+      "It raises the original exception",
+      "As \"OBSERVATION: ERROR (<error_type>): <error>\"",
+      "As \"OBSERVATION: <result>\" with result set to None"
+    ],
+    "answer_index": 2,
+    "explanation": "Failures become f\"OBSERVATION: ERROR ({error_type}): {error}\", e.g. 'OBSERVATION: ERROR (ValueError): division by zero'. The model sees the error type and message."
+  },
+  {
+    "id": "18.2-019",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "What four keys does run_tool_loop's return dict contain?",
+    "options": [
+      "result, error, steps, and model",
+      "output, logits, tokens, and loss",
+      "answer, reward, policy, and registry",
+      "answer, trace, context, and stopped"
+    ],
+    "answer_index": 3,
+    "explanation": "answer is the final prose or None; trace lists executed calls; context is the full message list; stopped says why the loop ended."
+  },
+  {
+    "id": "18.2-020",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "In run_tool_loop's result, what does len(trace) equal?",
+    "options": [
+      "The number of model turns in the run",
+      "The number of messages in the context",
+      "max_steps, always, regardless of answer",
+      "Exactly the number of tool calls made"
+    ],
+    "answer_index": 3,
+    "explanation": "trace gets one entry per executed tool call, recording step index, tool name, arguments, and raw result. A final prose turn adds no entry."
+  },
+  {
+    "id": "18.2-021",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "What values can the `stopped` field of run_tool_loop's result take, and why does it exist?",
+    "options": [
+      "\"final_answer\" or \"max_steps\", so the caller knows why the loop ended",
+      "\"ok\" or \"error\", indicating whether the last tool call succeeded or not",
+      "\"user\" or \"tool\", naming the role of the last message in the context",
+      "An integer step count only, so callers compare it against max_steps"
+    ],
+    "answer_index": 0,
+    "explanation": "stopped distinguishes a proper finish from exhausting the budget. That lets callers detect non-terminating runs instead of hanging."
+  },
+  {
+    "id": "18.2-022",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "Why is the trace described as the audit log of a tool-use run?",
+    "options": [
+      "It stores the model's gradients for each step so the run can be replayed during training",
+      "It is a compressed copy of the tokenizer output, used to audit token usage for billing",
+      "It records each call's name, arguments, and result: what the agent actually did, for tests",
+      "It contains only the final answer and stopped reason, logged once when the loop ends"
+    ],
+    "answer_index": 2,
+    "explanation": "The trace is what you inspect to see the agent's real actions, including failed calls. Tests check it to verify behavior."
+  },
+  {
+    "id": "18.2-023",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "5. Numerical example: calculator then answer, worked step by step",
+    "question": "In the scripted calculator-then-answer policy, how does the policy decide what to emit?",
+    "options": [
+      "It alternates between calling and answering using a global counter that persists across separate test runs",
+      "It checks the last message's role: if user, emit the calculator call; else read the observation and answer",
+      "It randomly chooses whether to call a tool, using a fixed seed so the test remains deterministic",
+      "It always emits both the call and the answer in one message, and the loop splits them apart"
+    ],
+    "answer_index": 1,
+    "explanation": "On turn 0 the last role is user, so it emits the calculator JSON. On turn 1 the last message is the tool observation, so it splits 'OBSERVATION: 14' and answers 'The answer is 14.'"
+  },
+  {
+    "id": "18.2-024",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "5. Numerical example: calculator then answer, worked step by step",
+    "question": "In the calculator-then-answer run of the observation/action loop, how many model turns and tool calls occur?",
+    "options": [
+      "One model turn and one tool call",
+      "Two model turns and two tool calls",
+      "Three model turns and one tool call",
+      "Two model turns and one tool call"
+    ],
+    "answer_index": 3,
+    "explanation": "Turn 0 emits the call (one trace entry); turn 1 emits prose and ends the loop. The trace has length 1."
+  },
+  {
+    "id": "18.2-025",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "5. Numerical example: calculator then answer, worked step by step",
+    "question": "In the calculator-then-answer loop example, who did the exact computation?",
+    "options": [
+      "The loop and the tool; the model supplied the plan and read the result",
+      "The model, while generating the call's arguments in the JSON string",
+      "The parser, which evaluates arithmetic while extracting the JSON call",
+      "The chat template, which renders computed values into the context"
+    ],
+    "answer_index": 0,
+    "explanation": "The model never multiplied anything. The calculator computed 14 and the model only decided to call it and read the observation."
+  },
+  {
+    "id": "18.2-026",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "What is the single most important robustness property of the observation/action loop?",
+    "options": [
+      "A broken tool call becomes an observation, not an exception",
+      "Every failed tool call is retried in code until it succeeds",
+      "Tools are written so they are never allowed to fail at all",
+      "The loop restarts from step 0 with a fresh context after errors"
+    ],
+    "answer_index": 0,
+    "explanation": "Because registry.call catches everything, the loop keeps going and the model gets a chance to correct itself."
+  },
+  {
+    "id": "18.2-027",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "In the run where the policy first emits a calculator call for '1/0', what tool message appears in the context?",
+    "options": [
+      "TOOL: OBSERVATION: inf, since Python division returns infinity",
+      "No tool message; the loop crashes with ZeroDivisionError",
+      "TOOL: OBSERVATION: ERROR (ValueError): division by zero",
+      "TOOL: OBSERVATION: 0, since the calculator clamps errors to zero"
+    ],
+    "answer_index": 2,
+    "explanation": "The calculator's error is caught by the registry and formatted as an error observation. It is appended to context exactly as a success would be, and the loop continues."
+  },
+  {
+    "id": "18.2-028",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "What does 'retry via feedback' mean in the observation/action loop?",
+    "options": [
+      "The runtime automatically reruns the same call up to three times before reporting a failure",
+      "The model is fine-tuned on each error before continuing, so it does not repeat the mistake",
+      "The error is handed to the model as an observation and the model decides how to fix it",
+      "The user is asked to fix the arguments by hand, then the loop resumes from the failed step"
+    ],
+    "answer_index": 2,
+    "explanation": "We do not silently retry in code. The model reads the error and can fix the argument, pick a different tool, or explain the problem."
+  },
+  {
+    "id": "18.2-029",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "Which two kinds of failure both become error observations in the observation/action loop?",
+    "options": [
+      "Network timeouts and GPU out-of-memory errors, which the registry wraps as structured errors",
+      "Bad arguments (wrong keys or types, a caught TypeError) and tool exceptions (e.g. division by zero)",
+      "Parsing failures in the model's JSON and tokenizer errors when rendering the chat template",
+      "Unknown users and expired sessions, which the runtime reports back as permission observations"
+    ],
+    "answer_index": 1,
+    "explanation": "Whether the arguments don't match the function or the tool itself throws, the registry catches it and the loop appends an OBSERVATION: ERROR message. The driver never crashes."
+  },
+  {
+    "id": "18.2-030",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "When run_tool_loop exhausts its step budget, what does it return?",
+    "options": [
+      "{\"answer\": None, \"stopped\": \"max_steps\"} (plus trace and context)",
+      "It raises a TimeoutError carrying the trace collected so far as its payload",
+      "It returns the last tool result as the answer, with stopped set to final_answer",
+      "It keeps looping past the budget until the user interrupts the process"
+    ],
+    "answer_index": 0,
+    "explanation": "Honoring the budget and returning answer None with stopped max_steps lets the caller detect a non-terminating run instead of hanging."
+  },
+  {
+    "id": "18.2-031",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "7. Multi-step tool use",
+    "question": "To chain two tools in the observation/action loop, what changes?",
+    "options": [
+      "Only the policy's branching; the loop code stays exactly the same",
+      "The loop needs a second inner loop dedicated to the second tool",
+      "The registry must be rebuilt between calls to swap the active tool",
+      "The parser must accept two calls in one output and run them in order"
+    ],
+    "answer_index": 0,
+    "explanation": "Multi-step use is just more iterations of the same four steps. The policy branches on the last observation to choose the next tool or answer."
+  },
+  {
+    "id": "18.2-032",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "7. Multi-step tool use",
+    "question": "In a two-tool run (search for France's capital, then count letters, then answer), what is the trace length?",
+    "options": [
+      "2, one entry per tool call in order",
+      "3, one per model turn",
+      "1, since only the last call is recorded",
+      "4, one per assistant and tool message"
+    ],
+    "answer_index": 0,
+    "explanation": "Two tool calls produce two trace entries; the final prose turn adds none. The context grows by two assistant+tool pairs plus the final assistant answer."
+  },
+  {
+    "id": "18.2-033",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "8. Under the hood: what is the \"policy\" really?",
+    "question": "In a real system, how does policy(context) produce its text?",
+    "options": [
+      "Look up the answer in the tool registry directly by matching the prompt against each tool's description",
+      "Execute the most recent tool again with the same arguments and return its result as the next message",
+      "Render the context with the chat template (schemas in the system message), tokenize, run the forward pass, and decode",
+      "Concatenate all observations without any chat template and return the longest one as the next message"
+    ],
+    "answer_index": 2,
+    "explanation": "The context is rendered via the chat template, tokenized, passed through the model, and decoded — ideally with constrained decoding so tool calls are valid JSON. Parsing, executing, appending, and budgeting stay in the driver."
+  },
+  {
+    "id": "18.2-034",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "8. Under the hood: what is the \"policy\" really?",
+    "question": "Why can the observation/action loop be fully built and tested with no model and no network?",
+    "options": [
+      "Real models are never used with tool loops in practice; production systems hard-code the policy logic",
+      "Loop correctness is independent of policy intelligence: a real model changes the text, not how the loop runs",
+      "The loop caches every model output from a previous online run and replays them offline during the tests",
+      "The tools themselves generate the model's text, so the loop does not need any model to produce its outputs"
+    ],
+    "answer_index": 1,
+    "explanation": "With a scripted policy and offline deterministic tools, every run is reproducible. A real model only changes the text the policy returns."
+  },
+  {
+    "id": "18.2-035",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "8. Under the hood: what is the \"policy\" really?",
+    "question": "What dominates the compute cost of an observation/action loop?",
+    "options": [
+      "The tools, especially the calculator, whose exact arithmetic dominates each step",
+      "Parsing the JSON calls, which requires a full schema validation on every turn",
+      "The model turns: each one is a full generation over a context that keeps growing",
+      "Formatting observation strings, which re-serializes the entire trace each step"
+    ],
+    "answer_index": 2,
+    "explanation": "Each step re-reads and re-attends over an ever-longer context, so long tool-use sessions make context length and KV-cache efficiency important. Tools like a calculator or lookup are negligible by comparison."
+  },
+  {
+    "id": "18.2-036",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Unit test",
+    "question": "A test policy always returns a mock_search call and run_tool_loop is called with max_steps=3. What do the tests assert?",
+    "options": [
+      "stopped == \"max_steps\", answer is None, and len(trace) == 3",
+      "stopped == \"final_answer\", answer is the search result, len(trace) == 1",
+      "The loop raises RuntimeError after the third step with no answer",
+      "answer equals the search result and stopped == \"final_answer\""
+    ],
+    "answer_index": 0,
+    "explanation": "A policy that never answers runs until the budget ends, making one tool call per step. So three trace entries, no answer, and stopped max_steps."
+  },
+  {
+    "id": "18.2-037",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Unit test",
+    "question": "In the test that feeds back a 1/0 calculator error, what does `out[\"trace\"][0][\"result\"][\"ok\"] is False` confirm?",
+    "options": [
+      "The calculator returned infinity and the loop treated it as a valid result",
+      "The policy never called a tool, so the trace entry is an empty placeholder",
+      "The error was caught and recorded, not crashed",
+      "The loop stopped at max_steps before the policy could recover"
+    ],
+    "answer_index": 2,
+    "explanation": "The first trace entry holds the failed result dict. The loop continued and the policy returned 'Recovered after the error.' as the answer."
+  },
+  {
+    "id": "18.2-038",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if a tool loop forgets to append the observation to the context?",
+    "options": [
+      "The model on the next turn has no idea what happened and cannot use the result",
+      "The tool runs twice, because the loop re-executes calls with no recorded observation",
+      "The trace becomes empty, since trace entries are derived from the context messages",
+      "The parser rejects the next output, because tool messages are required between turns"
+    ],
+    "answer_index": 0,
+    "explanation": "The append is how the stateless model learns the tool's result. Without it, the next turn proceeds blind."
+  },
+  {
+    "id": "18.2-039",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is detecting 'done' by looking for keywords like 'final answer' a mistake in a tool loop?",
+    "options": [
+      "Keywords are faster to check but less accurate than counting the output's tokens",
+      "Keywords are fine as long as they are uppercase and appear at the start of the output",
+      "The clean signal is that no tool call was parsed: parse_tool_call(output) is None",
+      "Keyword detection requires a separate classifier model to run after every turn"
+    ],
+    "answer_index": 2,
+    "explanation": "Keywords are brittle; prose may lack them or calls may contain them. Termination should be defined structurally by the absence of a parsable call."
+  },
+  {
+    "id": "18.2-040",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is silently retrying failed calls in code worse than feeding the error back to the model?",
+    "options": [
+      "Retries consume GPU memory that the model needs, so long runs eventually fail with an out-of-memory error",
+      "Retries are forbidden by the JSON Schema spec, so a compliant registry must reject a repeated identical call",
+      "Retries always succeed eventually, which hides real bugs in the tool implementation from the developer",
+      "Blind retries repeat the same mistake, whereas the model can read the error and decide on a fix"
+    ],
+    "answer_index": 3,
+    "explanation": "Repeating an identical failing call usually fails identically. Giving the error to the model lets it change arguments or tools."
+  },
+  {
+    "id": "18.2-041",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Exercise",
+    "question": "A scripted policy emits mock_search(\"chinchilla\") on the first turn and a prose answer using the result on the second. What is len(trace)?",
+    "options": [
+      "2, one entry per model turn, including the prose answer",
+      "0, because search results are not recorded in the trace",
+      "1: one tool call, and the prose turn adds no trace entry",
+      "3, counting the user prompt, the call, and the answer"
+    ],
+    "answer_index": 2,
+    "explanation": "trace counts tool calls, not model turns. Expecting 2 is a common off-by-one; you would need a second JSON call before answering to get 2."
+  },
+  {
+    "id": "18.2-042",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A policy unconditionally returns a calculator call every turn, with max_steps=8. What happens?",
+    "options": [
+      "It calls the tool every turn and stops at max_steps with answer None and len(trace) == 8",
+      "The loop returns 4 as the answer after one step, since the calculator result ends the run",
+      "The loop crashes on the second call, because identical calls raise a duplicate-call error",
+      "The parser rejects repeated identical calls and returns None, so the loop ends after one step"
+    ],
+    "answer_index": 0,
+    "explanation": "Because the policy never branches to prose, parse_tool_call always finds a call. The loop only stops when the budget runs out; the fix is to answer when context[-1]['role'] == 'tool'."
+  },
+  {
+    "id": "18.2-043",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Why is a step budget described as mandatory, given the debugging case of a policy that never answers?",
+    "options": [
+      "It forces the policy to answer correctly within the budget",
+      "It turns an infinite loop into a detectable failure",
+      "It speeds up each model turn by shortening the context",
+      "It reduces the number of tool schemas the model sees"
+    ],
+    "answer_index": 1,
+    "explanation": "Without max_steps, the never-answering policy hangs forever. With it, the run ends with stopped=max_steps, which can be detected and debugged."
+  },
+  {
+    "id": "18.2-044",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Research connection",
+    "question": "How does ReAct (Yao et al., 2022) build on the observation/action loop?",
+    "options": [
+      "It removes the observations and lets the model reason only, so tool results never enter the context",
+      "It trains the model to emit API calls via self-supervised loss filtering on inserted call positions",
+      "It replaces external tools with retrieval over the model's own weights, avoiding a runtime entirely",
+      "It interleaves reasoning traces ('thoughts') with actions and observations in one stream"
+    ],
+    "answer_index": 3,
+    "explanation": "ReAct adds explicit thought steps between actions and observations, and is the basis for the Module 19 agents. The self-supervised call-insertion method is Toolformer, not ReAct."
+  },
+  {
+    "id": "18.2-045",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Check yourself",
+    "question": "What exactly is an 'observation' in the observation/action loop?",
+    "options": [
+      "The model's internal hidden state after each step, cached for the next turn",
+      "The user's feedback on the final answer, appended after the loop finishes",
+      "A tool's execution result, formatted as a tool message and appended to the context",
+      "A log line written to disk for debugging that is never shown to the model"
+    ],
+    "answer_index": 2,
+    "explanation": "It comes from registry.call, as OBSERVATION: <result> on success or OBSERVATION: ERROR (...): ... on failure. It is how the model's next turn learns what happened."
+  },
+  {
+    "id": "18.2-046",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A tool raises an exception mid-run in the observation/action loop. What happens to the loop and the trace?",
+    "options": [
+      "The loop crashes with the exception and the partial trace is lost entirely",
+      "The loop skips the step silently and records nothing in the trace for that call",
+      "The loop ends immediately with stopped='final_answer' and the error as the answer",
+      "It appends an error observation, records the failed result in the trace, and continues"
+    ],
+    "answer_index": 3,
+    "explanation": "registry.call converts the exception into an error dict. The loop keeps going so the model can correct, and the trace preserves the failure for auditing."
+  },
+  {
+    "id": "18.2-047",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Next",
+    "question": "What does Module 19 change in the observation/action loop to build ReAct-style and SWE agents?",
+    "options": [
+      "It removes the step budget, since a capable reasoning model always knows when to stop calling tools",
+      "It swaps the scripted policy for a real reasoning model and adds planning, memory, and richer tools",
+      "It replaces the registry with direct eval of model-written Python code for every action the agent takes",
+      "It removes observations from the context, keeping only the model's reasoning steps to save tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "The driver stays; the policy becomes a real model and the system gains planning, memory, and richer tools."
+  },
+  {
+    "id": "18.2-048",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "2. Intuition: think, act, observe, repeat",
+    "question": "In the notepad analogy for the observation/action loop, what are the two things the problem-solver can write each turn?",
+    "options": [
+      "A question to the user, or a request for more steps from the loop",
+      "An action (a tool call) or an answer (a final conclusion in prose)",
+      "A new tool definition, or an update to an existing tool's schema",
+      "A gradient for its own weights, or a loss value for the last step"
+    ],
+    "answer_index": 1,
+    "explanation": "Each turn the model either acts by writing a tool call or answers in prose. If it acted, the result is written onto the notepad as an observation and it decides again."
+  },
+  {
+    "id": "18.2-049",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "In production, what does the observation/action loop's policy(context) correspond to?",
+    "options": [
+      "Looking up a cached response by hashing the full prompt text",
+      "Executing the most recently registered tool on the current context",
+      "Running the LLM's forward pass on the context and decoding text",
+      "Sampling a random tool from the registry, weighted by past success"
+    ],
+    "answer_index": 2,
+    "explanation": "In tests the policy is scripted; in production it is the model generating its next message from the context."
+  },
+  {
+    "id": "18.2-050",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "3. The loop, precisely — every symbol named",
+    "question": "In the observation/action loop, what is the `prompt` argument used for?",
+    "options": [
+      "It is the system prompt containing the tool schemas and nothing else",
+      "It is the user's task, seeded as the first (user) message of the context",
+      "It is the expected final answer, which the loop compares each output against",
+      "It is re-appended after every tool observation to keep the task in view"
+    ],
+    "answer_index": 1,
+    "explanation": "The context starts as [user: prompt]. Every later message is an assistant output or a tool observation."
+  },
+  {
+    "id": "18.2-051",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "In run_tool_loop, what does each trace entry record?",
+    "options": [
+      "Only the formatted observation string shown to the model",
+      "The model's logits for each token of the tool call",
+      "The full context as it stood at that step of the run",
+      "The step index, tool name, arguments, and the raw result dict"
+    ],
+    "answer_index": 3,
+    "explanation": "Each entry is {step, name, arguments, result}, giving an audit log of exactly what was executed and returned."
+  },
+  {
+    "id": "18.2-052",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "4. From-scratch implementation",
+    "question": "In run_tool_loop, what does a tool message in the context contain besides the role?",
+    "options": [
+      "The tool's Python source code and its JSON schema",
+      "The tool's name and the observation text as content",
+      "Only a boolean success flag and the step index",
+      "The arguments the model passed, but not the result"
+    ],
+    "answer_index": 1,
+    "explanation": "The loop appends {\"role\": \"tool\", \"name\": call[\"name\"], \"content\": _observation_text(result)}."
+  },
+  {
+    "id": "18.2-053",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "5. Numerical example: calculator then answer, worked step by step",
+    "question": "In the calculator-then-answer loop example, why does parse_tool_call return None at step 1?",
+    "options": [
+      "The output 'The answer is 14.' is prose with no JSON call, so it is the final answer",
+      "Because the calculator returned an error that the parser treats as the end of the run",
+      "Because max_steps was reached after one step, so the parser is skipped for the output",
+      "Because the policy returned an empty string, which parse_tool_call maps to None"
+    ],
+    "answer_index": 0,
+    "explanation": "No parsable call means done; the loop returns with stopped=\"final_answer\"."
+  },
+  {
+    "id": "18.2-054",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "In the 1/0 recovery example of the observation/action loop, what does the trace preserve?",
+    "options": [
+      "Nothing, because failed calls are filtered out of the trace before the run returns its result dict",
+      "Only the final answer 'Recovered after the error.' with the step count",
+      "A full Python stack trace of the original ZeroDivisionError from the tool",
+      "The failed result {'ok': False, 'error': 'division by zero', 'error_type': 'ValueError'}"
+    ],
+    "answer_index": 3,
+    "explanation": "The audit log keeps failures so you can see what went wrong, even though the run continued and answered."
+  },
+  {
+    "id": "18.2-055",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "6. Retries and tool errors — the loop must not crash",
+    "question": "After reading an error observation, what can a capable model do in the observation/action loop?",
+    "options": [
+      "Nothing; an error observation always ends the run on the next step",
+      "Modify the registry's code so that the failing tool no longer raises",
+      "Fix the argument, pick a different tool, or explain the problem",
+      "Restart the loop with an empty context and retry the whole task"
+    ],
+    "answer_index": 2,
+    "explanation": "The error is ordinary context. The model decides the recovery strategy."
+  },
+  {
+    "id": "18.2-056",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "7. Multi-step tool use",
+    "question": "In a two-tool observation/action run, how does the context grow?",
+    "options": [
+      "By one message per run, regardless of how many tools are called",
+      "By two assistant+tool message pairs, followed by the final assistant answer",
+      "By replacing earlier messages with the latest observation to save tokens",
+      "By appending only the tool messages, since assistant outputs are discarded"
+    ],
+    "answer_index": 1,
+    "explanation": "Each tool call adds an assistant message and a tool observation; the final prose adds one more assistant message."
+  },
+  {
+    "id": "18.2-057",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "8. Under the hood: what is the \"policy\" really?",
+    "question": "In a real observation/action loop, where are the tool schemas placed when rendering the context with the chat template?",
+    "options": [
+      "In every user message, repeated before each new request",
+      "In the system message, with each tool observation as its own turn",
+      "In the model's weights, learned once during tool-use fine-tuning",
+      "After the final answer, so they never distract the model mid-task"
+    ],
+    "answer_index": 1,
+    "explanation": "The chat template renders schemas into the system message and observations as separate turns, then the model generates the next message."
+  },
+  {
+    "id": "18.2-058",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "8. Under the hood: what is the \"policy\" really?",
+    "question": "Why should a real policy ideally use constrained decoding in the observation/action loop?",
+    "options": [
+      "So that it never produces a prose final answer",
+      "So that it can run fully on CPU without a GPU",
+      "So that tool observations come back shorter",
+      "So any tool call it emits is valid JSON"
+    ],
+    "answer_index": 3,
+    "explanation": "Constrained decoding guarantees syntactically valid calls, while the loop still handles correctness through feedback."
+  },
+  {
+    "id": "18.2-059",
+    "chapter": "18.2",
+    "chapter_name": "The observation/action loop",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-02.md",
+    "section": "Check yourself",
+    "question": "In the two-turn calculator run of the observation/action loop, why does len(trace) equal 1?",
+    "options": [
+      "Because the second call was deduplicated against the first one",
+      "Because the trace stores only successful calls, not failed ones",
+      "Because the first turn is not recorded, only the most recent call",
+      "trace counts tool calls, not model turns; turn 1 was prose"
+    ],
+    "answer_index": 3,
+    "explanation": "Two model turns, one tool call, so the trace has one entry."
+  }
+]

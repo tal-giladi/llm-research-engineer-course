@@ -1,0 +1,1370 @@
+[
+  {
+    "id": "01.3-001",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In information theory, what does the entropy $H(p)$ of a distribution measure?",
+    "options": [
+      "The number of outcomes with nonzero probability under $p$",
+      "The extra cost of encoding $p$'s data with a model $q$",
+      "The largest probability any single outcome of $p$ receives",
+      "The average surprise (information content) per draw from $p$"
+    ],
+    "answer_index": 3,
+    "explanation": "Entropy is the expected surprisal of a distribution: on average, how much information each draw from $p$ carries. The extra cost of using a model $q$ instead of $p$ is the KL divergence, not entropy. Entropy depends on the whole shape of $p$, not just its peak or support size."
+  },
+  {
+    "id": "01.3-002",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What does the cross-entropy $H(p, q)$ represent when data truly comes from $p$ and a model $q$ is used?",
+    "options": [
+      "The average surprisal of $q$'s own samples, scored under $q$ itself",
+      "The probability that $p$ and $q$ pick the same outcome on one draw",
+      "The average cost of scoring/encoding $p$'s data using $q$'s probabilities",
+      "The symmetric distance between $p$ and $q$, the same in either argument order"
+    ],
+    "answer_index": 2,
+    "explanation": "Cross-entropy is the average surprisal you incur when outcomes happen with frequencies $p$ but are scored with $-\\log q(x)$. The surprisal of $q$'s own samples under $q$ would be $H(q)$. It is not symmetric and is not a probability of agreement."
+  },
+  {
+    "id": "01.3-003",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is cross-entropy central to training language models?",
+    "options": [
+      "The LM training loss is cross-entropy between the model's predicted distribution and the true next token",
+      "It measures how large a vocabulary the model needs to cover the training corpus without unknowns",
+      "It replaces the softmax layer at the output, turning raw logits directly into next-token predictions",
+      "It is used only to evaluate models after training; the training loss itself is mean squared error"
+    ],
+    "answer_index": 0,
+    "explanation": "Every language model is trained by minimizing cross-entropy between its predicted next-token distribution $q$ and the true next token. It is the training loss itself, not merely an evaluation metric, and it works alongside (not instead of) softmax."
+  },
+  {
+    "id": "01.3-004",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Cross-entropy decomposes into two parts. Which description of them is correct?",
+    "options": [
+      "Two KL divergences, one from model to truth and one from truth to model, added together",
+      "The model's entropy plus the data's entropy, both reducible by training on more data",
+      "An irreducible part (the data's entropy) plus a reducible part (the KL gap between model and truth)",
+      "A reducible part (the data's entropy) plus an irreducible part (the KL gap between the model and truth)"
+    ],
+    "answer_index": 2,
+    "explanation": "$H(p, q) = H(p) + \\mathrm{KL}(p \\parallel q)$. $H(p)$ depends only on the data and no model can lower it; the KL term is the model's mismatch and can be driven toward zero. The tempting swap gets it backwards: entropy of the data is the fixed part."
+  },
+  {
+    "id": "01.3-005",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "What is the core intuition information theory starts from about surprise?",
+    "options": [
+      "A common event carries more information because it is observed more often",
+      "A rare event is more surprising and carries more information than a common one",
+      "All events carry equal information regardless of probability",
+      "Surprise depends only on how many outcomes are possible, not their probabilities"
+    ],
+    "answer_index": 1,
+    "explanation": "The founding idea is that rare outcomes are more informative: seeing rain in a desert teaches you a lot, seeing sun teaches you almost nothing. So the measure of surprise must be large when $p(x)$ is small, and it depends on each outcome's probability, not just the count of outcomes."
+  },
+  {
+    "id": "01.3-006",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "How is the surprisal (information content) of an outcome $x$ with probability $p(x)$ defined?",
+    "options": [
+      "$\\log p(x)$, equivalently $-\\log \\frac{1}{p(x)}$",
+      "$-\\log p(x)$, equivalently $\\log \\frac{1}{p(x)}$",
+      "$1 - p(x)$, the probability that $x$ does not occur",
+      "$-p(x) \\log p(x)$, the term $x$ adds to the entropy"
+    ],
+    "answer_index": 1,
+    "explanation": "Surprisal is $-\\log p(x) = \\log(1/p(x))$: large when $p(x)$ is near 0 and zero when $p(x) = 1$. Plain $\\log p(x)$ is non-positive, so it has the wrong sign. $-p(x)\\log p(x)$ is one term of the entropy sum, not the surprisal of a single outcome."
+  },
+  {
+    "id": "01.3-007",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "What is the surprisal $-\\log p(x)$ of an outcome that is certain, $p(x) = 1$?",
+    "options": [
+      "$\\log 2$, one bit of information per observation",
+      "$+\\infty$, because it happens on every single draw",
+      "0, because a certain event carries no surprise",
+      "1, the maximum possible surprisal for any event"
+    ],
+    "answer_index": 2,
+    "explanation": "$-\\log 1 = 0$. A certain event teaches you nothing when it happens, so it carries zero information. Infinite surprisal is the opposite extreme, reached as $p(x) \\to 0$."
+  },
+  {
+    "id": "01.3-008",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "Why is the surprisal $-\\log p(x)$ always non-negative?",
+    "options": [
+      "Because the logarithm of any positive number is positive, and $p(x)$ is always positive",
+      "Because probabilities exceed 1 in log space, so $\\log p(x) \\ge 0$ before the sign is applied",
+      "Because $p(x) \\le 1$ makes $\\log p(x) \\le 0$, and the minus sign flips it to $\\ge 0$",
+      "Because surprisal is defined with an absolute value, $|\\log p(x)|$, rather than a minus sign"
+    ],
+    "answer_index": 2,
+    "explanation": "Probabilities lie in $[0, 1]$, and the log of a number at most 1 is at most 0. The leading minus sign turns that non-positive number into a non-negative one. Logs are not always positive (e.g. $\\ln 0.5 < 0$), and no absolute value is involved."
+  },
+  {
+    "id": "01.3-009",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "Surprisal measured with $\\log_2$ is in bits. What unit results from using the natural log $\\ln$?",
+    "options": [
+      "Nats",
+      "Hartleys per bit",
+      "Bits",
+      "Bans"
+    ],
+    "answer_index": 0,
+    "explanation": "Using $\\ln$ gives nats; $\\log_2$ gives bits. Bits count yes/no questions needed to pin down an outcome. The two units differ by the constant factor $\\ln 2 \\approx 0.6931$."
+  },
+  {
+    "id": "01.3-010",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "By what factor do an information quantity in nats and the same quantity in bits differ?",
+    "options": [
+      "$\\ln 2 \\approx 0.6931$, since $\\log_2 x = \\ln x / \\ln 2$",
+      "$e \\approx 2.718$, since nats use base $e$ and bits base 2",
+      "$2$, since bits use base 2 and $\\log_2 x = 2 \\ln x$",
+      "$\\log_{10} 2 \\approx 0.301$, since $\\log_2 x = \\log_{10} x / 2$"
+    ],
+    "answer_index": 0,
+    "explanation": "Change of base gives $\\log_2 x = \\ln x / \\ln 2$, so the value in bits equals the value in nats divided by $\\ln 2 \\approx 0.6931$. It is not a factor of 2 or $e$; the conversion constant is the natural log of the base 2."
+  },
+  {
+    "id": "01.3-011",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "Why does a course that matches PyTorch by hand compute information quantities in nats rather than bits?",
+    "options": [
+      "Bits cannot represent fractional information, so nats are needed for non-integer entropies",
+      "Nats are always smaller numbers than bits, so they avoid overflow in long float32 sums",
+      "PyTorch converts everything to bits internally, so working in nats is needed to undo that conversion",
+      "PyTorch's log, softmax and cross_entropy all use the natural log, so nats match its outputs exactly"
+    ],
+    "answer_index": 3,
+    "explanation": "PyTorch's `log`, `softmax`, and `cross_entropy` use the natural log, so working in nats makes hand computations agree with PyTorch to the last decimal. Bits can be fractional, and PyTorch does not convert to bits."
+  },
+  {
+    "id": "01.3-012",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "1. Intuition: surprise, measured in nats",
+    "question": "An entropy is quoted as some value in bits. How do you convert a value in nats to bits?",
+    "options": [
+      "Divide the nats value by 2, the base of bits",
+      "Divide the nats value by $\\ln 2 \\approx 0.6931$",
+      "Multiply the nats value by $\\ln 2 \\approx 0.6931$",
+      "Take $2$ raised to the nats value, $2^{H}$"
+    ],
+    "answer_index": 1,
+    "explanation": "Since $\\log_2 x = \\ln x / \\ln 2$, a value in nats divided by $0.6931$ (equivalently multiplied by $1.4427$) gives bits. Multiplying by $\\ln 2$ goes the other way (bits to nats). Exponentiating is unrelated to unit conversion."
+  },
+  {
+    "id": "01.3-013",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "How is the entropy $H(p)$ defined in terms of surprisal?",
+    "options": [
+      "The expected surprisal: $H(p) = E_{x\\sim p}[-\\log p(x)] = -\\sum_x p(x)\\log p(x)$",
+      "The maximum surprisal: $H(p) = \\max_x -\\log p(x)$, the rarest outcome's cost",
+      "The unweighted sum of surprisals: $H(p) = -\\sum_x \\log p(x)$ over all outcomes",
+      "The surprisal of the most likely outcome only: $H(p) = -\\log \\max_x p(x)$"
+    ],
+    "answer_index": 0,
+    "explanation": "Entropy weights each outcome's surprisal $-\\log p(x)$ by its probability $p(x)$ and sums: the expectation as a probability-weighted sum. An unweighted sum would treat rare and common outcomes equally, and the max or most-likely-only versions ignore most of the distribution."
+  },
+  {
+    "id": "01.3-014",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "In $H(p) = -\\sum_x p(x)\\log p(x)$, what roles does $p(x)$ play?",
+    "options": [
+      "It is only the argument of the log (the surprisal); the weights over outcomes are uniform",
+      "It is a normalizing constant that makes the sum equal 1, playing no role inside the log",
+      "It is both the weight (how often $x$ occurs) and the argument of the log (the surprisal)",
+      "It is only the weight (how often $x$ occurs); the log uses a separate model distribution"
+    ],
+    "answer_index": 2,
+    "explanation": "In entropy the same distribution supplies both the weights and the logs. That is exactly what distinguishes it from cross-entropy, where the weights come from $p$ but the logs come from a model $q$."
+  },
+  {
+    "id": "01.3-015",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "What convention is used for the term $0 \\log 0$ in entropy, and what does it mean?",
+    "options": [
+      "$0 \\log 0 = 0$: an impossible outcome contributes no surprise",
+      "$0 \\log 0 = 1$: an impossible outcome contributes one nat",
+      "$0 \\log 0 = -\\infty$: an impossible outcome makes entropy infinite",
+      "$0 \\log 0$ is undefined, so such distributions have no entropy"
+    ],
+    "answer_index": 0,
+    "explanation": "By convention $0 \\log 0 = 0$, justified by the limit $p\\log p \\to 0$ as $p \\to 0$. An outcome that never happens is never paid for, so it adds nothing to the average surprise. Distributions with zero entries still have well-defined entropy."
+  },
+  {
+    "id": "01.3-016",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "Which distribution over $K$ outcomes has the maximum entropy, and what is that maximum?",
+    "options": [
+      "The uniform distribution, with entropy $\\log K$ nats",
+      "A one-hot distribution, with entropy $\\log K$ nats",
+      "Any distribution with full support, with entropy 1 nat",
+      "The uniform distribution, with entropy $K$ nats"
+    ],
+    "answer_index": 0,
+    "explanation": "Uniform is maximally uncertain (every outcome equally surprising) and reaches the ceiling $\\log K$. A one-hot distribution is the opposite, with entropy 0. The ceiling is $\\log K$, not $K$; $K$ itself appears after exponentiating, as perplexity."
+  },
+  {
+    "id": "01.3-017",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "What is the entropy of a distribution that puts probability 1 on a single outcome?",
+    "options": [
+      "$+\\infty$, because the other outcomes have zero probability",
+      "1 nat, the minimum nonzero entropy",
+      "$\\log K$, because there are $K$ possible outcomes",
+      "Exactly 0, because there is no uncertainty"
+    ],
+    "answer_index": 3,
+    "explanation": "A one-hot distribution has $H = -(1\\cdot\\log 1) = 0$; the zero entries drop out by $0\\log 0 = 0$. A sure thing carries no surprise. Zero-probability outcomes do not make entropy infinite."
+  },
+  {
+    "id": "01.3-018",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2. Entropy: the average surprisal of a distribution",
+    "question": "The fact that the maximum entropy over $K$ outcomes is $\\log K$ underlies which later quantity?",
+    "options": [
+      "The number of attention heads, which scales with $\\log K$ of the vocabulary",
+      "Perplexity, whose worst (uniform) value equals the vocabulary size",
+      "The KL penalty coefficient in RLHF, which is set to $\\log K$ by default",
+      "The learning rate schedule, whose peak is tied to $\\log K$ of the outputs"
+    ],
+    "answer_index": 1,
+    "explanation": "The $\\log K$ ceiling is why a uniform model has loss $\\log V$ and perplexity $\\exp(\\log V) = V$. That is the perplexity connection; it is unrelated to learning rates, attention heads, or RLHF penalties."
+  },
+  {
+    "id": "01.3-019",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "2.1 Worked example: a 3-outcome distribution",
+    "question": "For $p = (0.5, 0.25, 0.25)$, the entropy is about 1.0397 nats, while the uniform distribution over 3 outcomes has $\\ln 3 \\approx 1.0986$ nats. Why is $p$'s entropy lower?",
+    "options": [
+      "Because $p$ is peakier (favors one outcome), so it carries less surprise per draw than uniform",
+      "Because entropy is always lower for distributions that repeat a probability value, like 0.25 twice",
+      "Because $p$ has fewer possible outcomes than the uniform distribution it is compared with",
+      "Because $p$'s entropy was computed in bits while $\\ln 3$ is in nats, so they are not comparable"
+    ],
+    "answer_index": 0,
+    "explanation": "Uniform is the maximum-entropy distribution, so any distribution that favors some outcome has lower entropy. Both distributions are over 3 outcomes and both values are in nats. Repeated probabilities are not the reason; non-uniformity is."
+  },
+  {
+    "id": "01.3-020",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "3. Cross-entropy: encoding p's data with q's beliefs",
+    "question": "How is the cross-entropy $H(p, q)$ written as a sum?",
+    "options": [
+      "$H(p, q) = -\\sum_x q(x)\\log q(x)$",
+      "$H(p, q) = \\sum_x p(x)\\log \\frac{p(x)}{q(x)}$",
+      "$H(p, q) = -\\sum_x p(x)\\log q(x)$",
+      "$H(p, q) = -\\sum_x q(x)\\log p(x)$"
+    ],
+    "answer_index": 2,
+    "explanation": "Cross-entropy weights by the true $p(x)$ and takes the log of the model $q(x)$. Swapping weights and logs computes a different quantity. $-\\sum q\\log q$ is the model's own entropy, and $\\sum p\\log(p/q)$ is the KL divergence."
+  },
+  {
+    "id": "01.3-021",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "3. Cross-entropy: encoding p's data with q's beliefs",
+    "question": "In cross-entropy $H(p, q)$, why are the weights the true probabilities $p(x)$ while the logs use $q(x)$?",
+    "options": [
+      "Because $p$ is the model's prediction and $q$ is the empirical data, so the data supplies the logs",
+      "Because the logs of $p$ are unknown in practice, so $q$ stands in for them and $p$ only serves to normalize the sum",
+      "Because $q$ must always be uniform, so taking its log adds the same constant $\\log K$ to every term",
+      "Because $p(x)$ is how often each outcome really happens, and $q$ is the distribution used to score/predict it"
+    ],
+    "answer_index": 3,
+    "explanation": "Each time outcome $x$ occurs you are charged $-\\log q(x)$, and $x$ occurs with frequency $p(x)$. So the frequencies are $p$ and the charge uses $q$. There is no requirement that $q$ be uniform, and the weights are not the model's."
+  },
+  {
+    "id": "01.3-022",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "3. Cross-entropy: encoding p's data with q's beliefs",
+    "question": "When is the cross-entropy $H(p, q)$ minimized over $q$, and what is its minimum value?",
+    "options": [
+      "When $q$ is one-hot, where it equals 0",
+      "When $q$ is uniform, where it equals $\\log K$",
+      "When $q = 1 - p$, where it equals the KL divergence",
+      "When $q = p$, where it equals the entropy $H(p)$"
+    ],
+    "answer_index": 3,
+    "explanation": "Cross-entropy equals $H(p)$ exactly when the model matches the truth and is strictly larger for any mismatch. So 'make $q$ match $p$' and 'minimize $H(p,q)$' are the same goal, which is why it is the training loss. A uniform or one-hot $q$ is optimal only if $p$ happens to be that distribution."
+  },
+  {
+    "id": "01.3-023",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "3.1 Worked example: cross-entropy of q against p",
+    "question": "With $p = (0.5, 0.25, 0.25)$ and $q = (0.25, 0.25, 0.5)$, $H(p,q) \\approx 1.2130 > H(p) \\approx 1.0397$. What does the excess of about 0.1733 nats represent?",
+    "options": [
+      "The entropy of $q$, the model's own uncertainty about the next outcome",
+      "The KL divergence $\\mathrm{KL}(p \\parallel q)$, the cost of using the wrong distribution",
+      "The entropy of the uniform distribution minus $H(p)$, the headroom remaining in $p$",
+      "A rounding error from using natural logs instead of base-2 logs in the sums"
+    ],
+    "answer_index": 1,
+    "explanation": "The amount by which cross-entropy exceeds the entropy is exactly $\\mathrm{KL}(p \\parallel q)$: extra average surprisal paid for encoding with $q$ instead of $p$. It is not $H(q)$ and not a numerical artifact."
+  },
+  {
+    "id": "01.3-024",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4. KL divergence: how far q is from p",
+    "question": "How is the KL divergence $\\mathrm{KL}(p \\parallel q)$ defined?",
+    "options": [
+      "$\\sum_x p(x) |\\log p(x) - \\log q(x)|$",
+      "$\\sum_x q(x)\\log \\frac{p(x)}{q(x)}$",
+      "$\\sum_x p(x)\\log \\frac{p(x)}{q(x)}$",
+      "$\\sum_x p(x)\\log \\frac{q(x)}{p(x)}$"
+    ],
+    "answer_index": 2,
+    "explanation": "KL is the $p$-weighted average of the log-ratio $\\log(p/q)$: $E_{x\\sim p}[\\log(p(x)/q(x))]$. Weighting by $q$ gives a different quantity. The absolute-difference sum is total variation, and $-\\sum p \\log q$ is cross-entropy."
+  },
+  {
+    "id": "01.3-025",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4. KL divergence: how far q is from p",
+    "question": "In words, what does $\\mathrm{KL}(p \\parallel q)$ measure?",
+    "options": [
+      "The probability that a sample drawn from $q$ actually came from $p$",
+      "The average surprisal of draws from the true distribution $p$ under $p$",
+      "The total surprisal of $q$ summed over all outcomes, unweighted",
+      "The extra average surprisal paid for using $q$ instead of the true $p$"
+    ],
+    "answer_index": 3,
+    "explanation": "KL measures how much worse $q$ does than the truth: the excess average surprisal over the optimum $H(p)$. The average surprisal of $p$ is the entropy itself. KL is not a probability."
+  },
+  {
+    "id": "01.3-026",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4. KL divergence: how far q is from p",
+    "question": "Which property states that $\\mathrm{KL}(p \\parallel q) \\ge 0$ with equality iff $q = p$?",
+    "options": [
+      "The chain rule of probability",
+      "Bayes' theorem",
+      "Gibbs' inequality",
+      "The triangle inequality"
+    ],
+    "answer_index": 2,
+    "explanation": "Non-negativity of KL, with equality exactly when the distributions match, is Gibbs' inequality. KL does not satisfy the triangle inequality in general (it is not a metric). Bayes and the chain rule are unrelated."
+  },
+  {
+    "id": "01.3-027",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4. KL divergence: how far q is from p",
+    "question": "Why is the KL divergence not a true distance (metric)?",
+    "options": [
+      "Because it is only defined when both $p$ and $q$ are uniform distributions over $K$ outcomes",
+      "Because it is asymmetric: $\\mathrm{KL}(p \\parallel q) \\ne \\mathrm{KL}(q \\parallel p)$ in general",
+      "Because it is zero for some pairs of different distributions, so $\\mathrm{KL} = 0$ does not imply $p = q$",
+      "Because it can be negative, so $\\mathrm{KL}(p \\parallel q) < 0$ happens for some pairs"
+    ],
+    "answer_index": 1,
+    "explanation": "KL is non-negative and zero only when $q = p$, but swapping the arguments generally changes its value, so it fails symmetry. It is never negative and is defined for general distributions."
+  },
+  {
+    "id": "01.3-028",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4. KL divergence: how far q is from p",
+    "question": "In $\\mathrm{KL}(p \\parallel q)$, which distribution supplies the weights?",
+    "options": [
+      "The second argument, $q$ (the model distribution)",
+      "Both $p$ and $q$, averaged together as $(p+q)/2$",
+      "The first argument, $p$ (the true distribution)",
+      "Neither; the weights are uniform over outcomes"
+    ],
+    "answer_index": 2,
+    "explanation": "The first argument provides the weights: $\\mathrm{KL}(p \\parallel q) = \\sum_x p(x)\\log(p(x)/q(x))$. Reversing the order changes which distribution weights the log-ratios, which is why the order matters."
+  },
+  {
+    "id": "01.3-029",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "4.1 Worked example",
+    "question": "In computing $\\mathrm{KL}(p \\parallel q)$, some individual terms $p(x)\\log(p(x)/q(x))$ can be negative. What must be true of the total?",
+    "options": [
+      "The total equals zero whenever any term is negative",
+      "The total must be negative if any term is negative",
+      "The total is undefined if any term is negative",
+      "The total is still $\\ge 0$, by Gibbs' inequality"
+    ],
+    "answer_index": 3,
+    "explanation": "Terms where $q(x) > p(x)$ have a negative log-ratio, but the $p$-weighted sum is always non-negative. For example, with $p = (0.5, 0.25, 0.25)$, $q = (0.25, 0.25, 0.5)$ one term is $-0.173$ yet the total is $+0.173$."
+  },
+  {
+    "id": "01.3-030",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "Which identity ties together cross-entropy, entropy and KL divergence?",
+    "options": [
+      "$H(p, q) = H(p) - \\mathrm{KL}(p \\parallel q)$",
+      "$H(p, q) = H(p) + \\mathrm{KL}(p \\parallel q)$",
+      "$H(p, q) = H(p) \\cdot \\mathrm{KL}(p \\parallel q)$",
+      "$H(p, q) = H(q) + \\mathrm{KL}(q \\parallel p)$"
+    ],
+    "answer_index": 1,
+    "explanation": "Cross-entropy equals entropy plus KL. Since KL is non-negative, this means $H(p,q) \\ge H(p)$. A minus sign would allow the loss to go below the entropy, which cannot happen; the other forms swap or misuse the distributions."
+  },
+  {
+    "id": "01.3-031",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "The derivation of $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ starts by rewriting $\\log q(x)$. Which rewrite is used?",
+    "options": [
+      "$\\log q(x) = \\log p(x) - \\log \\frac{p(x)}{q(x)}$",
+      "$\\log q(x) = \\log p(x) \\cdot \\log q(x)$",
+      "$\\log q(x) = \\frac{\\log p(x)}{\\log(p(x)/q(x))}$",
+      "$\\log q(x) = \\log p(x) + \\log \\frac{p(x)}{q(x)}$"
+    ],
+    "answer_index": 0,
+    "explanation": "From $\\log(p/q) = \\log p - \\log q$, rearranging gives $\\log q = \\log p - \\log(p/q)$. With a plus sign the identity fails (check $p = 0.5$, $q = 0.25$). This split separates 'the best possible log-probability' from 'the gap'."
+  },
+  {
+    "id": "01.3-032",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "The rewrite $\\log q(x) = \\log p(x) - \\log\\frac{p(x)}{q(x)}$ comes from which basic rule?",
+    "options": [
+      "$\\log(a + b) = \\log a + \\log b$, then rearranged once",
+      "$e^{\\log a} = a$, applied to the ratio $p/q$",
+      "$\\log \\frac{a}{b} = \\log a - \\log b$, rearranged",
+      "$\\log(a^b) = a \\log b$, applied to the ratio"
+    ],
+    "answer_index": 2,
+    "explanation": "It is the quotient rule for logs applied to $p(x)/q(x)$, then rearranged to isolate $\\log q(x)$. $\\log(a+b) = \\log a + \\log b$ is false in general, and the power and exponent rules are not what this step uses."
+  },
+  {
+    "id": "01.3-033",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "Why is it useful to split $\\log q(x)$ into $\\log p(x)$ and $\\log\\frac{p(x)}{q(x)}$?",
+    "options": [
+      "It makes the cross-entropy symmetric in $p$ and $q$, so the order of the two arguments no longer matters",
+      "The first piece depends only on the truth (becomes $H(p)$) and the second measures the model's gap (becomes KL)",
+      "It removes the need to know $p$ during training, since only the second piece involves the data",
+      "Both pieces depend only on the model, so they can be optimized separately with two different losses"
+    ],
+    "answer_index": 1,
+    "explanation": "$\\log p(x)$ involves only the true distribution and becomes the entropy; $\\log(p/q)$ is zero when $q(x) = p(x)$ and becomes the KL. This separates the irreducible part from the part the model controls. It does not make anything symmetric."
+  },
+  {
+    "id": "01.3-034",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "In $H(p,q) = H(p) + \\mathrm{KL}(p \\parallel q)$, why does minimizing cross-entropy over the model amount to minimizing KL?",
+    "options": [
+      "Because $H(p)$ is always zero for real data, leaving only the KL term",
+      "Because $H(p)$ is fixed by the data and the optimizer cannot change it",
+      "Because KL and cross-entropy are always equal, whatever $p$ happens to be",
+      "Because the optimizer minimizes $H(p)$ first and then turns to KL"
+    ],
+    "answer_index": 1,
+    "explanation": "The entropy term depends only on the data, so it is a constant with respect to the model's parameters; all change in the loss comes from the KL term. $H(p)$ is zero only for one-hot targets, and cross-entropy equals KL only in that case."
+  },
+  {
+    "id": "01.3-035",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5. The identity H(p, q) = H(p) + KL(p || q)",
+    "question": "In the decomposition of the language-modeling loss, what does the entropy term $H(p)$ represent?",
+    "options": [
+      "The irreducible uncertainty of the language itself, which no model can remove",
+      "The uncertainty introduced by the tokenizer alone, which a better vocabulary removes",
+      "The regularization penalty on the model weights, which shrinks as training proceeds",
+      "The model's own mistakes on the data, which training gradually drives toward zero"
+    ],
+    "answer_index": 0,
+    "explanation": "$H(p)$ is a property of the data: genuine uncertainty about what comes next. No model can do better on average. The model's fault is the KL term, which is zero exactly when $q = p$."
+  },
+  {
+    "id": "01.3-036",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5.1 Verify the whole thing in Python",
+    "question": "In PyTorch, which code computes the cross-entropy $H(p,q)$ for probability tensors `p` and `q`?",
+    "options": [
+      "`(p * (p / q).log()).sum()`",
+      "`-(q * p.log()).sum()`",
+      "`-(p * p.log()).sum()`",
+      "`-(p * q.log()).sum()`"
+    ],
+    "answer_index": 3,
+    "explanation": "Cross-entropy uses weights `p` and logs of `q`. `-(q * p.log()).sum()` swaps them, `-(p * p.log()).sum()` is the entropy of `p`, and `(p * (p/q).log()).sum()` is $\\mathrm{KL}(p\\parallel q)$."
+  },
+  {
+    "id": "01.3-037",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5.1 Verify the whole thing in Python",
+    "question": "In PyTorch, what does `.log()` on a tensor compute?",
+    "options": [
+      "The natural logarithm $\\ln$, so results are in nats",
+      "The log-softmax along the last dimension of the tensor",
+      "The base-2 logarithm, so results are in bits",
+      "The base-10 logarithm, so results are in hartleys"
+    ],
+    "answer_index": 0,
+    "explanation": "Tensor `.log()` is the natural log. That is why the course works in nats: hand calculations then match PyTorch outputs. It is not base 2 or 10, and it is not log-softmax."
+  },
+  {
+    "id": "01.3-038",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "5.1 Verify the whole thing in Python",
+    "question": "When `Hp + KL` is computed in float64 PyTorch and compared with `Hpq`, what is observed?",
+    "options": [
+      "They differ by a small amount, because the KL term is only an approximation",
+      "They differ by exactly $\\ln 2$, because of the change from bits to nats",
+      "`Hp + KL` is always slightly larger than `Hpq` due to rounding",
+      "They agree to machine precision, confirming the identity numerically"
+    ],
+    "answer_index": 3,
+    "explanation": "The identity $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ is exact, so the numbers match to machine precision. There is no unit mismatch (all natural logs) and KL is computed exactly, not approximated."
+  },
+  {
+    "id": "01.3-039",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "When training a language model, what is the 'true' distribution $p$ at a single position?",
+    "options": [
+      "Uniform over the vocabulary, since every token is a possible next token",
+      "One-hot: probability 1 on the observed next token and 0 elsewhere",
+      "The unigram frequency of each token in the training corpus",
+      "The model's own softmax output, treated as a soft target"
+    ],
+    "answer_index": 1,
+    "explanation": "At each position the true next token is a single known token $t$, so $p$ is one-hot on $t$. It is not the model's output, not uniform, and not corpus-wide frequencies."
+  },
+  {
+    "id": "01.3-040",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "When the true distribution is one-hot on token $t$, what does the cross-entropy $H(p, q)$ reduce to?",
+    "options": [
+      "$-\\log q(t)$, the negative log-probability of the true token",
+      "$1 - q(t)$, the probability mass placed on the wrong tokens",
+      "$-\\sum_x \\log q(x)$, summed over every token in the vocabulary",
+      "$-\\log q(t) - \\sum_{x\\ne t} \\log(1 - q(x))$"
+    ],
+    "answer_index": 0,
+    "explanation": "Every term with $p(x) = 0$ vanishes, leaving only the $x = t$ term with weight 1: $-\\log q(t)$. Wrong tokens do not appear at all. $1 - q(t)$ is not a log loss, and the extra terms belong to a binary per-token loss, not categorical cross-entropy."
+  },
+  {
+    "id": "01.3-041",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "Minimizing cross-entropy against one-hot next-token targets is equivalent to what?",
+    "options": [
+      "Maximizing the log-likelihood of the observed text",
+      "Minimizing the entropy of the model's predictions",
+      "Minimizing the KL divergence from the model to the uniform distribution",
+      "Maximizing the entropy of the data"
+    ],
+    "answer_index": 0,
+    "explanation": "With one-hot targets the per-token cross-entropy is $-\\log q(t)$, the negative log-likelihood of the observed token. Summing over positions gives the negative log-likelihood of the text, so minimizing it is maximum likelihood. It does not directly target entropy or uniformity."
+  },
+  {
+    "id": "01.3-042",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "For a one-hot target $p$, what does the identity $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ become?",
+    "options": [
+      "$H(p,q) = H(q)$, since the model's entropy dominates",
+      "$H(p,q) = H(p)$, since $\\mathrm{KL} = 0$ for one-hot $p$",
+      "$H(p,q) = \\log V + \\mathrm{KL}(p\\parallel q)$, since $H(p) = \\log V$",
+      "$H(p,q) = \\mathrm{KL}(p \\parallel q)$, since $H(p) = 0$"
+    ],
+    "answer_index": 3,
+    "explanation": "A one-hot distribution has zero entropy, so for one-hot targets the cross-entropy loss equals the KL divergence: the model's entire loss is its distance from the truth. KL is zero only if the model is exactly one-hot on the correct token."
+  },
+  {
+    "id": "01.3-043",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "In cross-entropy against a one-hot target, how is the model told to distribute probability among the wrong tokens?",
+    "options": [
+      "The loss requires all wrong tokens to have exactly zero probability, enforced term by term",
+      "Each wrong token gets an explicit penalty proportional to its probability in the loss",
+      "Wrong tokens are pushed toward a uniform distribution by a separate entropy term",
+      "It is not told explicitly; only $q(t)$ appears, and softmax handles the rest implicitly"
+    ],
+    "answer_index": 3,
+    "explanation": "Only the true token's probability enters $-\\log q(t)$. The wrong tokens are pushed down implicitly because softmax ties all probabilities together: raising $q(t)$ forces the others to shrink. There is no separate term for them in the loss."
+  },
+  {
+    "id": "01.3-044",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "6. Why cross-entropy against a one-hot target is the LM training signal",
+    "question": "What single scalar per position is the language-model loss?",
+    "options": [
+      "The raw probability the model assigns to the correct next token, unlogged",
+      "The entropy of the model's predicted distribution at that position",
+      "The negative log-probability the model assigns to the correct next token",
+      "The difference between the largest logit and the correct token's logit"
+    ],
+    "answer_index": 2,
+    "explanation": "The per-position LM loss is $-\\log q(t)$. Using the raw probability would not be a log loss. The model's entropy is a different quantity, and the logit gap is not the loss itself (the loss is logsumexp minus the true logit)."
+  },
+  {
+    "id": "01.3-045",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Your hand-computed entropy differs from PyTorch's by a factor of about 0.6931. What is the most likely cause?",
+    "options": [
+      "Using float32 instead of float64, which loses about 30% of the value",
+      "Weighting by $q$ instead of $p$, which swaps the roles of truth and model",
+      "Mixing bits and nats (using $\\log_2$ instead of $\\ln$ or vice versa)",
+      "Forgetting to normalize the distribution so that it sums to 1"
+    ],
+    "answer_index": 2,
+    "explanation": "A factor of exactly $\\ln 2 \\approx 0.6931$ is the signature of a unit mismatch between bits and nats. Wrong weighting or missing normalization give unrelated errors, and float32 vs float64 differences are tiny, not a constant factor."
+  },
+  {
+    "id": "01.3-046",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if you compute $-\\sum_x q(x)\\log p(x)$ when you meant the cross-entropy $H(p,q)$?",
+    "options": [
+      "Weights and logs are swapped, so it computes a different quantity entirely",
+      "Nothing; cross-entropy is symmetric in $p$ and $q$, so the order is free",
+      "It gives the same value as $H(p,q)$, but measured in bits instead of nats",
+      "It gives the KL divergence $\\mathrm{KL}(p \\parallel q)$ instead of cross-entropy"
+    ],
+    "answer_index": 0,
+    "explanation": "In $H(p,q)$ the weights are the true $p(x)$ and the logs are the model $q(x)$. Swapping them computes $H(q,p)$, which is generally different; cross-entropy is not symmetric. It is not a unit change and is not the KL."
+  },
+  {
+    "id": "01.3-047",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why does the asymmetry of KL divergence matter later in a language-model curriculum?",
+    "options": [
+      "It forces the learning rate to be decreased over the course of training",
+      "It determines the vocabulary size the tokenizer is allowed to use",
+      "Argument order matters in RLHF/DPO, where KL penalties are used",
+      "It makes the softmax non-invertible, so logits cannot be recovered"
+    ],
+    "answer_index": 2,
+    "explanation": "KL's asymmetry means the order of arguments encodes which distribution supplies the weights, and this matters in preference-tuning methods like RLHF and DPO. It has nothing to do with vocabulary size, softmax invertibility, or learning rate schedules."
+  },
+  {
+    "id": "01.3-048",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What happens to the loss if the model assigns $q(x) = 0$ to a token that actually occurs ($p(x) > 0$)?",
+    "options": [
+      "The term is dropped by the convention $0 \\log 0 = 0$",
+      "The loss equals $\\log V$, the uniform-model value",
+      "The loss is $+\\infty$, because $-\\log 0 = +\\infty$",
+      "The loss is 0 for that token, since it contributes nothing"
+    ],
+    "answer_index": 2,
+    "explanation": "The convention $0\\log 0 = 0$ applies only when the weight $p(x)$ is zero. Here the weight is positive and the log's argument is zero, giving an infinite loss. That is why models must never output exactly zero probability."
+  },
+  {
+    "id": "01.3-049",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "In entropy and cross-entropy, what decides whether a zero probability is harmless or catastrophic?",
+    "options": [
+      "Whether the distribution has more than two outcomes (harmless) or only two outcomes (catastrophic)",
+      "Whether the zero occurs at the first position of the vector (harmless) or the last position (catastrophic)",
+      "Whether the computation is done in nats (harmless) or in bits, where $\\log_2 0$ is not defined at all (catastrophic)",
+      "Whether the zero is in the weight $p(x)$ (harmless) or inside the log, $q(x)$, with $p(x) > 0$ (catastrophic)"
+    ],
+    "answer_index": 3,
+    "explanation": "A zero weight $p(x) = 0$ makes its term vanish; a zero inside the log with nonzero weight gives $+\\infty$. Position in the vector, units, and number of outcomes do not change this."
+  },
+  {
+    "id": "01.3-050",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why is the convention $0 \\log 0 = 0$ mathematically justified?",
+    "options": [
+      "Because any finite number times infinity is zero, so $0 \\cdot (-\\infty) = 0$",
+      "Because probabilities of zero are rounded up to $10^{-8}$ before taking logs",
+      "Because $\\lim_{p\\to 0^+} p\\log p = 0$: $p$ shrinks faster than $\\log p$ grows",
+      "Because $\\log 0 = 0$ by definition, so the whole term vanishes"
+    ],
+    "answer_index": 2,
+    "explanation": "As $p$ gets smaller, e.g. $0.1\\ln 0.1 = -0.230$, $0.01\\ln 0.01 = -0.046$, $10^{-6}\\ln 10^{-6} \\approx -0.0000138$, the product tends to 0. $\\log 0$ is $-\\infty$, not 0, and $0\\times\\infty$ is not generally zero; the limit justifies the convention."
+  },
+  {
+    "id": "01.3-051",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "What is the intuitive meaning of $0 \\log 0 = 0$ in entropy?",
+    "options": [
+      "An outcome that never happens is never paid for, so it adds no average surprise",
+      "An impossible outcome adds exactly one nat, the cost of ruling it out",
+      "An impossible outcome is maximally surprising, so it dominates the sum",
+      "An impossible outcome doubles the entropy contributed by all the other outcomes"
+    ],
+    "answer_index": 0,
+    "explanation": "Its weight is zero, so the term vanishes. For example $p = (0.5, 0.5, 0)$ has entropy $\\ln 2 \\approx 0.693$, exactly a fair coin; the impossible outcome contributes nothing."
+  },
+  {
+    "id": "01.3-052",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "In cross-entropy, if a token has true probability $p(x) = 0$, how much does the model's $q(x)$ for that token directly affect the score?",
+    "options": [
+      "Not at all, since the term has weight 0",
+      "It adds $-\\log q(x)$ to the loss",
+      "It adds $q(x)$ to the loss",
+      "It makes the loss infinite unless $q(x) = 0$"
+    ],
+    "answer_index": 0,
+    "explanation": "A token with zero true probability gets weight 0 in $-\\sum p\\log q$, so its $q(x)$ does not appear in the score. It matters only indirectly: probability given to it is taken away from tokens that do occur."
+  },
+  {
+    "id": "01.3-053",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "What does `-(p * p.log()).sum()` return in PyTorch for `p = torch.tensor([0.5, 0.5, 0.0])`, and why?",
+    "options": [
+      "`0.0`, because the zero entry zeroes out the whole product before the sum",
+      "`inf`, because `log(0) = -inf` and the minus sign flips it to `+inf`",
+      "`0.6931`, because PyTorch applies the $0\\log 0 = 0$ convention automatically in `log`",
+      "`nan`, because `log(0) = -inf` and `0 * -inf` is `nan` in IEEE floating point"
+    ],
+    "answer_index": 3,
+    "explanation": "The computer evaluates `log(0) = -inf` first, then `0 * -inf`, which is `nan` in IEEE floating point. One `nan` makes the sum `nan`. The convention $0\\log 0 = 0$ exists on paper, not in hardware."
+  },
+  {
+    "id": "01.3-054",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Which PyTorch function computes $x \\log y$ but returns exactly 0 when $x = 0$, implementing $0\\log 0 = 0$?",
+    "options": [
+      "`torch.log1p`",
+      "`torch.nan_to_num`",
+      "`torch.xlogy`",
+      "`torch.logsumexp`"
+    ],
+    "answer_index": 2,
+    "explanation": "`torch.xlogy(x, y)` computes `x * log(y)` and returns 0 wherever `x == 0`, so `-torch.xlogy(p, p).sum()` gives the correct entropy. `log1p` computes $\\log(1+x)$, `logsumexp` is a reduction, and `nan_to_num` would only patch the symptom after the fact."
+  },
+  {
+    "id": "01.3-055",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Besides `torch.xlogy`, how can you avoid the `nan` when computing entropy of a vector containing zeros?",
+    "options": [
+      "Replace the zeros with $-\\infty$ so the log is well defined",
+      "Drop the zero entries first, e.g. sum only over `p[p > 0]`",
+      "Add 1 to every entry before taking the log, then subtract 1",
+      "Take the log in base 2 instead, which handles zero entries"
+    ],
+    "answer_index": 1,
+    "explanation": "Masking to `p[p > 0]` removes exactly the terms that are 0 by convention, giving the correct value. Adding 1 changes the result, changing base does not fix $\\log 0$, and $-\\infty$ entries are not valid probabilities."
+  },
+  {
+    "id": "01.3-056",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why does a `nan` in a computed entropy or loss matter so much during training?",
+    "options": [
+      "It is automatically replaced by zero, so it only slightly biases the loss",
+      "It halts training with an exception immediately",
+      "It only affects logging, not the gradients",
+      "One `nan` makes the whole sum `nan` and poisons every gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "Any `nan` term propagates through the sum, making the loss `nan`, and backpropagation then fills gradients with `nan`, corrupting the weights. It is not silently replaced and does not necessarily raise an exception."
+  },
+  {
+    "id": "01.3-057",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "A one-hot target written as a probability vector, `target`, is used in `-(target * target.log()).sum()`. What bug appears?",
+    "options": [
+      "A shape error, because one-hot vectors cannot be logged",
+      "`nan`, because every non-target entry is $0 \\times \\log 0$",
+      "No bug; the result is exactly 0",
+      "An infinite loss, because the target entry is $\\log 1$"
+    ],
+    "answer_index": 1,
+    "explanation": "Each zero entry gives `0 * log(0) = 0 * -inf = nan`, so the sum is `nan` even though the true answer is 0. The target entry is $1\\cdot\\log 1 = 0$, which is fine; the zeros are the problem."
+  },
+  {
+    "id": "01.3-058",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why can no convention rescue the term $-p(x)\\log q(x)$ when $q(x) = 0$ but $p(x) > 0$?",
+    "options": [
+      "Because the $0\\log 0$ convention only applies when the computation is carried out in bits, not nats",
+      "The weight is nonzero, so the term is genuinely $+\\infty$: the model called the token impossible and it occurred",
+      "Because conventions are only allowed in entropy, and cross-entropy is defined without any special cases",
+      "Because PyTorch reserves the $0\\log 0$ rule for `xlogy`, and plain `log` cannot apply it to this term"
+    ],
+    "answer_index": 1,
+    "explanation": "With $p(x) > 0$ the term is $-p(x)\\times(-\\infty) = +\\infty$, an infinite loss meaning infinite surprise. The $0\\log 0$ convention needs a zero weight, which is absent here. Units are irrelevant."
+  },
+  {
+    "id": "01.3-059",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "The true next token is `cat`. Compare the loss if the model gives $q(\\text{cat}) = 0$ vs $q(\\text{cat}) = 0.001$.",
+    "options": [
+      "Infinite vs about 6.9 nats; the second is large but finite, so gradients can still pull it up",
+      "Zero vs about 6.9 nats; a zero probability is skipped by the $0\\log 0$ convention",
+      "Both are infinite, since any probability below $10^{-2}$ underflows the logarithm in float32 arithmetic",
+      "Both are about 6.9 nats, since the loss saturates once the probability is that small"
+    ],
+    "answer_index": 0,
+    "explanation": "$-\\ln 0 = +\\infty$ while $-\\ln 0.001 \\approx 6.9$. A finite loss gives a usable gradient that pushes the true token's probability up; an infinite one does not."
+  },
+  {
+    "id": "01.3-060",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why does softmax mathematically guarantee $q_i > 0$ for every token?",
+    "options": [
+      "Because softmax clips every output to at least $10^{-8}$ before normalizing the distribution",
+      "Because softmax adds a small epsilon to every output so that no single probability can ever be exactly zero",
+      "Because $e^{z}$ is strictly positive for every real $z$, and the denominator is a positive sum",
+      "Because logits are always positive, so their ratio to the total is positive as well"
+    ],
+    "answer_index": 2,
+    "explanation": "$q_i = e^{z_i}/\\sum_j e^{z_j}$ and $e^{z}$ is positive for all real $z$, so every $q_i$ is positive. Logits can be negative, and standard softmax adds no epsilon or clipping."
+  },
+  {
+    "id": "01.3-061",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "When can softmax output exactly 0 in practice despite the mathematical guarantee?",
+    "options": [
+      "Never; softmax outputs are always strictly positive in float32 and float64 alike",
+      "Only when all logits are equal, so every output collapses to the same tiny value",
+      "Only when a logit is exactly 0, because $e^0$ is then dropped from the sum",
+      "When $e^{z_i}$ underflows in floating point, e.g. $e^{-200}$ in float32 rounds to 0"
+    ],
+    "answer_index": 3,
+    "explanation": "Float32 has a smallest representable value; $e^{-200} \\approx 10^{-87}$ is below it and rounds to exactly 0. A logit of 0 gives $e^0 = 1$, and equal logits give a uniform distribution, neither of which is zero."
+  },
+  {
+    "id": "01.3-062",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "For logits `[0.0, -200.0]` in float32, what do `softmax(...).log()` and `log_softmax(...)` return?",
+    "options": [
+      "Both return `[0, -inf]`",
+      "`[0, -inf]` vs `[0, -200]`",
+      "`[0, -200]` vs `[0, -inf]`",
+      "Both return `[0, -200]`"
+    ],
+    "answer_index": 1,
+    "explanation": "Two-step `softmax` then `log` first forms $e^{-200}$, which underflows to 0, then $\\log 0 = -\\infty$. `log_softmax` computes $z_i - \\log\\sum_j e^{z_j}$ directly and returns the finite $-200$."
+  },
+  {
+    "id": "01.3-063",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "What is the recommended fix for the softmax-then-log underflow problem?",
+    "options": [
+      "Compute $\\log q_i = z_i - \\log\\sum_j e^{z_j}$ directly with `log_softmax`, never forming tiny $q_i$",
+      "Divide the logits by a large temperature before softmax, so no probability gets small enough to underflow",
+      "Add $10^{-8}$ to the softmax output before taking the log, which keeps every value finite and exact",
+      "Compute the softmax in float16, whose extra precision keeps tiny probabilities above zero"
+    ],
+    "answer_index": 0,
+    "explanation": "Log-softmax never forms the tiny probability, so it cannot underflow to 0. Adding an epsilon changes the result and hides the issue; float16 has less range, not more; changing temperature changes the model's distribution."
+  },
+  {
+    "id": "01.3-064",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why does `torch.nn.functional.cross_entropy` take raw logits instead of probabilities?",
+    "options": [
+      "Because it needs the raw logits to infer the vocabulary size from the size of the last dimension",
+      "Because logits take less memory than probabilities, since they are stored in float16",
+      "Because probabilities are not differentiable once they have passed through a softmax",
+      "It computes log-softmax internally, avoiding underflow from forming tiny probabilities"
+    ],
+    "answer_index": 3,
+    "explanation": "`cross_entropy` applies a numerically stable log-softmax to the logits, so for logits `[0, -200]` with target 1 it returns 200, not `inf`. Probabilities are differentiable and have the same memory footprint; the reason is numerical stability."
+  },
+  {
+    "id": "01.3-065",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "`F.cross_entropy(z, t)` is literally equivalent to which composition?",
+    "options": [
+      "`nll_loss(softmax(z), t)`",
+      "`-softmax(z)[t].log().mean()` computed in two steps",
+      "`log_softmax(nll_loss(z, t))`",
+      "`nll_loss(log_softmax(z), t)`"
+    ],
+    "answer_index": 3,
+    "explanation": "`cross_entropy` computes log-probabilities with `log_softmax`, then `nll_loss` picks $-\\log q_t$. Using `softmax` instead of `log_softmax` would not be a log-probability, and the explicit two-step softmax-then-log version reintroduces underflow."
+  },
+  {
+    "id": "01.3-066",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "In the stable log-sum-exp $m + \\log\\sum_j e^{z_j - m}$, what is $m$?",
+    "options": [
+      "The mean logit in the row, $\\frac{1}{V}\\sum_j z_j$",
+      "The minimum logit in the row, $\\min_j z_j$",
+      "The maximum logit in the row, $\\max_j z_j$",
+      "The logit of the true token, $z_t$"
+    ],
+    "answer_index": 2,
+    "explanation": "Subtracting the max $m$ makes the largest shifted exponent $e^0 = 1$ and all others at most 1. That prevents overflow and keeps the sum at least 1. The mean or minimum does not give these guarantees."
+  },
+  {
+    "id": "01.3-067",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why does $m + \\log\\sum_j e^{z_j - m}$ equal $\\log\\sum_j e^{z_j}$ exactly?",
+    "options": [
+      "Because the max term dominates the sum and the remaining terms are dropped as negligible",
+      "Because $\\log$ is linear, so $\\log\\sum_j e^{z_j} = \\sum_j \\log e^{z_j - m} + m$",
+      "Because $e^{z_j - m} = e^{z_j} - e^m$, so the shift cancels inside the sum",
+      "Factoring $e^m$ out of the sum: $\\log(e^m \\sum_j e^{z_j - m}) = m + \\log\\sum_j e^{z_j - m}$"
+    ],
+    "answer_index": 3,
+    "explanation": "Each $e^{z_j} = e^m e^{z_j - m}$, so the sum factors as $e^m \\sum_j e^{z_j-m}$, and the log of a product splits into $m$ plus the rest. It is exact, not an approximation that drops terms."
+  },
+  {
+    "id": "01.3-068",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "In stable log-softmax on logits $(0, -200)$, $e^{-200}$ still underflows to 0. Why is that harmless here?",
+    "options": [
+      "It is harmless because the underflowed term is multiplied by zero later in the loss computation",
+      "It is only added to the max term $e^0 = 1$, so the sum is off by about $10^{-87}$, a negligible error",
+      "It is not harmless at all; the loss becomes infinite as soon as any term underflows to zero",
+      "It is harmless because PyTorch switches to float64 automatically whenever an exponential underflows to zero"
+    ],
+    "answer_index": 1,
+    "explanation": "The tiny exponential only appears as an addend next to $e^0 = 1$, so the computed sum is 1 instead of $1 + 10^{-87}$. Meanwhile $z_1 = -200$ enters the final subtraction as an ordinary number, giving $\\log q_1 = -200$ and loss 200."
+  },
+  {
+    "id": "01.3-069",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why can the log-sum-exp in a max-shifted log-softmax never be $-\\infty$?",
+    "options": [
+      "The sum always contains the max term $e^0 = 1$, so it is at least 1 and its log is at least 0",
+      "Because each exponential is rounded up to $10^{-38}$, the smallest float32, before it is summed",
+      "Because the log is only ever applied to the max logit, never to the full sum of exponentials",
+      "Because logits are clipped to be non-negative, so every exponential in the sum is at least 1"
+    ],
+    "answer_index": 0,
+    "explanation": "After subtracting the max, at least one shifted logit is exactly 0, contributing $e^0 = 1$. The sum is therefore $\\ge 1$, so the log-sum-exp offset is $\\ge m$ and finite. No clipping or rounding up is involved."
+  },
+  {
+    "id": "01.3-070",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Besides avoiding $\\log 0$, what other numerical problem does subtracting the max logit prevent?",
+    "options": [
+      "Negative probabilities, which large negative logits would otherwise produce",
+      "Overflow: large logits like 1000 would make $e^{1000} = \\text{inf}$ in float32",
+      "Division by zero, which happens whenever all the logits in a row are equal",
+      "Loss of gradient for the true token when its logit is the largest one"
+    ],
+    "answer_index": 1,
+    "explanation": "With $z = (1000, 800)$, the naive $e^{1000}$ is `inf`. Shifted by the max, the exponentials are $e^0$ and $e^{-200}$, giving log-sum-exp 1000 and $\\log q_2 = -200$. Equal logits never cause division by zero, and softmax never yields negative probabilities."
+  },
+  {
+    "id": "01.3-071",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "\"Forgetting 0 log 0 = 0\", in detail",
+    "question": "Why does subtracting the max logit from every logit not change the softmax output?",
+    "options": [
+      "Softmax is invariant to adding the same constant to all logits; only differences matter",
+      "Because the shift is undone by a later multiplication by $e^m$ inside the loss function",
+      "Because the max logit is always zero after training, so subtracting it changes nothing",
+      "It does change the output slightly, but the change stays within float32 tolerance"
+    ],
+    "answer_index": 0,
+    "explanation": "Shifting all logits by a constant multiplies numerator and denominator by the same factor, which cancels. So the probabilities are exactly the same; the max logit need not be zero originally."
+  },
+  {
+    "id": "01.3-072",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Exercise",
+    "question": "If a model's $q$ is uniform over 2 outcomes, what is its cross-entropy against any true distribution $p$ over those outcomes?",
+    "options": [
+      "0 nats, since a uniform model is never surprised",
+      "It depends on $p$ and can be any non-negative value",
+      "$\\ln 2 \\approx 0.6931$ nats, regardless of $p$",
+      "$H(p)$ nats, since cross-entropy then equals entropy"
+    ],
+    "answer_index": 2,
+    "explanation": "When $q$ is uniform both logs equal $\\ln 0.5$, and the weights $p(x)$ sum to 1, so $H(p,q) = -\\ln 0.5 = \\ln 2$. In general a uniform model over $K$ outcomes always costs $\\ln K$."
+  },
+  {
+    "id": "01.3-073",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Exercise",
+    "question": "Given $H(p)$ and $H(p,q)$ for a true distribution $p$ and model $q$, how can $\\mathrm{KL}(p\\parallel q)$ be obtained without summing log-ratios?",
+    "options": [
+      "$\\mathrm{KL}(p\\parallel q) = H(p,q) + H(p)$",
+      "$\\mathrm{KL}(p\\parallel q) = H(p,q) - H(p)$",
+      "$\\mathrm{KL}(p\\parallel q) = H(p) - H(p,q)$",
+      "$\\mathrm{KL}(p\\parallel q) = H(p,q) / H(p)$"
+    ],
+    "answer_index": 1,
+    "explanation": "Rearranging $H(p,q) = H(p) + \\mathrm{KL}(p\\parallel q)$ gives KL as cross-entropy minus entropy. $H(p) - H(p,q)$ would be non-positive, contradicting KL's non-negativity."
+  },
+  {
+    "id": "01.3-074",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Term by term, how do entropy $H(p)$ and cross-entropy $H(p,q)$ differ?",
+    "options": [
+      "Entropy sums over every outcome, while cross-entropy takes a maximum over the outcomes instead",
+      "Entropy uses natural logs throughout, while cross-entropy uses base-2 logs for every term",
+      "Entropy weights each term by the model $q$, while cross-entropy weights each term by the true $p$",
+      "Both weight by the true $p$; entropy takes logs of $p$, cross-entropy takes logs of the model $q$"
+    ],
+    "answer_index": 3,
+    "explanation": "Both are probability-weighted sums of negative log-probabilities with weights from $p$. The difference is whose log-probabilities appear: $p$'s in entropy, $q$'s in cross-entropy. They are equal exactly when $q = p$, and otherwise $H(p,q) > H(p)$."
+  },
+  {
+    "id": "01.3-075",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Check yourself",
+    "question": "With one-hot targets, what does driving the cross-entropy loss to 0 require of the model?",
+    "options": [
+      "Its logits must all be exactly zero, so that every token receives the same probability",
+      "Its $q$ must exactly match the one-hot target, putting probability 1 on the true token",
+      "Its distribution must become uniform, spreading probability evenly over the vocabulary",
+      "Its entropy must equal $\\log V$, the maximum possible uncertainty over the vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "For one-hot $p$, loss $= \\mathrm{KL}(p\\parallel q) = -\\log q(t)$, which is 0 only when $q(t) = 1$. Uniform predictions or zero logits give loss $\\log V$, the opposite of perfect."
+  },
+  {
+    "id": "01.3-076",
+    "chapter": "01.3",
+    "chapter_name": "Entropy, cross-entropy, KL divergence",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-03.md",
+    "section": "Check yourself",
+    "question": "A hand-computed entropy is 0.693 but a textbook says 1.0 for the same distribution. What is the explanation?",
+    "options": [
+      "The hand calculation forgot the minus sign, which flips and shrinks the result",
+      "The textbook uses bits and the hand calculation uses nats; $0.693 = 1.0 \\times \\ln 2$",
+      "The hand calculation applied the $0\\log 0 = 0$ convention incorrectly to a zero entry",
+      "The textbook used a different distribution with more outcomes and hence more entropy"
+    ],
+    "answer_index": 1,
+    "explanation": "$0.693 \\approx \\ln 2$, the bits-to-nats factor, so 1 bit equals 0.693 nats. A missing minus sign would produce a negative value, not a scaled one. To convert nats to bits multiply by $1/\\ln 2 \\approx 1.4427$."
+  }
+]

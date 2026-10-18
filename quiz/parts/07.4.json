@@ -1,0 +1,1514 @@
+[
+  {
+    "id": "07.4-001",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In LLM training-cost reasoning, what does MFU (Model FLOPs Utilization) primarily tell an engineer?",
+    "options": [
+      "How many total training tokens the run will need before the loss converges",
+      "Whether the model's parameters and optimizer state fit in GPU memory",
+      "Whether the run is wasting the hardware's available arithmetic throughput",
+      "How many FLOPs a single forward pass costs per token at this width"
+    ],
+    "answer_index": 2,
+    "explanation": "MFU is achieved FLOP/s divided by the hardware's peak FLOP/s, so it measures how much of the accelerator's arithmetic capacity the run actually uses. A low MFU means the GPU is idle part of the time. Memory fit is answered by memory accounting, and FLOPs per token by the 6N rule, not by MFU."
+  },
+  {
+    "id": "07.4-002",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Training-memory accounting splits memory into four buckets. Which four?",
+    "options": [
+      "Parameters, gradients, KV cache, and logits",
+      "Weights, biases, LayerNorm gains, and embeddings",
+      "Parameters, optimizer state, data-loader buffers, and checkpoints",
+      "Parameters, gradients, optimizer state, and activations"
+    ],
+    "answer_index": 3,
+    "explanation": "Training memory is parameters, gradients (one per parameter), optimizer state (for Adam, two buffers per parameter), and activations (the forward-pass tensors saved for backward). The KV cache is an inference concept, and logits are just one (often the largest) activation tensor, not a separate bucket."
+  },
+  {
+    "id": "07.4-003",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "1. Intuition: two questions about every run",
+    "question": "Before launching a training run, which two questions are answered by back-of-envelope estimates based mostly on the parameter count N?",
+    "options": [
+      "What peak learning rate to use, and how many warmup steps it needs",
+      "How much arithmetic the run requires, and whether it fits in memory",
+      "Which tokenizer to train, and what vocabulary size gives the best loss",
+      "How well the model will generalize, and at what step it will overfit"
+    ],
+    "answer_index": 1,
+    "explanation": "The two questions about every run are how much arithmetic it is (which sets wall-clock time and dollar cost) and whether it fits in memory (which sets whether it runs at all). Both have simple estimates that depend mostly on N. Hyperparameters and generalization are not predicted by these estimates."
+  },
+  {
+    "id": "07.4-004",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "1. Intuition: two questions about every run",
+    "question": "What is the standard estimate of total training compute for a transformer with N non-embedding parameters trained on D tokens?",
+    "options": [
+      "About 6·N·D FLOPs",
+      "About 2·N·D FLOPs",
+      "About 6·N·D² FLOPs",
+      "About 12·N·D FLOPs"
+    ],
+    "answer_index": 0,
+    "explanation": "Forward plus backward costs about 6N FLOPs per token, and the run processes D tokens, so total compute is about 6ND. 2ND counts only the forward pass and underestimates the cost threefold. Compute is linear in D, not quadratic."
+  },
+  {
+    "id": "07.4-005",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "1. Intuition: two questions about every run",
+    "question": "In fp32 training with AdamW, which memory bucket is the only one whose size depends on batch size and context length?",
+    "options": [
+      "Gradients",
+      "Activations",
+      "Optimizer state",
+      "Parameters"
+    ],
+    "answer_index": 1,
+    "explanation": "Parameters, gradients, and Adam's m and v each hold a fixed number of values per parameter, regardless of the batch. Activations are the intermediate tensors of the forward pass, one set per example per position, so they scale with batch × context. Gradients have the shape of the weights, not of the batch."
+  },
+  {
+    "id": "07.4-006",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "1. Intuition: two questions about every run",
+    "question": "How many stored numbers does the Adam/AdamW optimizer state hold for a model with N parameters?",
+    "options": [
+      "N — one momentum value per parameter, updated in place each step",
+      "4N — two moments plus fp32 copies of the params and the gradients",
+      "N/2 — the second moment is shared across each row of a weight matrix",
+      "2N — one first-moment and one second-moment value per parameter"
+    ],
+    "answer_index": 3,
+    "explanation": "AdamW keeps two buffers per parameter: m (first moment) and v (second moment), so its state is 2N numbers. That is why Adam alone doubles the parameter memory, and with params and grads the fixed total is 4N numbers. Plain SGD with momentum would be N."
+  },
+  {
+    "id": "07.4-007",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "When counting FLOPs for a matrix multiply, why does each multiply-add count as 2 FLOPs?",
+    "options": [
+      "It consists of one multiplication and one addition",
+      "The backward pass repeats each operation once",
+      "Each operand is read from memory twice",
+      "Floating-point ops are counted in pairs by convention for bf16"
+    ],
+    "answer_index": 0,
+    "explanation": "A multiply-add is two arithmetic operations: a multiply and an add. So a length-C vector times a C×C matrix, which is C² multiply-adds, costs 2C² FLOPs. The factor for the backward pass is a separate thing that turns 2N into 6N."
+  },
+  {
+    "id": "07.4-008",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "How many FLOPs does it cost to multiply one length-C input vector by a C×C weight matrix?",
+    "options": [
+      "C² FLOPs",
+      "C²/2 FLOPs",
+      "2C² FLOPs",
+      "2C³ FLOPs"
+    ],
+    "answer_index": 2,
+    "explanation": "The product has C outputs, each a length-C dot product, so there are C² multiply-adds. Counting a multiply-add as 2 FLOPs gives 2C². 2C³ is the cost of multiplying two C×C matrices, not a vector by a matrix."
+  },
+  {
+    "id": "07.4-009",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "Why does a transformer's forward pass cost about 2N FLOPs per token, where N is the non-embedding parameter count?",
+    "options": [
+      "Each weight is read twice, once for keys and once for queries",
+      "Each token passes through two copies of every layer",
+      "The residual stream doubles the work of every matmul",
+      "Each weight is used in roughly one multiply-add (2 FLOPs) per token"
+    ],
+    "answer_index": 3,
+    "explanation": "The dominant cost is matmuls against the weights, and each weight participates in about one multiply-add per token. One multiply-add is 2 FLOPs, so the forward pass costs about 2N FLOPs per token. Residual additions and other elementwise ops are tiny by comparison."
+  },
+  {
+    "id": "07.4-010",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "Why does the backward pass cost roughly twice the forward pass (≈ 4N vs ≈ 2N FLOPs per token)?",
+    "options": [
+      "It must recompute the entire forward pass before it can start differentiating anything",
+      "It computes two gradients per matmul: one for the input and one for the weights",
+      "It runs the optimizer update inside every matmul as the gradients arrive",
+      "It computes second derivatives of the loss, which Adam needs for its v buffer"
+    ],
+    "answer_index": 1,
+    "explanation": "For every weight matmul, backward computes the gradient with respect to the layer's input (to keep propagating) and the gradient with respect to the weights (for the optimizer). Each is a matmul about as expensive as the forward one, so backward ≈ 2 × 2N = 4N. Recomputation only happens with activation checkpointing, and Adam uses first derivatives only."
+  },
+  {
+    "id": "07.4-011",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "In the backward pass of a linear layer, which gradient is the one the optimizer actually uses to update the model?",
+    "options": [
+      "The gradient of the loss with respect to the layer's weights",
+      "The gradient of the loss with respect to the layer's input",
+      "The gradient of the layer's output with respect to its bias only",
+      "The gradient of the logits with respect to the token embeddings"
+    ],
+    "answer_index": 0,
+    "explanation": "∂L/∂W is what becomes the parameter's .grad and is used by the optimizer step. ∂L/∂x, the gradient with respect to the input, is needed to continue back-propagating to earlier layers, but it is not stored as a parameter gradient. Both cost about one matmul each."
+  },
+  {
+    "id": "07.4-012",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "In backpropagation through a linear layer, what is the gradient with respect to the layer's input (∂L/∂x) used for?",
+    "options": [
+      "It is stored in the layer's .grad and applied by the optimizer at the next step",
+      "It is used to rescale the learning rate of each layer in proportion to its gradient norm",
+      "It is passed to the previous layer as its upstream gradient, so backprop can continue",
+      "It is added to the weights as a regularization term, like weight decay but per input"
+    ],
+    "answer_index": 2,
+    "explanation": "∂L/∂x has the shape of the layer's input activation and is handed to the earlier layer so the chain rule can keep going. The optimizer instead uses ∂L/∂W. Without ∂L/∂x, no layer below the current one would receive a gradient."
+  },
+  {
+    "id": "07.4-013",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "In the 6N FLOPs-per-token rule, how does the factor 6 decompose?",
+    "options": [
+      "2 (forward) + 2 (grad w.r.t. input) + 2 (grad w.r.t. weights)",
+      "3 (forward) + 3 (backward, mirroring the forward pass exactly)",
+      "2 (forward) + 2 (backward) + 2 (AdamW optimizer update)",
+      "1 (embedding) + 2 (attention) + 3 (MLP, as the widest block)"
+    ],
+    "answer_index": 0,
+    "explanation": "Forward is one matmul per weight (2 FLOPs/param/token), and backward is two matmuls per weight: one for the input gradient and one for the weight gradient, 2 FLOPs each. So 6 = 2 + 2 + 2. The optimizer update costs a few FLOPs per parameter per step, not per token, so it is negligible."
+  },
+  {
+    "id": "07.4-014",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "2. The 6N rule: 2 forward + 4 backward",
+    "question": "In the total training compute estimate 6ND that appears throughout scaling-law papers, what is D?",
+    "options": [
+      "The model's hidden dimension",
+      "The total number of training tokens",
+      "The number of transformer layers",
+      "The dataset size in bytes"
+    ],
+    "answer_index": 1,
+    "explanation": "D is the number of tokens the model is trained on. Each token costs about 6N FLOPs forward+backward, so the run costs about 6ND FLOPs. The hidden width is usually written C or d_model, and layers n_layer."
+  },
+  {
+    "id": "07.4-015",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "What is the standard estimate of a GPT-style transformer's non-embedding parameter count?",
+    "options": [
+      "4 · n_layer · n_embd²",
+      "12 · n_layer · n_embd · vocab_size",
+      "12 · n_layer · n_embd²",
+      "8 · n_layer² · n_embd"
+    ],
+    "answer_index": 2,
+    "explanation": "Each layer has 4C² attention weights plus 8C² MLP weights, 12C² in total, and there are n_layer layers, so N ≈ 12·n_layer·C². Vocabulary size only enters the embedding, which is excluded. 4C² is attention alone."
+  },
+  {
+    "id": "07.4-016",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "Per transformer layer, where do the 4C² attention weights come from?",
+    "options": [
+      "Four heads, each with its own full C×C projection matrix",
+      "Q, K and V, plus the T×T attention-probability matrix",
+      "Two C×2C matrices, one fused for keys and one for values",
+      "Four C×C matrices: W_Q, W_K, W_V and the output W_O"
+    ],
+    "answer_index": 3,
+    "explanation": "Three C×C matrices produce the query, key and value vectors, and the fourth, W_O, maps the combined head outputs back into the residual stream. The attention-probability matrix is computed from activations and has no weights. The number of heads does not change the count."
+  },
+  {
+    "id": "07.4-017",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "In a transformer attention block, what does the output projection W_O do?",
+    "options": [
+      "Projects the input token embeddings into the query vectors used for the attention scores",
+      "Converts the raw attention scores into probabilities before they weight the value vectors",
+      "Maps the C-dim concatenation of all heads' weighted values back into the residual stream",
+      "Maps the final hidden state of the last layer to the vocabulary logits for the loss"
+    ],
+    "answer_index": 2,
+    "explanation": "After attention has mixed the value vectors of all heads into one C-dim vector, W_O (C×C) projects that result back into the residual stream. Queries come from W_Q, probabilities from softmax (no weights), and logits from the LM head."
+  },
+  {
+    "id": "07.4-018",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "In a GPT implementation where attn.c_attn maps C → 3C and attn.c_proj maps C → C, how many weights are in the attention block per layer (ignoring biases)?",
+    "options": [
+      "3C² only, since c_proj is part of the MLP",
+      "3C² + C² = 4C²",
+      "6C², because the fused layer has two outputs per input",
+      "C², because Q, K, V share one matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "c_attn fuses W_Q, W_K, W_V into one C→3C linear, which has 3C² weights, and c_proj is W_O with C² weights. Together they give 4C². Fusing the three projections changes the kernel layout, not the parameter count."
+  },
+  {
+    "id": "07.4-019",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "How does splitting attention into H heads of size C/H change the number of weights in W_Q (and likewise W_K, W_V, W_O)?",
+    "options": [
+      "None: the H heads together still use one C×C matrix",
+      "It multiplies it by H, since each head has its own C×C matrix",
+      "It divides it by H, since each head only sees C/H of the input",
+      "It divides it by H², since each head is (C/H)×(C/H)"
+    ],
+    "answer_index": 0,
+    "explanation": "Each head uses a C×(C/H) slice, and H such slices together form one C×C matrix. So multi-head attention has the same 4C² attention weights as single-head attention. Heads change how the work is partitioned, not the parameter count."
+  },
+  {
+    "id": "07.4-020",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "Why does a transformer MLP block with hidden size 4C contribute 8C² weights per layer?",
+    "options": [
+      "It has eight C×C matrices, one for each of the eight experts in the block",
+      "The GELU nonlinearity has its own weights, doubling the 4C² of the linear",
+      "It has a single C→8C linear layer followed by a parameter-free projection",
+      "The C→4C linear has 4C² weights and the 4C→C linear has another 4C²"
+    ],
+    "answer_index": 3,
+    "explanation": "The MLP expands C to 4C (4C² weights) and contracts 4C back to C (another 4C²), for 8C² total. GELU is an elementwise nonlinearity with no weights. Combined with attention's 4C², each layer has 12C²."
+  },
+  {
+    "id": "07.4-021",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "Why are biases and LayerNorm weights dropped from the 12·n_layer·C² parameter estimate?",
+    "options": [
+      "They are frozen during training, so they never count toward N at all",
+      "They are O(C) per layer, negligible next to the O(C²) weight matrices",
+      "They are stored in a separate dtype that takes no extra memory on GPU",
+      "They are folded into the embedding table when the model is constructed"
+    ],
+    "answer_index": 1,
+    "explanation": "Biases and LayerNorm gains/biases have length C (or 4C), so they add only O(C) parameters per layer, against 12C² for the weight matrices. For GPT-2 small the estimate is within about 0.15% of the true non-embedding count. They are trained normally."
+  },
+  {
+    "id": "07.4-022",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "Why is the input token embedding excluded from N in the 6N FLOP rule?",
+    "options": [
+      "Embedding is a table lookup: no matmul, so essentially no FLOPs",
+      "Embedding parameters receive no gradient during pretraining",
+      "Embedding is computed once per dataset rather than once per token",
+      "Embedding parameters are always stored in int8, outside FLOP counts"
+    ],
+    "answer_index": 0,
+    "explanation": "Looking up a token's row reads values but does no multiply-adds, so those parameters do not each cost one multiply-add per token. The embedding does receive gradients and is trained. It is excluded from the FLOP count because it is not a matmul."
+  },
+  {
+    "id": "07.4-023",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What N means here, and the caveat",
+    "question": "The output head of a GPT with tied embeddings computes logits = x·W_Eᵀ, a C×V matmul. How does the standard 6N convention treat it?",
+    "options": [
+      "It is included, and counted twice, because tied weights appear in two places",
+      "It costs nothing at all, because the weights are shared with the input embedding",
+      "It is folded into the attention-score FLOPs, which the 6N rule already includes",
+      "It is real matmul work, but the convention counts only non-embedding parameters"
+    ],
+    "answer_index": 3,
+    "explanation": "The head really is a matmul and costs FLOPs, but the 6N convention uses non-embedding parameters only, so it is omitted. Tying weights shares memory, not compute. For large models it is a few percent; for GPT-2 small, with a vocabulary large relative to C, it is significant."
+  },
+  {
+    "id": "07.4-024",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "Which kind of matmul does the 6N rule count?",
+    "options": [
+      "All matmuls in the model, including the QKᵀ and PV attention products",
+      "Only the attention matmuls, since they dominate the per-token cost",
+      "Only matmuls against weights — one multiply-add per parameter per token",
+      "Only the matmuls in the MLP block, which hold about two thirds of the weights"
+    ],
+    "answer_index": 2,
+    "explanation": "6N is built from the parameter count, so it only sees matmuls where one operand is a weight. The attention-score matmuls QKᵀ and PV multiply activations by activations and contribute nothing to N, so 6N cannot see them."
+  },
+  {
+    "id": "07.4-025",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "Why are the attention matmuls QKᵀ and PV invisible to the 6N FLOP estimate?",
+    "options": [
+      "They are executed on a separate hardware unit that is not counted in peak FLOP/s",
+      "Both operands are activations from the sequence, so no parameters are involved",
+      "They are fused into the softmax kernel, so they cost no FLOPs of their own",
+      "They are only performed at inference time, when the KV cache is being filled"
+    ],
+    "answer_index": 1,
+    "explanation": "QKᵀ dots queries with keys and PV averages value vectors by softmax probabilities; Q, K, V and P are all activations. Since no weights are involved, they add nothing to N, and a formula built from N cannot account for them. They do real work in training."
+  },
+  {
+    "id": "07.4-026",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "How does the 6N FLOPs-per-token estimate change when the same model's context length T goes from 128 to 128,000?",
+    "options": [
+      "It grows linearly with T, since each token attends to more keys",
+      "It grows quadratically with T, through the T×T attention matrix",
+      "It does not change: 6N depends only on the parameter count",
+      "It shrinks, because the fixed cost is spread over more positions"
+    ],
+    "answer_index": 2,
+    "explanation": "6N contains only N, so it is identical for any context length. The attention-score work per token, however, grows linearly with T, which 6N does not capture. At very long context this omitted term can dominate."
+  },
+  {
+    "id": "07.4-027",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "Per token per layer, with all heads together having total width C and attending to T keys, how many forward FLOPs does computing the attention scores QKᵀ cost?",
+    "options": [
+      "2C² FLOPs — the same as a weight matmul",
+      "2T² C FLOPs — the full score matrix",
+      "TC/2 FLOPs — one multiply per key",
+      "2TC FLOPs — T dot products of length C"
+    ],
+    "answer_index": 3,
+    "explanation": "One query of length C is dotted with T keys of length C: T·C multiply-adds, which is 2TC FLOPs. The full T×T matrix costs that per token times T tokens, but per token it is 2TC. C² would be a weight matmul cost."
+  },
+  {
+    "id": "07.4-028",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "Per token per layer, without a mask, what are the forward and forward+backward FLOPs of the attention-score work (QKᵀ plus PV)?",
+    "options": [
+      "Forward 4TC; forward+backward 12TC",
+      "Forward 2TC; forward+backward 6TC",
+      "Forward 4TC; forward+backward 8TC",
+      "Forward 12TC; forward+backward 36TC"
+    ],
+    "answer_index": 0,
+    "explanation": "QKᵀ and PV each cost 2TC, so forward is 4TC. Backward is again about 2× forward because each matmul needs a gradient for each of its two operands, giving 4TC + 8TC = 12TC. A causal mask then roughly halves this."
+  },
+  {
+    "id": "07.4-029",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "Why does a causal mask roughly halve the attention-score FLOPs per token (from 12TC to about 6TC per layer)?",
+    "options": [
+      "The mask zeroes out half of the attention heads in each layer during training",
+      "The backward pass is skipped for masked positions, which removes half the work",
+      "Token t attends only to earlier tokens, so on average it sees about T/2 keys",
+      "Keys and values are shared between neighbouring tokens, halving the products"
+    ],
+    "answer_index": 2,
+    "explanation": "With causal masking, token t attends only to positions up to t, so the average number of keys per token is about T/2. That halves the score work to about 6TC per layer, or 6·n_layer·T·C per token for the model. This only holds if the implementation actually skips masked work."
+  },
+  {
+    "id": "07.4-030",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "A naive attention implementation computes the full T×T score matrix and then applies the causal mask. What does that mean for its FLOPs?",
+    "options": [
+      "It spends exactly the causal ≈6TC, because the masked entries are skipped by the matmul hardware",
+      "It still spends the un-halved ≈12TC per layer on masked entries; FlashAttention-style kernels skip them",
+      "It spends ≈24TC per layer, because applying the mask requires a second full pass over the scores",
+      "It spends fewer FLOPs than FlashAttention, because it avoids the extra tiling and recomputation"
+    ],
+    "answer_index": 1,
+    "explanation": "Computing the full matrix and masking afterward does all T keys' work per token, then throws half away, so it spends about 12TC per layer. FlashAttention-style kernels skip the fully masked blocks, realizing the causal halving. Masking itself is cheap; the waste is in computing entries that are then discarded."
+  },
+  {
+    "id": "07.4-031",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "What is the ratio of causal attention-score FLOPs to the 6N weight-matmul FLOPs, per layer, for width C and context T?",
+    "options": [
+      "T / (12C)",
+      "(12C) / T",
+      "T² / (12C)",
+      "T / (6C)"
+    ],
+    "answer_index": 0,
+    "explanation": "Per layer, scores cost ≈ 6TC and weight matmuls cost 6·12C², so the ratio is 6TC / (72C²) = T/(12C). The score term is small when T ≪ 12C and equals the 6N cost when T = 12C."
+  },
+  {
+    "id": "07.4-032",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "At what context length does the causal attention-score cost equal the entire 6N cost of a model with width C?",
+    "options": [
+      "T = 24C",
+      "T = 12C²",
+      "T = C / 12",
+      "T = 12C"
+    ],
+    "answer_index": 3,
+    "explanation": "Since the ratio of scores to 6N is T/(12C), the two are equal at T = 12C. For C = 4096 that is T = 49,152. Wider models therefore tolerate longer contexts before the attention-score term dominates."
+  },
+  {
+    "id": "07.4-033",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "For GPT-2 small (C = 768) at T = 1024, roughly how much do the causal attention-score FLOPs add on top of 6N?",
+    "options": [
+      "About 11%",
+      "About 1%",
+      "About 50%",
+      "About 2.6×"
+    ],
+    "answer_index": 0,
+    "explanation": "The ratio is T/(12C) = 1024/9216 ≈ 0.11, so scores add about 11% to the 6N cost. 2.6× is the figure for C = 4096 at T = 128,000, where the score term dominates."
+  },
+  {
+    "id": "07.4-034",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "What the 6N rule leaves out: attention scores",
+    "question": "For a model with C = 4096, how do the attention-score FLOPs compare to 6N at T = 128,000, and what does that motivate?",
+    "options": [
+      "They are about 8% of 6N, so the 6N estimate remains accurate at that length",
+      "They are exactly equal to 6N at that length, so the total cost simply doubles",
+      "About 2.6× the 6N cost, one reason long-context training needs efficient attention",
+      "They vanish, because long-context runs switch to sparse attention masks automatically"
+    ],
+    "answer_index": 2,
+    "explanation": "T/(12C) = 128,000/49,152 ≈ 2.6, so the term 6N ignores becomes the dominant cost. At T = 4096 it is only about 8%. This growth with T is one reason long-context training relies on the efficient attention methods of the memory-hierarchy module."
+  },
+  {
+    "id": "07.4-035",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "3. Numerical example: GPT-2 small",
+    "question": "For GPT-2 small, how does the 12·n_layer·C² estimate (≈84.9M) compare with the true non-embedding parameter count (85,056,000)?",
+    "options": [
+      "It is about 30% low, because it leaves out the MLP's two weight matrices",
+      "It is about 46% high, because it double-counts the attention projections",
+      "It matches exactly, because the biases are already counted inside 12C²",
+      "It is within about 0.15%; only O(C) terms like biases and LayerNorm are missing"
+    ],
+    "answer_index": 3,
+    "explanation": "84,934,656 vs 85,056,000 is a difference of about 0.15%. The gap comes from biases and LayerNorm parameters, which are O(C) per layer. The 46% figure is the overestimate from wrongly using the total count including embeddings."
+  },
+  {
+    "id": "07.4-036",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "3. Numerical example: GPT-2 small",
+    "question": "GPT-2 small's total parameter count is about 124.4M but its non-embedding count is about 85M. What makes up most of the difference?",
+    "options": [
+      "The attention output projections W_O, one 768 × 768 matrix in every layer",
+      "The tied token embedding table, V × C ≈ 50,257 × 768, plus position embeddings",
+      "The Adam optimizer's m and v buffers, which are counted as parameters",
+      "The MLP's second linear layer, 4C × C, which the 12C² estimate omits"
+    ],
+    "answer_index": 1,
+    "explanation": "The token embedding is about 38.6M parameters (50,257 × 768), and the position embeddings add about 0.8M. Those make up nearly all of the gap. Optimizer buffers are not parameters, and W_O and MLP weights are part of the non-embedding count."
+  },
+  {
+    "id": "07.4-037",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "3. Numerical example: GPT-2 small",
+    "question": "How do you get the FLOPs of one optimizer step from the 6N rule?",
+    "options": [
+      "Multiply 6N by the number of layers, since 6N is a per-layer figure",
+      "Multiply 6N by the tokens in the step (global batch × sequence length)",
+      "Multiply 6N by the number of micro-batches only, ignoring T entirely",
+      "Divide 6N by the number of GPUs, since each one handles a share"
+    ],
+    "answer_index": 1,
+    "explanation": "6N is FLOPs per token, so a step of K tokens costs 6N·K FLOPs. For GPT-2 small, a 500,000-token step is about 5.1×10⁸ × 5×10⁵ ≈ 2.5×10¹⁴ FLOPs, roughly 255 TFLOP. The number of GPUs changes how fast it runs, not how much work it is."
+  },
+  {
+    "id": "07.4-038",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "In the full FLOP tally for one GPT-2 small training token at T = 1024, which component is the largest?",
+    "options": [
+      "The LM head (about 29%)",
+      "The causal attention scores (about 7%)",
+      "The weight matmuls counted by 6N (about 64%)",
+      "Elementwise ops like LayerNorm and GELU (about 0.4%)"
+    ],
+    "answer_index": 2,
+    "explanation": "Weight matmuls are about 63.6% of the total, the LM head about 28.9%, causal attention scores about 7.1%, and elementwise ops about 0.4%. So 6N is the headline but not everything, especially for a small model with a large vocabulary."
+  },
+  {
+    "id": "07.4-039",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "Why is the LM head (6CV FLOPs per token) about 29% of GPT-2 small's per-token training FLOPs?",
+    "options": [
+      "GPT-2 small's vocabulary is very large relative to its width (V/C ≈ 65)",
+      "The LM head is recomputed once per layer, so it repeats 12 times",
+      "The LM head runs in fp32 while the rest of the model runs in bf16",
+      "The LM head also performs the attention-score computation for the last layer"
+    ],
+    "answer_index": 0,
+    "explanation": "The head is a C×V matmul, costing 6CV per token forward+backward, while the weight matmuls cost 6·12·n_layer·C². With V = 50,257 and C = 768, V/C ≈ 65, so the head is large relative to the blocks. For a 7B model with C = 4096 and V = 32,000 the head is only about 2%."
+  },
+  {
+    "id": "07.4-040",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "For a 7B model (C = 4096, 32 layers, V = 32,000), roughly what fraction of 6N is the LM head's 6CV?",
+    "options": [
+      "About 29%",
+      "About 11%",
+      "About 50%",
+      "About 2%"
+    ],
+    "answer_index": 3,
+    "explanation": "6CV ≈ 7.9×10⁸ against 6N ≈ 3.9×10¹⁰, about 2%. Larger models have a much bigger 12·n_layer·C² relative to C·V, so the head becomes negligible. The 29% figure is specific to GPT-2 small."
+  },
+  {
+    "id": "07.4-041",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "In a GPT-2 small FLOP tally, roughly how large are elementwise operations (LayerNorm, GELU, softmax, residual adds, loss) compared to the matmuls?",
+    "options": [
+      "About a third of the total, like the LM head",
+      "About the same as the weight matmuls counted by 6N",
+      "About 10%, roughly the same as the attention scores",
+      "Well under 1% of the total — too small to matter"
+    ],
+    "answer_index": 3,
+    "explanation": "Elementwise ops do a handful of FLOPs per element over a modest number of elements per layer, about 0.4% of the total for GPT-2 small. Matmuls dominate the FLOP count. (Elementwise ops can still take noticeable time because they are memory-bound, but that is a different question from FLOPs.)"
+  },
+  {
+    "id": "07.4-042",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "In the per-token FLOP tally of a GPT model, which component grows when the context length T increases while the model stays fixed?",
+    "options": [
+      "The attention-score FLOPs, which grow linearly with T",
+      "The weight-matmul FLOPs (6N), via longer sequences",
+      "The LM head FLOPs (6CV), which scale with sequence length",
+      "All components grow proportionally with T, per token"
+    ],
+    "answer_index": 0,
+    "explanation": "6N and 6CV depend only on the model's weights and vocabulary, not on T. The attention scores cost about 6·n_layer·T·C per token, linear in T. For GPT-2 small, doubling T from 1024 to 2048 roughly doubles that line to about 13% of the total."
+  },
+  {
+    "id": "07.4-043",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full FLOP picture: GPT-2 small, one token, forward + backward",
+    "question": "MFU is conventionally computed with 6N in the numerator. What consequence does that have for GPT-2 small?",
+    "options": [
+      "It overstates the true arithmetic by about a third, so MFU above 70% is common for it",
+      "It is exact for GPT-2 small, because 6N already includes the LM head and attention",
+      "It understates the true arithmetic by about a third, fine if MFUs share the same convention",
+      "It makes MFU meaningless for any model under 1B parameters, so it is not reported"
+    ],
+    "answer_index": 2,
+    "explanation": "For GPT-2 small, 6N is about 64% of the true per-token FLOPs, because the LM head and attention scores are omitted. So 6N-based MFU credits less work than was actually done. That is acceptable when comparing MFUs computed the same way."
+  },
+  {
+    "id": "07.4-044",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "4. Throughput and MFU",
+    "question": "How is training throughput in tokens per second computed?",
+    "options": [
+      "Number of model parameters divided by wall-clock seconds per step",
+      "Tokens per optimizer step divided by wall-clock seconds per step",
+      "FLOPs per step divided by the GPU's peak FLOP/s, times sequence length",
+      "Micro-batch size divided by sequence length, times the step rate"
+    ],
+    "answer_index": 1,
+    "explanation": "Tokens/sec is the raw speedometer: measure wall-clock time per step and divide the tokens in the step by it. FLOPs per step over peak FLOP/s is an ideal step time, not throughput."
+  },
+  {
+    "id": "07.4-045",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "4. Throughput and MFU",
+    "question": "Why is tokens per second alone not enough to judge whether a training run uses the GPU well?",
+    "options": [
+      "A bigger model is slower in tokens/sec yet may use the GPU's arithmetic better",
+      "Tokens per second ignores the learning-rate schedule, which sets the step time",
+      "Tokens per second is only defined for single-GPU runs, not for data-parallel ones",
+      "Tokens per second counts padding tokens twice, inflating it on short sequences"
+    ],
+    "answer_index": 0,
+    "explanation": "Each token of a larger model needs more FLOPs, so tokens/sec falls with model size even when the hardware is well used. MFU normalizes by FLOPs per token and by hardware peak to compare utilization fairly."
+  },
+  {
+    "id": "07.4-046",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "4. Throughput and MFU",
+    "question": "Which expression is the definition of MFU (Model FLOPs Utilization)?",
+    "options": [
+      "(6N × D) ÷ peak hardware FLOP/s",
+      "tokens/sec ÷ peak tokens/sec of the GPU",
+      "(2N × tokens/sec) ÷ memory bandwidth",
+      "(6N × tokens/sec) ÷ peak hardware FLOP/s"
+    ],
+    "answer_index": 3,
+    "explanation": "MFU = achieved FLOP/s ÷ peak FLOP/s, with achieved FLOP/s = 6N × tokens/sec. It is the fraction of the accelerator's advertised arithmetic throughput the run delivers. 6ND is a total count, not a rate, so dividing it by a rate gives time, not utilization."
+  },
+  {
+    "id": "07.4-047",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "What is the NVIDIA A100's commonly quoted peak throughput for dense bf16 matmuls?",
+    "options": [
+      "About 19.5 TFLOP/s",
+      "About 624 TFLOP/s",
+      "About 312 TFLOP/s",
+      "About 1,000 TFLOP/s"
+    ],
+    "answer_index": 2,
+    "explanation": "The A100 peaks at about 312 TFLOP/s in dense bf16. 624 TFLOP/s is the figure with 2:4 structured sparsity, which dense training cannot use. MFU for dense training should divide by 312."
+  },
+  {
+    "id": "07.4-048",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "When computing MFU for a multi-GPU run from an aggregate tokens/sec, what should the denominator be?",
+    "options": [
+      "The peak FLOP/s of a single GPU, since MFU is a per-device figure",
+      "The combined peak FLOP/s of all the GPUs that produced that throughput",
+      "The peak FLOP/s of one GPU multiplied by the number of nodes in the job",
+      "The interconnect bandwidth of the cluster, which caps aggregate speed"
+    ],
+    "answer_index": 1,
+    "explanation": "If 8 A100s together produce 1,000,000 tokens/sec, the achieved FLOP/s must be compared against 8 × 312 TFLOP/s. Dividing by a single GPU's peak would inflate MFU by the number of GPUs. In that example MFU is about 20.4%."
+  },
+  {
+    "id": "07.4-049",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "What MFU range is commonly reported for well-tuned large-scale LLM pretraining, and how firm is that figure?",
+    "options": [
+      "Roughly 90–100%, as guaranteed by GPU vendors for well-tuned bf16 matmul kernels",
+      "Roughly 30–50%, as reasonable industry practice from public write-ups, not a law",
+      "Roughly 5–10%, as proven by the scaling-law papers for transformer pretraining",
+      "Exactly 50%, as a theoretical limit for transformers set by the backward pass"
+    ],
+    "answer_index": 1,
+    "explanation": "Public training write-ups commonly report about 30–50% MFU when well tuned. It is reasonable industry practice, not a law: it depends on model size, sequence length, hardware, and time spent on non-matmul work such as attention scores, communication and data loading."
+  },
+  {
+    "id": "07.4-050",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "Why does a small model at short context, such as GPT-2 small, typically reach a lower MFU than a large pretraining run?",
+    "options": [
+      "Small models cannot use bf16 tensor cores at all, so they run on the slower fp32 units",
+      "Small models need more FLOPs per token than large ones, which lowers their utilization",
+      "Fixed overheads such as launches, data loading and non-matmul work are a larger share",
+      "MFU is defined with a different numerator for models under 1B parameters, lowering it"
+    ],
+    "answer_index": 2,
+    "explanation": "With small matmuls, each kernel does little arithmetic, so fixed costs such as kernel launches, Python, elementwise work and data loading dominate more of the step time. Achieved FLOP/s falls further below peak. The definition of MFU is the same for all sizes."
+  },
+  {
+    "id": "07.4-051",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "If a training run's MFU is doubled while the model and token budget stay fixed, what happens to its cost?",
+    "options": [
+      "The cost stays the same, but the model reaches lower loss",
+      "The cost doubles because GPUs run hotter",
+      "The total FLOPs needed are halved",
+      "The wall-clock time and the bill roughly halve"
+    ],
+    "answer_index": 3,
+    "explanation": "Total FLOPs (6ND) are fixed by the model and data; MFU sets how fast the hardware delivers them. Doubling MFU doubles achieved FLOP/s, halving time and cost. For example, a 255 TFLOP step takes about 2 s on one A100 at 40% MFU and about 4 s at 20%."
+  },
+  {
+    "id": "07.4-052",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked MFU",
+    "question": "A training run shows a low MFU. In engineering terms, what does that most often signal?",
+    "options": [
+      "The GPU is \"starving\": idle while waiting for data or other GPUs, so find the stall",
+      "The model has converged, so the GPU has no useful work left to do on each step",
+      "The learning rate is too high, so steps are wasted recovering from overshoots",
+      "The model is too large to fit in memory, so it is silently swapped to host RAM"
+    ],
+    "answer_index": 0,
+    "explanation": "Low MFU says the arithmetic units sit idle part of each step, waiting for inputs such as data loading, host-device transfers or gradient communication. Engineers call this starving: idle not because work is done but because inputs have not arrived. It is the most useful number for finding a non-arithmetic bottleneck."
+  },
+  {
+    "id": "07.4-053",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "During training, how many gradient values does the model store per parameter, and with what shape?",
+    "options": [
+      "One gradient per parameter per token in the batch, kept until step",
+      "Two gradients per parameter, one for the input and one for the weight",
+      "Four gradients per parameter, matching the 4N backward FLOPs",
+      "One per parameter, in a .grad tensor shaped like the parameter"
+    ],
+    "answer_index": 3,
+    "explanation": "loss.backward() fills a .grad the same shape as every parameter, so gradients take P numbers. Each token's contribution is accumulated into that same slot. The input gradient ∂L/∂x has the shape of the activation and is freed right after use, so it is not a per-parameter buffer."
+  },
+  {
+    "id": "07.4-054",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "The backward pass does about 4 FLOPs per parameter per token, yet gradient memory is just one number per parameter. How are these consistent?",
+    "options": [
+      "Gradients are compressed by a factor of 4 before being stored, so only one number per parameter remains",
+      "Three of the four gradients per parameter are discarded right after the optimizer step uses them",
+      "FLOPs count operations and memory counts stored numbers; every token adds into the same one slot",
+      "Gradient memory is actually 4P numbers, one per FLOP, but is reported as P by convention"
+    ],
+    "answer_index": 2,
+    "explanation": "The 4 counts multiplies and adds performed with each weight for every token. Each weight w has exactly one gradient ∂L/∂w, and all tokens' contributions are accumulated into it, so millions of FLOPs end up in one 4-byte number. The two 4s are unrelated."
+  },
+  {
+    "id": "07.4-055",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "During backpropagation through a linear layer applied to activations of shape (B, T, C), what are the shape and lifetime of the input gradient ∂L/∂x?",
+    "options": [
+      "Shape of the weight matrix (C, C), kept in .grad until the next optimizer step",
+      "Shape (B, T, C), handed to the previous layer as its upstream gradient, then freed",
+      "Shape (C,), stored in the LayerNorm gain buffer for the rest of the training run",
+      "Shape (B, T, V), stored alongside the logits until the loss is recomputed"
+    ],
+    "answer_index": 1,
+    "explanation": "∂L/∂x has the shape of the layer's input activation, not of W. It is a short-lived, activation-sized buffer used by the previous layer and then freed. ∂L/∂W is the one kept in .grad until the optimizer step."
+  },
+  {
+    "id": "07.4-056",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "Why do people say \"Adam triples your parameter memory\"?",
+    "options": [
+      "Params plus Adam's m and v make 3P numbers; gradients bring the fixed total to 4P",
+      "Adam stores three copies of every gradient, one for each of the last three steps",
+      "Adam needs three forward passes per step, each holding its own copy of the weights",
+      "Adam keeps fp32, fp16 and int8 versions of every weight for mixed-precision steps"
+    ],
+    "answer_index": 0,
+    "explanation": "AdamW keeps two buffers per parameter, m and v, so params + m + v = 3P numbers. With the gradients the fixed state is 4P numbers, or 16P bytes in fp32. Mixed-precision weight copies are a separate matter."
+  },
+  {
+    "id": "07.4-057",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "What are \"activations\" in the context of training-memory accounting?",
+    "options": [
+      "The weights of the nonlinearity layers such as GELU, which are learned per channel",
+      "The intermediate tensors the forward pass saves so backward can compute gradients",
+      "The optimizer's running averages of the gradients, kept between optimizer steps",
+      "The output probabilities that are written to disk after each evaluation pass"
+    ],
+    "answer_index": 1,
+    "explanation": "Activations are tensors computed during the forward pass and kept for backward, such as LayerNorm inputs, Q/K/V and MLP hidden states. Unlike the other buckets they scale with batch × context. GELU has no weights."
+  },
+  {
+    "id": "07.4-058",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "For language-model training, which single activation tensor often dominates activation memory?",
+    "options": [
+      "The query tensor of shape (B, T, C)",
+      "The LayerNorm gain of shape (C,)",
+      "The logits tensor of shape (B, T, V)",
+      "The position-embedding table of shape (T, C)"
+    ],
+    "answer_index": 2,
+    "explanation": "The vocabulary V is usually much larger than the width C, so the (B, T, V) logits tensor is huge. For GPT-2 small at B = 8, T = 1024, it is about 1.65 GB in fp32, nearly as much as all the fixed state. LayerNorm gains and position embeddings are parameters, not activations."
+  },
+  {
+    "id": "07.4-059",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "In fp32 training with AdamW, which statement about the first three memory buckets (params, grads, optimizer state) is correct?",
+    "options": [
+      "Together they are 4P numbers and are independent of batch size",
+      "Together they are 4P numbers and scale linearly with batch size",
+      "Together they are 2P numbers and scale with context length",
+      "Together they are P numbers because grads overwrite params"
+    ],
+    "answer_index": 0,
+    "explanation": "Params (P) + grads (P) + Adam state (2P) = 4P numbers, fixed by the model. Only activations can be traded against batch and context, which is what gradient accumulation, activation checkpointing and mixed precision attack."
+  },
+  {
+    "id": "07.4-060",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "5. Memory accounting: four buckets",
+    "question": "Which techniques reduce training memory by targeting the activation bucket?",
+    "options": [
+      "Weight tying, vocabulary pruning, and label smoothing of the output logits",
+      "Learning-rate warmup, weight decay, and gradient clipping by norm",
+      "Increasing the batch size and the context length per micro-batch",
+      "Gradient accumulation, activation checkpointing, and mixed precision"
+    ],
+    "answer_index": 3,
+    "explanation": "Activations are the only bucket that scales with batch and context, so they are the one you can trade. Gradient accumulation uses smaller micro-batches, checkpointing recomputes activations instead of storing them, and mixed precision stores them in 2 bytes. Warmup, decay and clipping are optimization choices that do not change memory."
+  },
+  {
+    "id": "07.4-061",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked memory: GPT-2 small in fp32",
+    "question": "In fp32 with AdamW, how many bytes does the fixed (non-activation) training state take for P parameters?",
+    "options": [
+      "16P bytes: 4P params + 4P grads + 8P Adam m and v",
+      "4P bytes: one fp32 copy of the parameters, nothing else",
+      "8P bytes: fp32 params plus fp32 gradients only",
+      "12P bytes: params plus Adam m and v, no gradients"
+    ],
+    "answer_index": 0,
+    "explanation": "Each of the 4P stored numbers is 4 bytes in fp32: params 4P, grads 4P, Adam m and v 8P, for 16P bytes. For GPT-2 small (≈124.4M) that is about 1.99 GB before any activation."
+  },
+  {
+    "id": "07.4-062",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Worked memory: GPT-2 small in fp32",
+    "question": "For GPT-2 small at B = 8, T = 1024 in fp32, how does the logits tensor compare with the fixed params + grads + Adam state (≈1.99 GB)?",
+    "options": [
+      "At ≈25 MB, it is negligible next to the fixed training state",
+      "At ≈16 GB, it is about eight times the fixed training state",
+      "At ≈1.65 GB, it alone is nearly as large as all the fixed state",
+      "It is exactly equal, because both scale with vocabulary size V"
+    ],
+    "answer_index": 2,
+    "explanation": "Logits have B·T·V ≈ 4.1×10⁸ elements, about 1.65 GB in fp32, roughly 83% of the 1.99 GB fixed state, and that is one tensor. 25 MB is the size of one (B, T, C) activation. This is why a 124M model does not train at 8×1024 on a small GPU without help."
+  },
+  {
+    "id": "07.4-063",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "In a naive GPT-2 implementation, about how many (B, T, C)-sized tensors does each transformer block save for backward, and which parts are largest?",
+    "options": [
+      "About 3; only the Q, K and V projections are saved for the backward pass",
+      "About 16; the attention probabilities account for 12 of them at width C",
+      "About 1; only the residual stream entering each block is saved for backward",
+      "About 16; the MLP hidden state before and after GELU are 4 each, at width 4C"
+    ],
+    "answer_index": 3,
+    "explanation": "Per block: LayerNorm-1 input and output (2), Q, K, V (3), attention output before W_O (1), LayerNorm-2 input and output (2), MLP hidden before GELU (4) and after GELU (4), totaling 16. The attention probabilities are a separate T×T-per-head tensor counted on their own line."
+  },
+  {
+    "id": "07.4-064",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "In naive attention, why is the attention-probability tensor (B·H·T² per layer) a separate, large activation, and what removes it?",
+    "options": [
+      "It is the KV cache, which grows with T²; it is removed by using smaller micro-batches",
+      "It is the materialized T×T softmax per head; FlashAttention-style kernels never store it",
+      "It is the gradient of W_O, which is per-position; it is removed by gradient clipping",
+      "It is a copy of the logits reshaped per head; it is removed by tying the embeddings"
+    ],
+    "answer_index": 1,
+    "explanation": "A naive implementation stores the full T×T probability matrix per head for backward. For GPT-2 small at B = 8, T = 1024 that is about 4.8 GB over 12 layers, 36% of the total. FlashAttention-style kernels recompute it in tiles and never store it."
+  },
+  {
+    "id": "07.4-065",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "In a GPT-2 small memory tally (B = 8, T = 1024), the attention-probability line equals the 16-tensor per-layer line. Why?",
+    "options": [
+      "Because attention probabilities are always 16 tensors of size (B, T, C)",
+      "Because FlashAttention stores both in the same buffer",
+      "By coincidence: H·T = 12·1024 happens to equal 16·C = 16·768",
+      "Because both scale with T² by design"
+    ],
+    "answer_index": 2,
+    "explanation": "Attention probabilities are B·H·T² floats per layer and the 16 tensors are 16·B·T·C. They match only because H·T = 12,288 = 16·768. Change T and the two diverge, since one scales with T² and the other with T."
+  },
+  {
+    "id": "07.4-066",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "In a GPT-2 small fp32 memory tally (B = 8, T = 1024), how do the activation lines scale when you change B or T?",
+    "options": [
+      "All scale with B; attention probabilities scale with T² and the rest with T",
+      "All activation lines scale with T², and none of them depend on B at all",
+      "Only the logits scale with B; the rest are fixed by the model width C",
+      "All activation lines are fixed; only the Adam state grows as T increases"
+    ],
+    "answer_index": 0,
+    "explanation": "The four activation lines (about 85% of the total) are proportional to B. Attention probabilities grow with T², the others linearly with T. Halving B to 4 cuts the total to about 7.7 GB; doubling T to 2048 raises it to about 34.4 GB. Params, grads and Adam state stay at 1.99 GB."
+  },
+  {
+    "id": "07.4-067",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "Activation-memory estimates are approximate. What is the recommended way to get the exact peak figure in PyTorch on a GPU?",
+    "options": [
+      "Read it from model.num_params() multiplied by the bytes per element",
+      "Measure it with torch.cuda.max_memory_allocated() during a short run",
+      "Compute 16P from the parameter count and add the size of the logits tensor",
+      "Check the size of the saved checkpoint file on disk after one step"
+    ],
+    "answer_index": 1,
+    "explanation": "What is saved depends on the implementation's fusion choices, so estimates can be off. torch.cuda.max_memory_allocated() reports the actual peak. 16P covers only the fixed state, and checkpoint size reflects params (and maybe optimizer state), not activations."
+  },
+  {
+    "id": "07.4-068",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "How does mixed precision reduce training memory?",
+    "options": [
+      "It removes the Adam second-moment buffer, since bf16 gradients need no variance estimate",
+      "It shrinks the vocabulary to fit bf16 token ids, which halves the logits tensor size",
+      "It shares one gradient buffer between neighbouring layers, since bf16 values are small",
+      "It stores activations, often plus a weight copy, at 2 bytes in bf16/fp16, about halving them"
+    ],
+    "answer_index": 3,
+    "explanation": "Mixed precision stores activations, and often a working copy of the weights, in 2-byte formats instead of 4-byte fp32. That roughly halves activation and parameter-copy memory. It does not remove the 4P fixed state, which is addressed by sharding."
+  },
+  {
+    "id": "07.4-069",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "What trade does activation checkpointing make?",
+    "options": [
+      "It saves activations to disk during forward so that the next epoch can reuse them directly",
+      "It skips the backward pass for half the layers, trading gradient accuracy for lower memory",
+      "It stores only the gradients and discards the parameters, rebuilding them from the optimizer",
+      "It drops most activations in forward and recomputes them in backward: more FLOPs, far less memory"
+    ],
+    "answer_index": 3,
+    "explanation": "Checkpointing keeps a few activations and recomputes the rest during backward, so memory falls a lot while compute rises. It is not disk saving, and it still computes full gradients."
+  },
+  {
+    "id": "07.4-070",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "The full memory picture: GPT-2 small, fp32, B = 8, T = 1024",
+    "question": "Which technique attacks the fixed 4P (params + grads + Adam state) cost rather than activations?",
+    "options": [
+      "Activation checkpointing, which recomputes the saved tensors during backward",
+      "FlashAttention, which avoids storing the T×T attention-probability matrix",
+      "Optimizer-state sharding such as ZeRO/FSDP, splitting that state across GPUs",
+      "Gradient accumulation, which runs smaller micro-batches before each step"
+    ],
+    "answer_index": 2,
+    "explanation": "Mixed precision, checkpointing, FlashAttention and gradient accumulation all target activations. The 4P fixed state does not depend on batch, so it is reduced by sharding params, grads and optimizer state across data-parallel GPUs, as in ZeRO and FSDP."
+  },
+  {
+    "id": "07.4-071",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "6. Under the hood: why these estimates are trustworthy",
+    "question": "Why is the 6N FLOP estimate trusted despite dropping attention scores, softmax, LayerNorm and embedding lookups?",
+    "options": [
+      "For standard shapes at moderate context, the omitted terms are ~10% or less of the total",
+      "Those omitted terms are exactly zero on modern GPUs, which fuse them into the matmuls",
+      "The factor 6 already includes a built-in safety margin that covers all of those terms",
+      "Those terms only appear during evaluation, so the training-time count never includes them"
+    ],
+    "answer_index": 0,
+    "explanation": "For large models at ordinary context, weight matmuls dominate and the omitted terms are about 10% or less. The exception is small models with large vocabularies such as GPT-2 small, where the omitted LM head alone is about 29%. The 6 is exactly 2+2+2, not a padded margin."
+  },
+  {
+    "id": "07.4-072",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "6. Under the hood: why these estimates are trustworthy",
+    "question": "In which situations should you switch from the 6N estimate to a fuller FLOP count?",
+    "options": [
+      "Any model trained in bf16 rather than full fp32 precision",
+      "Very long context, very small models, or MoE routing",
+      "Any run that uses more than one GPU or more than one node",
+      "Any model with tied input embeddings and output head"
+    ],
+    "answer_index": 1,
+    "explanation": "6N stops being accurate when the omitted terms stop being small: at very long context the attention scores grow, in very small models the LM head and overheads loom large, and with MoE routing not all parameters are active per token. Precision, GPU count and weight tying do not by themselves break the estimate."
+  },
+  {
+    "id": "07.4-073",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "6. Under the hood: why these estimates are trustworthy",
+    "question": "What is the main practical value of the 6N estimate?",
+    "options": [
+      "It gives an exact FLOP count, accurate to 0.1%, for any transformer at any context length",
+      "It predicts the final validation loss of the run from the parameter count and token count",
+      "It needs only the model config, so it budgets GPU-hours and model size before any code exists",
+      "It measures the actual runtime of each kernel, so slow layers can be found before profiling"
+    ],
+    "answer_index": 2,
+    "explanation": "The point is not perfect accuracy but a number you can compute from the config alone, right to within about 10% at ordinary context. That is enough to budget GPU-hours and choose a model size. It does not predict loss or measure kernels."
+  },
+  {
+    "id": "07.4-074",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "6. Under the hood: why these estimates are trustworthy",
+    "question": "Why is activation memory usually measured with a short profiling run, while parameter and optimizer memory are predicted precisely in capacity planning?",
+    "options": [
+      "The first three are exact (P × dtype size), while activations depend on fusion and what is saved",
+      "Activations are random and change from step to step by a large factor, so only a run can show them",
+      "Optimizer state is stored on the CPU and is never measured, so it can only be predicted",
+      "Parameter memory depends on the training data, so it is fixed only after the first batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Params, grads and optimizer state are P × dtype size, so they are exact. Activation memory depends on which tensors the implementation keeps and how it fuses operations, so it is estimated and then confirmed by profiling. That asymmetry shapes capacity planning."
+  },
+  {
+    "id": "07.4-075",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Exercise",
+    "question": "Given a training run's total FLOPs and a cluster's effective (MFU-adjusted) FLOP/s, how do you estimate wall-clock training time?",
+    "options": [
+      "Multiply total FLOPs by the effective FLOP/s",
+      "Divide total FLOPs by the effective FLOP/s",
+      "Divide the effective FLOP/s by total FLOPs",
+      "Divide total FLOPs by the peak FLOP/s, ignoring MFU"
+    ],
+    "answer_index": 1,
+    "explanation": "Time = work ÷ rate. With total FLOPs ≈ 6ND and an effective rate of MFU × peak, time ≈ 6ND ÷ (MFU × peak). Using the peak rate instead of the effective rate assumes 100% MFU and badly underestimates time."
+  },
+  {
+    "id": "07.4-076",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Exercise",
+    "question": "Why does a 1.3B-parameter model not train on a single 16 GB GPU in plain fp32 with AdamW, even before activations?",
+    "options": [
+      "Its weights alone (≈ 1.3 GB) leave too little room on the GPU for the tokenizer and data loader",
+      "Its gradients are stored per token rather than per parameter, and so exceed 16 GB at any batch",
+      "Its 6N FLOPs per token exceed the GPU's peak FLOP/s, so the step cannot be scheduled on it",
+      "Its fixed state, 16P bytes ≈ 20.8 GB, already exceeds 16 GB, needing sharding or mixed precision"
+    ],
+    "answer_index": 3,
+    "explanation": "Params + grads + Adam state in fp32 are 16 bytes per parameter: 16 × 1.3×10⁹ ≈ 20.8 GB. That alone exceeds 16 GB, before any activation. Billion-parameter training therefore relies on sharding or mixed precision. FLOPs per token affect speed, not fit."
+  },
+  {
+    "id": "07.4-077",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Exercise",
+    "question": "What is the approximate compute-optimal ratio of training tokens to parameters (Chinchilla-style)?",
+    "options": [
+      "About 1 token per parameter (D ≈ N)",
+      "About 20 tokens per parameter (D ≈ 20N)",
+      "About 200 tokens per parameter (D ≈ 200N)",
+      "About 0.2 tokens per parameter (D ≈ N/5)"
+    ],
+    "answer_index": 1,
+    "explanation": "The Chinchilla compute-optimal ballpark is D ≈ 20N, covered in the scaling-laws module. So a 1.3B model on 26B tokens is roughly in that regime. Training far beyond 20N is possible and sometimes desirable, but 20N is the compute-optimal reference point."
+  },
+  {
+    "id": "07.4-078",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Which statement correctly distinguishes FLOPs from FLOP/s?",
+    "options": [
+      "FLOPs and FLOP/s are the same quantity; the /s is notation for the per-second peak only",
+      "FLOPs is a rate; FLOP/s is a count accumulated over one second, so 6ND is a rate",
+      "FLOPs is a count of work, FLOP/s a rate: 6ND is a count, peak a rate, MFU a ratio of rates",
+      "6ND is a rate of work, peak FLOP/s is a count, and MFU is a count divided by a rate"
+    ],
+    "answer_index": 2,
+    "explanation": "FLOPs counts operations (work), FLOP/s is operations per second (speed). 6N and 6ND are counts, a GPU's peak is a rate, and MFU divides one rate by another, so it has no unit. Confusing the two leads to nonsensical time or utilization estimates."
+  },
+  {
+    "id": "07.4-079",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "A capacity plan uses 2N instead of 6N FLOPs per token. What is the consequence?",
+    "options": [
+      "Compute, time and cost are underestimated threefold, since the backward pass is forgotten",
+      "Compute is overestimated threefold, because 2N already double-counts the forward pass",
+      "Compute is underestimated by only about 10%, roughly the share of attention and elementwise work",
+      "Only memory is underestimated, not compute, because FLOPs do not depend on backward"
+    ],
+    "answer_index": 0,
+    "explanation": "2N is the forward pass only; backward adds about 4N, so the true cost is 6N. Using 2N underestimates FLOPs, wall-clock time and cost by a factor of 3."
+  },
+  {
+    "id": "07.4-080",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "A team budgets GPU memory for weights and gradients only, then the run fails with an out-of-memory error at the first optimizer step. What did they forget?",
+    "options": [
+      "The logits tensor computed on the validation set each step",
+      "The tokenizer's vocabulary table, which is loaded on the GPU",
+      "The learning-rate scheduler's state, one value per parameter",
+      "Adam's m and v buffers, which double the parameter memory"
+    ],
+    "answer_index": 3,
+    "explanation": "AdamW keeps two buffers per parameter, as much memory as weights and grads combined. Budgeting only for weights + grads underestimates the fixed state by half. In PyTorch these buffers are created lazily in the first step(), so the failure shows up exactly there."
+  },
+  {
+    "id": "07.4-081",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "When reporting or comparing MFU across runs, what must you always state?",
+    "options": [
+      "The random seed and the data order, since MFU varies between otherwise identical runs",
+      "The dtype and the exact peak FLOP/s used (e.g., dense vs sparse, fp16 vs fp32)",
+      "The number of layers and attention heads, since MFU depends on model shape",
+      "The tokenizer and vocabulary size, since they set the tokens counted per step"
+    ],
+    "answer_index": 1,
+    "explanation": "MFU depends entirely on its denominator, and the same GPU has very different peaks by dtype and by dense vs sparse. Without stating which peak, two MFUs cannot be compared."
+  },
+  {
+    "id": "07.4-082",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Check yourself",
+    "question": "A single-GPU run reports 8% MFU. Which is a plausible cause?",
+    "options": [
+      "The micro-batch is too small, or time is lost to data loading and host-device copies",
+      "The model has too few FLOPs per token to ever exceed the GPU's peak FLOP/s",
+      "The learning rate is too low for the model size, so each step does less work",
+      "The optimizer is AdamW instead of SGD, and AdamW's FLOPs are excluded from MFU"
+    ],
+    "answer_index": 0,
+    "explanation": "Low MFU means the arithmetic units sit idle part of each step. Plausible causes include a tiny micro-batch that under-uses the GPU between kernel launches, time lost to data loading, host-device transfers or communication, or a small model and short context where non-matmul work is a larger share. Learning rate and optimizer choice do not change FLOP/s."
+  },
+  {
+    "id": "07.4-083",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why does activation memory, unlike parameters, gradients and optimizer state, depend on batch size and context length?",
+    "options": [
+      "Activations store one value per parameter for every example, which grows with the batch size",
+      "Activations are copies of the gradients made once per token, so they scale with B × T × P",
+      "Activations hold the optimizer's moments for each batch element and each position in it",
+      "They are per-example, per-position intermediates, so their size scales with B × T (and V for logits)"
+    ],
+    "answer_index": 3,
+    "explanation": "Params, grads and optimizer state describe the model: one number (or two) per parameter. Activations are forward-pass results, with one set per example per position, so they grow with B × T, and the logits additionally with V. That is why batch and context are the knobs for activation memory."
+  },
+  {
+    "id": "07.4-084",
+    "chapter": "07.4",
+    "chapter_name": "Throughput, FLOPs, MFU, memory accounting",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-04.md",
+    "section": "Hardware track",
+    "question": "Which parts of FLOP, MFU and memory accounting can be done on a CPU-only machine?",
+    "options": [
+      "None of them; even the 6N FLOP estimate requires a GPU profiler to count the launched kernels",
+      "Only the memory estimate; FLOP counting needs CUDA to enumerate every matmul kernel",
+      "All estimates are pure arithmetic; only measuring real MFU and tokens/sec needs the accelerator",
+      "Only tokens/sec can be measured on CPU; MFU and memory estimates need a TPU or GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "The 6N, MFU and memory-bucket formulas are pure Python arithmetic that run instantly on any machine. Measuring actual tokens/sec and MFU requires running on the accelerator you are profiling, e.g. an A100 at about 312 TFLOP/s bf16 for GPT-2-small-scale experiments."
+  }
+]

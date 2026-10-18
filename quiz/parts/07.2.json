@@ -1,0 +1,992 @@
+[
+  {
+    "id": "07.2-001",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "With micro-batch size b, gradient-accumulation steps G and data-parallel workers W, what is the global batch size in sequences?",
+    "options": [
+      "b * G / W",
+      "b + G + W",
+      "b * W / G",
+      "b * G * W"
+    ],
+    "answer_index": 3,
+    "explanation": "Each worker processes b sequences per micro-step, repeats that G times before stepping, and W workers do so in parallel, so B_global = b * G * W sequences per optimizer step. G and W both multiply the batch; neither divides it."
+  },
+  {
+    "id": "07.2-002",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How many tokens does one optimizer step learn from, in terms of b, G, W and sequence length T?",
+    "options": [
+      "b * G * W / T",
+      "b * G * W * V",
+      "(b + G) * W * T",
+      "b * G * W * T"
+    ],
+    "answer_index": 3,
+    "explanation": "Tokens per step = B_global * T = b * G * W * T, because each of the B_global sequences has T tokens. b * G * W * V wrongly uses the vocabulary size V in place of the sequence length T. The course's tokens_per_step(b, G, W, T) computes exactly this product."
+  },
+  {
+    "id": "07.2-003",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why does gradient accumulation exist?",
+    "options": [
+      "To get the gradient of a large effective batch that does not fit in memory",
+      "To reduce the total arithmetic needed per optimizer step on very large models",
+      "To let each micro-batch use its own learning rate within the same optimizer step",
+      "To remove the need for gradient clipping once batches grow beyond a few thousand"
+    ],
+    "answer_index": 0,
+    "explanation": "The batch size that gives good learning dynamics is often too large to fit in one device's memory. Accumulation runs it in pieces and sums their gradients. It does not reduce total compute and does not change how learning rates or clipping work."
+  },
+  {
+    "id": "07.2-004",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How is gradient accumulation implemented correctly when every micro-batch has the same number of tokens?",
+    "options": [
+      "Scale each micro-batch loss by 1/G before calling backward",
+      "Multiply each micro-batch loss by G before calling backward",
+      "Call optimizer.step() after every micro-batch",
+      "Call zero_grad() after every micro-batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Dividing each micro-batch loss by G makes the summed gradients equal the gradient of the full-batch mean. Multiplying by G or forgetting the scale inflates the gradient. Stepping or zeroing after each micro-batch defeats accumulation."
+  },
+  {
+    "id": "07.2-005",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What does gradient accumulation decouple in a large-model training configuration?",
+    "options": [
+      "The forward pass from the backward pass, so they can run on different devices",
+      "The batch size the learning math wants from the batch size memory allows",
+      "The learning-rate schedule from the total number of optimizer steps in the run",
+      "The model's parameters from its optimizer state, so they can live on separate GPUs"
+    ],
+    "answer_index": 1,
+    "explanation": "Large models train on global batches of hundreds of thousands to millions of tokens, but each device fits far less. Accumulation lets the effective batch be chosen for learning dynamics while each micro-batch is sized for memory. A training config is largely a choice of b, G and W."
+  },
+  {
+    "id": "07.2-006",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "1. Intuition: the batch you want vs. the batch that fits",
+    "question": "Why is a larger batch per gradient step generally beneficial for training?",
+    "options": [
+      "It gives a less noisy gradient estimate, allowing larger, more confident steps",
+      "It reduces the number of parameters that must be updated on each optimizer step",
+      "It makes each forward pass cheaper per token, because the work is shared across examples",
+      "It guarantees the model cannot overfit, since every step averages over many examples"
+    ],
+    "answer_index": 0,
+    "explanation": "Averaging the gradient over more examples reduces its variance, so the step direction is more reliable and larger steps become safe. This is part of why large-scale training uses millions of tokens per step. It does not shrink the model or make forward passes cheaper."
+  },
+  {
+    "id": "07.2-007",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "1. Intuition: the batch you want vs. the batch that fits",
+    "question": "Why can a batch of a million tokens not simply be run in one forward and backward pass on a single GPU?",
+    "options": [
+      "The optimizer can only process one sequence per step, so the batch must be split up",
+      "The loss function cannot average over more than a few thousand tokens at once",
+      "The learning rate would have to be driven to zero to stay stable on such a batch",
+      "The activations saved for backward would be far too large for the GPU's memory"
+    ],
+    "answer_index": 3,
+    "explanation": "Activation memory scales with batch size and sequence length, so a million-token batch would need enormous memory just for saved activations. The loss and optimizer have no such limit. That memory wall is what accumulation works around."
+  },
+  {
+    "id": "07.2-008",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "1. Intuition: the batch you want vs. the batch that fits",
+    "question": "During gradient accumulation, what does the optimizer see when it finally steps?",
+    "options": [
+      "A list of G separate gradients, which it averages internally before updating",
+      "One big accumulated gradient, with no knowledge that the batch arrived in pieces",
+      "Only the gradient of the most recent micro-batch, since earlier ones are overwritten",
+      "The individual losses of each micro-batch, which it re-differentiates at step time"
+    ],
+    "answer_index": 1,
+    "explanation": "The micro-batch gradients are summed in place in .grad, so the optimizer reads a single tensor per parameter, identical to what a full batch would produce. It never knows how many pieces there were. The latest micro-batch alone would only result from zeroing inside the loop, a bug."
+  },
+  {
+    "id": "07.2-009",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "1. Intuition: the batch you want vs. the batch that fits",
+    "question": "In gradient accumulation, what is the effective batch size chosen for, and what is the micro-batch size chosen for?",
+    "options": [
+      "Effective batch for learning dynamics; micro-batch for memory",
+      "Effective batch for memory; micro-batch for learning dynamics",
+      "Effective batch for disk space; micro-batch for throughput",
+      "Both are chosen purely for memory and must be equal"
+    ],
+    "answer_index": 0,
+    "explanation": "The optimizer sees the effective (global) batch, so it is set to give good gradient quality and learning behavior. The micro-batch is what one forward/backward must hold, so it is set by memory. Accumulation lets the two differ."
+  },
+  {
+    "id": "07.2-010",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "2. Mathematics: five quantities, one product",
+    "question": "In batch-size vocabulary, what is the micro-batch size b?",
+    "options": [
+      "The total number of sequences per optimizer step across all workers",
+      "The number of tokens in each sequence",
+      "The number of micro-batches summed before an optimizer step",
+      "The number of sequences in one forward/backward on one worker"
+    ],
+    "answer_index": 3,
+    "explanation": "b is what a single worker processes in one forward/backward pass, set by that device's memory. The total per step is B_global, the tokens per sequence is T, and the number of micro-batches summed is G."
+  },
+  {
+    "id": "07.2-011",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "2. Mathematics: five quantities, one product",
+    "question": "In batch-size vocabulary, what is G?",
+    "options": [
+      "The number of GPUs that each hold a model copy in data parallelism",
+      "The global batch size, counted in sequences across all workers",
+      "The number of tokens in each micro-batch on a single worker",
+      "Micro-batches whose gradients are summed per optimizer step"
+    ],
+    "answer_index": 3,
+    "explanation": "G is the gradient-accumulation step count. Each worker runs G micro-batches and accumulates their gradients before stepping. The number of devices is W, and the global batch is b * G * W."
+  },
+  {
+    "id": "07.2-012",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "2. Mathematics: five quantities, one product",
+    "question": "In batch-size vocabulary, what does T denote?",
+    "options": [
+      "The sequence length or block size, in tokens per sequence",
+      "The total number of optimizer steps planned for the run",
+      "The total number of tokens processed per optimizer step",
+      "The softmax temperature used when sampling from the logits"
+    ],
+    "answer_index": 0,
+    "explanation": "T is the context length: how many tokens each sequence contains. Multiplying B_global by T gives tokens per step. It is unrelated to the number of training steps or sampling temperature."
+  },
+  {
+    "id": "07.2-013",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "In data-parallel training, what is a 'worker'?",
+    "options": [
+      "One layer of the model assigned to its own GPU",
+      "One thread that loads data while the GPU computes",
+      "One process driving one device, typically one per GPU",
+      "One micro-batch within an accumulation loop"
+    ],
+    "answer_index": 2,
+    "explanation": "A worker is a process that runs the training loop on one device. With data parallelism you launch W of them, commonly one per GPU, such as W = 8 on an 8-GPU machine. Splitting layers across GPUs is a different strategy (model/pipeline parallelism)."
+  },
+  {
+    "id": "07.2-014",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "In data-parallel training, what does each worker hold?",
+    "options": [
+      "A distinct slice of the model's layers, passed along in turn",
+      "A full, identical copy of the model and the optimizer state",
+      "Only the optimizer state, with the model stored on a server",
+      "A smaller distilled copy of the model that it trains locally"
+    ],
+    "answer_index": 1,
+    "explanation": "Every data-parallel worker has the complete model and optimizer state, identical across workers. What differs is the data each one reads. Splitting the model itself is a different form of parallelism covered later."
+  },
+  {
+    "id": "07.2-015",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "In data-parallel training, what data does each worker process?",
+    "options": [
+      "A different slice of the training data from every other worker",
+      "Exactly the same batch as every other worker, for redundancy",
+      "Only the validation data, while one main worker trains",
+      "A random subset of tokens from each sequence in a shared batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Each worker reads different sequences, so W workers together cover W times as much data per step. Processing the same batch everywhere would waste the extra devices. The averaged gradient then reflects all workers' data."
+  },
+  {
+    "id": "07.2-016",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "What does the all-reduce operation do in data-parallel training?",
+    "options": [
+      "One main worker gathers all W gradients, averages them, and keeps the result to itself",
+      "Every worker sends its freshly updated weights to every other worker after stepping",
+      "Every worker discards its gradient except the largest one, which all workers then use",
+      "Every worker contributes its gradient and every worker receives the average of all W"
+    ],
+    "answer_index": 3,
+    "explanation": "All-reduce is a collective communication: each worker supplies a gradient tensor and each receives the same averaged result. Then every worker applies that identical gradient. Weights are never exchanged; only gradients are averaged."
+  },
+  {
+    "id": "07.2-017",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "Why do data-parallel workers stay identical after each optimizer step without ever sending their weights to each other?",
+    "options": [
+      "A main worker broadcasts the new weights after every step",
+      "They start identical and each applies the same averaged gradient",
+      "Each worker re-reads the latest checkpoint from disk after stepping",
+      "They use the same random seed, which forces identical weights"
+    ],
+    "answer_index": 1,
+    "explanation": "Identical starting weights plus an identical update (the all-reduced average gradient) give identical new weights, so no weight transfer is needed. A shared seed alone would not keep them identical if they applied different gradients. No checkpoint reload is involved."
+  },
+  {
+    "id": "07.2-018",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "With W = 2 workers, b = 4 and G = 2, what is each worker's gradient after the all-reduce equivalent to?",
+    "options": [
+      "The gradient one device would get from a single batch of 16 sequences",
+      "The gradient one device would get from a single batch of 8 sequences",
+      "The gradient one device would get from a single batch of 4 sequences",
+      "The sum of 16 separate one-sequence gradients, with no averaging applied"
+    ],
+    "answer_index": 0,
+    "explanation": "Each worker processes 4 * 2 = 8 sequences and the two together process 16. Averaging their gradients yields exactly the mean gradient over all 16, as if one device had processed a batch of 16. It is an average, not an unscaled sum."
+  },
+  {
+    "id": "07.2-019",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "What a \"data-parallel worker\" is (first look — built in Module 9)",
+    "question": "Both gradient accumulation (G) and data parallelism (W) multiply the global batch. How do they differ in what they spend?",
+    "options": [
+      "G buys a bigger batch with more devices in parallel; W buys it with more time on one device",
+      "G buys a bigger batch with more time on one device; W buys it with more devices in parallel",
+      "G cuts activation memory per device; W cuts the total arithmetic needed per step",
+      "G rescales the learning rate per micro-batch; W changes the sequence length per worker"
+    ],
+    "answer_index": 1,
+    "explanation": "Accumulation runs extra micro-batches sequentially on the same device, costing time. Data parallelism runs them simultaneously on more devices. Both enlarge the batch the optimizer sees by the same multiplicative rule."
+  },
+  {
+    "id": "07.2-020",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "2. Mathematics: five quantities, one product",
+    "question": "Why is tokens per optimizer step the key number for reading a training config and for scaling laws?",
+    "options": [
+      "It is the number of parameters that get updated in each step",
+      "It is how much text the model learns from between weight updates",
+      "It is the number of steps needed to reach the target validation loss",
+      "It is the amount of GPU memory each worker needs for activations"
+    ],
+    "answer_index": 1,
+    "explanation": "Tokens per step, b * G * W * T, measures the data in each update, which is what scaling laws and batch-size choices reason about. It is not a parameter count, a step count or a memory figure."
+  },
+  {
+    "id": "07.2-021",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Why the $1/G$ scaling is required",
+    "question": "Why does the full-batch mean loss equal the average of the G micro-batch mean losses?",
+    "options": [
+      "Because the cross-entropy loss is always convex",
+      "Because every micro-batch contains the same number of tokens",
+      "Because the optimizer averages the losses automatically",
+      "Because the micro-batches are drawn with the same random seed"
+    ],
+    "answer_index": 1,
+    "explanation": "A mean over all tokens equals the average of per-chunk means only when each chunk has the same token count, so every token gets equal weight. Convexity and the optimizer play no role. This equal-count condition is what breaks with padding or ragged tails."
+  },
+  {
+    "id": "07.2-022",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Why the $1/G$ scaling is required",
+    "question": "Why can the full-batch gradient be computed as the sum of gradients of L_g / G over micro-batches?",
+    "options": [
+      "Because the gradient of each micro-batch is always smaller in norm than its loss value",
+      "Because backward() divides every accumulated gradient by G automatically at the end",
+      "Because AdamW normalizes away any scaling of the gradient, so the 1/G factor is cosmetic",
+      "Because the gradient is linear: the gradient of an average is the average of gradients"
+    ],
+    "answer_index": 3,
+    "explanation": "The gradient of a sum is the sum of gradients, so the gradient of (1/G) * sum L_g equals sum of grad(L_g / G). That is why calling (loss_g / G).backward() and letting .grad accumulate yields the full-batch gradient. backward does not divide by G for you."
+  },
+  {
+    "id": "07.2-023",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Why the $1/G$ scaling is required",
+    "question": "What happens if gradient accumulation forgets the 1/G scaling of each micro-batch loss?",
+    "options": [
+      "The gradient is G times too small, like secretly dividing the learning rate by G",
+      "Only the first micro-batch contributes, because later backward calls are ignored",
+      "Nothing, because AdamW renormalizes any gradient scale exactly before each update",
+      "The gradient is G times too large, like secretly multiplying the learning rate by G"
+    ],
+    "answer_index": 3,
+    "explanation": "Summing G unscaled micro-batch gradients gives G times the mean gradient. In effect the learning rate is multiplied by G, which usually destabilizes training. AdamW is only partly scale-invariant, so this is not harmless."
+  },
+  {
+    "id": "07.2-024",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "3. Numerical example: two micro-batches, worked by hand",
+    "question": "Is the equality between the full-batch mean loss and the 1/G-weighted sum of equal-size micro-batch mean losses exact or approximate?",
+    "options": [
+      "Approximate: it holds only on average over many randomly drawn batches",
+      "Approximate: it holds only when G is large enough for the micro-batch noise to average out",
+      "Exact: it is an identity; a test on a tiny GPT matches gradients to about 1e-5",
+      "Exact only for G = 1, and approximate for any larger G due to rounding"
+    ],
+    "answer_index": 2,
+    "explanation": "When every micro-batch has the same token count, the identity holds exactly for any G. The course's test_grad_accumulation_matches_full_batch confirms the gradients agree to 1e-5 on a real GPT, differences being floating-point noise. It is not a statistical approximation."
+  },
+  {
+    "id": "07.2-025",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "3. Numerical example: two micro-batches, worked by hand",
+    "question": "What condition must hold for the plain 1/G averaging of micro-batch losses to be exact?",
+    "options": [
+      "Every micro-batch holds the same number of real target tokens",
+      "Every micro-batch is drawn from the same source document",
+      "The micro-batch size b is a power of two, such as 8 or 16",
+      "The learning rate is held constant throughout the accumulation loop"
+    ],
+    "answer_index": 0,
+    "explanation": "The identity weights each micro-batch equally, which is correct only if they all contain the same number of real targets. Pretraining get_batch returns full (b, T) windows, so it is exact there. Document source, power-of-two sizes and learning rate are irrelevant."
+  },
+  {
+    "id": "07.2-026",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "What is a 'ragged tail' in the context of gradient accumulation?",
+    "options": [
+      "A sequence that is longer than the context length T and gets cut at the end",
+      "A last micro-batch of an epoch that is shorter than b because the dataset ran out",
+      "A gradient whose norm sits far above the clipping threshold on the final step",
+      "A worker that finishes its micro-batches later than the others and stalls the all-reduce"
+    ],
+    "answer_index": 1,
+    "explanation": "When iterating a fixed dataset in order, the final micro-batch of an epoch can contain fewer sequences, such as 3 instead of 8. That breaks the equal-token-count assumption behind plain 1/G averaging. It is unrelated to sequence length limits or slow workers."
+  },
+  {
+    "id": "07.2-027",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "In fine-tuning with padded sequences, why can two micro-batches of identical shape break plain 1/G averaging?",
+    "options": [
+      "Padded positions get double weight in the cross-entropy, inflating the shorter batch",
+      "The padding token has a larger embedding norm than real tokens, skewing the gradient",
+      "Ignored positions get target -1 and add no loss, so real-token counts can differ greatly",
+      "Micro-batches containing any padding are skipped by the optimizer, so the step silently loses data"
+    ],
+    "answer_index": 2,
+    "explanation": "Padding and often prompt tokens are given target -1, which GPT.forward passes as ignore_index=-1, so they add no loss. Two (b, T) batches can then hold very different numbers of real targets, and averaging their means weights tokens unequally. Padding positions get zero weight, not double."
+  },
+  {
+    "id": "07.2-028",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "Micro-batch 1 has 3 real tokens and micro-batch 2 has 1 real token. Why does plain 1/G averaging of their mean losses give the wrong full-batch loss?",
+    "options": [
+      "The three tokens in micro-batch 1 are each counted twice, inflating its share of the loss",
+      "The mean of micro-batch 2 is undefined because a mean needs at least two tokens to compute",
+      "Its single token gets the same total weight as all three in micro-batch 1: it counts 3x as much",
+      "The plain average always gives exactly half of the true loss when G = 2 micro-batches"
+    ],
+    "answer_index": 2,
+    "explanation": "Averaging two micro-batch means gives each micro-batch weight 1/2 regardless of size. The lone token in micro-batch 2 then carries as much weight as the three tokens of micro-batch 1 combined, distorting the per-token mean. The error depends on the counts; it is not a fixed factor."
+  },
+  {
+    "id": "07.2-029",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "When micro-batches have different numbers of real target tokens, what is the correct way to accumulate the loss?",
+    "options": [
+      "Compute each micro-batch loss as a mean and backpropagate it divided by G, as for equal sizes",
+      "Compute each micro-batch loss as a mean and multiply it by its own token count, with no division",
+      "Drop the micro-batch with fewer tokens and double the other's loss to keep the scale",
+      "Compute each loss as a sum S_g over its tokens and backpropagate S_g / N, N the total real tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "Summing per-token losses and dividing by the total real-token count N across all micro-batches gives each token equal weight, matching the true full-batch mean. Plain mean/G is the special case when counts are equal. Dropping and doubling would distort the result."
+  },
+  {
+    "id": "07.2-030",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "When does the token-weighted recipe, backpropagating S_g / N, reduce to the plain recipe L_g / G?",
+    "options": [
+      "When every micro-batch has the same number n of real tokens, so N = G * n",
+      "When G equals 1 but the token counts differ between steps of the run",
+      "When the loss uses reduction='mean' instead of 'sum' inside each micro-batch",
+      "When the micro-batch size b equals the sequence length T on every worker"
+    ],
+    "answer_index": 0,
+    "explanation": "If each N_g = n, then N = G * n and S_g / N = (S_g / n) / G = L_g / G. So the plain recipe is a special case of the general one. The other conditions do not make the two equal in general."
+  },
+  {
+    "id": "07.2-031",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "In token-weighted gradient accumulation, why are all G micro-batches fetched before the first backward call?",
+    "options": [
+      "The optimizer requires all G batches resident in memory to compute its moment estimates",
+      "Fetching them together makes the data loader deterministic across restarts",
+      "The total real-token count N must be known before any S_g / N can be backpropagated",
+      "The forward pass needs all G batches at once to compute attention across them"
+    ],
+    "answer_index": 2,
+    "explanation": "Each micro-batch's loss is divided by N, the total real tokens across all G micro-batches, so N has to be counted first. The optimizer and attention do not need the batches together. Fetching early is purely for computing the normalizer."
+  },
+  {
+    "id": "07.2-032",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "In the token-weighted accumulation code, how is the number of real target tokens N computed?",
+    "options": [
+      "Multiplying b by T by G",
+      "Counting nonzero entries of the logits",
+      "Summing the loss values of every micro-batch",
+      "Summing (y != -1) over all G target tensors"
+    ],
+    "answer_index": 3,
+    "explanation": "Ignored positions have target -1, so counting entries where y != -1 across all fetched batches gives the real-token total. b * T * G counts padding too. Logits and losses are not token counts."
+  },
+  {
+    "id": "07.2-033",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "In token-weighted accumulation, which cross-entropy reduction is used for each micro-batch loss, and why?",
+    "options": [
+      "reduction='mean', so each micro-batch is averaged over its tokens before weighting",
+      "reduction='none', so each token's loss is backpropagated separately through the model",
+      "reduction='sum', so the micro-batch contributes S_g, the sum over its real tokens",
+      "reduction='max', so only the hardest token in each micro-batch drives the gradient"
+    ],
+    "answer_index": 2,
+    "explanation": "The recipe needs S_g, the sum of per-token losses over real tokens (with ignore_index=-1 skipping padding), which is then divided by the global N. A mean would reintroduce per-micro-batch normalization, the source of the bug."
+  },
+  {
+    "id": "07.2-034",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "What is the memory cost of fetching all G micro-batches up front in token-weighted accumulation?",
+    "options": [
+      "All G micro-batches' activations must be held at once, multiplying peak activation memory by G",
+      "The model weights must be copied G times, one copy for each fetched micro-batch",
+      "All G (b, T) int64 token-id tensors sit in memory, which is tiny next to activations",
+      "The optimizer state grows by a factor of G, since each micro-batch needs moments"
+    ],
+    "answer_index": 2,
+    "explanation": "Only the integer token ids for all G batches are kept, which are small. Activations are still created for one micro-batch at a time during its forward/backward. Model and optimizer state are unaffected."
+  },
+  {
+    "id": "07.2-035",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "In pretraining, what simple alternative handles the ragged-tail problem in gradient accumulation?",
+    "options": [
+      "Duplicate the short batch's sequences until it reaches full size b",
+      "Drop the short last batch, as DataLoader(..., drop_last=True) does",
+      "Raise the learning rate on the short batch in proportion to its size",
+      "Skip gradient clipping on the short batch so its update is not shrunk"
+    ],
+    "answer_index": 1,
+    "explanation": "Dropping the final incomplete batch is standard in pretraining: losing one batch among millions does not matter, and every remaining micro-batch is full. Duplicating examples would overweight them. Learning-rate or clipping tweaks do not fix the token-weighting error."
+  },
+  {
+    "id": "07.2-036",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "Why is token-weighted accumulation required in fine-tuning rather than just dropping problematic batches?",
+    "options": [
+      "Fine-tuning datasets are too small to iterate more than once, so no batch can be lost",
+      "Fine-tuning always uses G = 1, so plain gradient accumulation is impossible there",
+      "Fine-tuning disables ignore_index, so padded positions cannot be masked from the loss",
+      "Padding varies in every batch, so it cannot be dropped the way a single ragged tail can"
+    ],
+    "answer_index": 3,
+    "explanation": "In fine-tuning nearly every batch has a different count of real tokens because of padding and masked prompts, so there is no single short batch to drop. The token-weighted sum / N recipe is needed. Fine-tuning does use ignore_index and can use accumulation."
+  },
+  {
+    "id": "07.2-037",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "When micro-batches have different token counts",
+    "question": "With W > 1 data-parallel workers and token-weighted accumulation, what must N be?",
+    "options": [
+      "The real-token count summed across all workers, via one extra all-reduce of a single number",
+      "Each worker's own local token count, so no communication is needed for the normalizer",
+      "The token count of worker 0, broadcast to the others so every worker divides alike",
+      "The local token count multiplied by W, assuming every worker sees the same padding"
+    ],
+    "answer_index": 0,
+    "explanation": "To weight every token equally globally, the normalizer must be the total over all workers. That needs one cheap all-reduce of a scalar. Using local counts would weight workers' tokens unequally when their counts differ, and multiplying by W assumes equal counts."
+  },
+  {
+    "id": "07.2-038",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "4. Tensor shapes: nothing new, just repeated",
+    "question": "What new tensors does gradient accumulation add to a training step?",
+    "options": [
+      "None; only each parameter's .grad persists and gets added to G times",
+      "A separate gradient buffer per micro-batch, costing G times the model size",
+      "A saved copy of the activations for every micro-batch until the step",
+      "A second set of optimizer moments for each of the G micro-batches"
+    ],
+    "answer_index": 0,
+    "explanation": "Each micro-step is an ordinary forward/backward. The only thing carried across micro-steps is .grad, which is the same shape as each parameter and accumulates in place until step() reads it and zero_grad() clears it."
+  },
+  {
+    "id": "07.2-039",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "4. Tensor shapes: nothing new, just repeated",
+    "question": "With gradient accumulation, what sets peak activation memory?",
+    "options": [
+      "The global batch B_global, regardless of the choice of b",
+      "The micro-batch size b, not the global batch B_global",
+      "The number of data-parallel workers W in the run",
+      "The number of accumulation steps G before each update"
+    ],
+    "answer_index": 1,
+    "explanation": "Only one micro-batch's activations exist at a time, so peak activation memory depends on b (and T). You pay for a batch of b in memory but learn from b * G * W. That is the whole payoff of accumulation."
+  },
+  {
+    "id": "07.2-040",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "5. From-scratch PyTorch: the accumulation inner loop",
+    "question": "In a gradient-accumulation loop, where is optimizer.zero_grad() called?",
+    "options": [
+      "Inside the micro-step loop, before each micro-batch backward",
+      "Inside the micro-step loop, after each micro-batch backward",
+      "Once per optimizer step, outside and before the G micro-step loop",
+      "Only once at the very start of training"
+    ],
+    "answer_index": 2,
+    "explanation": "The G micro-batch gradients must accumulate, so they are cleared only once per optimizer step, before the micro-loop starts. Zeroing inside the loop keeps only the last micro-batch. Never zeroing between steps mixes gradients across steps."
+  },
+  {
+    "id": "07.2-041",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "5. From-scratch PyTorch: the accumulation inner loop",
+    "question": "In a gradient-accumulation loop, why are clipping and optimizer.step() run once, after all G micro-batches?",
+    "options": [
+      "So clipping sees the true full-batch gradient norm and one update covers all G",
+      "So clipping can act on each micro-batch's gradient separately before summing",
+      "So the learning rate can be re-adjusted between micro-batches by the cosine schedule",
+      "So the optimizer can skip micro-batches whose losses come out unusually large"
+    ],
+    "answer_index": 0,
+    "explanation": "After G micro-steps .grad holds the full-batch gradient, so clipping its norm matches what clipping would do without accumulation, and a single step applies the update. Clipping each micro-batch would clip a different quantity."
+  },
+  {
+    "id": "07.2-042",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "5. From-scratch PyTorch: the accumulation inner loop",
+    "question": "In a gradient-accumulation loop, why is the logged step loss accumulated as loss.item() / G?",
+    "options": [
+      "So the reported loss is on the same scale as a single full-batch mean loss",
+      "So the logged value comes out G times larger than the true loss and stands out",
+      "So the gradient of each micro-batch is scaled correctly for backward()",
+      "So the GPU never needs to synchronize with the CPU when the loss is logged"
+    ],
+    "answer_index": 0,
+    "explanation": "Summing loss.item() / G over G equal micro-batches gives the full-batch mean, matching what one large batch would report. The gradient scaling is handled separately by (loss / G).backward(). item() still synchronizes with the device."
+  },
+  {
+    "id": "07.2-043",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "6. Under the hood: accumulation is compute-for-memory",
+    "question": "What does gradient accumulation trade?",
+    "options": [
+      "Accuracy for speed: it approximates the full-batch gradient with fewer FLOPs",
+      "Wall-clock time for memory: the arithmetic is the same, just done sequentially",
+      "Memory for time: it holds more activations in memory so the step finishes faster",
+      "Disk space for compute: it caches intermediate gradients on disk between steps"
+    ],
+    "answer_index": 1,
+    "explanation": "The GPU does the same total arithmetic as processing the whole batch at once; it just does it in G sequential pieces, so it takes about as long as that larger batch would. What you save is peak activation memory, which scales with b instead of b * G. The gradient is exact, not approximate."
+  },
+  {
+    "id": "07.2-044",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "6. Under the hood: accumulation is compute-for-memory",
+    "question": "Why is LayerNorm unaffected by how a batch is split into micro-batches?",
+    "options": [
+      "It normalizes each token over its feature dimension, independently of other examples",
+      "It normalizes over the batch dimension, and accumulation preserves the batch statistics",
+      "It has no learnable parameters, so the gradients never depend on how the batch is split",
+      "It is only applied at evaluation time, so training-time batch splits never reach it"
+    ],
+    "answer_index": 0,
+    "explanation": "LayerNorm computes its mean and variance per token across features, so no statistic depends on which other examples share the batch. That makes it invariant to micro-batch slicing. It does have learnable scale and shift and is active during training."
+  },
+  {
+    "id": "07.2-045",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "6. Under the hood: accumulation is compute-for-memory",
+    "question": "Why would BatchNorm break the exactness of gradient accumulation?",
+    "options": [
+      "Its statistics span the batch dimension, so G micro-batches of b differ from one batch of b*G",
+      "It has too many parameters to fit in the accumulated gradient buffer, so it is dropped",
+      "It normalizes each token independently, so it ignores which batch the token arrived in",
+      "It requires the learning rate to be rescaled by the batch size whenever G changes"
+    ],
+    "answer_index": 0,
+    "explanation": "BatchNorm's mean and variance are taken over the examples in the batch, so a small micro-batch gives different normalization than the full batch, and the result depends on how you slice. That breaks the equivalence accumulation relies on. Per-token normalization describes LayerNorm."
+  },
+  {
+    "id": "07.2-046",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "6. Under the hood: accumulation is compute-for-memory",
+    "question": "Why do transformers use LayerNorm or RMSNorm rather than BatchNorm?",
+    "options": [
+      "They are the only normalizations that support float16 and bfloat16 mixed-precision training",
+      "They are invariant to how the batch is sliced, so accumulation and data parallelism stay exact",
+      "They let the model skip the backward pass through normalization layers, saving compute",
+      "They reduce the vocabulary size needed for the output layer by normalizing the logits"
+    ],
+    "answer_index": 1,
+    "explanation": "Per-token normalization does not depend on other examples in the batch, so splitting the batch across micro-steps or workers gives exactly the same result. This is one of several reasons transformers avoid BatchNorm. Dtype support and vocabulary size are unrelated."
+  },
+  {
+    "id": "07.2-047",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Exercise",
+    "question": "Given a target tokens-per-step, sequence length T, workers W and maximum micro-batch b, how do you find the accumulation steps G?",
+    "options": [
+      "Divide the token target by T to get B_global in sequences, then G = B_global / (b * W)",
+      "Divide the token target by b to get sequences per worker, then G = result / (T * W)",
+      "Multiply the token target by T to get B_global in tokens, then G = result / (b * W)",
+      "Divide the token target by W to get each worker's share in tokens, then G = result / b"
+    ],
+    "answer_index": 0,
+    "explanation": "First convert tokens to sequences: B_global = tokens / T. Then solve B_global = b * G * W for G. For example 491,520 tokens with T = 1024 gives 480 sequences, and with b = 6 and W = 8, G = 480 / 48 = 10."
+  },
+  {
+    "id": "07.2-048",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Exercise",
+    "question": "If a target tokens-per-step does not divide evenly by b * W * T, what is the practical choice?",
+    "options": [
+      "Round G to the nearest integer and accept slightly different tokens per step",
+      "Change the vocabulary size until the token target divides evenly by b * W * T",
+      "Abandon gradient accumulation entirely and run with G = 1 on every worker",
+      "Use a fractional G by running one partial micro-batch at the end of each step"
+    ],
+    "answer_index": 0,
+    "explanation": "The schedule and scaling-law targets are not sensitive to a few percent in tokens per step, so rounding G and accepting the small difference is fine. Vocabulary size has nothing to do with batch size. Giving up accumulation would miss the target far more."
+  },
+  {
+    "id": "07.2-049",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What symptom typically follows forgetting the 1/G scaling in gradient accumulation?",
+    "options": [
+      "The step-0 loss already reads G times ln(V) before any update",
+      "The loss falls G times faster than usual with no instability at all",
+      "The step-0 loss looks fine, but within a few steps training explodes",
+      "Training stalls immediately, with the loss frozen near ln(V) for good"
+    ],
+    "answer_index": 2,
+    "explanation": "The loss itself is computed correctly, so step 0 looks normal. But the gradient is G times too large, a silent G-times learning-rate increase that usually diverges after a few steps. It does not just speed up training safely."
+  },
+  {
+    "id": "07.2-050",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What happens if zero_grad() is mistakenly called inside the gradient-accumulation micro-loop?",
+    "options": [
+      "The gradients become G times too large, so the update overshoots and training diverges quickly",
+      "Only the last micro-batch's gradient survives; the loss still falls, from a batch G times smaller",
+      "The optimizer raises an error at step time because each parameter's .grad has been emptied",
+      "The model receives no update at all, since every gradient is zeroed, and the loss stays flat"
+    ],
+    "answer_index": 1,
+    "explanation": "Each zero_grad wipes the previous micro-batches, so only the final one is left when step() runs. That is still a valid gradient, so the loss decreases, but you paid for G forwards and used one. It is a silent waste rather than a crash or divergence."
+  },
+  {
+    "id": "07.2-051",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "When changing G to fit memory, what should be kept fixed to preserve tuned learning-rate behavior?",
+    "options": [
+      "The global batch B_global, because LR schedules are tuned to the global batch",
+      "The micro-batch size b, because learning-rate schedules are tuned per device",
+      "The accumulation steps G, because the learning rate is tuned to the step count",
+      "The worker count W, because the learning rate is tuned to the number of GPUs"
+    ],
+    "answer_index": 0,
+    "explanation": "The learning-rate schedule is tuned for the batch the optimizer sees, which is B_global. If you shrink b, raise G to keep B_global (and so the LR) unchanged. Confusing b with B_global when setting the LR is a common mistake."
+  },
+  {
+    "id": "07.2-052",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Check yourself",
+    "question": "With b = 12, G = 40, W = 8 and T = 1024, roughly how many tokens does each optimizer step process?",
+    "options": [
+      "About 491 thousand tokens (480 sequences)",
+      "About 12 thousand tokens (12 sequences)",
+      "About 3.9 million tokens (3840 sequences)",
+      "About 39 million tokens (38,400 sequences)"
+    ],
+    "answer_index": 2,
+    "explanation": "B_global = 12 * 40 * 8 = 3840 sequences, and 3840 * 1024 = 3,932,160 tokens, about 3.9M per step. This is the scale of global batch large models use, achieved via accumulation and data parallelism."
+  },
+  {
+    "id": "07.2-053",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why scale each micro-batch loss by 1/G rather than summing the raw losses?",
+    "options": [
+      "Summing raw losses would underflow in float32 once G grows beyond a few dozen steps",
+      "The optimizer requires every backpropagated loss to be less than one to stay stable",
+      "Summing raw losses stops backward from accumulating into .grad across micro-batches",
+      "The full-batch loss is a mean, and summing raw losses gives G times the mean gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "With equal-size micro-batches the full mean equals the average of micro means. Summing raw losses gives G times that gradient, an unintended G-times larger step. The 1/G makes the accumulated gradient equal the true full-batch gradient."
+  },
+  {
+    "id": "07.2-054",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Check yourself",
+    "question": "You halve the micro-batch b to fit a longer context but want the same global batch. What must change, and what happens to peak activation memory from the batch side?",
+    "options": [
+      "Halve G; halving b raises peak activation memory, because each micro-batch holds longer sequences",
+      "Double G; halving b lowers peak activation memory, though longer context costs more per sequence",
+      "Double W; peak activation memory is unchanged by b, since it depends only on the context length",
+      "Keep G fixed; peak activation memory depends only on B_global, which is set by the token target"
+    ],
+    "answer_index": 1,
+    "explanation": "To keep B_global = b * G * W constant, halving b requires doubling G. Peak activation memory is set by the micro-batch, so smaller b lowers it, while the longer context raises activation cost per sequence; the two effects trade off."
+  },
+  {
+    "id": "07.2-055",
+    "chapter": "07.2",
+    "chapter_name": "Micro-batch, global batch, grad accumulation",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-02.md",
+    "section": "Next",
+    "question": "To resume a pretraining run so that it is bit-for-bit identical to an uninterrupted run, what is needed?",
+    "options": [
+      "Saving only the model weights at higher precision",
+      "Restarting with a larger learning rate to catch up",
+      "Saving more than the model weights",
+      "Saving only the final loss value and step count"
+    ],
+    "answer_index": 2,
+    "explanation": "Weights alone are not enough to continue training exactly; optimizer state, step and RNG states also matter. That is the subject of checkpointing in 07.3. Learning-rate tricks cannot recreate an identical trajectory."
+  }
+]

@@ -1,0 +1,974 @@
+[
+  {
+    "id": "09.3-001",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What is '3D parallelism' in frontier-model training?",
+    "options": [
+      "Running three independent training runs on separate clusters and averaging their weights",
+      "Splitting a model's layers across exactly three GPUs, one third of the depth on each device",
+      "Combining data, tensor and pipeline parallelism at the same time",
+      "Sharding parameters, gradients and optimizer state at once, as in ZeRO stage 3"
+    ],
+    "answer_index": 2,
+    "explanation": "3D parallelism combines data parallelism (split the data), tensor parallelism (split within layers), and pipeline parallelism (split across layers). Expert parallelism is added on top for Mixture-of-Experts models. Sharding all three model-state buckets is ZeRO-3, a different idea."
+  },
+  {
+    "id": "09.3-002",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is it useful to know what each parallelism axis splits and what it costs in communication?",
+    "options": [
+      "It determines the model's final accuracy, since each axis changes the loss curve",
+      "It lets you read a large-model training report and plan a training layout",
+      "It replaces scaling laws, since the layout alone fixes the optimal model size",
+      "It lets you pick a layout that avoids inter-device communication entirely"
+    ],
+    "answer_index": 1,
+    "explanation": "Frontier runs use several parallelism axes at once, each with its own communication pattern and cost. Knowing them lets you interpret the configuration in a training report and map axes to hardware when planning one. Parallelism does not change what the model learns."
+  },
+  {
+    "id": "09.3-003",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Single-CPU note",
+    "question": "A tensor-parallel example is simulated in one process by computing each device's partial result with NumPy and summing them. What does it reproduce, and what does it not?",
+    "options": [
+      "It reproduces the all-reduce's numbers, not the real gain of fitting or speeding up a big layer",
+      "It reproduces the real multi-GPU speedup, but not the exact numbers that an all-reduce would produce",
+      "It reproduces both the all-reduce's numbers and the per-device memory savings of the split",
+      "It reproduces neither the numbers nor the memory savings, since NumPy has no collectives"
+    ],
+    "answer_index": 0,
+    "explanation": "Summing per-device partials in one process gives exactly the output an all-reduce would produce. But the point of real tensor parallelism, fitting a layer that does not fit on one device and computing it faster, can only be shown on real multi-device hardware."
+  },
+  {
+    "id": "09.3-004",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "1. When data parallelism and ZeRO run out",
+    "question": "What assumption do data parallelism and ZeRO/FSDP share that breaks for the largest models?",
+    "options": [
+      "That the full training dataset fits in each node's CPU memory for shuffling",
+      "That a single device can, at least momentarily, hold and compute one full layer",
+      "That all GPUs sit on one machine and share a single NVLink switch fabric",
+      "That the optimizer is plain SGD, so no per-parameter state ever needs to be stored"
+    ],
+    "answer_index": 1,
+    "explanation": "Data parallelism replicates the model, and ZeRO/FSDP gather each layer's full weights before computing it. Both assume one device can hold and compute one layer. When a layer's weights or activations are too large, the model itself must be split across devices."
+  },
+  {
+    "id": "09.3-005",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "1. When data parallelism and ZeRO run out",
+    "question": "Which description matches tensor parallelism?",
+    "options": [
+      "Splitting one operation such as a matmul so each device holds part of the weight and output",
+      "Assigning a contiguous block of layers to each device and passing activations to the next one",
+      "Placing different MoE experts on different devices and routing tokens to their owners",
+      "Giving each device a different shard of the training data and averaging the gradients"
+    ],
+    "answer_index": 0,
+    "explanation": "Tensor parallelism splits within a layer, across the width of a matmul. Assigning layer ranges is pipeline parallelism, placing experts is expert parallelism, and sharding the data is data parallelism."
+  },
+  {
+    "id": "09.3-006",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "1. When data parallelism and ZeRO run out",
+    "question": "Which description matches pipeline parallelism?",
+    "options": [
+      "Each device holds a column slice of every weight matrix and all-reduces outputs",
+      "Each device holds a contiguous range of layers and passes activations to the next",
+      "Each device holds a subset of the MoE experts and receives tokens via all-to-all",
+      "Each device holds a slice of the token positions and exchanges keys and values for attention"
+    ],
+    "answer_index": 1,
+    "explanation": "Pipeline parallelism splits the layer stack (depth) across devices. Each stage computes its layers and sends activations forward, while backward flows in reverse. Slicing every weight matrix is tensor parallelism and slicing token positions is sequence parallelism."
+  },
+  {
+    "id": "09.3-007",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "1. When data parallelism and ZeRO run out",
+    "question": "Which description matches expert parallelism?",
+    "options": [
+      "Each device computes a column block of every matmul and all-reduces the outputs",
+      "Each device holds a contiguous range of layers and forwards its activations to the next device",
+      "In an MoE, experts live on different devices and tokens are routed to their expert's device",
+      "Each device processes a different data shard and the gradients are all-reduced"
+    ],
+    "answer_index": 2,
+    "explanation": "Expert parallelism is specific to MoE models. Experts are distributed across devices, and tokens are sent to the device hosting the expert the router selected. It composes with the other parallelism axes."
+  },
+  {
+    "id": "09.3-008",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "1. When data parallelism and ZeRO run out",
+    "question": "How do data parallelism and ZeRO relate to tensor, pipeline and expert parallelism?",
+    "options": [
+      "They compose on top of all three",
+      "They are alternatives that cannot be combined with them",
+      "They replace tensor parallelism at large scale",
+      "They only work with pipeline parallelism"
+    ],
+    "answer_index": 0,
+    "explanation": "Data parallelism and ZeRO split the data and the memory, while tensor, pipeline, and expert parallelism split the model itself. Real runs use them together: model-parallel groups form replicas, and data parallelism or ZeRO runs across replicas."
+  },
+  {
+    "id": "09.3-009",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "2. Tensor parallelism: split the matmul (Megatron style)",
+    "question": "What is the key design goal of the Megatron-LM tensor-parallel split for a Transformer MLP?",
+    "options": [
+      "Removing the nonlinearity between the two matmuls so they fuse into one",
+      "Making every device hold the full weight matrices to avoid gathering them",
+      "Splitting the two matmuls so they need only one communication between them",
+      "Communicating the 4C-wide hidden activations after every matmul in the block"
+    ],
+    "answer_index": 2,
+    "explanation": "Megatron chooses how to split the MLP's two weight matrices so that the pair needs only one collective (an all-reduce at the end) per pass. The wide hidden activations never have to be communicated."
+  },
+  {
+    "id": "09.3-010",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The column-then-row trick for an MLP",
+    "question": "In a Transformer MLP Y = ReLU(X A) B, what are A and B?",
+    "options": [
+      "A is the attention score matrix; B is the value projection applied to it",
+      "A is the C to 4C up projection; B is the 4C to C down projection",
+      "A is the 4C to C down projection; B is the C to 4C up projection",
+      "A and B are both C by C matrices, so the hidden width stays at C"
+    ],
+    "answer_index": 1,
+    "explanation": "The MLP widens the representation from C to 4C with A, applies an element-wise nonlinearity, and projects back from 4C to C with B. GPT-2 uses GELU rather than ReLU, but the tensor-parallel splitting is identical."
+  },
+  {
+    "id": "09.3-011",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The column-then-row trick for an MLP",
+    "question": "In Megatron's column-parallel split of the MLP's first matmul, why can each device apply the nonlinearity without communication?",
+    "options": [
+      "Because ReLU is linear on its domain, so applying it before or after the sum gives an identical result",
+      "Each device computes its own slice of the hidden activations, and the nonlinearity is element-wise",
+      "Because each device holds the full 4C-wide hidden activations after an implicit all-gather",
+      "Because the nonlinearity is deferred until after the all-reduce that follows the second matmul"
+    ],
+    "answer_index": 1,
+    "explanation": "Splitting A by columns means device d computes X A_d, a slice of the hidden activations. An element-wise function like ReLU or GELU needs only each element itself, so it can be applied to the slice locally. That is why the column split is placed before the nonlinearity."
+  },
+  {
+    "id": "09.3-012",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The column-then-row trick for an MLP",
+    "question": "In Megatron's MLP split, how is the second matmul B partitioned, and what does each device produce?",
+    "options": [
+      "Row-parallel: B is split by rows matching the hidden slices; each device gives a full-shape partial",
+      "Column-parallel: B is split by columns, so each device produces a disjoint slice of the output columns",
+      "Replicated: every device holds all of B and produces the full, correct output without communication",
+      "Split by batch: each device holds all of B and produces the outputs for a different subset of tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "B is split by rows so device d multiplies its hidden slice by B_d. The result has the full C-wide output shape but contains only that device's contribution. The full output is the sum of these partials."
+  },
+  {
+    "id": "09.3-013",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The column-then-row trick for an MLP",
+    "question": "How does Megatron's tensor-parallel MLP obtain the complete output Y on every device?",
+    "options": [
+      "An all-reduce sums the partial outputs: Y = sum over d of ReLU(X A_d) B_d",
+      "An all-gather concatenates each device's output columns into the full width-C Y",
+      "Rank 0 gathers every partial, computes Y alone, and broadcasts it to the others",
+      "Each device already holds the full Y after the row-parallel matmul, with no communication"
+    ],
+    "answer_index": 0,
+    "explanation": "Each device's row-parallel result is a partial contribution to Y. One all-reduce with sum adds them, leaving the full Y on every device. Concatenating would be wrong because the partials overlap in shape rather than covering disjoint columns."
+  },
+  {
+    "id": "09.3-014",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The column-then-row trick for an MLP",
+    "question": "Why is Megatron's column-then-row MLP split bandwidth-thrifty?",
+    "options": [
+      "It avoids all communication in the backward pass, since gradients are computed fully locally per shard",
+      "It compresses the weight shards to int8 before sending them, cutting each transfer by four",
+      "It communicates only the gradients of the nonlinearity, which are tiny compared with activations",
+      "The 4C-wide hidden activations are never sent; only the C-wide output is all-reduced once a pass"
+    ],
+    "answer_index": 3,
+    "explanation": "Each device keeps its own hidden slice through the nonlinearity, so the wide intermediate never crosses the network. Only the narrower final output is all-reduced, once in forward and once in backward."
+  },
+  {
+    "id": "09.3-015",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked example, by hand",
+    "question": "A two-device tensor-parallel MLP gives device partial outputs [5, 2] and [5, 9], and the single-device output is [10, 11]. What does this demonstrate?",
+    "options": [
+      "Tensor parallelism introduces a small approximation error that is tolerable in practice for training",
+      "Summing the row-parallel partials with an all-reduce exactly reconstructs the single-device output",
+      "The partials must be concatenated, not summed, to recover the true single-device output",
+      "Each device already computed the full output; the two copies differ only by rounding noise"
+    ],
+    "answer_index": 1,
+    "explanation": "The element-wise sum [5+5, 2+9] = [10, 11] matches ReLU(XA)B computed on one device. Tensor parallelism is exact: each device held only half of A and half of B and computed on a hidden slice half as wide."
+  },
+  {
+    "id": "09.3-016",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked example, by hand",
+    "question": "In a two-device tensor-parallel MLP with C = 2 (hidden width 4), what does each device hold and compute?",
+    "options": [
+      "Half of A's columns and half of B's rows, computing on a hidden slice of width 2",
+      "All of A and half of B's rows, computing on the full hidden width 4 before splitting",
+      "Half of A's rows and half of B's columns, computing on half of the input features",
+      "All of A and all of B, computing the full MLP on half of the tokens in the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Device 0 takes columns 1 to 2 of A and rows 1 to 2 of B; device 1 takes columns 3 to 4 and rows 3 to 4. Each computes on a hidden slice of width 2 instead of 4. That is how a matmul too big for one device is split and reassembled with one all-reduce."
+  },
+  {
+    "id": "09.3-017",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked example, by hand",
+    "question": "In a tensor-parallel split of an MLP whose first matmul is A, which slices of A and B must a device hold together?",
+    "options": [
+      "The columns of A and the rows of B that correspond to the same hidden units",
+      "Any columns of A and any rows of B, since the all-reduce fixes any mismatch",
+      "The rows of A and the columns of B that correspond to the same hidden units",
+      "All of A, plus only the rows of B that correspond to its assigned hidden units"
+    ],
+    "answer_index": 0,
+    "explanation": "Device d's hidden slice is X A_d for some block of hidden units; its partial output multiplies that slice by the rows of B for the same hidden units. Mismatched slices would multiply the wrong hidden activations by the wrong weights."
+  },
+  {
+    "id": "09.3-018",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "2. Tensor parallelism: split the matmul (Megatron style)",
+    "question": "How is multi-head attention tensor-parallelized in Megatron style?",
+    "options": [
+      "Each device computes all heads on a subset of the key dimensions and concatenates the scores",
+      "Each device gets a subset of tokens and all heads, exchanging keys and values with the other devices",
+      "Each device runs a subset of heads in full; the output projection is row-parallel, one all-reduce",
+      "Attention is replicated on every device and only the MLP block is split column-then-row"
+    ],
+    "answer_index": 2,
+    "explanation": "Heads are independent, so splitting by heads is natural: each device computes its heads' QKV projections and attention locally. The output projection is split by rows, and one all-reduce sums the partials. That mirrors the MLP's column-then-row pattern."
+  },
+  {
+    "id": "09.3-019",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "2. Tensor parallelism: split the matmul (Megatron style)",
+    "question": "Why is tensor parallelism normally confined to GPUs within one node over NVLink?",
+    "options": [
+      "Because it only supports up to two GPUs, and nodes typically hold exactly that many",
+      "Because NVLink hardware is required to execute a split matmul's partial products",
+      "It all-reduces in every layer's forward and backward, making it communication-heavy",
+      "Because it communicates only once per step, so cross-node latency would simply be wasted"
+    ],
+    "answer_index": 2,
+    "explanation": "Tensor parallelism needs an all-reduce in every layer's forward and backward pass. That traffic is affordable only on the fastest links, typically NVLink within a node. Pipeline and data parallelism, which communicate less often, are used across nodes."
+  },
+  {
+    "id": "09.3-020",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "3. Pipeline parallelism: split the layer stack",
+    "question": "With 4 pipeline stages and 32 layers split evenly, which layers does stage 1 hold?",
+    "options": [
+      "Layers 0 to 7",
+      "Layers 8 to 15",
+      "Layers 1, 5, 9, ...",
+      "Layers 16 to 23"
+    ],
+    "answer_index": 1,
+    "explanation": "Pipeline parallelism gives each stage a contiguous range of layers. With 32 layers and 4 stages, stage 0 holds 0 to 7, stage 1 holds 8 to 15, and so on. Forward flows stage 0 to stage 3 and backward flows in reverse."
+  },
+  {
+    "id": "09.3-021",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "3. Pipeline parallelism: split the layer stack",
+    "question": "What memory problem does pipeline parallelism solve?",
+    "options": [
+      "It shards activations along the sequence dimension, so long contexts fit on each device",
+      "Each device holds only its slice of the model's depth, so a far deeper model fits",
+      "It eliminates the optimizer state, since each stage updates its layers with plain SGD",
+      "It shrinks each weight matrix by splitting its columns across the pipeline stages"
+    ],
+    "answer_index": 1,
+    "explanation": "By assigning different layers to different devices, each device needs only its layers' parameters and their computation. A model too deep for one device can thus be spread across several. Individual layers are still held whole, unlike tensor parallelism."
+  },
+  {
+    "id": "09.3-022",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The bubble",
+    "question": "In naive pipeline parallelism with one batch pushed through, what is the 'pipeline bubble'?",
+    "options": [
+      "Extra memory held by in-flight activations waiting for their backward pass",
+      "Idle time while stages wait on others, e.g. stages 1-3 idle while stage 0 computes",
+      "A numerical error introduced when activations are cast to pass between devices",
+      "The time every stage spends waiting on the optimizer step at the end of each full batch"
+    ],
+    "answer_index": 1,
+    "explanation": "When one batch flows through, each stage is busy only while that batch is on it, so most devices are idle most of the time. That wasted time is the bubble. It is the fill and drain time at the ends of the pipe."
+  },
+  {
+    "id": "09.3-023",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The bubble",
+    "question": "How does pipeline parallelism reduce the bubble?",
+    "options": [
+      "Add more pipeline stages, so each stage's share of the compute and of the idle time shrinks",
+      "Split the batch into m micro-batches fed in a staggered stream so all stages stay busy",
+      "Run the optimizer step during the forward pass so that idle stages update their layers",
+      "All-reduce the activations between stages so every stage can start at the same time"
+    ],
+    "answer_index": 1,
+    "explanation": "Once stage 0 passes micro-batch 1 on, it starts micro-batch 2, and so on, like an assembly line. After a short fill, all stages are busy. Only fill and drain at the ends remain as bubble, which more micro-batches amortize."
+  },
+  {
+    "id": "09.3-024",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The bubble",
+    "question": "What is the pipeline bubble fraction for S stages and m micro-batches?",
+    "options": [
+      "(S - 1) / (m + S - 1)",
+      "(S - 1) / m",
+      "(m - 1) / (m + S - 1)",
+      "(S - 1) / (m + S + 1)"
+    ],
+    "answer_index": 0,
+    "explanation": "Filling the pipe takes S-1 slots before the last stage starts, and draining takes another S-1, spread over a schedule of m + S - 1 slots. The bubble fraction is (S-1)/(m+S-1). Increasing m amortizes the fixed fill/drain over more useful work."
+  },
+  {
+    "id": "09.3-025",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "The bubble",
+    "question": "Why does increasing the number of micro-batches m shrink the pipeline bubble fraction?",
+    "options": [
+      "The S-1 fill/drain overhead is fixed, so more micro-batches spread it over more work",
+      "Smaller micro-batches compute proportionally faster than full batches on each stage",
+      "With enough micro-batches the pipe never has to drain, so the overhead disappears",
+      "Each micro-batch is assigned its own stage, so more of them occupy more stages at once"
+    ],
+    "answer_index": 0,
+    "explanation": "The fill and drain overhead depends on the number of stages, not on m. Adding micro-batches adds useful slots in the denominator m + S - 1 while the numerator S-1 stays fixed."
+  },
+  {
+    "id": "09.3-026",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked bubble",
+    "question": "With 4 pipeline stages and only 1 micro-batch, what fraction of the hardware time is wasted in the bubble?",
+    "options": [
+      "27%",
+      "43%",
+      "75%",
+      "9%"
+    ],
+    "answer_index": 2,
+    "explanation": "Bubble = (S-1)/(m+S-1) = 3/4 = 0.75 with m = 1. With 8 micro-batches it falls to about 27%, and with 32 to under 9%."
+  },
+  {
+    "id": "09.3-027",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked bubble",
+    "question": "Why do more sophisticated pipeline schedules such as GPipe and the interleaved 1F1B of Megatron/DeepSpeed exist?",
+    "options": [
+      "To remove the need for a separate backward pass by fusing it into forward",
+      "To avoid micro-batches entirely by pipelining individual layers instead",
+      "To shrink the bubble and the activation memory further",
+      "To allow tensor parallelism to run efficiently across slow inter-node links"
+    ],
+    "answer_index": 2,
+    "explanation": "Plain staggered micro-batching still leaves a bubble and keeps many micro-batches' activations alive. Schedules like GPipe and interleaved one-forward-one-backward (1F1B) reorder work to reduce idle time and how much activation memory is held at once."
+  },
+  {
+    "id": "09.3-028",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked bubble",
+    "question": "What rule of thumb relates micro-batches m to pipeline stages S?",
+    "options": [
+      "Use m much larger than S, for example m at least 4S",
+      "Use m equal to S, so each stage holds exactly one micro-batch",
+      "Use m less than S, so that activation memory stays small",
+      "Use m = S - 1, which exactly cancels the fill/drain overhead"
+    ],
+    "answer_index": 0,
+    "explanation": "Because the bubble is (S-1)/(m+S-1), m near S wastes a large fraction of the hardware. Using m much larger than S, such as m at least 4S, keeps the bubble small."
+  },
+  {
+    "id": "09.3-029",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked bubble",
+    "question": "Why does using many pipeline micro-batches increase activation memory?",
+    "options": [
+      "Each in-flight micro-batch keeps its activations alive until its backward pass",
+      "Each micro-batch stores its own full copy of the stage's parameters and gradients",
+      "Micro-batch activations are kept in fp64 to avoid error accumulating across stages",
+      "Each micro-batch's activations are replicated on every stage of the pipeline"
+    ],
+    "answer_index": 0,
+    "explanation": "A micro-batch's forward activations must be retained until its backward pass uses them. The more micro-batches are in flight at once, the more activation memory is held. Schedules like GPipe and 1F1B largely differ in how they manage this."
+  },
+  {
+    "id": "09.3-030",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Worked bubble",
+    "question": "Why does load-balancing layers across pipeline stages matter?",
+    "options": [
+      "Unbalanced stages increase the number of gradient all-reduces each step needs",
+      "Unbalanced stages produce wrong gradients, because the slow stage lags a step behind",
+      "A stage stalls if its input isn't ready, so an uneven split idles fast stages on slow ones",
+      "Load balancing lets each stage drop redundant layers, reducing the model's total parameter count"
+    ],
+    "answer_index": 2,
+    "explanation": "A pipeline runs at the pace of its slowest stage. If one stage has more compute, the others wait for it. Assigning layers so each stage has equal compute keeps all stages busy."
+  },
+  {
+    "id": "09.3-031",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "4. Sequence / context parallelism and expert parallelism",
+    "question": "What does sequence (context) parallelism split, and what does it target?",
+    "options": [
+      "The batch dimension B; it targets optimizer state, which grows with the global batch size",
+      "The sequence length T; it targets memory growing with T, like attention scores and LayerNorm",
+      "The hidden width C; it targets the weight matrices, which are too wide for a single device",
+      "The experts; it targets MoE routing tables, which grow with the number of tokens per batch"
+    ],
+    "answer_index": 1,
+    "explanation": "Sequence parallelism gives each device a slice of the token positions. It shards the activations that grow with sequence length, which tensor parallelism leaves whole. This is what makes very long context lengths trainable."
+  },
+  {
+    "id": "09.3-032",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "4. Sequence / context parallelism and expert parallelism",
+    "question": "Why does sequence parallelism require communication inside attention?",
+    "options": [
+      "Because experts are placed on different devices and every token must visit all of them",
+      "Because LayerNorm needs a global mean over the batch, which spans every device's tokens",
+      "Because the optimizer state is split by sequence and must be gathered for each step",
+      "Each position's query must still see all keys, which may live on other devices"
+    ],
+    "answer_index": 3,
+    "explanation": "Attention mixes information across positions: every query attends over all keys. If token positions are split across devices, each device needs keys and values from the others, so communication across the sequence dimension is required. Sequence parallelism composes with tensor parallelism."
+  },
+  {
+    "id": "09.3-033",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "4. Sequence / context parallelism and expert parallelism",
+    "question": "In an MoE layer, what does the router do?",
+    "options": [
+      "Sends each token to every expert and averages their outputs by learned weights",
+      "Sends each token to only one or a few of many expert MLPs",
+      "Chooses which GPU runs each token's attention computation for the current layer",
+      "Selects which Transformer layers each token skips to save compute at inference"
+    ],
+    "answer_index": 1,
+    "explanation": "An MoE layer replaces one MLP with many expert MLPs plus a router. The router picks one or a few experts per token, so each token uses only a small part of the layer's parameters."
+  },
+  {
+    "id": "09.3-034",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "4. Sequence / context parallelism and expert parallelism",
+    "question": "Which collective does expert parallelism use to move tokens to their experts and back?",
+    "options": [
+      "All-gather",
+      "All-reduce",
+      "All-to-all",
+      "Broadcast"
+    ],
+    "answer_index": 2,
+    "explanation": "In expert parallelism, every device may have tokens for experts on every other device. An all-to-all lets each device send each of its tokens to the device holding its chosen expert and receive the results back."
+  },
+  {
+    "id": "09.3-035",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "4. Sequence / context parallelism and expert parallelism",
+    "question": "Why can an MoE have a huge total parameter count while each device stores and computes only a small part?",
+    "options": [
+      "MoE parameters are stored in int4, so even a huge expert count fits on each device",
+      "Each token uses only a couple of experts, and experts are distributed across devices",
+      "Experts share all their weights and differ only in a small per-expert bias vector",
+      "Only the router has trainable parameters; the experts are frozen random projections"
+    ],
+    "answer_index": 1,
+    "explanation": "Total parameters scale with the number of experts, but each token's forward pass touches only the few experts it was routed to. With experts spread across devices, per-device storage and per-token compute stay small."
+  },
+  {
+    "id": "09.3-036",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "What is the universal performance trick for every parallelism axis' communication?",
+    "options": [
+      "Route all communication through a single designated GPU per node",
+      "Compress every communicated tensor to fp8 before it leaves the device",
+      "Run all communication only at the end of the step, after backward finishes",
+      "Overlap communication with computation so the network cost hides under compute"
+    ],
+    "answer_index": 3,
+    "explanation": "Every axis adds communication. Starting the next matmul or all-gather while the current collective is still in flight hides network time under compute, as with DDP and FSDP. A well-tuned run is bottlenecked by arithmetic, not idle waiting."
+  },
+  {
+    "id": "09.3-037",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "In a typical 3D-parallel layout, how are the axes mapped to the hardware topology?",
+    "options": [
+      "Tensor within a node, pipeline across a few nodes, data parallelism/ZeRO across the rest",
+      "Data parallelism within a node, tensor parallelism across nodes, pipeline across racks",
+      "Pipeline within a node, tensor parallelism across all nodes, data parallelism per GPU",
+      "All axes on the slowest inter-node links, to leave NVLink bandwidth free for compute"
+    ],
+    "answer_index": 0,
+    "explanation": "Tensor parallelism's per-layer all-reduces go on the fastest links (NVLink within a node). Pipeline parallelism sends only activations, so it can cross slower links between a few nodes. Data parallelism or ZeRO, with one gradient all-reduce per step, spans the remaining groups."
+  },
+  {
+    "id": "09.3-038",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "Which framework is the reference implementation of tensor and sequence parallelism?",
+    "options": [
+      "PyTorch FSDP (Meta AI)",
+      "DeepSpeed (Microsoft)",
+      "Megatron-LM (NVIDIA)",
+      "vLLM (UC Berkeley)"
+    ],
+    "answer_index": 2,
+    "explanation": "Megatron-LM implements the column-then-row tensor split, sequence parallelism, and interleaved pipeline schedules. Reach for it when you need to split the model's math across devices."
+  },
+  {
+    "id": "09.3-039",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "Which framework is home to ZeRO and offers memory features such as ZeRO-Offload?",
+    "options": [
+      "PyTorch FSDP (Meta AI)",
+      "Megatron-LM (NVIDIA)",
+      "DeepSpeed (Microsoft)",
+      "NVIDIA NCCL library"
+    ],
+    "answer_index": 2,
+    "explanation": "DeepSpeed provides the ZeRO stages and pipeline parallelism, along with optimizer and memory features like ZeRO-Offload. It is the choice for memory-efficient data parallelism with easy ZeRO stages."
+  },
+  {
+    "id": "09.3-040",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "What does PyTorch FSDP primarily provide among large-scale training frameworks?",
+    "options": [
+      "Native ZeRO-3-style fully sharded data parallelism with little code, gaining TP support",
+      "The reference implementation of sequence and tensor parallelism for Transformer blocks",
+      "Pipeline schedules such as interleaved 1F1B, with automatic layer-to-stage balancing",
+      "All-to-all expert routing and load-balancing losses for Mixture-of-Experts training"
+    ],
+    "answer_index": 0,
+    "explanation": "FSDP is PyTorch's native way to shard a model's parameters, gradients, and optimizer state across data-parallel workers. It increasingly supports tensor parallelism too."
+  },
+  {
+    "id": "09.3-041",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "5. Communication/computation overlap, and the frameworks",
+    "question": "In practice, what does an ML engineer usually do with large-scale parallelism frameworks?",
+    "options": [
+      "Avoid parallelism frameworks and scale everything with plain DDP and larger batches",
+      "Re-implement the NCCL collectives for each project to match the cluster's topology",
+      "Write a custom pipeline schedule and tensor split by hand for every new model",
+      "Configure the axes and reason about their memory and communication cost"
+    ],
+    "answer_index": 3,
+    "explanation": "Correct production versions of topology-aware collectives, overlapped communication, interleaved pipelines, and all-to-all routing are large systems efforts, which is why Megatron, DeepSpeed, and FSDP exist. Building toy versions makes config options like tensor_parallel_size, pipeline_parallel_size, zero_stage, and num_micro_batches understandable."
+  },
+  {
+    "id": "09.3-042",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Research connection",
+    "question": "Which paper introduced the column-then-row tensor-parallel split for the MLP and multi-head attention?",
+    "options": [
+      "Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism (Shoeybi et al., 2019)",
+      "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models (Rajbhandari et al., 2019)",
+      "GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism (Huang et al., 2019)",
+      "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity (Fedus et al., 2021)"
+    ],
+    "answer_index": 0,
+    "explanation": "Megatron-LM (Shoeybi et al., 2019) introduced the column-then-row tensor-parallel split and showed it scaling to billions of parameters. With ZeRO it is one of the two foundational large-model systems papers."
+  },
+  {
+    "id": "09.3-043",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Exercise",
+    "question": "With 32 GPUs, tensor parallelism degree 4, and 4 pipeline stages, how many data-parallel replicas can you run?",
+    "options": [
+      "8",
+      "4",
+      "2",
+      "16"
+    ],
+    "answer_index": 2,
+    "explanation": "One replica uses tensor size times pipeline size = 4 * 4 = 16 GPUs. 32 / 16 = 2 data-parallel replicas, giving the 3D layout tensor(4) * pipeline(4) * data(2) = 32."
+  },
+  {
+    "id": "09.3-044",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Exercise",
+    "question": "In a 3D-parallel layout of tensor(4) x pipeline(4) x data(2), what communication happens each step?",
+    "options": [
+      "Only one all-reduce of gradients across all 32 GPUs, as in plain data parallelism",
+      "The 2 replicas all-reduce grads; inside each, TP all-reduces per layer, PP passes activations",
+      "Only activations are passed between stages; no all-reduce of any kind occurs during the step",
+      "Each GPU broadcasts its weight shard to all 31 others before every forward and backward pass"
+    ],
+    "answer_index": 1,
+    "explanation": "Data parallelism across the two replicas needs a gradient all-reduce. Inside a replica, tensor parallelism all-reduces partial outputs on every layer, and pipeline parallelism sends activations forward and gradients backward between stages."
+  },
+  {
+    "id": "09.3-045",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Exercise",
+    "question": "With 4 pipeline stages, what is the minimum number of micro-batches to keep the bubble below 10%?",
+    "options": [
+      "27",
+      "28",
+      "30",
+      "32"
+    ],
+    "answer_index": 1,
+    "explanation": "3/(m+3) < 0.10 requires m + 3 > 30, so m > 27 and the minimum integer is 28. At m = 28 the bubble is 3/31, about 9.7%."
+  },
+  {
+    "id": "09.3-046",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is the key difference between tensor parallelism and pipeline parallelism?",
+    "options": [
+      "Tensor splits across layers and passes activations; pipeline splits within a layer",
+      "Tensor splits within a layer, all-reducing per layer; pipeline splits layers, passing activations",
+      "Tensor splits the data batch across devices; pipeline splits the optimizer state across stages",
+      "They are two names for the same technique, differing only in which framework implements it"
+    ],
+    "answer_index": 1,
+    "explanation": "Tensor parallelism divides a matmul's width across devices and needs per-layer all-reduces. Pipeline parallelism assigns layer ranges to devices and sends activations between them. They solve different fit problems and are usually combined."
+  },
+  {
+    "id": "09.3-047",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What happens if tensor parallelism is run across slow inter-node links?",
+    "options": [
+      "It automatically falls back to pipeline parallelism across the slow links",
+      "It becomes more accurate, because the slower all-reduce uses higher precision",
+      "Its per-layer all-reduces dominate and throughput collapses",
+      "Nothing much; tensor parallelism communicates only once per optimizer step"
+    ],
+    "answer_index": 2,
+    "explanation": "Tensor parallelism all-reduces on every layer's forward and backward. On slow links that traffic cannot hide under compute, so throughput collapses. Keep it on the fastest interconnect, within a node."
+  },
+  {
+    "id": "09.3-048",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with running a pipeline with a number of micro-batches close to the number of stages?",
+    "options": [
+      "The stages deadlock waiting on each other's backward passes",
+      "The gradients become incorrect because micro-batches overlap",
+      "The model no longer fits in memory once the stages fill up",
+      "The bubble wastes a large fraction of the hardware"
+    ],
+    "answer_index": 3,
+    "explanation": "With m near S, (S-1)/(m+S-1) is large: for example S = 8, m = 8 gives about 47% wasted. Use m much larger than S."
+  },
+  {
+    "id": "09.3-049",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Check yourself",
+    "question": "A pipeline has 8 stages. What bubble fractions do 8 and 64 micro-batches give?",
+    "options": [
+      "About 88% and about 50%",
+      "About 12% and about 1%",
+      "About 47% and about 10%",
+      "About 47% and about 1%"
+    ],
+    "answer_index": 2,
+    "explanation": "(S-1)/(m+S-1) with S = 8: m = 8 gives 7/15, about 0.467; m = 64 gives 7/71, about 0.099. More micro-batches amortize the fixed 7-slot fill and drain."
+  },
+  {
+    "id": "09.3-050",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Check yourself",
+    "question": "In the Megatron MLP split, why is the first matmul column-parallel and the second row-parallel, rather than the reverse?",
+    "options": [
+      "Column-first keeps the element-wise nonlinearity local; row-second gives partials one all-reduce sums",
+      "Because row-parallel matmuls run faster on GPUs, so the larger 4C-wide matmul should use them",
+      "Because the reverse order would need each device to hold twice as much weight memory overall",
+      "Because the reverse order changes the model's output, since ReLU does not commute with the split"
+    ],
+    "answer_index": 0,
+    "explanation": "If the first matmul were row-split, each device would get a partial pre-activation that must be summed before the nonlinearity, forcing a communication of the wide hidden layer. Column-then-row avoids that, needing only one all-reduce of the C-wide output."
+  },
+  {
+    "id": "09.3-051",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Hardware track — model parallelism",
+    "question": "What hardware does real tensor parallelism typically need, and what degree is common?",
+    "options": [
+      "CPU clusters with many cores; degree equal to the number of cores per socket",
+      "GPUs across many nodes over standard Ethernet; a degree of 64 or more is typical",
+      "A single GPU with tensor cores, which split each matmul internally across units",
+      "GPUs on the fastest link (NVLink within a node); degree 2 to 8 is typical"
+    ],
+    "answer_index": 3,
+    "explanation": "Because it all-reduces on every layer's forward and backward, tensor parallelism needs the fastest interconnect, typically NVLink within one node. Degrees of 2 to 8 within a node are typical."
+  },
+  {
+    "id": "09.3-052",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Hardware track — model parallelism",
+    "question": "Why can pipeline parallelism span nodes over slower links?",
+    "options": [
+      "It compresses activations to 1 bit before sending them across the node boundary",
+      "It does not communicate at all, since each stage owns its layers and its own data",
+      "Only activations cross stage boundaries, lighter than TP's per-layer all-reduces",
+      "It replicates every stage on every node, so traffic stays within each node's NVLink"
+    ],
+    "answer_index": 2,
+    "explanation": "Pipeline stages exchange only the activations (and their gradients) at stage boundaries, which is much less frequent than per-layer all-reduces. That makes pipeline parallelism tolerant of slower inter-node links, though it still needs many micro-batches."
+  },
+  {
+    "id": "09.3-053",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Hardware track — model parallelism",
+    "question": "Does model parallelism reduce the total compute needed to train a model?",
+    "options": [
+      "No; it roughly doubles total compute, because every layer is recomputed across devices",
+      "Yes; splitting the matmuls halves the FLOPs per token compared with a single device",
+      "Yes; it divides the total compute by the number of GPUs used in the parallel layout",
+      "No; it makes a too-big model trainable and spreads the work, but total compute stays ~6ND"
+    ],
+    "answer_index": 3,
+    "explanation": "Training compute is about 6 times parameters times tokens regardless of how the work is split. Model parallelism spreads that compute and memory across devices so the model can be trained at all; it does not reduce the total."
+  },
+  {
+    "id": "09.3-054",
+    "chapter": "09.3",
+    "chapter_name": "Tensor / pipeline / expert parallelism",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-03.md",
+    "section": "Next",
+    "question": "After data parallelism, ZeRO/FSDP and tensor/pipeline/expert parallelism, what question do scaling laws address?",
+    "options": [
+      "How to overlap each axis's communication with computation on a given cluster",
+      "How to split the matmuls across GPUs so that each one fits in device memory",
+      "How big to make the model and how much data to use for a given compute budget",
+      "How to route tokens to experts so the load stays balanced across devices"
+    ],
+    "answer_index": 2,
+    "explanation": "Parallelism is about how to train a given model fast. Scaling laws step back to ask how to choose model size and token count so that a compute budget yields the best model."
+  }
+]

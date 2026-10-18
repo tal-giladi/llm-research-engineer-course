@@ -1,0 +1,2054 @@
+[
+  {
+    "id": "08.3-001",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is mixed precision described as the single highest-leverage change for LLM training performance?",
+    "options": [
+      "It halves memory-bound traffic and activation memory, and unlocks 16-bit Tensor Cores",
+      "It removes the need for a full backward pass, since 16-bit gradients come from the forward",
+      "It halves the number of FLOPs in every matmul, since each multiply is on 16-bit values",
+      "It eliminates kernel launch overhead, because 16-bit kernels are fused automatically"
+    ],
+    "answer_index": 0,
+    "explanation": "Switching most training to 16-bit halves the traffic of every memory-bound kernel, roughly halves the activation memory bucket, and lets Tensor Cores run at their fast 16-bit rate. The FLOP count of a matmul stays the same; it just runs on faster hardware."
+  },
+  {
+    "id": "08.3-002",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which numeric format is nearly every modern LLM trained in?",
+    "options": [
+      "Pure fp16 with no fp32 master copies",
+      "Pure fp64 for stability at scale",
+      "int8 throughout, with fp32 scales",
+      "bf16 mixed precision"
+    ],
+    "answer_index": 3,
+    "explanation": "Modern LLM pretraining overwhelmingly uses bf16 mixed precision: bf16 for the throughput-critical work with fp32 master weights and accumulation. fp16 needs loss scaling and pure low precision loses updates."
+  },
+  {
+    "id": "08.3-003",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "1. Intuition: measure before you optimize",
+    "question": "Why profile before optimizing a transformer training step?",
+    "options": [
+      "Profiling automatically fuses the slowest kernels, so it must come before any manual changes",
+      "The roofline cannot be applied to transformers, so only a profile can say anything useful",
+      "A step runs thousands of kernels; the roofline says what fix fits, not which kernels matter",
+      "Profiling converts the model to bf16, which is required before other optimizations apply"
+    ],
+    "answer_index": 2,
+    "explanation": "The roofline diagnoses the kind of fix but cannot tell you where time is actually spent. A profiler records each kernel's duration and CPU/GPU overlap for a real step, so you attack only the top of the list."
+  },
+  {
+    "id": "08.3-004",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "What does torch.profiler record?",
+    "options": [
+      "Only the total wall-clock time of the training loop, as a single summary number",
+      "Every operator and CUDA kernel with timestamps, as a sorted table or a timeline",
+      "Only the GPU memory capacity and the peak allocation reached during the profiled region",
+      "Only Python function call counts, grouped by the module that made each call"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.profiler wraps a code region and records every operator and kernel with timestamps. key_averages().table() prints a sorted summary and export_chrome_trace writes a trace for a timeline viewer."
+  },
+  {
+    "id": "08.3-005",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In torch.profiler, what does record_shapes=True add?",
+    "options": [
+      "Python source line attribution for each op, so time maps back to code",
+      "Tensor shapes for each op, so you can tell which matmul a row refers to",
+      "Memory allocation tracking per op, attributing bytes to each operator",
+      "Automatic padding of each op's shapes to powers of two for faster kernels"
+    ],
+    "answer_index": 1,
+    "explanation": "record_shapes keeps input shapes, distinguishing, for example, the MLP matmul from the vocab head. Python line attribution is with_stack=True, and allocation tracking is profile_memory=True."
+  },
+  {
+    "id": "08.3-006",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In torch.profiler, what does profile_memory=True do?",
+    "options": [
+      "Tracks allocations, feeding the accounting of params, grads, optimizer state and activations",
+      "Prints the GPU's total HBM capacity and the memory the driver reserves for itself at startup",
+      "Disables the caching allocator so every free returns memory to the driver",
+      "Forces all tensors into fp16 so that the profile shows the run's minimum memory footprint"
+    ],
+    "answer_index": 0,
+    "explanation": "profile_memory=True records allocations so you can attribute memory to operations, connecting the profile to the memory buckets of training."
+  },
+  {
+    "id": "08.3-007",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "What does setting with_stack=True in torch.profiler enable?",
+    "options": [
+      "Recording the input tensor shapes of every op",
+      "Tracking memory allocations made by each op",
+      "Profiling every GPU in the node at the same time",
+      "Attributing time to Python source lines"
+    ],
+    "answer_index": 3,
+    "explanation": "with_stack=True records Python stack information so time can be attributed to source lines (and adds python_function events in the trace). It has extra overhead, so it is off by default."
+  },
+  {
+    "id": "08.3-008",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "Why does a profiling snippet run a few steps rather than one?",
+    "options": [
+      "Because the profiler cannot record a single step and needs at least two",
+      "To make the trace file smaller by averaging steps into one summary row",
+      "So the schedule warms up and the profiled steps are representative",
+      "Because the first step always runs on the CPU before moving to the GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Running several steps lets the work settle into a steady pattern (for example, cuBLAS kernel selection happens in warm-up). Profiling only one cold step would mislead."
+  },
+  {
+    "id": "08.3-009",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "What is the purpose of with record_function('train_step') inside a profiled loop?",
+    "options": [
+      "It speeds up the step by fusing all kernels launched inside the span",
+      "It forces every op inside the span to run in fp16 under autocast",
+      "It creates a named span in the trace and table marking the step's work",
+      "It disables autograd for the span so the step can be timed cleanly"
+    ],
+    "answer_index": 2,
+    "explanation": "record_function adds a labelled region visible in both the table and the timeline, and on the GPU row as a gpu_user_annotation. It is a label for analysis, not an optimization."
+  },
+  {
+    "id": "08.3-010",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In the profiler table, why does the same time appear twice, once on an aten:: row and once on a cryptically named row?",
+    "options": [
+      "The profiler measures every kernel twice and reports both runs for accuracy",
+      "aten:: rows are PyTorch operators; the rows under them are the GPU kernels launched",
+      "One row is the forward time of the op and the other is its backward time",
+      "One row is the fp32 time of the op and the other is its time under fp16 autocast, side by side"
+    ],
+    "answer_index": 1,
+    "explanation": "An aten:: operator like aten::mm launches a GPU kernel such as volta_sgemm_128x64_nt. The operator's CUDA time is the time of its kernel, so the same time shows on both rows; summing both would double-count."
+  },
+  {
+    "id": "08.3-011",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In a profile of a transformer training step, which operator is the forward of every nn.Linear, and which is the backward?",
+    "options": [
+      "aten::addmm is the forward; aten::mm is the backward",
+      "aten::mm is the forward; aten::addmm is the backward",
+      "aten::bmm is the forward; aten::gelu is the backward",
+      "aten::linear for both"
+    ],
+    "answer_index": 0,
+    "explanation": "nn.Linear's forward with bias is aten::addmm. Backward needs two matmuls per Linear (gradient w.r.t. input and w.r.t. weight), recorded as aten::mm, which is why mm has twice addmm's call count."
+  },
+  {
+    "id": "08.3-012",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In a 5-step profile of a model with 17 Linear layers, why does aten::addmm show 85 calls and aten::mm 170?",
+    "options": [
+      "Each Linear runs 17 times per step, and backward doubles that count",
+      "aten::mm counts both the forward and backward of each Linear twice per step",
+      "The profiler counts each mm call twice, once on the CPU and once on the GPU",
+      "17 Linears x 5 steps = 85 forwards; backward does two matmuls each, so 170"
+    ],
+    "answer_index": 3,
+    "explanation": "Forward: one addmm per Linear per step, 17 x 5 = 85. Backward: input gradient and weight gradient, two mm per Linear, 170."
+  },
+  {
+    "id": "08.3-013",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "In a healthy transformer profile, what does it mean that the sgemm kernels make up about two thirds of GPU time?",
+    "options": [
+      "The model is starving for data from the loader",
+      "The memory-bound tail dominates the step time",
+      "The profiler is double-counting the gemm rows",
+      "Compute-bound matmuls lead, the healthy picture"
+    ],
+    "answer_index": 3,
+    "explanation": "Having large matmuls dominate means the GPU spends most of its time on compute-bound work. GELU, dropout and LayerNorm form the smaller memory-bound tail fusion would remove."
+  },
+  {
+    "id": "08.3-014",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "Why must both ProfilerActivity.CPU and ProfilerActivity.CUDA be enabled when profiling?",
+    "options": [
+      "CUDA activity cannot be recorded unless CPU activity is also recorded in the same run",
+      "CPU activity records the memory allocations, while CUDA activity records the shapes",
+      "The CPU launches kernels and the GPU runs them, so both timelines must line up",
+      "The profiler crashes when only one activity is enabled, so both are always required"
+    ],
+    "answer_index": 2,
+    "explanation": "Work happens on two devices: Python and the dispatcher on the CPU queue kernels, the GPU executes them. Seeing both lets you detect gaps where the GPU waits for the CPU."
+  },
+  {
+    "id": "08.3-015",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2. The PyTorch profiler",
+    "question": "Why does torch.cuda.synchronize() matter when timing GPU code manually?",
+    "options": [
+      "It clears cached GPU memory so each timed region starts from the same state",
+      "CUDA is asynchronous, so without it a timer measures only kernel launches",
+      "It converts tensors to fp32 so the timed kernels run at a consistent precision",
+      "It forces the profiler to use fewer threads, so it does not distort the timing"
+    ],
+    "answer_index": 1,
+    "explanation": "loss.backward() queues kernels and returns immediately. A wall-clock timer without synchronize stops before the GPU finishes, measuring launches only. The profiler uses CUDA events, but manual timing must synchronize or the numbers are fiction."
+  },
+  {
+    "id": "08.3-016",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "What hardware does the self-contained profiling experiment target, and can it run on CPU?",
+    "options": [
+      "A free Colab T4 GPU; it cannot run on CPU, since the point is to see GPU kernels",
+      "An 8x H100 node; it also runs on CPU in a few hours with a smaller model config",
+      "Any CPU; a GPU is optional and only shortens the runtime of the experiment",
+      "A TPU v4; it falls back to the CPU when no TPU is attached to the session"
+    ],
+    "answer_index": 0,
+    "explanation": "The experiment uses a free Colab T4 (16 GB), runs in about a minute with under 2 GB of GPU memory, and requires a GPU since it profiles GPU kernels."
+  },
+  {
+    "id": "08.3-017",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "In the 'starving GPU' experiment with batch 1 x 16 tokens, why is the GPU busy only a fraction of the wall time?",
+    "options": [
+      "Every kernel is tiny, so the GPU finishes each before the CPU launches the next",
+      "The model is too large for the T4's 16 GB, so weights are paged in from host RAM",
+      "fp32 matmuls are disabled at small batch sizes, so cuBLAS falls back to slow loops",
+      "The profiler blocks the GPU after every kernel to read its hardware counters"
+    ],
+    "answer_index": 0,
+    "explanation": "With tiny kernels, the GPU's work per kernel is shorter than the CPU's launch time, so the GPU sits idle between launches. This is the CPU-GPU gap."
+  },
+  {
+    "id": "08.3-018",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "Why is fp16 (rather than bf16) used for the mixed-precision experiment on a Colab T4?",
+    "options": [
+      "bf16 is slower than fp32 on every GPU, so it would hide the speedup",
+      "fp16 needs no GradScaler, which keeps the experiment's code simpler",
+      "bf16 cannot be used with autocast, which only supports fp16 on CUDA",
+      "The T4 has fp16 Tensor Cores but no bf16 hardware support"
+    ],
+    "answer_index": 3,
+    "explanation": "The T4 (Turing) supports fp16 Tensor Cores but not bf16. bf16 requires Ampere or newer; on older GPUs, fp16 plus GradScaler is the fallback."
+  },
+  {
+    "id": "08.3-019",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "Why does the profiling script run a few warm-up steps before profiling?",
+    "options": [
+      "To download and cache the model weights and the tokenizer before the timed steps begin",
+      "To compile the Python model code into CUDA kernels on the first steps",
+      "cuBLAS picks kernels in the first steps, so warm-up makes the profile representative",
+      "To fill the GPU's HBM with zeros so that later allocations are not slowed by page faults"
+    ],
+    "answer_index": 2,
+    "explanation": "Early steps include one-time costs such as cuBLAS selecting kernels. Running warm-up and synchronizing ensures the profile shows steady-state behaviour."
+  },
+  {
+    "id": "08.3-020",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "When building a per-kernel breakdown from prof.key_averages(), why does the script drop rows starting with aten::, autograd:: or train_step?",
+    "options": [
+      "Those rows are CPU-only bookkeeping and record no GPU time at all",
+      "Those rows repeat the time of the kernels they launched and would double-count",
+      "Those rows are always zero once the profiler has finished warm-up steps",
+      "Those rows describe memory allocations only, not any kernel execution time on the GPU"
+    ],
+    "answer_index": 1,
+    "explanation": "Operator, autograd and annotation rows aggregate time already counted on their child kernel rows. Keeping only real kernels avoids double counting when summing GPU time."
+  },
+  {
+    "id": "08.3-021",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "In the healthy T4 experiment, why are there exactly three gemm kernels each with 17 calls per step?",
+    "options": [
+      "There are three attention heads per layer, each with its own matmul per Linear",
+      "Each of the 17 Linears does one forward and two backward matmuls, each a different layout",
+      "Each Linear is run three times in the forward pass because activation checkpointing is on",
+      "Three GPUs were used with data parallelism, and each one reports its own gemm kernel"
+    ],
+    "answer_index": 1,
+    "explanation": "17 Linears (4 per block x 4 blocks plus the head) each launch a forward gemm and two backward gemms (input grad, weight grad), giving three kernel variants with 17 calls each."
+  },
+  {
+    "id": "08.3-022",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "In the starving experiment (8.3 ms wall, 1.7 ms GPU work per step), why would making kernels faster change nothing?",
+    "options": [
+      "The GPU idles ~80% of the time waiting on launches, so the fix is fewer, bigger kernels",
+      "Because the kernels already run at peak FLOP/s, so there is no headroom left for any gain",
+      "Because the GPU is memory-bound on the PCIe link, which faster kernels cannot change",
+      "Because the profiler hides the true kernel time, so the measured gap is an artifact"
+    ],
+    "answer_index": 0,
+    "explanation": "The bottleneck is CPU launch rate, not kernel speed. Bigger batches, fusion, torch.compile or CUDA graphs cut the number of launches and close the gaps."
+  },
+  {
+    "id": "08.3-023",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "What do the digits in a kernel name like turing_fp16_s1688gemm indicate?",
+    "options": [
+      "The number of SMs the kernel runs on, 1688",
+      "The cuBLAS kernel version number, 16.8.8",
+      "The output tile size, 16 x 88 elements per block",
+      "The Tensor-Core instruction shape, 16x8x8"
+    ],
+    "answer_index": 3,
+    "explanation": "In fp16_s1688gemm, '1688' is the 16x8x8 Tensor-Core instruction shape. Its appearance signals the matmuls moved from fp32 CUDA cores to fp16 Tensor Cores."
+  },
+  {
+    "id": "08.3-024",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "In the T4 mixed-precision experiment, why does the non-matmul share of GPU time rise from 27% to 44%?",
+    "options": [
+      "The elementwise kernels became slower in fp16, since they must upcast every element",
+      "fp16 adds extra cast kernels to every layer, and those conversions dominate the step",
+      "The matmuls got much faster, so the unchanged memory-bound tail is a bigger share",
+      "The profiler misattributes fp16 matmul time to elementwise kernels on Turing GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "The gemm kernels dropped from ~78 ms to ~20 ms per step. The memory-bound tail shrank less, so its share grew. After speeding up the compute-bound part, the memory-bound tail is the next target."
+  },
+  {
+    "id": "08.3-025",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "2.1 Run it yourself on a Colab T4",
+    "question": "What speedup did fp16 autocast give in the clean T4 timing of the small transformer?",
+    "options": [
+      "About 1.1x",
+      "About 16x",
+      "About 2.7x",
+      "About 0.5x (it slowed down)"
+    ],
+    "answer_index": 2,
+    "explanation": "Clean timing showed fp32 at ~121 ms/step and fp16 autocast at ~45 ms/step, a ~2.7x speedup, from both Tensor-Core matmuls and halved bytes."
+  },
+  {
+    "id": "08.3-026",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "How is the 'GPU busy' percentage of a profiled run computed?",
+    "options": [
+      "Number of kernels launched divided by the number of SMs available on the GPU",
+      "Sum of all GPU kernel durations divided by the profiled wall-clock time",
+      "Peak FLOP/s divided by the achieved FLOP/s over the profiled steps",
+      "It is read directly from the trace viewer's colour of the GPU row"
+    ],
+    "answer_index": 1,
+    "explanation": "GPU busy = total kernel time / wall time. The numerator sums self_device_time_total over real kernel rows; the denominator is perf_counter around the steps with a synchronize at the end."
+  },
+  {
+    "id": "08.3-027",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "Why is it legitimate to add kernel durations to get GPU busy time when all kernels run on one CUDA stream?",
+    "options": [
+      "Kernels on one stream run one after another and never overlap, so the sum is busy time",
+      "Because kernels on one stream always run for the same duration, so sums are exact",
+      "Because the profiler automatically subtracts any overlap between kernels on the same GPU",
+      "Because a single stream uses only one SM, so no two kernels can share the hardware"
+    ],
+    "answer_index": 0,
+    "explanation": "On one stream, kernels are serialized, so their summed durations are exactly the busy time. With multiple streams (e.g. overlapping communication), kernels overlap and the sum can exceed 100%; then measure per stream."
+  },
+  {
+    "id": "08.3-028",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "In a chrome trace JSON, which event categories correspond to GPU work?",
+    "options": [
+      "cpu_op and cuda_runtime, which mark the launch calls",
+      "user_annotation and python_function from the CPU",
+      "ac2g only, the arrows from each launch to its kernel",
+      "kernel, gpu_memcpy and gpu_memset"
+    ],
+    "answer_index": 3,
+    "explanation": "GPU work events have cat 'kernel', 'gpu_memcpy' or 'gpu_memset'. cpu_op and cuda_runtime are CPU-side; ac2g are the CPU-to-GPU flow arrows."
+  },
+  {
+    "id": "08.3-029",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "Why does a busy percentage computed from trace.json (first kernel start to last kernel end) come out slightly higher than the script's wall-time version?",
+    "options": [
+      "The trace double-counts each kernel once on the CPU row and once on the GPU row",
+      "The trace uses milliseconds instead of microseconds, which inflates the computed busy ratio",
+      "The trace includes CPU ops such as cudaLaunchKernel in the GPU busy sum",
+      "The trace span omits the launch time before the first kernel that wall time includes"
+    ],
+    "answer_index": 3,
+    "explanation": "The span starts at the first kernel, so it omits the launch time before it. The script's wall time includes that, so its denominator is bigger and its percentage smaller."
+  },
+  {
+    "id": "08.3-030",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "In a trace, a large GPU idle gap immediately after a Memcpy DtoH almost always indicates what?",
+    "options": [
+      "The data loader blocked the step while the next batch was prepared",
+      "A kernel was fused incorrectly and had to be relaunched by the runtime",
+      "A .item(), .cpu() or print(loss) forced a host synchronization",
+      "The GPU ran out of HBM and spilled activations to host memory"
+    ],
+    "answer_index": 2,
+    "explanation": "Device-to-host copies come from pulling values to the CPU, which forces a sync and stalls the queue. A large hole at the start of every step instead usually points to the data loader."
+  },
+  {
+    "id": "08.3-031",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Where \"GPU busy 96%\" comes from",
+    "question": "In a trace, a big GPU idle hole at the start of every training step usually means what?",
+    "options": [
+      "A loss.item() call is forcing a sync",
+      "The data loader is blocking the step",
+      "The optimizer is running on the CPU",
+      "The matmuls are memory-bound"
+    ],
+    "answer_index": 1,
+    "explanation": "Idle time at the start of each step suggests the GPU waits for the next batch. Holes after a DtoH memcpy point to a host sync like .item()."
+  },
+  {
+    "id": "08.3-032",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In a GPU kernel name, what does 'gemm' indicate?",
+    "options": [
+      "A General Matrix Multiply (C = AB), i.e. a matmul kernel",
+      "A gradient memory kernel that zeroes .grad before backward",
+      "A generic elementwise kernel generated by the JIT compiler",
+      "A GPU memory copy between HBM and the L2 cache of an SM"
+    ],
+    "answer_index": 0,
+    "explanation": "gemm is the BLAS name for general matrix multiply. Names like volta_sgemm_128x64_nt, ampere_bf16_s16816gemm and cutlass_..._gemm are all matmuls."
+  },
+  {
+    "id": "08.3-033",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "What does a kernel name containing 'gemv' usually indicate?",
+    "options": [
+      "A matrix-vector multiply, typical of batch-1 inference decode",
+      "A fused attention kernel with the softmax folded into the GEMM",
+      "An optimizer update applied to many parameter vectors at once",
+      "A LayerNorm reduction computing the mean and variance per row"
+    ],
+    "answer_index": 0,
+    "explanation": "gemv is matrix times vector, which appears when the batch is 1, as in inference decoding."
+  },
+  {
+    "id": "08.3-034",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In kernel names such as fmha_cutlassF_... and fmha_cutlassB_..., what do F and B mean?",
+    "options": [
+      "Float32 and bfloat16 variants of the same attention kernel",
+      "First and best kernel variants chosen by the autotuner",
+      "Fill and broadcast phases of the attention mask setup",
+      "Forward and backward of a fused attention kernel"
+    ],
+    "answer_index": 3,
+    "explanation": "fmha kernels are fused multi-head attention (scores, softmax and weighted sum in one kernel). F denotes forward and B backward."
+  },
+  {
+    "id": "08.3-035",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In a vectorized_elementwise_kernel name, how do you tell which elementwise op it is?",
+    "options": [
+      "The thread count in the name, which is unique to each elementwise op",
+      "The prefix volta_ or ampere_, which encodes the op for that generation",
+      "The functor in angle brackets, e.g. GeluCUDAKernelImpl or MulFunctor",
+      "It cannot be determined from the name; only the shapes reveal the op"
+    ],
+    "answer_index": 2,
+    "explanation": "The template argument names the operation: GeluCUDAKernelImpl is GELU, MulFunctor a multiply, FillFunctor a fill (zeroing, e.g. from zero_grad)."
+  },
+  {
+    "id": "08.3-036",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "Which kernel name indicates the optimizer, such as a foreach AdamW update?",
+    "options": [
+      "fmha_cutlassF",
+      "multi_tensor_apply",
+      "cunn_SoftMaxForward",
+      "vectorized_layer_norm_kernel"
+    ],
+    "answer_index": 1,
+    "explanation": "multi_tensor_apply kernels update many parameters per launch, which is how foreach optimizers like AdamW are implemented."
+  },
+  {
+    "id": "08.3-037",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "What is cunn_SoftMaxForward typically in a language-model training profile?",
+    "options": [
+      "The QK^T attention-score matmul, the largest kernel in the step",
+      "The log-softmax inside cross-entropy, part of the memory-bound tail",
+      "The optimizer step that normalizes each parameter's update",
+      "A host-to-device copy of the next batch's token IDs"
+    ],
+    "answer_index": 1,
+    "explanation": "cunn_SoftMaxForward is the softmax kernel, commonly the log-softmax inside cross-entropy. Softmax, layer_norm, reduce_kernel and fused_dropout are the memory-bound tail."
+  },
+  {
+    "id": "08.3-038",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In a cuBLAS kernel name like volta_sgemm_128x64_nt running on a T4, what does the 'volta_' prefix mean?",
+    "options": [
+      "The GPU generation the kernel was written for, reused on Turing for fp32",
+      "The GPU generation currently running the kernel, here reported as Volta",
+      "That the kernel uses Volta-style Tensor Cores for its multiply-accumulates",
+      "That the kernel is a voltage-control routine run alongside each matmul"
+    ],
+    "answer_index": 0,
+    "explanation": "The prefix names the architecture the kernel was written for, not the one you have. cuBLAS reuses Volta fp32 kernels on the Turing T4 because Turing added nothing new for fp32."
+  },
+  {
+    "id": "08.3-039",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "What does the 's' in 'sgemm' mean?",
+    "options": [
+      "Sparse matrix, using 2:4 structured sparsity",
+      "Shared memory only, with no HBM reads at all",
+      "Streamed across all SMs in a single wave",
+      "Single precision (fp32), on ordinary CUDA cores"
+    ],
+    "answer_index": 3,
+    "explanation": "sgemm is single-precision gemm on CUDA cores. h means half (fp16); names like fp16_s1688gemm or bf16_s16816gemm are Tensor-Core kernels."
+  },
+  {
+    "id": "08.3-040",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In volta_sgemm_128x64_nt, what does '128x64' describe?",
+    "options": [
+      "The sizes of the two input matrices, 128 and 64 rows",
+      "The number of SMs and warps the kernel launches with",
+      "The output tile that each thread block computes",
+      "The Tensor-Core instruction shape used for each step"
+    ],
+    "answer_index": 2,
+    "explanation": "128x64 is the output tile per thread block, the tiling idea from the GPU hierarchy. The Tensor-Core shape appears as digits like 1688 in fp16 kernel names."
+  },
+  {
+    "id": "08.3-041",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "What do the suffixes nt, nn and tn in gemm kernel names indicate?",
+    "options": [
+      "The number of threads and the number of tiles in each thread block",
+      "Whether the kernel belongs to the forward pass or the backward pass",
+      "Whether the first and second operands are read normal or transposed",
+      "Whether the result and the accumulator are stored as fp16 or fp32"
+    ],
+    "answer_index": 2,
+    "explanation": "Each letter refers to an operand being normal or transposed. One nn.Linear produces three layouts: forward Y = XW^T, and in backward dL/dX = (dL/dY)W and dL/dW = (dL/dY)^T X."
+  },
+  {
+    "id": "08.3-042",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "If attention is computed by hand (q @ k.transpose, softmax, @ v), what do you see in the profile instead of an fmha kernel?",
+    "options": [
+      "A single flash_fwd_kernel, since SDPA is called under the hood anyway",
+      "Batched gemm kernels launched by aten::bmm, plus a softmax kernel",
+      "Only elementwise kernels, because the matmuls are folded into them",
+      "A Memcpy kernel per head, as q, k and v are copied into one buffer"
+    ],
+    "answer_index": 1,
+    "explanation": "Unfused attention runs as batched matmuls (names with batched or strided, from aten::bmm) and a softmax kernel. The names say 'matmul'; you recognise it as attention only from the launching op and shapes."
+  },
+  {
+    "id": "08.3-043",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "How can you find out which CPU operator launched a cryptically named GPU kernel in the profiler table?",
+    "options": [
+      "Look at the parent aten:: operator, such as aten::addmm, aten::mm or aten::bmm",
+      "Check the kernel's tile size, which maps one-to-one to the operator that launched it",
+      "Count the kernel's calls and match the count to the number of layers in the model",
+      "It is impossible without reading the CUDA source of every kernel in the library"
+    ],
+    "answer_index": 0,
+    "explanation": "Every kernel has a parent CPU op with a readable name. addmm is a forward Linear, mm a backward Linear, bmm a batched matmul, and _efficient_attention_forward or _scaled_dot_product_flash_attention fused attention."
+  },
+  {
+    "id": "08.3-044",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "How can you see which specific matmul a profiler row refers to, by its shapes?",
+    "options": [
+      "Use with_stack=True and sort by CPU time to see each matmul's call site",
+      "Use profile_memory=True, since allocation sizes reveal each operand's shape",
+      "Export to trace.json and count the rows per kernel to match the layers",
+      "Use record_shapes=True and key_averages(group_by_input_shape=True)"
+    ],
+    "answer_index": 3,
+    "explanation": "Grouping by input shape (with shapes recorded) splits rows per shape. A shape like [16,256,512] x [2048,512] identifies the first MLP layer of a d=512 model, and [4096,8000] the vocab head."
+  },
+  {
+    "id": "08.3-045",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "How to tell matmul from attention from everything else",
+    "question": "In a trace viewer, how do you trace a GPU kernel back to the CPU call that queued it?",
+    "options": [
+      "Read the kernel's tile dimensions and match them to the op's tensor shapes",
+      "Look at the kernel's start time and pick the CPU op that ran just before it",
+      "Follow the flow arrow (correlation ID) from the kernel to its cudaLaunchKernel",
+      "Check the GPU's stream number, which equals the thread ID of the CPU caller"
+    ],
+    "answer_index": 2,
+    "explanation": "Clicking a kernel shows a correlation ID; an arrow (flow event) connects it to the cudaLaunchKernel on the CPU row, which sits inside the aten:: op that wanted it."
+  },
+  {
+    "id": "08.3-046",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "In a PyTorch trace, why does the CPU main thread show one long backward block doing nothing but waiting?",
+    "options": [
+      "The backward pass runs entirely on the GPU, so the CPU has nothing to launch",
+      "The main thread is blocked by the data loader prefetching the next batch",
+      "backward() hands the graph to autograd's engine thread, which launches the ops",
+      "The profiler pauses CPU recording during backward to keep its overhead low"
+    ],
+    "answer_index": 2,
+    "explanation": "The autograd engine runs backward on a separate C++ worker thread (one per GPU). All the ...Backward0 ops and backward kernel launches appear on that thread; the main thread just waits."
+  },
+  {
+    "id": "08.3-047",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "Why is there typically only one GPU row in a simple training trace?",
+    "options": [
+      "The GPU has only one SM visible to the profiler at a time",
+      "All kernels were queued on the default CUDA stream",
+      "The profiler merges all CUDA streams into a single row",
+      "Only forward kernels are shown on the GPU row by default"
+    ],
+    "answer_index": 1,
+    "explanation": "The GPU row is labelled with a stream number; with everything on one default stream there is a single row, which is also why summing durations gives busy time."
+  },
+  {
+    "id": "08.3-048",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "What is a train_step bar of category gpu_user_annotation on the GPU row of a trace?",
+    "options": [
+      "The record_function span mirrored onto the GPU as a label, not GPU work itself",
+      "A real GPU kernel that runs the whole training step as one fused launch",
+      "A host-to-device memory copy of the batch, labelled with the step name",
+      "An error marker the profiler inserts whenever a step exceeds its expected time budget"
+    ],
+    "answer_index": 0,
+    "explanation": "record_function spans are mirrored on the GPU as gpu_user_annotation bars. They are labels, not work; naming spans data, forward, backward, optim makes the GPU row a readable map."
+  },
+  {
+    "id": "08.3-049",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "When clicking a block in a trace viewer, what is Self Time?",
+    "options": [
+      "Wall Duration minus the time covered by blocks nested inside it",
+      "The time the block spent on the CPU only, excluding GPU work",
+      "The time from the start of the trace to the start of the block",
+      "The time from the block's end until the next kernel starts"
+    ],
+    "answer_index": 0,
+    "explanation": "Self Time excludes nested children. A kernel has no children, so its Self Time equals its Wall Duration. A large Self Time on an annotation means much of its window has no nested kernel: idle GPU or kernels on another row."
+  },
+  {
+    "id": "08.3-050",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "In a trace viewer, what does an External id on a clicked block let you do?",
+    "options": [
+      "Identify which SM ran the kernel and how many warps it used",
+      "Set the kernel's stream priority for the next profiled step",
+      "Export only that block and its children to a separate trace",
+      "Jump to the matching CPU-side event that has the same id"
+    ],
+    "answer_index": 3,
+    "explanation": "External id links GPU-side blocks to the CPU event with the same id; search for it to find the corresponding op."
+  },
+  {
+    "id": "08.3-051",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "What does the trace event category 'ac2g' represent?",
+    "options": [
+      "Accumulated GPU gradients, written once per backward pass",
+      "A CUDA caching-allocator event for a device-side allocation",
+      "The arrows linking an async CPU launch to its GPU kernel",
+      "An annotation that appears on the CPU timeline only"
+    ],
+    "answer_index": 2,
+    "explanation": "ac2g stands for async CPU to GPU: the flow link from a launch to the kernel it produced."
+  },
+  {
+    "id": "08.3-052",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "Why is 'the GPU row looks solid when zoomed out' not enough to declare a trace healthy?",
+    "options": [
+      "The viewer hides all gaps by design, so even long stalls never show up as white space",
+      "Gaps of a few microseconds are sub-pixel at that zoom, so compute the busy percentage",
+      "A solid colour on the GPU row means the GPU is thermally throttling during the step",
+      "Zooming out shows only CPU events, so the GPU row is not actually being displayed"
+    ],
+    "answer_index": 1,
+    "explanation": "A 4-microsecond gap is invisible zoomed out. 'No gaps' only means 'no big gaps', so compute the busy fraction and zoom in to see individual kernels."
+  },
+  {
+    "id": "08.3-053",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "In a healthy trace, how do the launch-to-kernel arrows slant, and what does it mean?",
+    "options": [
+      "They are vertical, because each kernel starts the instant it is launched",
+      "They lean right, because the CPU runs ahead and queues work for the GPU",
+      "They lean left, because kernels are scheduled before their launch calls",
+      "There are no arrows at all in a healthy trace, only in a starving one"
+    ],
+    "answer_index": 1,
+    "explanation": "When the CPU runs ahead, kernels execute well after launch, so arrows slant right. In a starving trace they are nearly vertical: each kernel runs as soon as launched and the GPU then waits."
+  },
+  {
+    "id": "08.3-054",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What you see in the trace viewer",
+    "question": "Why is Perfetto recommended over chrome://tracing for viewing trace.json?",
+    "options": [
+      "chrome://tracing is deprecated and slow on big traces; Perfetto stays fast at hundreds of MB",
+      "Perfetto is the only viewer that can open JSON traces; chrome://tracing needs a protobuf file",
+      "chrome://tracing cannot show GPU rows, so kernel timing is only visible in Perfetto",
+      "Perfetto automatically closes the GPU gaps it finds and writes a corrected trace file"
+    ],
+    "answer_index": 0,
+    "explanation": "Perfetto opens the same trace file, scales to very large traces and supports drag-selecting a region to compute busy fraction."
+  },
+  {
+    "id": "08.3-055",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "3. Reading the trace: hot kernels and CPU↔GPU gaps",
+    "question": "In a profiler table, what does it suggest if elementwise, LayerNorm, softmax or copy kernels are near the top?",
+    "options": [
+      "Healthy compute-bound behaviour, as these kernels feed the matmuls",
+      "The model is too small for the GPU, so the batch should be lowered",
+      "The GPU's Tensor Cores are broken and work fell back to CUDA cores",
+      "A memory-bound tail that fusion or torch.compile should collapse"
+    ],
+    "answer_index": 3,
+    "explanation": "In a healthy step the big matmuls lead. If low-intensity kernels dominate, the step is wasting time on HBM round trips that fusion can eliminate."
+  },
+  {
+    "id": "08.3-056",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "3. Reading the trace: hot kernels and CPU↔GPU gaps",
+    "question": "What is a CPU-GPU gap in a profiler timeline?",
+    "options": [
+      "A period where the CPU is idle while the GPU is busy computing queued kernels",
+      "The time spent copying the model weights from host RAM to HBM at startup",
+      "White space on the GPU track: the GPU has drained its queue and waits on the CPU",
+      "A gap between two GPUs in a cluster while they wait for an all-reduce to finish"
+    ],
+    "answer_index": 2,
+    "explanation": "A gap means the GPU has no queued work, waiting on launch, a forced sync (.item(), .cpu()), or the data loader. MFU is lost to no kernels rather than slow ones."
+  },
+  {
+    "id": "08.3-057",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "3. Reading the trace: hot kernels and CPU↔GPU gaps",
+    "question": "A training loop calls print(loss) or loss.item() every step and the trace shows GPU gaps. What is the fix?",
+    "options": [
+      "Increase the learning rate so fewer steps, and so fewer syncs, are needed",
+      "Use more HBM so the logged values can stay resident on the device",
+      "Log less often: accumulate on device and call .item() only occasionally",
+      "Switch the model to fp64 so the loss can be printed without a sync"
+    ],
+    "answer_index": 2,
+    "explanation": "Each .item() or print forces a host sync that drains the GPU queue. Logging every N steps keeps the GPU fed."
+  },
+  {
+    "id": "08.3-058",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "3. Reading the trace: hot kernels and CPU↔GPU gaps",
+    "question": "Which fix addresses GPU gaps caused by a Python-heavy loop that cannot launch kernels fast enough?",
+    "options": [
+      "Add more data-loader workers and prefetch batches with pinned memory",
+      "Fuse ops or use torch.compile to launch fewer, bigger kernels",
+      "Use a lower learning rate so each step needs fewer launches",
+      "Disable the profiler, since its hooks cause the launch delay"
+    ],
+    "answer_index": 1,
+    "explanation": "If launches are the bottleneck, reducing their number with fusion or compilation closes the gaps. More data-loader workers addresses a different cause."
+  },
+  {
+    "id": "08.3-059",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "3. Reading the trace: hot kernels and CPU↔GPU gaps",
+    "question": "Which fixes address GPU gaps caused by a data loader blocking the step?",
+    "options": [
+      "More num_workers, prefetching and pinned memory",
+      "torch.compile and fusion to cut kernel launches",
+      "Using bf16 instead of fp32 for the input batches",
+      "Calling torch.cuda.synchronize() more often"
+    ],
+    "answer_index": 0,
+    "explanation": "A blocking loader is solved by parallel loading, prefetching and pinned memory for faster host-to-device copies."
+  },
+  {
+    "id": "08.3-060",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "4. Mixed precision: the idea",
+    "question": "Why does storing tensors in a 16-bit format instead of fp32 move fewer bytes?",
+    "options": [
+      "16-bit formats are compressed automatically on write",
+      "16-bit tensors live in registers instead of HBM",
+      "16-bit tensors are never written back to HBM",
+      "fp32 uses 4 bytes per number; 16-bit formats use 2"
+    ],
+    "answer_index": 3,
+    "explanation": "Halving the dtype halves every tensor's storage and traffic, which helps memory-bound kernels, activation memory, and Tensor-Core throughput."
+  },
+  {
+    "id": "08.3-061",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "In the runtime model t ≈ max(FLOPs/P_max, bytes/B), what does halving bytes do?",
+    "options": [
+      "Shrinks the first term, which helps only compute-bound kernels",
+      "Shrinks both terms equally, so every kernel speeds up by 2x",
+      "Raises P_max, since 16-bit data feeds the Tensor Cores faster",
+      "Shrinks the second term, which helps only memory-bound kernels"
+    ],
+    "answer_index": 3,
+    "explanation": "Halving bytes reduces bytes/B. That matters only if it is the larger term, i.e. for memory-bound kernels."
+  },
+  {
+    "id": "08.3-062",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "In the runtime model t ≈ max(FLOPs/P_max, bytes/B), what does switching to the 16-bit Tensor-Core path do?",
+    "options": [
+      "Lowers B and shrinks the second term, helping memory-bound kernels",
+      "Halves the FLOP count, shrinking the first term for every kernel",
+      "Raises P_max and shrinks the first term, helping compute-bound kernels",
+      "Has no effect on either term, since only storage dtype matters"
+    ],
+    "answer_index": 2,
+    "explanation": "The 16-bit Tensor-Core path increases peak FLOP/s, reducing FLOPs/P_max. This only matters if compute is the binding limit."
+  },
+  {
+    "id": "08.3-063",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "On an A100, what are P_max for plain fp32 and for bf16 Tensor Cores?",
+    "options": [
+      "312 TFLOP/s for both fp32 and bf16",
+      "19.5 TFLOP/s for fp32, 312 TFLOP/s for bf16",
+      "2 TB/s for fp32 and 3.3 TB/s for bf16",
+      "9.6 TFLOP/s for fp32, 153 TFLOP/s for bf16"
+    ],
+    "answer_index": 1,
+    "explanation": "Plain fp32 on CUDA cores peaks at 19.5 TFLOP/s; bf16 Tensor Cores at 312. The 9.6 and 153 values are the corresponding ridge points in FLOPs/byte."
+  },
+  {
+    "id": "08.3-064",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "For an n = 4096 matmul on an A100 in fp32, what happens if you only halve the bytes (16-bit storage, fp32 arithmetic)?",
+    "options": [
+      "Zero speedup: the ~7 ms compute term dwarfs the memory term",
+      "About a 2x speedup, since halving the bytes halves the runtime",
+      "About a 16x speedup, since 16-bit data feeds the Tensor Cores",
+      "It becomes memory-bound, so the runtime roughly doubles instead"
+    ],
+    "answer_index": 0,
+    "explanation": "Compute takes ~7.05 ms and memory ~0.1 ms. Halving memory to ~0.05 ms leaves the max at 7.05 ms. You shrank a term that was not the bottleneck."
+  },
+  {
+    "id": "08.3-065",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "For an n = 4096 matmul on an A100, roughly what speedup comes from moving fp32 arithmetic to bf16 Tensor Cores?",
+    "options": [
+      "About 16x, all from the higher compute ceiling",
+      "About 2x, all from halving the bytes moved",
+      "None, since the matmul is already memory-bound",
+      "About 1.5x, limited by the fp32 accumulation inside each tile"
+    ],
+    "answer_index": 0,
+    "explanation": "Compute drops from ~7.05 ms to ~0.44 ms (19.5 to 312 TFLOP/s) while memory stays small, so runtime ≈ 0.44 ms, ~16x faster."
+  },
+  {
+    "id": "08.3-066",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "For a memory-bound elementwise add of 10^8 elements on an A100, what does switching from fp32 to bf16 storage do?",
+    "options": [
+      "Gives about a 16x speedup, since the add now runs on Tensor Cores",
+      "Has no effect, since the add's runtime is set by its FLOP count",
+      "Doubles the runtime, because bf16 adds need extra rounding steps",
+      "Roughly halves runtime (~0.59 to ~0.29 ms), all from halved bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "The memory term dominates; halving bytes from 12 to 6 per element halves it. Elementwise ops do not run on Tensor Cores, so faster arithmetic does nothing."
+  },
+  {
+    "id": "08.3-067",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "Why does a faster arithmetic unit not help an elementwise add?",
+    "options": [
+      "Elementwise adds are compute-bound, so they already run at the arithmetic peak",
+      "Elementwise adds are executed on the CPU, so GPU arithmetic speed is irrelevant",
+      "Its compute term is tiny, and there is no matmul for Tensor Cores to speed up",
+      "Tensor Cores make elementwise ops slower, because they must pad to 16x16 tiles"
+    ],
+    "answer_index": 2,
+    "explanation": "The add's compute term is microseconds versus a memory term of hundreds of microseconds. There is no matmul for Tensor Cores to accelerate."
+  },
+  {
+    "id": "08.3-068",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "On the roofline, what does halving the bytes do to a kernel's position, and which kernels benefit?",
+    "options": [
+      "It halves AI, moving the dot left; compute-bound kernels may turn memory-bound",
+      "It doubles AI: memory-bound dots climb the slope, compute-bound ones gain nothing",
+      "It raises the flat roof, so every kernel gains the same 2x speedup from the change",
+      "It moves all kernels to the ridge, balancing compute and bandwidth for each one"
+    ],
+    "answer_index": 1,
+    "explanation": "Halving bytes doubles FLOPs/byte. An elementwise add (0.083 to 0.167) climbs the bandwidth line; an n=4096 matmul (683 to 1365) slides along the flat cap, no higher."
+  },
+  {
+    "id": "08.3-069",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "What does the bf16 Tensor-Core path do to the roofline picture?",
+    "options": [
+      "It steepens the bandwidth line, so memory-bound dots rise with the same AI",
+      "It raises the roof (19.5 to 312 TFLOP/s), lifting only compute-bound dots",
+      "It moves memory-bound dots to the right, since 16-bit halves their bytes",
+      "It lowers the ridge point, so more kernels end up on the compute-bound side"
+    ],
+    "answer_index": 1,
+    "explanation": "The Tensor-Core path increases P_max, raising the horizontal ceiling. Memory-bound kernels under the slanted line do not benefit."
+  },
+  {
+    "id": "08.3-070",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "Why does the A100 ridge point depend on dtype?",
+    "options": [
+      "The ridge is P_max/B, and P_max is ~19.5 TFLOP/s in fp32 vs ~312 in bf16",
+      "Because HBM bandwidth doubles in bf16, which moves the ridge to the left",
+      "Because the ridge is defined per tensor, from the bytes per element of its dtype",
+      "It does not depend on dtype; only the kernels' own AI values shift"
+    ],
+    "answer_index": 0,
+    "explanation": "With P_max of 19.5 TFLOP/s for fp32 the ridge is ~9.6; with 312 TFLOP/s for bf16 it is ~153. Changing dtype changes which side of the ridge a kernel sits on."
+  },
+  {
+    "id": "08.3-071",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "Why is an n = 256 matmul compute-bound in fp32 but memory-bound in bf16 on an A100?",
+    "options": [
+      "bf16 increases its FLOP count, because each product must be rounded twice",
+      "fp32 matmuls are never memory-bound, while every bf16 matmul is memory-bound",
+      "bf16 halves the effective HBM bandwidth, pushing the kernel under the slope",
+      "Its AI (~43 fp32, ~85 bf16) is above the fp32 ridge (9.6), below bf16's (153)"
+    ],
+    "answer_index": 3,
+    "explanation": "In bf16, Tensor Cores collapse the compute term so much that bytes become the limit, and the halved bytes keep that limit at 0.19 µs instead of 0.39 µs. Such a kernel needs both wins."
+  },
+  {
+    "id": "08.3-072",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "Why are many small, skinny matmuls (small heads, small inference batches) bandwidth-limited in bf16?",
+    "options": [
+      "Small matmuls cannot use bf16, so they fall back to slow fp32 CUDA cores",
+      "Small matmuls are dispatched to the CPU, so PCIe bandwidth becomes the limit",
+      "bf16 Tensor Cores raise the ridge to ~153, and small matmuls' AI is below it",
+      "Small matmuls are always compute-bound, so bandwidth only limits large ones"
+    ],
+    "answer_index": 2,
+    "explanation": "Once the compute term is collapsed by Tensor Cores, small matmuls with modest AI are limited by the bytes they move."
+  },
+  {
+    "id": "08.3-073",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "Before predicting what mixed precision will buy a particular kernel, what should you do?",
+    "options": [
+      "Assume a 2x speedup for every kernel, since all bytes are halved",
+      "Check only its FLOP count, since Tensor Cores speed up all FLOPs",
+      "Place it on the roofline: left of the ridge bytes, right of it FLOP/s",
+      "Check only its memory footprint, since activations halve in 16-bit"
+    ],
+    "answer_index": 2,
+    "explanation": "Halved bytes help memory-bound kernels; Tensor Cores help compute-bound ones. Which applies depends on the kernel's position relative to the ridge."
+  },
+  {
+    "id": "08.3-074",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Two different mechanisms: fewer bytes vs a higher ceiling",
+    "question": "What is mixed precision, as opposed to making everything 16-bit?",
+    "options": [
+      "Alternating between fp16 and bf16 every step so neither format's errors accumulate",
+      "Running error-tolerant matmul ops in 16-bit while sensitive parts stay in fp32",
+      "Using fp32 for the forward pass and fp16 for the backward pass, where errors matter less",
+      "Storing the weights in int8 and the activations in fp16, with fp32 only for the loss"
+    ],
+    "answer_index": 1,
+    "explanation": "Some ops lose too much accuracy in 16-bit. Mixed precision keeps them in fp32 while fast, tolerant ops run in 16-bit; torch.autocast automates the per-op choice."
+  },
+  {
+    "id": "08.3-075",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "In a floating-point format, what do the exponent bits and mantissa bits respectively determine?",
+    "options": [
+      "Exponent sets the dynamic range; mantissa sets the precision",
+      "Exponent sets the precision; mantissa sets the dynamic range",
+      "Both set the range; precision comes from the sign bit alone",
+      "Exponent sets the sign and scale; mantissa sets the range"
+    ],
+    "answer_index": 0,
+    "explanation": "More exponent bits allow larger and smaller magnitudes; more mantissa bits give more significant digits within a magnitude."
+  },
+  {
+    "id": "08.3-076",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is the bit split of fp32?",
+    "options": [
+      "1 sign, 5 exponent, 10 mantissa",
+      "1 sign, 8 exponent, 7 mantissa",
+      "1 sign, 11 exponent, 52 mantissa",
+      "1 sign, 8 exponent, 23 mantissa"
+    ],
+    "answer_index": 3,
+    "explanation": "fp32 uses 8 exponent and 23 mantissa bits, giving range up to ~3.4x10^38 and eps ~1.2x10^-7. 5/10 is fp16, 8/7 is bf16, 11/52 is fp64."
+  },
+  {
+    "id": "08.3-077",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is tf32?",
+    "options": [
+      "A 19-bit storage format that halves weight memory compared with fp32",
+      "A 16-bit storage format with fp32's 8 exponent bits and a 7-bit mantissa",
+      "A synonym for fp16 used in NVIDIA's Tensor-Core documentation",
+      "A Tensor-Core mode: 8 exponent bits, 10-bit mantissa; storage stays fp32"
+    ],
+    "answer_index": 3,
+    "explanation": "tf32 is not a storage format: tensors stay fp32 in memory, and only the matmul rounds internally to a 10-bit mantissa. It gives a big matmul speedup almost free and is controlled by torch.backends.cuda.matmul.allow_tf32."
+  },
+  {
+    "id": "08.3-078",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is the bit split of fp16?",
+    "options": [
+      "1 sign, 8 exponent, 7 mantissa",
+      "1 sign, 8 exponent, 23 mantissa",
+      "1 sign, 5 exponent, 10 mantissa",
+      "1 sign, 6 exponent, 9 mantissa"
+    ],
+    "answer_index": 2,
+    "explanation": "fp16 has 5 exponent and 10 mantissa bits: finer precision than bf16 but a narrow range, max 65504."
+  },
+  {
+    "id": "08.3-079",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is the bit split of bf16?",
+    "options": [
+      "1 sign, 5 exponent, 10 mantissa",
+      "1 sign, 8 exponent, 7 mantissa",
+      "1 sign, 7 exponent, 8 mantissa",
+      "1 sign, 8 exponent, 10 mantissa"
+    ],
+    "answer_index": 1,
+    "explanation": "bf16 keeps fp32's 8 exponent bits and has 7 mantissa bits, so it has fp32's range but coarser precision. 8/10 describes tf32's compute mode."
+  },
+  {
+    "id": "08.3-080",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is the largest finite value representable in fp16?",
+    "options": [
+      "65504",
+      "3.4x10^38",
+      "32767",
+      "1.18x10^-38"
+    ],
+    "answer_index": 0,
+    "explanation": "fp16's max is 65504; anything larger overflows to inf. fp32 and bf16 go up to about 3.4x10^38."
+  },
+  {
+    "id": "08.3-081",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is fp16's smallest normal value, below which values start underflowing?",
+    "options": [
+      "About 6.1x10^-5",
+      "About 1.18x10^-38",
+      "About 7.8x10^-3",
+      "About 9.8x10^-4"
+    ],
+    "answer_index": 0,
+    "explanation": "fp16's smallest normal is ~6.1x10^-5. fp32 and bf16 share ~1.18x10^-38. 7.8x10^-3 and 9.8x10^-4 are the eps values of bf16 and fp16."
+  },
+  {
+    "id": "08.3-082",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "What is the relative precision (eps) of bf16, and roughly how many significant decimal digits does that give?",
+    "options": [
+      "About 1.2x10^-7, roughly 7 digits",
+      "About 9.8x10^-4, roughly 4 digits",
+      "About 6.1x10^-5, roughly 5 digits",
+      "About 7.8x10^-3, roughly 3 digits"
+    ],
+    "answer_index": 3,
+    "explanation": "bf16's 7 mantissa bits give eps ≈ 7.81x10^-3, about 3 significant decimal digits. fp32's eps is ~1.2x10^-7 and fp16's ~9.8x10^-4."
+  },
+  {
+    "id": "08.3-083",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "How can you verify the max, smallest normal and eps of a PyTorch dtype?",
+    "options": [
+      "With torch.iinfo(dtype), reading .max, .min and .bits",
+      "With tensor.element_size() and the dtype's bit width",
+      "With torch.finfo(dtype), reading .max, .tiny and .eps",
+      "With torch.cuda.get_device_properties() for the GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "torch.finfo gives floating-point properties: max, tiny (smallest normal) and eps. iinfo is for integer types."
+  },
+  {
+    "id": "08.3-084",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "How do fp16 and bf16 differ, given that both are 16 bits?",
+    "options": [
+      "fp16 has more exponent bits (wider range); bf16 has more mantissa bits (finer precision)",
+      "fp16 has more mantissa (finer, narrow range); bf16 more exponent (fp32's range)",
+      "They have identical bit splits, but run on different Tensor-Core hardware paths",
+      "bf16 has more total bits than fp16, using the extra ones for its wider exponent"
+    ],
+    "answer_index": 1,
+    "explanation": "fp16 spends 5 bits on exponent and 10 on mantissa; bf16 spends 8 and 7. For training, range matters more than the last bits of precision, so bf16 won."
+  },
+  {
+    "id": "08.3-085",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "5. The four formats: dynamic range vs precision",
+    "question": "Outside what magnitude range do fp16 values overflow to inf or underflow to zero?",
+    "options": [
+      "Roughly 10^-38 to 3.4x10^38",
+      "Roughly 6x10^-5 to 6.5x10^4",
+      "Roughly 10^-4 to 10^4 overall",
+      "Roughly 10^-7 to 10^7"
+    ],
+    "answer_index": 1,
+    "explanation": "fp16 covers about [6x10^-5, 6.5x10^4] in magnitude for normal numbers. bf16 and fp32 cover about [10^-38, 3.4x10^38]."
+  },
+  {
+    "id": "08.3-086",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "Why does bf16's fp32-equal exponent matter for training?",
+    "options": [
+      "Activations and gradients span huge ranges and spike, and bf16 keeps them representable",
+      "It makes bf16 matmuls run twice as fast as fp16 matmuls on the same Tensor Cores",
+      "It gives bf16 more significant digits than fp16, so rounding error is smaller",
+      "It removes the need for fp32 master weights, since bf16 updates are never rounded away"
+    ],
+    "answer_index": 0,
+    "explanation": "With the same range as fp32, a gradient of 10^-10 or an activation of 10^5 stays representable. The cost is only ~3 significant digits, tolerated because master weights and accumulation stay fp32."
+  },
+  {
+    "id": "08.3-087",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "What do fp32 master weights do in bf16 mixed-precision training?",
+    "options": [
+      "They make the gradients exactly equal to the gradients of a full-fp32 run",
+      "They make the forward and backward passes run in fp32 instead of bf16 under autocast",
+      "They double the speed of the optimizer, since fp32 updates fuse better",
+      "They keep small updates from rounding away; they don't restore lost precision"
+    ],
+    "answer_index": 3,
+    "explanation": "Gradients from a bf16 forward/backward stay approximate. The fp32 master copy accumulates small updates that would vanish in bf16, so learning continues. It stops further loss, it does not restore lost precision."
+  },
+  {
+    "id": "08.3-088",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "Near 1.0, what is the spacing between adjacent bf16 values?",
+    "options": [
+      "2^-10 ≈ 0.00098",
+      "2^-23 ≈ 1.2x10^-7",
+      "2^-7 = 0.0078125",
+      "2^-8 = 0.00390625"
+    ],
+    "answer_index": 2,
+    "explanation": "bf16 has 7 mantissa bits, so near 1.0 consecutive values differ by 2^-7. The next value above 1.0 is 1.0078125; anything below the midpoint 1.00390625 rounds back to 1.0."
+  },
+  {
+    "id": "08.3-089",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "If a weight of 1.0 is stored directly in bf16 and you add 0.001 each step, what happens?",
+    "options": [
+      "It reaches about 1.004 after 4 steps, as in fp32",
+      "It overflows to inf once enough updates pile up",
+      "It never changes; each update rounds back to 1.0",
+      "It jumps to 1.0078125 on the very first step"
+    ],
+    "answer_index": 2,
+    "explanation": "1.001 is below the rounding midpoint 1.00390625, so it rounds back to 1.0 every time. Stored in bf16 alone, small updates are lost forever."
+  },
+  {
+    "id": "08.3-090",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "With an fp32 master weight starting at 1.0 and +0.001 updates, when does the bf16 copy used for compute first change?",
+    "options": [
+      "At step 1, when the master first becomes 1.001 and the copy rounds up",
+      "At step 4, when the master (~1.004) crosses the midpoint to 1.0078125",
+      "Never, since every update is below the rounding midpoint of 1.0",
+      "At step 8, when the master reaches 1.008 and passes 1.0078125"
+    ],
+    "answer_index": 1,
+    "explanation": "The fp32 master accumulates 1.001, 1.002, 1.003, 1.004. At 1.004 it exceeds 1.00390625, so the bf16 copy rounds to 1.0078125. Small updates are kept, not made exact."
+  },
+  {
+    "id": "08.3-091",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "What does fp32 accumulation inside a bf16 matmul accomplish?",
+    "options": [
+      "An fp32 accumulator avoids new rounding error at each add; input rounding stays",
+      "It converts the bf16 inputs back to their exact original fp32 values before use",
+      "It doubles the matmul's FLOPs, because every product is computed twice for the fp32 sum",
+      "It removes the need for Tensor Cores, since fp32 adds run on CUDA cores"
+    ],
+    "answer_index": 0,
+    "explanation": "Accumulating in fp32 prevents error from compounding during the sum. Rounding already in the bf16 inputs remains."
+  },
+  {
+    "id": "08.3-092",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "What the fp32 master weights do — and do not — buy you",
+    "question": "Does bf16 mixed-precision training produce the same numbers as full fp32 training?",
+    "options": [
+      "Yes, exactly, because fp32 master weights reproduce every fp32 step",
+      "Yes, as long as dynamic loss scaling is used alongside autocast",
+      "No, and it diverges after a few thousand steps without loss scaling",
+      "No; losses differ slightly, but it learns about as well as fp32"
+    ],
+    "answer_index": 3,
+    "explanation": "Mixed precision does not reproduce fp32 results. It keeps errors small so learning is essentially as good."
+  },
+  {
+    "id": "08.3-093",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "What happens to many gradients when training in fp16 without loss scaling?",
+    "options": [
+      "They overflow to inf every step, because fp16's max is only 65504",
+      "They are automatically promoted to fp32 by autograd, so nothing is lost",
+      "They are rounded to the nearest power of two, adding a small bias",
+      "They fall below fp16's ~6.1x10^-5 normal and underflow to zero"
+    ],
+    "answer_index": 3,
+    "explanation": "Gradients are often tiny. In fp16 they underflow to zero, silently erasing updates. Loss scaling moves them into the representable range."
+  },
+  {
+    "id": "08.3-094",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "How does loss scaling with GradScaler work?",
+    "options": [
+      "Divide the loss by s before backward to prevent overflow, then multiply gradients by s",
+      "Clip every gradient to fp16's max of 65504 before backward, then rescale by s",
+      "Multiply the loss by s so gradients rise into fp16's range, then unscale in fp32",
+      "Cast the loss to bf16 before backward, then cast gradients back to fp16 for the step"
+    ],
+    "answer_index": 2,
+    "explanation": "Scaling the loss scales every gradient by s, lifting small values above fp16's underflow threshold. Unscaling in fp32 restores the true magnitude for the update."
+  },
+  {
+    "id": "08.3-095",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "What does GradScaler do when it detects inf or nan gradients?",
+    "options": [
+      "Raises the scale factor s and retries the same step",
+      "Skips that optimizer step and lowers the scale factor s",
+      "Stops training with an error naming the bad parameter",
+      "Replaces the inf values with zeros and continues the step"
+    ],
+    "answer_index": 1,
+    "explanation": "An inf/nan means the scaled gradients overflowed fp16's top. The scaler skips the step and reduces s, adjusting dynamically over training."
+  },
+  {
+    "id": "08.3-096",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "What is the decisive reason modern LLM pretraining uses bf16 rather than fp16?",
+    "options": [
+      "bf16 removes the loss-scaling failure mode; both run at the same speed",
+      "bf16 runs twice as fast as fp16 on Tensor Cores, halving the step time",
+      "bf16 has higher precision than fp16, so gradients are more accurate",
+      "bf16 uses fewer bytes per value than fp16, so activations are smaller"
+    ],
+    "answer_index": 0,
+    "explanation": "Speed is the same; both are 2 bytes. bf16's range covers where gradients live, so nothing underflows and no scaler is needed, eliminating a class of bugs."
+  },
+  {
+    "id": "08.3-097",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "6. Why bf16 is preferred for training (and needs no loss scaling)",
+    "question": "What hardware is required for bf16 training, and what is the fallback on older GPUs?",
+    "options": [
+      "Ampere/A100 or newer; older GPUs fall back to fp16 with GradScaler",
+      "Any GPU since Pascal; no fallback is needed for bf16 training",
+      "Only Hopper/H100; older GPUs fall back to fp64 for stability",
+      "Volta or newer; older GPUs fall back to int8 with per-tensor scales"
+    ],
+    "answer_index": 0,
+    "explanation": "bf16 needs Ampere-class hardware or newer. Older GPUs such as the T4 or V100 use fp16 with loss scaling."
+  },
+  {
+    "id": "08.3-098",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "What does wrapping the forward pass in torch.autocast do?",
+    "options": [
+      "Casts every tensor and weight permanently to 16-bit for the rest of training",
+      "Runs the whole forward in fp64 and casts results down to fp32 at the end",
+      "Converts the model to int8 for the forward pass, with fp32 scales per tensor",
+      "Picks a dtype per op: matmuls in 16-bit, sensitive ops like softmax in fp32"
+    ],
+    "answer_index": 3,
+    "explanation": "autocast applies a per-op policy: matmul-shaped, error-tolerant ops in 16-bit, fragile ops in fp32. Weights stay stored in fp32 and are cast on the fly."
+  },
+  {
+    "id": "08.3-099",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "Under torch.autocast, in what dtype are the model's weights stored?",
+    "options": [
+      "bf16 permanently, converted when autocast is entered",
+      "fp16 permanently, with an fp32 copy only in the optimizer",
+      "fp32, as the master copy, cast to 16-bit on the fly",
+      "int8 with per-channel scales, dequantized for each op"
+    ],
+    "answer_index": 2,
+    "explanation": "The weights remain fp32 in memory so the optimizer updates a precise copy. The 16-bit versions used by matmuls are transient."
+  },
+  {
+    "id": "08.3-100",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "Which ops does autocast keep in fp32?",
+    "options": [
+      "Linear layers and matmuls, where long sums accumulate error",
+      "Fragile ones: softmax, layernorm's reduction, log/exp, the loss",
+      "Convolutions and attention, since their inputs span wide ranges",
+      "All ops in the backward pass, since gradients are very small"
+    ],
+    "answer_index": 1,
+    "explanation": "Linear, matmul, conv and attention run in 16-bit for speed and halved bytes. Fragile ops stay in fp32 so precision is preserved where it matters."
+  },
+  {
+    "id": "08.3-101",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "What extra code does the fp16 autocast training loop need compared with the bf16 loop?",
+    "options": [
+      "A call to model.half() before training, so all weights become fp16",
+      "Three scaler calls: scale(loss).backward(), step(optimizer), update()",
+      "A second optimizer that keeps the fp16 copies of the parameters in sync",
+      "Nothing; the fp16 and bf16 autocast loops are identical line for line"
+    ],
+    "answer_index": 1,
+    "explanation": "Apart from the dtype, the only difference is the three GradScaler calls. That is the entire practical cost of fp16's narrow range."
+  },
+  {
+    "id": "08.3-102",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "In the fp16 training loop, what does scaler.step(optimizer) do?",
+    "options": [
+      "Unscales the gradients and skips the step if inf or nan is seen",
+      "Scales the loss up by s before backward so gradients do not underflow",
+      "Adjusts the scale factor for the next step based on recent overflows",
+      "Zeroes the gradients after the optimizer has applied the update"
+    ],
+    "answer_index": 0,
+    "explanation": "scaler.step unscales gradients and calls the optimizer only if they are finite. scaler.scale scales the loss and scaler.update adjusts the factor."
+  },
+  {
+    "id": "08.3-103",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "7. torch.autocast: how mixed precision is actually used",
+    "question": "In the bf16 autocast training loop, why is no GradScaler needed?",
+    "options": [
+      "bf16 gradients are computed in fp64 under autocast",
+      "Autocast disables the scaled backward for bf16 dtypes",
+      "bf16 gradients are clipped to a safe range automatically",
+      "bf16's range is fine for gradients, so none underflow"
+    ],
+    "answer_index": 3,
+    "explanation": "With fp32-equal exponent range, bf16 gradients remain representable, so there is nothing to scale."
+  },
+  {
+    "id": "08.3-104",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "8. Numerical example: fp16 overflows where bf16 does not",
+    "question": "What happens when you compute 300 x 300 in fp16 versus bf16?",
+    "options": [
+      "Both give 90000 exactly, well within their range",
+      "fp16 gives 90000; bf16 overflows to inf here",
+      "fp16 overflows to inf; bf16 gives 90112",
+      "Both overflow to inf, since 90000 > 65504"
+    ],
+    "answer_index": 2,
+    "explanation": "90000 exceeds fp16's max of 65504, so it overflows. bf16's range easily covers it; coarse precision rounds it to 90112."
+  },
+  {
+    "id": "08.3-105",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "8. Numerical example: fp16 overflows where bf16 does not",
+    "question": "What does storing 70000.0 as fp16 and as bf16 give?",
+    "options": [
+      "fp16 gives 70000; bf16 gives inf",
+      "Both give 70000",
+      "fp16 gives inf; bf16 gives 70144",
+      "fp16 gives 65504; bf16 gives 70000"
+    ],
+    "answer_index": 2,
+    "explanation": "fp16 cannot store values above 65504, so 70000 becomes inf. bf16 stores it as 70144, showing its ~3-digit precision but no overflow."
+  },
+  {
+    "id": "08.3-106",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "8. Numerical example: fp16 overflows where bf16 does not",
+    "question": "Why can the fp16-overflow versus bf16 demonstration run on a CPU?",
+    "options": [
+      "CPUs have Tensor Cores that emulate fp16 and bf16 math",
+      "It is purely about number formats, not GPU hardware",
+      "PyTorch emulates a full GPU on the CPU for these dtypes",
+      "bf16 is only supported on CPU, so the demo must run there"
+    ],
+    "answer_index": 1,
+    "explanation": "Overflow is a property of the format's range, so the same behaviour shows wherever the dtype is supported."
+  },
+  {
+    "id": "08.3-107",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "8. Numerical example: fp16 overflows where bf16 does not",
+    "question": "Which intermediate values in training can exceed fp16's range?",
+    "options": [
+      "Large activations, pre-softmax attention scores, squared terms in a variance",
+      "Only the token ids, which exceed 65504 whenever the vocabulary is large enough",
+      "Only the learning rate and its warmup schedule early in training",
+      "Only the bias vectors, which grow without bound when weight decay is turned off"
+    ],
+    "answer_index": 0,
+    "explanation": "Such values appear routinely. fp16 would produce inf/nan requiring loss scaling, while bf16 handles them."
+  },
+  {
+    "id": "08.3-108",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Exercise",
+    "question": "A profile shows 55% of CUDA time in matmuls and 30% in elementwise, layer_norm and softmax kernels. What should you try for the 30%?",
+    "options": [
+      "Rewrite the matmuls to use fewer FLOPs per token in the step",
+      "Switch the matmuls to fp64 so the tail has less to correct",
+      "Split the tail into more kernel launches so more SMs are used",
+      "Fuse it, e.g. with torch.compile, to cut HBM round trips"
+    ],
+    "answer_index": 3,
+    "explanation": "Elementwise, LayerNorm and softmax are the memory-bound tail. Fusing them reduces HBM traffic; the compute-bound matmuls are left alone (apart from the bf16 speedup)."
+  },
+  {
+    "id": "08.3-109",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Exercise",
+    "question": "Why does calling loss.item() every step create gaps in the GPU timeline?",
+    "options": [
+      "It doubles the size of the loss tensor by copying it into fp64 on the GPU",
+      "It runs the backward pass again to recompute the loss value for printing",
+      "It moves the model weights to host RAM so the scalar can be read safely",
+      "It copies a scalar to the CPU, forcing a sync that drains the GPU queue"
+    ],
+    "answer_index": 3,
+    "explanation": "The host sync stops the CPU running ahead. Logging every N steps or accumulating on-device removes it from the hot path."
+  },
+  {
+    "id": "08.3-110",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Exercise",
+    "question": "When switching a run from fp32 to bf16 autocast, which cost center benefits most in relative terms, and why?",
+    "options": [
+      "Only the matmuls benefit, through Tensor Cores; the memory-bound tail is unaffected",
+      "Neither benefits in speed; only activation memory use changes with the dtype",
+      "The memory-bound tail, as halving the dtype halves its traffic; matmuls also gain",
+      "The data loader benefits most, since bf16 batches cross PCIe in half the time"
+    ],
+    "answer_index": 2,
+    "explanation": "The memory-bound kernels gain from halved bytes; matmuls gain from the faster 16-bit Tensor-Core path; activation memory roughly halves."
+  },
+  {
+    "id": "08.3-111",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is the consequence of using fp16 without a GradScaler?",
+    "options": [
+      "The program crashes on the first step with an overflow error from autocast",
+      "Small gradients silently underflow to zero and the model fails to learn",
+      "Training becomes faster with no downside, since scaling only adds overhead",
+      "The model automatically switches to bf16 once underflow is detected"
+    ],
+    "answer_index": 1,
+    "explanation": "Underflow is silent: updates vanish and the loss curve just looks bad. Either scale the loss or use bf16."
+  },
+  {
+    "id": "08.3-112",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why should you not expect bf16 training to match fp32 loss curves to many digits?",
+    "options": [
+      "bf16 has ~3 significant digits, and master weights only stop further loss",
+      "bf16 overflows on every step, so some updates are skipped by the optimizer",
+      "bf16 disables fused AdamW, so the optimizer follows a different update rule",
+      "bf16 uses a different loss function, computed with a bf16 log-softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "Small run-to-run differences are normal. Master weights and fp32 accumulation keep training progressing, not identical."
+  },
+  {
+    "id": "08.3-113",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to assume mixed precision speeds up a compute-bound matmul by halving bytes?",
+    "options": [
+      "Its win is the 16-bit Tensor-Core path; halving an n=4096 matmul's bytes gives 0%",
+      "Matmuls do not move any bytes once their weights are cached in the GPU's L2 cache",
+      "Halving bytes makes matmuls slower, since 16-bit tiles need extra conversion",
+      "Mixed precision does not affect matmuls at all; it only changes the tail"
+    ],
+    "answer_index": 0,
+    "explanation": "Different mechanisms apply to different kernels. The tail gains from bytes, the matmuls from the higher ceiling (16x for the n=4096 case)."
+  },
+  {
+    "id": "08.3-114",
+    "chapter": "08.3",
+    "chapter_name": "Profiling & mixed precision",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-03.md",
+    "section": "Check yourself",
+    "question": "You autocast to bf16 but the model's weights are still fp32 in memory. Is that a bug?",
+    "options": [
+      "Yes; autocast should have converted the weights to bf16 permanently on entry",
+      "Yes; it means autocast is disabled and every op still runs in fp32",
+      "Yes; it doubles the FLOPs, since each op casts and recomputes its weights",
+      "No; fp32 weights are the master copy, cast to bf16 on the fly"
+    ],
+    "answer_index": 3,
+    "explanation": "This is how mixed precision works. The master copy keeps small updates from being rounded away, while the 16-bit path provides throughput."
+  }
+]

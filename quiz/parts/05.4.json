@@ -1,0 +1,992 @@
+[
+  {
+    "id": "05.4-001",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "At the highest level, what is a GPT model composed of?",
+    "options": [
+      "An embedding, a stack of identical blocks, a final norm, and an output head",
+      "A single very wide attention layer followed by a softmax over the vocabulary",
+      "An encoder stack that reads the prompt, followed by a decoder stack that writes",
+      "A recurrent cell applied T times, with attention over its hidden states"
+    ],
+    "answer_index": 0,
+    "explanation": "A GPT is literally token + positional embeddings, n_layer identical transformer blocks, a final LayerNorm, and a language-model head. Once you can build one block you have built the whole model up to bookkeeping. It is decoder-only, not encoder-decoder."
+  },
+  {
+    "id": "05.4-002",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is the pre-norm + residual structure of a transformer block described as 'the load-bearing wall'?",
+    "options": [
+      "Because it halves the parameter count, so 100-layer models fit in GPU memory",
+      "Because it is the reason very deep (e.g. 100-layer) transformers train at all",
+      "Because it replaces attention in the deeper layers, so only early blocks attend",
+      "Because it makes the model permutation-invariant, so no positional encoding is needed"
+    ],
+    "answer_index": 1,
+    "explanation": "Pre-norm with residual connections keeps a clean gradient path through the depth of the network, which is what makes very deep transformers trainable. It does not change parameter count meaningfully and is complementary to attention."
+  },
+  {
+    "id": "05.4-003",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "1. The shape of a block",
+    "question": "What are the two steps of a pre-norm GPT transformer block's forward pass?",
+    "options": [
+      "x = attn(x) + mlp(x), with both sub-layers computed in parallel",
+      "x = ln_1(attn(x)); then x = ln_2(mlp(x)), with no residual add",
+      "x = x + attn(ln_1(x)); then x = x + mlp(ln_2(x))",
+      "x = mlp(attn(ln(x))), with a single residual add around both"
+    ],
+    "answer_index": 2,
+    "explanation": "A block first does x = x + attn(ln_1(x)) (communication between positions) and then x = x + mlp(ln_2(x)) (per-position computation). Each sub-layer is preceded by a LayerNorm and wrapped in a residual add."
+  },
+  {
+    "id": "05.4-004",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "1. The shape of a block",
+    "question": "In a transformer block, where does information move between different positions?",
+    "options": [
+      "Only in the MLP's hidden layer",
+      "In both the LayerNorm and the MLP",
+      "In the residual add between blocks",
+      "Only in attention"
+    ],
+    "answer_index": 3,
+    "explanation": "Attention is the only place information moves between positions. The MLP transforms each position individually, and LayerNorm normalizes each position on its own. The residual add is elementwise per position."
+  },
+  {
+    "id": "05.4-005",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "1. The shape of a block",
+    "question": "What is the 'computational rhythm' of a transformer, alternating across its sub-layers?",
+    "options": [
+      "Mix across positions (attention), then think per position (MLP)",
+      "Normalize across the batch, then normalize across the sequence (LayerNorm)",
+      "Expand the sequence to 4T positions, then compress it back to T (MLP)",
+      "Compute the logits first, then compute the embeddings from them (head)"
+    ],
+    "answer_index": 0,
+    "explanation": "Each block alternates communication (attention mixes information between positions) and computation (the MLP transforms each position independently). Stacking blocks repeats this rhythm."
+  },
+  {
+    "id": "05.4-006",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "1. The shape of a block",
+    "question": "Why can transformer blocks be stacked one after another?",
+    "options": [
+      "Because each block halves the sequence length, so the stack ends at T = 1 token",
+      "Because each block takes a (B, T, C) activation and returns the same shape",
+      "Because each block has its own vocabulary and passes token ids to the next",
+      "Because each block outputs (B, T, V) logits that the next block re-embeds"
+    ],
+    "answer_index": 1,
+    "explanation": "A block maps (B, T, C) to (B, T, C), so the output of one block is a valid input to the next. Blocks do not change the sequence length or produce logits — that is the job of the final head."
+  },
+  {
+    "id": "05.4-007",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "How does the position-wise MLP in a transformer block treat different positions?",
+    "options": [
+      "It mixes all positions together like attention does, but without a causal mask",
+      "It uses a different weight matrix for each position up to block_size",
+      "It transforms each position independently, with the same weights everywhere",
+      "It only processes the last position, since only that one predicts a token"
+    ],
+    "answer_index": 2,
+    "explanation": "The MLP applies the same two linear layers and nonlinearity to every position independently. Weights are shared across positions, and no information moves between positions in the MLP."
+  },
+  {
+    "id": "05.4-008",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "What is the formula for the transformer MLP?",
+    "options": [
+      "MLP(x) = phi(W_1 x) ⊙ phi(W_2 x), with both W_1 and W_2 mapping C to 4C",
+      "MLP(x) = W_1 x + W_2 x + b, with W_1 and W_2 both (C, C) and no nonlinearity",
+      "MLP(x) = softmax(W_1 x) W_2, with W_1: C to 4C and W_2: 4C back to C",
+      "MLP(x) = W_2 phi(W_1 x + b_1) + b_2, with W_1: C to 4C and W_2: 4C to C"
+    ],
+    "answer_index": 3,
+    "explanation": "The MLP is two linear layers with a nonlinearity phi (GELU) between them: W_1 in R^(4C x C) expands to 4C, then W_2 in R^(C x 4C) projects back to C. There is no softmax."
+  },
+  {
+    "id": "05.4-009",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "Why does GPT-2's MLP expand the hidden width to 4C?",
+    "options": [
+      "It is the standard capacity/compute trade-off; the hidden layer holds per-token capacity",
+      "Because GPT-2 uses 4 attention heads, and the MLP needs one C-wide slot per head",
+      "Because GELU's tanh approximation requires a hidden width that is a multiple of 4",
+      "Because a 4C hidden layer makes the MLP mathematically equivalent to a second attention layer"
+    ],
+    "answer_index": 0,
+    "explanation": "The hidden layer holds the block's per-token capacity, and 4x expansion is the conventional trade-off between capacity and compute used by GPT-2 and most descendants. It is unrelated to the number of heads or GELU's requirements."
+  },
+  {
+    "id": "05.4-010",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "What would happen to the transformer MLP if the nonlinearity phi were removed?",
+    "options": [
+      "It would turn into a softmax layer, since W_2 would then normalize the 4C outputs",
+      "W_2 W_1 would collapse into one linear map, so the second layer would add nothing",
+      "It would become permutation-invariant over channels and lose all positional signal",
+      "It would double its parameter count, since the biases would have to absorb phi's role"
+    ],
+    "answer_index": 1,
+    "explanation": "Without phi, W_2 (W_1 x) equals (W_2 W_1) x, a single linear map, so having two layers gains nothing representationally. The nonlinearity is what lets the MLP represent nonlinear functions of its input."
+  },
+  {
+    "id": "05.4-011",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "What is the GELU nonlinearity used in GPT-2's MLP?",
+    "options": [
+      "phi(z) = max(0, z), the rectified linear unit applied per element",
+      "phi(z) = 1 / (1 + exp(−z)), the logistic sigmoid of the input",
+      "phi(z) = z · Phi(z), where Phi is the standard-normal CDF",
+      "phi(z) = tanh(z), squashing every input into the range (−1, 1)"
+    ],
+    "answer_index": 2,
+    "explanation": "GELU (Gaussian Error Linear Unit) is phi(z) = z Phi(z), with Phi the standard normal CDF. It is a smooth relative of ReLU. max(0, z) is ReLU and 1/(1+exp(−z)) is the sigmoid."
+  },
+  {
+    "id": "05.4-012",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "How does GELU treat large positive and negative inputs?",
+    "options": [
+      "It zeroes large positive inputs and passes large negative inputs through almost unchanged",
+      "It passes both large positive and large negative inputs through essentially unchanged",
+      "It clips both large positive and large negative inputs smoothly to the range ±1",
+      "It passes large positives almost unchanged and squashes negatives smoothly toward zero"
+    ],
+    "answer_index": 3,
+    "explanation": "GELU behaves like a smooth ReLU: large positive inputs pass through almost unchanged and negative inputs are smoothly squashed toward zero. It does not clip to ±1 like tanh."
+  },
+  {
+    "id": "05.4-013",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Intuition and math",
+    "question": "Approximately what is GELU(1.0), and how does it compare to ReLU(1.0)?",
+    "options": [
+      "About 0.8413 — most of the input, while ReLU would keep all of it (1.0)",
+      "Exactly 1.0 — for positive inputs GELU and ReLU agree exactly (1.0)",
+      "About 0.5 — half the input, since Phi(1) is 0.5, while ReLU gives 1.0",
+      "About 1.1587 — slightly more than the input itself, while ReLU gives 1.0"
+    ],
+    "answer_index": 0,
+    "explanation": "GELU(1.0) = 1.0 × Phi(1.0) ≈ 0.8413, since Phi(1) ≈ 0.8413. ReLU would return exactly 1.0. GELU keeps most of the input while being smooth."
+  },
+  {
+    "id": "05.4-014",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Tensor shapes",
+    "question": "What are the tensor shapes through a GPT MLP for input (B, T, C)?",
+    "options": [
+      "(B, T, C) → (B, 4T, C) → GELU (B, 4T, C) → (B, T, C)",
+      "(B, T, C) → (B, T, 4C) → GELU (B, T, 4C) → (B, T, C)",
+      "(B, T, C) → (B, 4, T, C) → GELU (B, 4, T, C) → (B, T, C)",
+      "(B, T, C) → (B, T, C/4) → GELU (B, T, C/4) → (B, T, C)"
+    ],
+    "answer_index": 1,
+    "explanation": "The first linear expands the channel axis to 4C, GELU keeps the shape, and the second linear projects back to C. Batch and time axes are unchanged; the MLP acts on the last axis only."
+  },
+  {
+    "id": "05.4-015",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Tensor shapes",
+    "question": "Which axis do the MLP's linear layers act on, for an input of shape (B, T, C)?",
+    "options": [
+      "The batch axis B, mixing the same position across different sequences",
+      "The batch axis B, mixing the same position across the different sequences in a batch",
+      "The last (channel) axis only, with the same weights for every (B, T) position",
+      "All three axes jointly, after flattening (B, T, C) into one long vector"
+    ],
+    "answer_index": 2,
+    "explanation": "nn.Linear multiplies along the last axis, so the MLP transforms each position's C-vector independently, with the same weights for every (b, t). It does not mix across batch or time."
+  },
+  {
+    "id": "05.4-016",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Tensor shapes",
+    "question": "How large is the MLP's hidden activation relative to the block input, and why does it matter?",
+    "options": [
+      "The same size as the input, so it adds nothing extra to activation memory",
+      "Half the size of the input, which is how the MLP saves activation memory",
+      "Twice the size of the input, which matters only for the MLP's FLOP count",
+      "4× the size of the input — relevant when accounting for activation memory"
+    ],
+    "answer_index": 3,
+    "explanation": "The hidden activation is (B, T, 4C), four times the input's size. That makes it significant when accounting for activation memory during training."
+  },
+  {
+    "id": "05.4-017",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "From scratch (the course codebase)",
+    "question": "In the course's MLP module, what are the layers in order?",
+    "options": [
+      "c_fc (C → 4C), GELU, c_proj (4C → C), dropout",
+      "c_proj (C → 4C), dropout, c_fc (4C → C), GELU",
+      "GELU, c_fc (C → C), c_proj (C → C)",
+      "c_attn (C → 3C), GELU, c_proj (3C → C), dropout"
+    ],
+    "answer_index": 0,
+    "explanation": "MLP.forward applies c_fc (expand C to 4C), then GELU, then c_proj (project 4C back to C), then dropout. c_attn is the attention's fused QKV projection, not part of the MLP."
+  },
+  {
+    "id": "05.4-018",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "What does a residual (skip) connection compute in a transformer block?",
+    "options": [
+      "y = f(x), replacing the input with the sub-layer's output each block",
+      "y = x + f(x), keeping the input and adding the sub-layer's output",
+      "y = x · f(x), gating the input elementwise by the sub-layer's output",
+      "y = f(x) − x, so the sub-layer's output is measured relative to x"
+    ],
+    "answer_index": 1,
+    "explanation": "A block computes x + sublayer(x) rather than replacing x. The input passes through unchanged along the identity path, and the sub-layer contributes an additive update. That single + is what lets dozens of blocks be stacked."
+  },
+  {
+    "id": "05.4-019",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "With a residual connection y = x + f(x), what does the sub-layer f have to learn?",
+    "options": [
+      "To reproduce the input x exactly, plus a small correction",
+      "To output the next token's logits directly at every block",
+      "Only what to change — an additive update on top of x",
+      "To normalize x to zero mean and unit variance per position"
+    ],
+    "answer_index": 2,
+    "explanation": "Because x reaches the output unchanged via the identity path, f does not need to reproduce x; it only learns the update to add. If f(x) = 0, the block simply passes its input through."
+  },
+  {
+    "id": "05.4-020",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "Why is a freshly initialized residual block whose sub-layer outputs are small a safe starting point for a deep stack?",
+    "options": [
+      "Because the gradients through a small sub-layer are exactly zero, freezing the block",
+      "Because it forces all blocks to learn identical weights, so depth adds no instability",
+      "Because small sub-layer outputs make the training loss exactly zero at initialization",
+      "Because y ≈ x, so the block starts close to 'do nothing' and preserves its input"
+    ],
+    "answer_index": 3,
+    "explanation": "If f(x) is near zero, y = x + f(x) ≈ x, so each block starts near the identity. A deep stack of near-identity blocks passes signals through cleanly, which is a safe initial state. Gradients are not zero and the loss is not zero."
+  },
+  {
+    "id": "05.4-021",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "For a residual block y = x + f(x) with upstream gradient g = dL/dy, what is dL/dx?",
+    "options": [
+      "g (I + df/dx) — an identity contribution plus a learned contribution",
+      "g · df/dx only — the identity branch carries no gradient at all",
+      "g / (1 + df/dx) — the skip divides the learned contribution back out",
+      "g − g df/dx — the skip subtracts the learned branch's contribution"
+    ],
+    "answer_index": 0,
+    "explanation": "By the chain rule, dL/dx = g (I + df/dx): the identity branch passes g back unchanged and the learned branch adds g df/dx. Without the skip, only the g df/dx term would remain."
+  },
+  {
+    "id": "05.4-022",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "In a scalar residual toy y = x + 0.2x with upstream gradient g = 1, what are the two gradient contributions to dL/dx?",
+    "options": [
+      "0.2 from the identity branch and 1 from the learned branch, total 1.2",
+      "1 from the identity branch and 0.2 from the learned branch, total 1.2",
+      "1 from each branch, since both branches see the same input, total 2",
+      "0.2 from each branch, since the skip copies the learned factor, total 0.4"
+    ],
+    "answer_index": 1,
+    "explanation": "The identity branch passes g · 1 = 1 unchanged, and the learned branch contributes g · f'(x) = 0.2, giving 1.2 in total. The identity contribution is the one that bypasses any learned factor."
+  },
+  {
+    "id": "05.4-023",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "Without residual connections, why do gradients in a deep stack of N layers tend to vanish or explode?",
+    "options": [
+      "Because softmax saturates in every layer, so its Jacobian is zero throughout a deep stack",
+      "Because LayerNorm divides by a variance that reaches zero after enough layers",
+      "Because the gradient is a product of N factors g df/dx, which tends to shrink or blow up",
+      "Because the effective learning rate is multiplied by N, once per stacked layer"
+    ],
+    "answer_index": 2,
+    "explanation": "With y = f(x), the only gradient path multiplies each layer's Jacobian, so N layers give a product of N factors. Such products tend to shrink (vanishing) or grow (exploding). The residual adds a path that bypasses learned factors."
+  },
+  {
+    "id": "05.4-024",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "What does a residual connection add to the backward pass that helps deep networks train?",
+    "options": [
+      "A learned per-layer scale on the gradient, tuned to keep its norm near 1",
+      "A gradient clipping step that caps the norm before it reaches early layers",
+      "A second, per-layer loss function that gives each block its own signal",
+      "A path where the upstream gradient reaches x without any learned factor"
+    ],
+    "answer_index": 3,
+    "explanation": "The identity branch carries the upstream gradient straight to x, so every layer gets a direct, well-scaled signal from the loss. It is not a clipping step or extra loss."
+  },
+  {
+    "id": "05.4-025",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "Does a residual connection guarantee that gradients never vanish?",
+    "options": [
+      "No — the learned part can cancel it (f'(x) = −1 gives 0), and (I + df/dx) still multiplies across layers",
+      "Yes — the identity term keeps the total gradient at least 1 at every layer, whatever f'(x) is",
+      "Yes — residuals force every sub-layer Jacobian to equal the identity, so gradients are preserved exactly at every layer",
+      "No — residuals make gradients vanish faster, since the identity term halves the signal per layer"
+    ],
+    "answer_index": 0,
+    "explanation": "The total is g (1 + f'(x)); with f'(x) = −0.5 it is 0.5 and with f'(x) = −1 it is 0. Across many layers the factors (I + df/dx) still multiply, so gradients can still grow or shrink. Residuals make training much easier, but normalization, initialization and LR schedules do the rest."
+  },
+  {
+    "id": "05.4-026",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "Besides residual connections, what other techniques help keep deep transformer training stable?",
+    "options": [
+      "Removing the MLP and attention from the deepest half of the blocks",
+      "Normalization, careful initialization, and learning-rate schedules",
+      "Training with a single very large batch only, never with a small one",
+      "Training each layer separately and freezing it before the next one"
+    ],
+    "answer_index": 1,
+    "explanation": "Residuals make deep networks easier to train but do not alone guarantee healthy gradients. Normalization (LayerNorm), careful initialization and learning-rate schedules do the remaining work."
+  },
+  {
+    "id": "05.4-027",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "3. Residual connections",
+    "question": "In a real GPT sub-layer, how does the Jacobian df/dx differ from the scalar toy f(x) = 0.2x?",
+    "options": [
+      "It is always exactly 0.2, whatever the input and the size of the model",
+      "It is always zero, since real sub-layers are initialized with zero weights",
+      "It is an input-dependent matrix on (B, T, C), but still identity plus learned",
+      "It is a scalar equal to the learning rate, applied uniformly to every channel of x"
+    ],
+    "answer_index": 2,
+    "explanation": "A real sub-layer (attention or MLP) acts on (B, T, C) tensors, so its Jacobian is a matrix that depends on the input. The scalar 0.2 is only a teaching example. The structure of the gradient — identity plus learned contribution, summed — is identical."
+  },
+  {
+    "id": "05.4-028",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "Why is LayerNorm used in deep transformers?",
+    "options": [
+      "To shuffle the order of channels so each block sees its features in a fresh arrangement",
+      "To compute the attention weights, since the softmax is applied to the normalized x",
+      "To reduce the vocabulary size by normalizing the logits before the output projection",
+      "Because activation scales drift across layers; LayerNorm re-centers and re-scales them"
+    ],
+    "answer_index": 3,
+    "explanation": "As activations flow through many layers, some feature vectors grow and others shrink, destabilizing optimization. LayerNorm re-centers each position's vector to zero mean and unit variance, then applies a learned scale and shift."
+  },
+  {
+    "id": "05.4-029",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "What is the LayerNorm formula?",
+    "options": [
+      "LN(x) = (x − mu) / sqrt(sigma² + eps) ⊙ gamma + beta, stats over the C channels",
+      "LN(x) = x / max(|x|) ⊙ gamma + beta, scaling each position by its largest channel",
+      "LN(x) = (x − mu_batch) / sqrt(sigma²_batch + eps), with stats over the batch",
+      "LN(x) = softmax(x) ⊙ gamma + beta, so each position's channels sum to one"
+    ],
+    "answer_index": 0,
+    "explanation": "LayerNorm subtracts the per-position mean over channels, divides by sqrt(variance + eps), then applies the learned per-channel scale gamma and shift beta. Statistics over the batch would be BatchNorm."
+  },
+  {
+    "id": "05.4-030",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "Why does LayerNorm include a learned per-channel scale gamma and shift beta?",
+    "options": [
+      "To rescale the output so its channels always sum to 1",
+      "So the network can undo the normalization if it needs to",
+      "To store the running mean and variance across training batches",
+      "To mask future positions before the attention softmax"
+    ],
+    "answer_index": 1,
+    "explanation": "After normalizing to zero mean and unit variance, gamma and beta let the network re-scale and re-shift each channel, even undoing the normalization if useful. LayerNorm keeps no running statistics."
+  },
+  {
+    "id": "05.4-031",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "Over which axis does LayerNorm compute its mean and variance for a (B, T, C) activation?",
+    "options": [
+      "Over the batch axis B, separately per channel",
+      "Over the time axis T, separately per channel",
+      "Over the last (channel) axis C only",
+      "Over all three axes jointly, once per batch"
+    ],
+    "answer_index": 2,
+    "explanation": "LayerNorm reduces over the last (channel) axis only, per position and per sequence. Reducing over the batch is what BatchNorm does; LayerNorm's choice makes it independent of batch size and sequence length."
+  },
+  {
+    "id": "05.4-032",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "Why is LayerNorm preferred over BatchNorm for language models?",
+    "options": [
+      "Because BatchNorm has no learnable scale or shift, so it cannot undo the normalization afterwards",
+      "Because LayerNorm runs faster on CPUs, which is where most language-model inference happens today in practice",
+      "Because BatchNorm cannot normalize bfloat16 activations, which modern language models train in",
+      "Because channel statistics don't depend on the batch, which matters for varied lengths and batch size 1"
+    ],
+    "answer_index": 3,
+    "explanation": "LayerNorm's statistics come from each position's own channels, so they do not depend on the batch. That works for variable-length sequences and batch size 1, unlike BatchNorm whose statistics depend on the batch."
+  },
+  {
+    "id": "05.4-033",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "What is the role of epsilon (default 1e-5) in LayerNorm?",
+    "options": [
+      "It prevents division by zero when the variance is very small",
+      "It is the learning rate used for the gamma and beta updates",
+      "It is the dropout probability applied after the normalization",
+      "It sets the target variance that the output is normalized to"
+    ],
+    "answer_index": 0,
+    "explanation": "epsilon is added to the variance inside the square root so the denominator never becomes zero. It is not a learning rate, dropout rate, or target variance."
+  },
+  {
+    "id": "05.4-034",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "4. LayerNorm",
+    "question": "Which variance does torch.nn.LayerNorm use?",
+    "options": [
+      "The unbiased sample variance, dividing by C − 1",
+      "The biased (population) variance, dividing by C",
+      "The variance across the batch, per channel, like BatchNorm",
+      "The median absolute deviation, for robustness to outliers"
+    ],
+    "answer_index": 1,
+    "explanation": "LayerNorm uses the biased population variance, dividing by C. Using the unbiased variance (C − 1) gives subtly wrong values that do not match torch.nn.LayerNorm."
+  },
+  {
+    "id": "05.4-035",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Every token gets its own μ and σ",
+    "question": "For one sequence of 100 tokens with C = 768, how many means and variances does LayerNorm compute?",
+    "options": [
+      "One mean and one variance for the whole input",
+      "768 means and 768 variances, one per channel",
+      "100 means and 100 variances, one per token",
+      "76,800 means and variances, one per element"
+    ],
+    "answer_index": 2,
+    "explanation": "LayerNorm computes a separate mean and variance for each token's C-dimensional vector, so 100 tokens give 100 means and 100 variances, each of shape (1, 100, 1). Per-channel statistics would be a different normalization."
+  },
+  {
+    "id": "05.4-036",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Every token gets its own μ and σ",
+    "question": "With a batch of 8 sequences of 100 tokens each, how many (mu, sigma²) pairs does LayerNorm compute?",
+    "options": [
+      "8, one per sequence",
+      "100, one per position",
+      "768, one per channel",
+      "800"
+    ],
+    "answer_index": 3,
+    "explanation": "Each token is normalized with its own statistics, so there are 8 × 100 = 800 separate (mu, sigma²) pairs. Tokens never share statistics."
+  },
+  {
+    "id": "05.4-037",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Every token gets its own μ and σ",
+    "question": "In LayerNorm, which quantities are shared across tokens?",
+    "options": [
+      "Only the learned gamma and beta, each of shape (C,)",
+      "The mean and variance, averaged over the whole batch",
+      "The mean only; each token keeps its own variance",
+      "Nothing at all; gamma and beta are per token too"
+    ],
+    "answer_index": 0,
+    "explanation": "Each token gets its own mean and variance, so one token cannot affect another's normalization. Only gamma and beta (shape (C,), 768 numbers each in GPT-2 small) are shared: the same scale and shift applied to every token after its own normalization."
+  },
+  {
+    "id": "05.4-038",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Every token gets its own μ and σ",
+    "question": "Can one token's large values change how another token in the same batch is normalized by LayerNorm?",
+    "options": [
+      "Yes, because the mean and variance are computed over the whole batch",
+      "No — each token is normalized with its own statistics, never shared",
+      "Yes, because gamma and beta are recomputed from each batch's statistics",
+      "Only if the tokens are adjacent, since the stats use a sliding window"
+    ],
+    "answer_index": 1,
+    "explanation": "LayerNorm statistics are computed per token over its own channels, so a token with large values (e.g. [0, 10, 0, 10]) has no effect on another token's normalization. gamma and beta are learned parameters, not recomputed per batch."
+  },
+  {
+    "id": "05.4-039",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Numerical example (verified against PyTorch)",
+    "question": "What does LayerNorm with gamma = 1 and beta = 0 produce for x = [2, 4, 4, 6]?",
+    "options": [
+      "[0, 0.5, 0.5, 1], scaled to the range 0 to 1",
+      "[-2, 0, 0, 2], centered by subtracting the mean",
+      "Approximately [-1.4142, 0, 0, 1.4142]",
+      "[-1, 0, 0, 1], divided by the max absolute value"
+    ],
+    "answer_index": 2,
+    "explanation": "The mean is 4 and the biased variance is 8/4 = 2, so sigma ≈ 1.4142. (x − 4)/1.4142 gives about [-1.4142, 0, 0, 1.4142]. [-2, 0, 0, 2] is only the centered vector before dividing by sigma."
+  },
+  {
+    "id": "05.4-040",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "From scratch, and matching PyTorch",
+    "question": "In a from-scratch LayerNorm, why is `keepdim=True` used when computing the mean and variance?",
+    "options": [
+      "To make the variance unbiased by keeping the C − 1 correction",
+      "To keep gradients from flowing back through the mean and variance",
+      "To store the statistics in a buffer that persists across forward calls",
+      "To keep the reduced axis as length 1 so it broadcasts against x"
+    ],
+    "answer_index": 3,
+    "explanation": "keepdim=True leaves the channel axis as size 1, giving shape (..., 1), which broadcasts against x of shape (..., C) for the subtraction and division. It has nothing to do with bias correction or gradients."
+  },
+  {
+    "id": "05.4-041",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "From scratch, and matching PyTorch",
+    "question": "In the from-scratch LayerNorm, how are gamma and beta initialized?",
+    "options": [
+      "gamma = ones(C), beta = zeros(C)",
+      "gamma = zeros(C), beta = ones(C)",
+      "Both random normal",
+      "gamma = ones(C), beta = ones(C) too"
+    ],
+    "answer_index": 0,
+    "explanation": "self.weight (gamma) starts as ones and self.bias (beta) as zeros, so at initialization LayerNorm is a pure normalization with no extra scale or shift. Training then adjusts them."
+  },
+  {
+    "id": "05.4-042",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "From scratch, and matching PyTorch",
+    "question": "Which are the two most common LayerNorm bugs?",
+    "options": [
+      "Computing in float32 instead of bfloat16 and forgetting to apply dropout afterwards",
+      "Reducing over the wrong axis (e.g. the batch) and using unbiased variance (C − 1)",
+      "Using an epsilon below 1e-8 and forgetting to add the learned bias beta at the end",
+      "Applying it before attention and after the MLP, instead of after both sub-layers"
+    ],
+    "answer_index": 1,
+    "explanation": "Reducing over the wrong axis or using unbiased=True gives subtly wrong values that still 'look normalized'. Always normalize over the last (channel) axis with the biased variance."
+  },
+  {
+    "id": "05.4-043",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "5. Pre-norm vs post-norm, and the block",
+    "question": "What is the difference between pre-norm and post-norm transformer blocks?",
+    "options": [
+      "Pre-norm normalizes the logits before the head; post-norm normalizes the embeddings",
+      "Pre-norm uses BatchNorm over the batch; post-norm uses LayerNorm over the channel axis",
+      "Pre-norm normalizes before the sublayer; post-norm normalizes after the residual add",
+      "Pre-norm blocks have no residual connection at all; post-norm blocks do have one"
+    ],
+    "answer_index": 2,
+    "explanation": "In pre-norm the LayerNorm is applied to the sublayer's input (x + f(LN(x))); in post-norm it is applied after the residual add (LN(x + f(x))). Both use LayerNorm and both have residuals."
+  },
+  {
+    "id": "05.4-044",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "5. Pre-norm vs post-norm, and the block",
+    "question": "Which normalization placement did the original 2017 Transformer use, and which do modern LLMs (GPT-2 onward) use?",
+    "options": [
+      "Both use pre-norm throughout",
+      "Original: pre-norm; modern LLMs: post-norm",
+      "Both use post-norm throughout",
+      "Original: post-norm; modern: pre-norm"
+    ],
+    "answer_index": 3,
+    "explanation": "The original Transformer used post-norm, while GPT-2 onward use pre-norm."
+  },
+  {
+    "id": "05.4-045",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "5. Pre-norm vs post-norm, and the block",
+    "question": "Why do modern LLMs prefer pre-norm over post-norm?",
+    "options": [
+      "It keeps the residual path free of normalization, so deep stacks train stably without delicate warmup",
+      "It removes one LayerNorm per block, cutting the parameter count enough to fit deeper stacks in memory",
+      "It removes the need for causal attention masking, since normalized inputs can no longer attend to the future",
+      "It makes LayerNorm unnecessary at inference, so the norm layers can be folded away into the weights"
+    ],
+    "answer_index": 0,
+    "explanation": "In pre-norm the raw x flows down the residual path untouched, so the identity gradient path has no normalization in it. That makes deep stacks train more stably without delicate warmup. It does not remove LayerNorm or reduce parameters meaningfully."
+  },
+  {
+    "id": "05.4-046",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "5. Pre-norm vs post-norm, and the block",
+    "question": "In a pre-norm Block's forward `x = x + self.attn(self.ln_1(x))`, what does LayerNorm act on?",
+    "options": [
+      "The residual stream itself, so x stays normalized in place for every later block",
+      "A copy fed into the sublayer, while the raw x continues down the residual path",
+      "Only the attention output, which is normalized before being added back to x",
+      "The attention weights, normalizing each row of the score matrix after softmax"
+    ],
+    "answer_index": 1,
+    "explanation": "ln_1 is applied to the input of attention only; the original x is what gets added to attention's output. So the residual stream is never normalized in place — that is the point of pre-norm."
+  },
+  {
+    "id": "05.4-047",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "5. Pre-norm vs post-norm, and the block",
+    "question": "Why is the course's `Block` module stackable?",
+    "options": [
+      "Because it contains its own embedding layer for token ids",
+      "Because it outputs logits of shape (B, T, V) for the next one",
+      "Because its output shape equals its input shape, (B, T, C)",
+      "Because it halves T each time, so the stack always terminates"
+    ],
+    "answer_index": 2,
+    "explanation": "Block maps (B, T, C) to (B, T, C), so blocks can be chained n_layer times. Logits are produced only by the final head after the last block."
+  },
+  {
+    "id": "05.4-048",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "6. Under the hood: parameter and compute cost of one block",
+    "question": "Approximately how many parameters does one transformer block with width C have, and where do they come from?",
+    "options": [
+      "About 4C², all from attention, since the MLP's weights are tied to QKV",
+      "About 8C², all from the MLP, since attention has no learned parameters",
+      "About C², mostly from the two LayerNorms' gamma and beta, each (C, C)",
+      "About 12C²: 4C² from attention (QKV plus output) and 8C² from the MLP"
+    ],
+    "answer_index": 3,
+    "explanation": "Attention contributes C·3C + C·C = 4C² and the MLP contributes C·4C + 4C·C = 8C², giving about 12C². The two LayerNorms add only about 4C, which is negligible."
+  },
+  {
+    "id": "05.4-049",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "6. Under the hood: parameter and compute cost of one block",
+    "question": "For GPT-2 small (C = 768, 12 blocks), approximately how many parameters are in the transformer blocks?",
+    "options": [
+      "About 85M (≈ 7.1M per block × 12), the bulk of the ~124M",
+      "About 7.1M in total, since the 12 blocks share their weights",
+      "About 124M — every GPT-2 parameter sits inside the blocks",
+      "About 38.6M, with the rest of the ~124M in the embeddings"
+    ],
+    "answer_index": 0,
+    "explanation": "12 × 768² ≈ 7.1M per block, times 12 blocks ≈ 85M. That is the bulk of GPT-2 small's ~124M parameters; the rest is mostly embeddings (38.6M is the token embedding table)."
+  },
+  {
+    "id": "05.4-050",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "6. Under the hood: parameter and compute cost of one block",
+    "question": "In a transformer block, which part's compute usually dominates, and when does that change?",
+    "options": [
+      "Attention always dominates, since its score matrix is formed at every sequence length",
+      "The MLP's 8C² FLOPs per token, until T is long enough for attention's T² term",
+      "LayerNorm dominates at short sequences, since its reductions are memory-bound",
+      "The residual add dominates at long sequences, since it touches every activation"
+    ],
+    "answer_index": 1,
+    "explanation": "Per token, the MLP's 8C² FLOPs usually outweigh attention's work. As sequences grow, attention's T² score-matrix term eventually takes over — the crossover that motivates FlashAttention. LayerNorm and residual adds are negligible."
+  },
+  {
+    "id": "05.4-051",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Exercise",
+    "question": "In a 12-layer model, a bug writes `x = self.attn(self.ln_1(x))` (dropping the residual `x +`). Why does training diverge or learn nothing?",
+    "options": [
+      "Because LayerNorm becomes undefined once its input is no longer the residual stream",
+      "Because the causal mask is attached to the residual path, so dropping it leaks the future",
+      "Because each layer multiplies the gradient by its Jacobian; 12 factors vanish or explode",
+      "Because the output shape changes to (B, T, 3C), which breaks the next block's input"
+    ],
+    "answer_index": 2,
+    "explanation": "Without the identity term, dL/dx = dL/dy · df/dx at every layer, so 12 such factors multiply. If their singular values are below 1 the gradient vanishes in early layers; above 1 it explodes into NaNs. The shape is unchanged, which is why the bug is not caught by shape checks."
+  },
+  {
+    "id": "05.4-052",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Exercise",
+    "question": "Why might a 1-layer model with the residual add accidentally dropped still appear to train?",
+    "options": [
+      "Because a 1-layer model adds the residual automatically inside nn.Module's forward hook",
+      "Because a single layer has no Jacobian, so the backward pass skips straight to the loss",
+      "Because LayerNorm rescales the output to unit variance, fully compensating for the residual",
+      "Because one Jacobian factor barely compounds, so the bug hides until the model goes deep"
+    ],
+    "answer_index": 3,
+    "explanation": "With a single layer there is only one multiplicative factor in the gradient, so the compounding that kills deep stacks doesn't happen. That is exactly why this bug hides until you go deep."
+  },
+  {
+    "id": "05.4-053",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Check yourself",
+    "question": "What is the shape of the MLP's hidden activation for input of shape (4, 128, 768)?",
+    "options": [
+      "(4, 128, 3072)",
+      "(4, 512, 768)",
+      "(4, 128, 768)",
+      "(16, 128, 768)"
+    ],
+    "answer_index": 0,
+    "explanation": "The first linear expands the last axis from C = 768 to 4C = 3072; batch and time are unchanged, giving (4, 128, 3072)."
+  },
+  {
+    "id": "05.4-054",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Check yourself",
+    "question": "For LayerNorm on x = [1, 1, 1, 5] with gamma = 1 and beta = 0, what are mu and the biased sigma²?",
+    "options": [
+      "mu = 2, sigma² = 4",
+      "mu = 2, sigma² = 3",
+      "mu = 2, sigma² = 2",
+      "mu = 8, sigma² = 12"
+    ],
+    "answer_index": 1,
+    "explanation": "mu = 8/4 = 2, and the biased variance is (1 + 1 + 1 + 9)/4 = 3, so sigma ≈ 1.732 and the largest normalized entry is (5 − 2)/1.732 ≈ 1.732. sigma² = 4 would be the unbiased variance (12/3)."
+  },
+  {
+    "id": "05.4-055",
+    "chapter": "05.4",
+    "chapter_name": "MLP, residual, LayerNorm, the block",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-04.md",
+    "section": "Check yourself",
+    "question": "In a pre-norm transformer block, does the normalization sit on the residual highway?",
+    "options": [
+      "Yes — x is normalized in place before being added back onto the residual stream",
+      "Yes — a LayerNorm is applied to the residual stream right after every residual add",
+      "No — the norm is applied only to the copy fed into the sublayer; raw x flows on",
+      "No — pre-norm blocks contain no normalization at all, only the final LayerNorm"
+    ],
+    "answer_index": 2,
+    "explanation": "In pre-norm, ln_1(x) feeds attention while the raw x is what the residual adds to. The norm is off the highway, keeping the gradient path clean. Normalizing after every residual add would be post-norm."
+  }
+]

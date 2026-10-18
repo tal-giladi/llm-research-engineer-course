@@ -1,0 +1,830 @@
+[
+  {
+    "id": "06.3-001",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What does a trained language model actually output, and what is 'decoding'?",
+    "options": [
+      "A distribution over the next token; decoding is the separate, tunable step that turns it into text",
+      "Finished text; decoding is the step that converts that text back into token ids for the next prompt",
+      "A single next token; decoding is the step that computes the cross-entropy loss against the target",
+      "Final embeddings; decoding is the step that applies ln_f and the LM head to produce the words"
+    ],
+    "answer_index": 0,
+    "explanation": "The model only produces logits, i.e. a next-token distribution. Decoding (greedy, temperature, top-k, top-p) is a separate choice of how to pick tokens from it, which is why the same model can sound robotic or unhinged depending only on the decoding knobs."
+  },
+  {
+    "id": "06.3-002",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What do the sampling parameters exposed by chat APIs and serving stacks correspond to?",
+    "options": [
+      "Hyperparameters of the training loop, such as the learning rate, batch size and warmup length",
+      "Architecture settings, such as the number of layers, heads and the width of each block",
+      "Tokenizer settings, such as the BPE merge table, the vocabulary size and special tokens",
+      "The decoding operations: greedy/argmax, temperature, top-k and top-p truncation"
+    ],
+    "answer_index": 3,
+    "explanation": "Temperature, top_k and top_p in serving APIs are exactly these four logit-sculpting operations applied at inference. They do not change the model's weights or architecture."
+  },
+  {
+    "id": "06.3-003",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "What does 'autoregressive' mean for text generation with a GPT?",
+    "options": [
+      "The model generates all output tokens in parallel in a single forward pass over the prompt",
+      "The model regresses continuous embeddings instead of predicting a distribution over tokens",
+      "The model's own sampled output is appended and fed back in to predict the next token",
+      "The model reads the input right-to-left first, then generates its output left-to-right"
+    ],
+    "answer_index": 2,
+    "explanation": "A language model predicts one next-token distribution given a prefix. Generation repeats: sample a token, append it, and feed the longer prefix back in. That feedback loop is what autoregressive means."
+  },
+  {
+    "id": "06.3-004",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, why is the method decorated with @torch.no_grad()?",
+    "options": [
+      "It freezes the weights so that sampling during generation cannot accidentally change them",
+      "Generation has no backward pass, so skipping the autograd graph saves memory and time",
+      "It disables dropout in every block so that generation becomes fully deterministic",
+      "It makes torch.multinomial reproducible across runs by fixing the sampler's random state"
+    ],
+    "answer_index": 1,
+    "explanation": "no_grad tells PyTorch not to record operations for backpropagation, which avoids storing activations for a graph that will never be used. Weights are not updated without an optimizer step anyway; disabling dropout is model.eval(), not no_grad."
+  },
+  {
+    "id": "06.3-005",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, why does it take logits[:, -1, :] after the forward pass?",
+    "options": [
+      "The last position has the highest-quality logits because it passed through the most layers",
+      "Only the last position's logits predict the next token; earlier ones predict tokens already there",
+      "Earlier positions' logits are always masked to minus infinity by the causal attention mask",
+      "The forward pass computes logits only for the last position whenever the model is in eval mode"
+    ],
+    "answer_index": 1,
+    "explanation": "forward returns (B, T, V) logits, one per position. Position t's logits predict token t+1, so only the final position predicts a new token. During training all positions are used; in generation only the last one is new."
+  },
+  {
+    "id": "06.3-006",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, what shape change does logits[:, -1, :] perform?",
+    "options": [
+      "(B, T, V) to (B, V)",
+      "(B, T, V) to (T, V)",
+      "(B, T, V) to (B, T)",
+      "(B, T, C) to (B, C)"
+    ],
+    "answer_index": 0,
+    "explanation": "Indexing the time axis with -1 removes it, leaving one V-length logit vector per sequence in the batch."
+  },
+  {
+    "id": "06.3-007",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "Why does GPT-2's generate loop crop the context to the last block_size tokens?",
+    "options": [
+      "Because attention becomes non-causal for any sequence that is longer than block_size tokens",
+      "Because the BPE tokenizer cannot encode or decode sequences longer than block_size tokens",
+      "Because cropping makes each forward pass exactly O(1) in cost, no matter how long the run",
+      "The model has only block_size position embeddings, so longer input fails forward's assertion"
+    ],
+    "answer_index": 3,
+    "explanation": "wpe has block_size rows; positions beyond that do not exist, and forward asserts T <= block_size. So once the running sequence is longer, generate keeps only idx[:, -block_size:]. The model never sees more context than it was built for."
+  },
+  {
+    "id": "06.3-008",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, what does torch.multinomial(probs, num_samples=1) do?",
+    "options": [
+      "Returns the index of the highest probability for each sequence, like argmax",
+      "Draws one token per sequence uniformly at random, ignoring the probabilities",
+      "Draws one token per sequence in proportion to its probability",
+      "Returns the probabilities for each sequence sorted in descending order"
+    ],
+    "answer_index": 2,
+    "explanation": "multinomial samples from the categorical distribution given by probs, so likelier tokens are chosen more often but not always. This sampling is what makes generation varied rather than one fixed continuation; argmax would be greedy."
+  },
+  {
+    "id": "06.3-009",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "After max_new_tokens iterations of GPT-2's generate loop starting from idx of shape (B, T0), what shape is the output?",
+    "options": [
+      "(B, max_new_tokens) only",
+      "(B, block_size), cropped",
+      "(B, T0 + max_new_tokens)",
+      "(B, T0 + max_new_tokens, V)"
+    ],
+    "answer_index": 2,
+    "explanation": "Each step torch.cat appends one column, the sampled (B, 1) token ids. The output keeps the prompt and adds max_new_tokens tokens. Cropping applies only to the model's input, not to the returned sequence."
+  },
+  {
+    "id": "06.3-010",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, how is temperature applied?",
+    "options": [
+      "The probabilities are multiplied by temperature after softmax",
+      "The last-position logits are divided by temperature before softmax",
+      "The sampled token id is shifted by temperature after drawing it",
+      "Temperature is added to every last-position logit before softmax"
+    ],
+    "answer_index": 1,
+    "explanation": "logits = logits[:, -1, :] / temperature, then softmax. Dividing scales the gaps between logits; adding a constant to every logit would leave the softmax unchanged."
+  },
+  {
+    "id": "06.3-011",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "Why is naive autoregressive generation O(T^2) over a run, and what fixes it in production?",
+    "options": [
+      "Each step re-runs the whole prefix, recomputing keys and values; a KV cache stores them",
+      "Each step re-sorts the full vocabulary; caching the sort order makes every step O(1)",
+      "Each step re-tokenizes the whole prompt; a tokenizer cache makes every step O(T)",
+      "Each step recomputes the embedding tables; freezing them makes every step O(1) in T"
+    ],
+    "answer_index": 0,
+    "explanation": "Without caching, step t processes all t tokens again, so total work grows quadratically. A KV cache keeps the keys and values already computed, so each new step only computes for the new token. The simple loop is the correct reference version."
+  },
+  {
+    "id": "06.3-012",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop with top_k set, how are tokens outside the top k removed?",
+    "options": [
+      "Logits smaller than the k-th largest value are set to zero before the softmax",
+      "Probabilities smaller than 1/k are set to zero after sampling, then renormalized",
+      "The k largest logits are set to minus infinity so that they are not resampled",
+      "Logits below the k-th largest value are set to minus infinity before softmax"
+    ],
+    "answer_index": 3,
+    "explanation": "logits[logits < v[:, [-1]]] = -inf uses the k-th largest logit as a threshold. Minus infinity becomes exactly zero probability after softmax; setting logits to zero would still leave those tokens with positive probability."
+  },
+  {
+    "id": "06.3-013",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "1. The autoregressive loop",
+    "question": "In GPT-2's generate loop, why is k computed as min(top_k, logits.size(-1))?",
+    "options": [
+      "So that k is always at least the vocabulary size, keeping every token",
+      "So that k shrinks as the running sequence grows longer than block_size",
+      "So that k is never larger than the batch size B passed to generate",
+      "So that asking for more candidates than V does not make torch.topk fail"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.topk errors if k exceeds the size of the dimension. Clamping to V keeps top_k values larger than the vocabulary valid (they simply keep everything)."
+  },
+  {
+    "id": "06.3-014",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "2. Greedy decoding",
+    "question": "What is greedy decoding?",
+    "options": [
+      "Sampling from the softmax at temperature 1 with no truncation at all",
+      "Keeping the smallest set of tokens whose cumulative probability reaches p",
+      "Always picking the highest-logit token (argmax), with no sampling",
+      "Picking the token with the lowest logit at each step to avoid repetition"
+    ],
+    "answer_index": 2,
+    "explanation": "Greedy takes argmax_i z_i at each step. Because it is deterministic, the same prompt always yields the same continuation."
+  },
+  {
+    "id": "06.3-015",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "2. Greedy decoding",
+    "question": "What are the strengths and weaknesses of greedy decoding?",
+    "options": [
+      "Highly creative and varied, but slow because it samples many candidates at every step",
+      "Deterministic and good for one-answer tasks, but bland and loop-prone in free-form text",
+      "Always produces the globally most likely sequence, but cannot run efficiently on a CPU",
+      "Avoids repetition entirely, but gives different outputs across runs of the same prompt"
+    ],
+    "answer_index": 1,
+    "explanation": "Greedy is reproducible and suits tasks with a single answer, but in open-ended text it often falls into loops repeating a phrase. Picking the best token at each step does not guarantee the most likely whole sequence."
+  },
+  {
+    "id": "06.3-016",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "2. Greedy decoding",
+    "question": "How can greedy decoding be expressed using GPT-2's generate loop?",
+    "options": [
+      "As top_k=1: only the best logit survives, so multinomial can only draw it",
+      "As temperature=1 with no top_k set, which always samples the argmax token",
+      "As top_k equal to the vocabulary size, which keeps only the single best token",
+      "As top_p=1.0, which keeps exactly one token, the most probable one, each step"
+    ],
+    "answer_index": 0,
+    "explanation": "With top_k=1, every other logit is minus infinity, so the distribution is one-hot on the argmax and sampling is forced. top_p=1.0 keeps all tokens, and temperature 1 is ordinary sampling."
+  },
+  {
+    "id": "06.3-017",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "How does temperature T change the softmax over logits z?",
+    "options": [
+      "q_i(T) = exp(z_i / T) / sum_j exp(z_j / T): logits divided by T",
+      "q_i(T) = exp(z_i) / T, then renormalized afterwards to sum to one",
+      "q_i(T) = exp(z_i * T) / sum_j exp(z_j), with T multiplying only the numerator",
+      "q_i(T) = exp(z_i + T) / sum_j exp(z_j + T): T added to each logit"
+    ],
+    "answer_index": 0,
+    "explanation": "Temperature divides every logit by T, which scales the gaps between them. Adding T to all logits cancels in the softmax, and dividing probabilities by T after softmax would not be a distribution."
+  },
+  {
+    "id": "06.3-018",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "What effect does a temperature T < 1 have on the next-token distribution?",
+    "options": [
+      "It flattens it: gaps between logits shrink and it approaches uniform",
+      "It leaves the distribution unchanged but makes sampling run faster",
+      "It reverses it: the lowest-logit token becomes the most likely one",
+      "It sharpens it: gaps between logits grow and the top token dominates"
+    ],
+    "answer_index": 3,
+    "explanation": "Dividing by T < 1 enlarges the differences between logits, so softmax concentrates mass on the top token. T > 1 is what flattens."
+  },
+  {
+    "id": "06.3-019",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "What effect does a temperature T > 1 have on the next-token distribution?",
+    "options": [
+      "It sharpens it: the top token gets almost all of the probability mass",
+      "It truncates it: low-probability tokens get exactly zero probability",
+      "It flattens it: gaps shrink and the distribution approaches uniform",
+      "It has no effect at all unless top_k or top_p is also being applied"
+    ],
+    "answer_index": 2,
+    "explanation": "Dividing by T > 1 compresses the logits toward each other, spreading probability more evenly ('more creative'). Temperature never zeroes tokens out; that is truncation's job."
+  },
+  {
+    "id": "06.3-020",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "What are the limits of temperature scaling as T approaches 0 and as T approaches infinity?",
+    "options": [
+      "T to 0 is the uniform distribution; T to infinity is greedy",
+      "T to 0 is the greedy limit; T to infinity is the uniform distribution",
+      "T to 0 gives all-zero probabilities; T to infinity gives all-one probabilities",
+      "Both limits leave the distribution unchanged, since softmax renormalizes"
+    ],
+    "answer_index": 1,
+    "explanation": "As T shrinks, the largest logit dominates infinitely, leaving a one-hot on the argmax. As T grows, all scaled logits approach zero and softmax becomes uniform over V."
+  },
+  {
+    "id": "06.3-021",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "For logits [2.0, 1.0, 0.0, -1.0, 0.5], what happens to token 0's probability as temperature rises from 0.5 to 2?",
+    "options": [
+      "It rises from about 0.37 to about 0.83, while low-probability tokens fall",
+      "It falls from about 0.83 to about 0.37, while low-probability tokens rise",
+      "It stays at about 0.56 because temperature only affects the tail",
+      "It falls to exactly zero at temperature 2"
+    ],
+    "answer_index": 1,
+    "explanation": "At T = 0.5 softmax gives token 0 about 0.8292; at T = 1 about 0.5630; at T = 2 about 0.3745. Higher temperature moves mass from the top token to the others, but nothing reaches exactly zero."
+  },
+  {
+    "id": "06.3-022",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "Why must temperature=0 not be passed to a generate loop that computes logits / temperature?",
+    "options": [
+      "It divides by zero; greedy should be handled with top_k=1 or a plain argmax",
+      "It makes every token equally likely, producing uniformly random text output",
+      "It is ignored by softmax, so it silently behaves exactly like temperature 1",
+      "It pushes probabilities above 1 after softmax, which multinomial then rejects"
+    ],
+    "answer_index": 0,
+    "explanation": "logits / 0 gives infinities and NaNs. Although T to 0 is conceptually greedy, the code must implement greedy as top_k=1 or a direct argmax."
+  },
+  {
+    "id": "06.3-023",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "3. Temperature",
+    "question": "What temperature values are typical for text generation?",
+    "options": [
+      "About 2.0 to 5.0; anything below 2.0 is nearly greedy decoding",
+      "About 0.01 to 0.1; anything above 0.1 tends to babble incoherently",
+      "Exactly 1.0; any other value breaks the softmax normalization",
+      "About 0.7 to 1.0; below 0.5 is near greedy, above 1.5 babbles"
+    ],
+    "answer_index": 3,
+    "explanation": "Practical settings sit around 0.7 to 1.0. Very low temperatures collapse toward greedy and very high ones flatten the distribution so much that the output becomes incoherent."
+  },
+  {
+    "id": "06.3-024",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "What weakness of temperature does top-k sampling address?",
+    "options": [
+      "Temperature always zeroes out all but the top token, removing all variety from the output",
+      "Temperature can only be applied to the first generated token, not to the later ones",
+      "Temperature never zeroes anything, so even nonsense tokens keep a sliver of probability",
+      "Temperature changes the model's weights permanently, so it cannot be undone after sampling"
+    ],
+    "answer_index": 2,
+    "explanation": "Temperature reshapes the whole distribution but keeps every token's probability positive. Top-k truncates: only the k best tokens survive, so the tail truly cannot be drawn."
+  },
+  {
+    "id": "06.3-025",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "How does top-k sampling transform a logit vector?",
+    "options": [
+      "It keeps the k lowest logits, sets the rest to zero, then applies softmax to all",
+      "It divides every logit by k and then applies softmax over the full vocabulary",
+      "It keeps the k highest logits, sets the rest to minus infinity, then softmaxes",
+      "It keeps the smallest set of tokens whose cumulative probability reaches k"
+    ],
+    "answer_index": 2,
+    "explanation": "Masking to minus infinity gives the discarded tokens exactly zero probability, and softmax renormalizes over the k survivors. Keeping a set by cumulative mass is top-p."
+  },
+  {
+    "id": "06.3-026",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "Applying top-k with k = 2 to logits [2.0, 1.0, 0.0, -1.0, 0.5], what is the resulting distribution?",
+    "options": [
+      "[0.5630, 0.2071, 0, 0, 0]",
+      "[0.7311, 0.2689, 0, 0, 0]",
+      "[0.5000, 0.5000, 0, 0, 0]",
+      "[0.7311, 0, 0, 0, 0.2689]"
+    ],
+    "answer_index": 1,
+    "explanation": "The two largest logits are 2.0 (token 0) and 1.0 (token 1); the rest become minus infinity. Softmax over the survivors gives e^2/(e^2 + e^1) = 0.7311 and 0.2689. The untruncated values 0.5630 and 0.2071 must be renormalized."
+  },
+  {
+    "id": "06.3-027",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "In a top-k implementation using v, _ = torch.topk(z, k), what is used as the cutoff, and which logits are masked?",
+    "options": [
+      "v[-1], the k-th largest logit; logits strictly less than it are set to minus infinity",
+      "v[0], the largest logit; logits strictly less than it are set to minus infinity",
+      "The mean of v; logits strictly below that mean are set to zero",
+      "v[-1], the k-th largest logit; logits strictly greater than it are set to minus infinity"
+    ],
+    "answer_index": 0,
+    "explanation": "topk returns values in descending order, so v[-1] is the k-th largest. The mask z < v[-1] removes everything below the threshold and keeps the top k. Using v[0] would keep only the single best token."
+  },
+  {
+    "id": "06.3-028",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "Why do the top-k probabilities for logits [3.0, 2.0, 1.0] with k = 2 equal those for [2.0, 1.0, 0.0, -1.0, 0.5] with k = 2?",
+    "options": [
+      "Softmax ignores the largest logit and normalizes the remaining ones against it",
+      "Softmax divides each logit by the sum of all logits, which is the same here",
+      "Softmax only depends on the number of survivors k, not on the logit values",
+      "Softmax is invariant to adding a constant, so only the survivors' gaps matter"
+    ],
+    "answer_index": 3,
+    "explanation": "softmax(z + c) = softmax(z). So top-k on [3, 2, 1] with k = 2 gives the same [0.7311, 0.2689] as on [2, 1, 0, ...], since the gap between the top two is 1.0 in both."
+  },
+  {
+    "id": "06.3-029",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "4. Top-k sampling",
+    "question": "What is top-k sampling's main weakness?",
+    "options": [
+      "It cannot be combined with temperature, since both act on the same logits",
+      "It requires sorting the full vocabulary twice per step, which dominates cost",
+      "It always produces exactly the same output as greedy decoding for any k",
+      "k is fixed while distributions vary: it admits junk or chops good options"
+    ],
+    "answer_index": 3,
+    "explanation": "With one token at 0.95, k = 40 lets in 39 junk tokens; with mass spread over hundreds, a small k drops plausible options. Top-p fixes this by adapting the number kept."
+  },
+  {
+    "id": "06.3-030",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "How does top-p (nucleus) sampling choose which tokens to keep?",
+    "options": [
+      "It keeps every token whose individual probability is at least p, then renormalizes",
+      "It keeps exactly p tokens, chosen as the p most likely ones, then renormalizes",
+      "It keeps the smallest top set whose cumulative probability reaches p, then renormalizes",
+      "It keeps tokens whose cumulative probability stays strictly below p, excluding the one that crosses it"
+    ],
+    "answer_index": 2,
+    "explanation": "Sort probabilities descending, accumulate, and stop once the running total is at least p, including the token that crosses p. Keep those, drop the rest, and renormalize. A per-token threshold of p is a different rule."
+  },
+  {
+    "id": "06.3-031",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "For probabilities [0.5630, 0.2071, 0.0762, 0.0280, 0.1256] over tokens 0 to 4, which tokens form the top-p nucleus with p = 0.9?",
+    "options": [
+      "Tokens {0, 1, 4}: their cumulative mass 0.8958 is the largest total that stays below 0.9",
+      "Tokens {0, 1, 4, 2}: the mass first reaches 0.9 at the fourth, giving 0.9720",
+      "Tokens {0, 1}: their cumulative mass 0.7701 is the closest to 0.9 from either side",
+      "All five tokens, since together their total probability mass is exactly 1.0"
+    ],
+    "answer_index": 1,
+    "explanation": "Sorted: 0.5630 (token 0), 0.7701 (+token 1), 0.8958 (+token 4), 0.9720 (+token 2). The total first reaches 0.9 at token 2, which is included; token 3 is dropped. Stopping below p would wrongly exclude the token that tips the total."
+  },
+  {
+    "id": "06.3-032",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "After choosing the top-p nucleus, how are the surviving probabilities adjusted?",
+    "options": [
+      "Each is divided by the total kept mass so they sum to 1 again",
+      "Each is set to 1/k, where k is the number of survivors",
+      "Each is divided by p, regardless of how much mass was kept",
+      "They are left unchanged and the dropped mass goes to the top token"
+    ],
+    "answer_index": 0,
+    "explanation": "Renormalization divides each survivor by the kept mass, e.g. 0.5630 / 0.9720 = 0.5793. Dividing by p would not, in general, produce probabilities that sum to 1."
+  },
+  {
+    "id": "06.3-033",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "In a top-p implementation with sorted probabilities sp and csum = cumsum(sp), why is the keep mask (csum - sp) < p?",
+    "options": [
+      "csum - sp is the mass before each token, so the token that crosses p is still kept",
+      "csum - sp is the mass after each token, so only tokens fully below p are kept",
+      "csum - sp equals each token's own probability, so only tokens below p are kept",
+      "csum - sp is always zero for sorted probabilities, so the mask keeps every token"
+    ],
+    "answer_index": 0,
+    "explanation": "Subtracting the current token's probability gives the cumulative mass excluding it. Keeping tokens where that is still below p includes the token that pushes the total past p. Using csum < p would wrongly drop that crossing token."
+  },
+  {
+    "id": "06.3-034",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "Why does top-p keep different numbers of tokens at different generation steps?",
+    "options": [
+      "Because p is decayed by a fixed factor after every step of generation, shrinking the set",
+      "Because the vocabulary itself is resampled at every step, so its size keeps changing",
+      "Because top-p keeps a random number of tokens at each step to add variety to the text",
+      "The number of tokens needed to reach mass p depends on how peaked the distribution is"
+    ],
+    "answer_index": 3,
+    "explanation": "A peaked distribution reaches p with one or two tokens; a flat one needs many. This adaptivity is exactly what fixed-k top-k lacks."
+  },
+  {
+    "id": "06.3-035",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p (nucleus) sampling",
+    "question": "What top-p values are common in practice?",
+    "options": [
+      "About 0.1 to 0.2, never combined with temperature",
+      "Exactly 1.0, which is the only valid setting",
+      "About 0.9 to 0.95, often combined with a temperature",
+      "About 10 to 50 tokens, chosen like k in top-k"
+    ],
+    "answer_index": 2,
+    "explanation": "Typical nucleus thresholds are 0.9 to 0.95. p is a probability mass between 0 and 1, not a token count, and it is routinely used together with temperature."
+  },
+  {
+    "id": "06.3-036",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p — summary of the four strategies",
+    "question": "Which decoding strategies reshape the distribution, and which truncate it?",
+    "options": [
+      "Top-k reshapes; temperature and top-p truncate",
+      "Temperature reshapes; top-k and top-p truncate",
+      "Top-p reshapes; temperature and top-k truncate",
+      "All three only reshape; none of them truncate"
+    ],
+    "answer_index": 1,
+    "explanation": "Temperature rescales logits and keeps all tokens possible. Top-k and top-p zero out part of the vocabulary. They are routinely combined, all sculpting the logits before multinomial sampling."
+  },
+  {
+    "id": "06.3-037",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "5. Top-p — research connection",
+    "question": "Which paper introduced top-p (nucleus) sampling, and what did it show?",
+    "options": [
+      "Press and Wolf 2016: tying the input and output embeddings improves language-model perplexity",
+      "Holtzman et al. 2020: maximization-based decoding degenerates; nucleus truncation fixes it",
+      "Radford et al. 2019: GPT-2 language models are unsupervised multitask learners at zero-shot",
+      "Holtzman et al. 2020: beam search with a large beam is the best decoding for open-ended text"
+    ],
+    "answer_index": 1,
+    "explanation": "Holtzman et al. showed greedy and beam search produce degenerate, repetitive text and proposed nucleus sampling to truncate the unreliable tail. Their finding was against maximization-based decoding, not in favor of large beams."
+  },
+  {
+    "id": "06.3-038",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "6. Under the hood: what generation costs",
+    "question": "What is the computational cost of each generated token in a naive GPT generation loop?",
+    "options": [
+      "One full forward pass over the current context",
+      "One forward pass over only the newest token",
+      "One backward pass over the current context",
+      "One forward pass over the entire training set"
+    ],
+    "answer_index": 0,
+    "explanation": "Without a KV cache, every step runs the model on the whole (cropped) prefix. That repeated re-processing is the dominant generation cost."
+  },
+  {
+    "id": "06.3-039",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "6. Under the hood: what generation costs",
+    "question": "How does the O(V log V) cost of sorting for top-p compare with the rest of a generation step?",
+    "options": [
+      "It dominates the step, because V is much larger than the number of parameters",
+      "It is exactly equal to the cost of the forward pass at every step",
+      "It grows with T squared, so it dominates long generations entirely",
+      "It is negligible next to the forward pass, which dominates the step"
+    ],
+    "answer_index": 3,
+    "explanation": "Sorting 50k probabilities is cheap compared with a forward pass through the network. The dominant cost is the O(T^2) re-processing of the prefix."
+  },
+  {
+    "id": "06.3-040",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "6. Under the hood — Hardware",
+    "question": "What hardware is needed to generate a few hundred tokens from a small (<10M parameter) GPT?",
+    "options": [
+      "A GPU with at least 24 GB of memory to hold the logits",
+      "A multi-GPU node, since generation requires model parallelism",
+      "Any CPU; it takes well under a second on a laptop",
+      "A TPU, since multinomial sampling is unsupported on CPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Tiny models generate quickly on CPU. Every example runs CPU-only, and GPU-hours are about zero."
+  },
+  {
+    "id": "06.3-041",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "6. Under the hood — Hardware",
+    "question": "Why does inference with @torch.no_grad() need far less GPU memory than training?",
+    "options": [
+      "The weights are automatically quantized to 1 bit",
+      "The vocabulary is pruned to the top-k tokens only",
+      "No activations are stored for a backward pass",
+      "The model runs only the first block during inference"
+    ],
+    "answer_index": 2,
+    "explanation": "Training must keep activations for backpropagation (plus gradients and optimizer state); under no_grad none of that is saved. The weights and architecture are unchanged."
+  },
+  {
+    "id": "06.3-042",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Exercise",
+    "question": "Generating with top_k=1, why does raising temperature to 1.3 have no effect on the output?",
+    "options": [
+      "Temperature is applied after sampling, so it never affects the chosen token",
+      "Only one finite logit survives, so softmax is one-hot whatever its value",
+      "Temperature only affects tokens outside the top k, which were already removed",
+      "top_k=1 internally resets temperature to 0, so the division never happens"
+    ],
+    "answer_index": 1,
+    "explanation": "After top-1 filtering, all other logits are minus infinity. Dividing the single survivor by any temperature leaves it the only finite entry, so the distribution stays one-hot on the argmax. Temperature is inert, and the output stays greedy and repetitive."
+  },
+  {
+    "id": "06.3-043",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Exercise",
+    "question": "A well-trained model repeats the same sentence under top_k=1. Which setting adds variety without admitting obvious garbage tokens?",
+    "options": [
+      "Widen the candidates and let temperature act, e.g. top_k=40 at T≈0.8 or top_p=0.9",
+      "Keep top_k=1 and raise the temperature to 5.0 so the single candidate gets more random",
+      "Remove all truncation and set temperature to 3.0 so every token has a fair chance",
+      "Switch to greedy argmax with a different random seed for each generated sentence"
+    ],
+    "answer_index": 0,
+    "explanation": "Several plausible tokens must survive for sampling to vary. Top-k 40 or top-p 0.9 keeps a good candidate set, temperature reshapes their relative mass, and the truncation still excludes the long tail. No truncation with a high temperature would admit garbage; greedy ignores the seed."
+  },
+  {
+    "id": "06.3-044",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Check yourself",
+    "question": "The running sequence has 1500 tokens and block_size = 1024. What context does GPT-2 see on the next generation step?",
+    "options": [
+      "All 1500 tokens, with positions beyond 1024 reusing wpe rows from the start",
+      "The first 1024 tokens, idx[:, :1024], so the prompt is always kept",
+      "Every other token, so that 1500 tokens fit into 750 positions",
+      "The last 1024 tokens, idx[:, -1024:]; anything earlier is forgotten"
+    ],
+    "answer_index": 3,
+    "explanation": "The model has only 1024 position embeddings, so the loop crops to the most recent block_size tokens. It forgets anything more than block_size tokens back; positions are not wrapped and the prompt is not specially preserved."
+  },
+  {
+    "id": "06.3-045",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Check yourself",
+    "question": "On logits [3.0, 2.0, 1.0] with k = 2, what probabilities does top-k give?",
+    "options": [
+      "[0.6652, 0.2447, 0.0900]",
+      "[0.6000, 0.4000, 0]",
+      "[0.5000, 0.5000, 0]",
+      "[0.7311, 0.2689, 0]"
+    ],
+    "answer_index": 3,
+    "explanation": "Keep 3.0 and 2.0 and mask 1.0. e^3 = 20.09 and e^2 = 7.39 give 0.7311 and 0.2689. [0.6652, 0.2447, 0.0900] is the plain softmax without truncation."
+  },
+  {
+    "id": "06.3-046",
+    "chapter": "06.3",
+    "chapter_name": "Generation: greedy, temperature, top-k, top-p",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why is top-p's ability to keep a different number of tokens at each step an advantage over top-k?",
+    "options": [
+      "It guarantees the same number of tokens as greedy decoding at every single step",
+      "It always keeps exactly the top 90 percent of the vocabulary, whatever the distribution",
+      "It adapts to the distribution, keeping few tokens when confident and many when unsure",
+      "It eliminates the need to apply a softmax over the logits before sampling a token"
+    ],
+    "answer_index": 2,
+    "explanation": "Top-p's cutoff follows the shape of the distribution, so it avoids admitting junk when the model is sure and avoids truncating good options when it is unsure. Top-k's fixed k does one or the other badly depending on the step."
+  }
+]

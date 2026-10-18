@@ -1,0 +1,1658 @@
+[
+  {
+    "id": "11.1-001",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In LLM pretraining, according to the data-engineering view of the pretraining data pipeline, what tends to move the loss more than almost any architecture tweak at frontier scale?",
+    "options": [
+      "The choice of activation function in the MLP block, e.g. SwiGLU versus GELU",
+      "Data quality — what text survives filtering into the training stream",
+      "The exact number of attention heads per layer at a fixed model width",
+      "The particular random seed used for weight initialization of each layer"
+    ],
+    "answer_index": 1,
+    "explanation": "At frontier scale, data quality moves the loss more than almost any architecture tweak. Two models with the same FLOPs can differ a lot purely because one was trained on cleaner data. Architecture details like activation choice or head count matter, but far less than what text reaches the model."
+  },
+  {
+    "id": "11.1-002",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In a pretraining project, where does most of the engineering effort typically live?",
+    "options": [
+      "In the data pipeline that turns raw web crawl into clean training documents",
+      "In writing and optimising the transformer model code and its custom fused GPU kernels",
+      "In tuning the optimizer's learning-rate schedule across many short sweeps",
+      "In writing the evaluation harness that scores checkpoints on benchmarks"
+    ],
+    "answer_index": 0,
+    "explanation": "Most of the engineering effort in a pretraining project lives in the data stage, not the model code. The model definition is comparatively short and standard; extracting, filtering, deduplicating and mixing web-scale data is where the work and the leverage are."
+  },
+  {
+    "id": "11.1-003",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which four stages make up the 'head' of the pretraining data pipeline that comes before tokenization, as built from a Common Crawl starting point?",
+    "options": [
+      "Tokenization → packing → batching → gradient accumulation, then loss computation on GPU",
+      "Text extraction → tokenization → quality filtering → language identification (plus PII handling)",
+      "Language identification → packing → toxicity filtering → BPE training on the filtered text",
+      "WARC/WET files → text extraction → language ID → quality filtering (plus toxicity and PII)"
+    ],
+    "answer_index": 3,
+    "explanation": "The real pretraining pipeline starts from Common Crawl WARC/WET files, extracts main text, identifies the language, applies quality filters (Gopher/C4-style heuristics), and handles toxicity and PII. Tokenization and packing come only after these filtering stages; they are the tail, not the head."
+  },
+  {
+    "id": "11.1-004",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "Why is a one-line `datasets.load_dataset(\"some/corpus\")` call that returns clean-looking text not a data pipeline?",
+    "options": [
+      "Because `load_dataset` cannot stream corpora larger than RAM, so it fails at web scale",
+      "Because `load_dataset` returns raw HTML rather than extracted text for most web corpora",
+      "Because it loads a corpus someone else built with the whole filtering funnel, choices baked in",
+      "Because `load_dataset` silently tokenizes the text with a tokenizer that differs from your own"
+    ],
+    "answer_index": 2,
+    "explanation": "Loading a dataset is the last step after someone else already did extraction, language ID, quality filtering, dedup and decontamination. Their filtering choices are baked into every token. If you train on your own crawl, all of that work is yours; the one-liner hides it rather than replacing it."
+  },
+  {
+    "id": "11.1-005",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "What does most of a raw public web crawl consist of, before any filtering?",
+    "options": [
+      "Mostly well-edited encyclopedic articles and news, with occasional ads and menus",
+      "Menus, cookie banners, SEO spam, link farms, machine-translated junk and mirrored copies",
+      "Mostly source code repositories, API documentation and forum threads about programming topics",
+      "Mostly near-duplicates of Wikipedia articles, with little other content of any kind"
+    ],
+    "answer_index": 1,
+    "explanation": "A raw crawl is hundreds of terabytes of HTML dominated by boilerplate and junk: menus, cookie banners, SEO spam, link farms, machine-translated gibberish, adult content, and the same article copied across many mirror sites. A frontier model trains only on the small clean fraction that survives aggressive filtering."
+  },
+  {
+    "id": "11.1-006",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "What is meant by the slogan 'the funnel is the product' for pretraining data?",
+    "options": [
+      "The filtering funnel that decides which small clean fraction of the crawl survives is what you build",
+      "The tokenizer's vocabulary is the most valuable artifact, since every later training stage depends on it",
+      "Collecting as much raw crawl as possible is the main goal, since filtering only removes data",
+      "The final trained weights are the only product that matters; the data pipeline is disposable"
+    ],
+    "answer_index": 0,
+    "explanation": "Because a frontier model trains only on the small fraction of the web that survives filtering, the design of that funnel determines what the model learns. The raw crawl is cheap and abundant; the filtering choices are what make the data valuable."
+  },
+  {
+    "id": "11.1-007",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "What is the correct order of the stages in the pretraining data funnel?",
+    "options": [
+      "raw crawl → tokenized → deduplicated → quality-filtered → language-filtered → decontaminated → mixed → packed → batched",
+      "raw crawl → deduplicated → tokenized → extracted text → quality-filtered → language-filtered → packed",
+      "raw crawl → language-filtered → packed → extracted text → decontaminated → deduplicated → tokenized",
+      "raw crawl → extracted → language-filtered → quality-filtered → deduped → decontaminated → mixed → tokenized → packed"
+    ],
+    "answer_index": 3,
+    "explanation": "The funnel runs raw crawl → extracted text → language filter → quality filter → dedup → decontamination → mixing → tokenization → packing. Tokenization and packing (Module 4) are the last two boxes; everything before operates on raw text documents."
+  },
+  {
+    "id": "11.1-008",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "Roughly what fraction of the raw crawled bytes typically reaches the model after the full data funnel?",
+    "options": [
+      "About half",
+      "Around 90%",
+      "A few percent",
+      "Essentially all of it, minus exact duplicates"
+    ],
+    "answer_index": 2,
+    "explanation": "Each stage of the funnel throws away far more than it keeps. A common outcome is that only a few percent of the raw bytes survive extraction, language ID, quality filtering, dedup and decontamination to reach the model."
+  },
+  {
+    "id": "11.1-009",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "1. Intuition: `load_dataset(...)` is not a data pipeline",
+    "question": "Which two stages of the pretraining data funnel were already built in Module 4 (special tokens, packing and data loading)?",
+    "options": [
+      "Text extraction and language identification",
+      "Tokenization and packing — the last two boxes",
+      "Deduplication and benchmark decontamination",
+      "Quality filtering and mixing across sources"
+    ],
+    "answer_index": 1,
+    "explanation": "Module 4 started from a clean corpus and built the tail of the pipeline: BPE encoding and packing documents into windows sampled by get_batch. The data-engineering module builds the middle stages that produce that clean corpus."
+  },
+  {
+    "id": "11.1-010",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "What is Common Crawl?",
+    "options": [
+      "A nonprofit that crawls the web every month or two and publishes the result for free",
+      "A commercial search engine that sells filtered, deduplicated text datasets to labs",
+      "A curated corpus of Wikipedia, books and news articles maintained by OpenAI since 2019",
+      "A deduplicated and quality-filtered pretraining dataset released by Google with T5"
+    ],
+    "answer_index": 0,
+    "explanation": "Common Crawl is a nonprofit that crawls the web periodically (every month or two) and publishes the raw result freely. It is the raw feedstock behind most open pretraining corpora such as C4, RefinedWeb, FineWeb and Dolma, but it is not itself filtered."
+  },
+  {
+    "id": "11.1-011",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "Which corpora are built using Common Crawl as raw feedstock?",
+    "options": [
+      "Only proprietary corpora; open corpora avoid Common Crawl for licensing reasons",
+      "Only code datasets such as GitHub dumps and Stack Overflow archives",
+      "Only Wikipedia-derived corpora and the reference sets built from them",
+      "C4, RefinedWeb, FineWeb, Dolma, and the web slice of nearly every LLM"
+    ],
+    "answer_index": 3,
+    "explanation": "Common Crawl is the raw material behind most open pretraining corpora — C4, RefinedWeb, FineWeb, Dolma — and the web portion of nearly every LLM. Those corpora differ mainly in how they extract and filter that same raw crawl."
+  },
+  {
+    "id": "11.1-012",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "Roughly how many pages does one monthly Common Crawl snapshot contain?",
+    "options": [
+      "On the order of a few million pages",
+      "On the order of a few thousand pages",
+      "On the order of a few billion pages",
+      "On the order of a few trillion pages"
+    ],
+    "answer_index": 2,
+    "explanation": "A single monthly Common Crawl is on the order of a few billion pages. That scale is why every stage must be streamed and why even cheap per-document filters need to be efficient."
+  },
+  {
+    "id": "11.1-013",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "What does a Common Crawl WARC (Web ARChive) file contain?",
+    "options": [
+      "Only Common Crawl's pre-extracted plain text of each page, with all of the HTML tags stripped",
+      "The full record of each fetch: HTTP request, response headers and the raw HTML body",
+      "Only the URLs and outgoing link graph of crawled pages, with no page content",
+      "Tokenized id sequences for each page, already packed into fixed-length windows"
+    ],
+    "answer_index": 1,
+    "explanation": "WARC is the complete record of each fetch — request, response headers and the full raw HTML. WET, by contrast, is the pre-extracted plain-text version. Starting from WARC gives you the raw HTML so you can run your own extractor."
+  },
+  {
+    "id": "11.1-014",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "What is a Common Crawl WET (WARC Encapsulated Text) file?",
+    "options": [
+      "A pre-extracted plain-text version of the crawl, with the HTML tags already stripped",
+      "The raw HTML together with the full HTTP request and response headers for each fetched page",
+      "A deduplicated subset of the crawl with near-duplicate pages removed by MinHash",
+      "A metadata index mapping each crawled URL to its file and byte offset in the WARCs"
+    ],
+    "answer_index": 0,
+    "explanation": "WET files contain plain text that Common Crawl produced by generic tag-stripping of the HTML. It is convenient, but the generic extraction keeps much boilerplate, which is why serious corpora go back to WARC."
+  },
+  {
+    "id": "11.1-015",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "Why do serious pretraining corpora start from Common Crawl WARC files and do their own extraction rather than using WET files?",
+    "options": [
+      "WET files are not publicly available; only WARC files are released for academic research use",
+      "WET files are already tokenized with an incompatible tokenizer, so they must be decoded first",
+      "WARC files are smaller and faster to download than WET, since they skip the text-extraction step",
+      "WET's generic tag-stripping keeps boilerplate a purpose-built extractor removes, capping quality"
+    ],
+    "answer_index": 3,
+    "explanation": "WET is tempting because the HTML is already stripped, but its generic stripping leaves menus, footers and related-article blocks in the text. A purpose-built extractor run on the raw HTML in WARC removes that boilerplate. Since no downstream filter can recover text quality lost at extraction, extraction sets a ceiling on everything after it."
+  },
+  {
+    "id": "11.1-016",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "What sets a ceiling on the quality of everything downstream in a web-text pretraining pipeline?",
+    "options": [
+      "The size of the BPE vocabulary",
+      "The number of GPUs used for training",
+      "The quality of the text extraction step",
+      "The learning-rate warmup length"
+    ],
+    "answer_index": 2,
+    "explanation": "If extraction leaves boilerplate in or drops real content, later filters can only work with what they are given. That is why text extraction quality caps everything downstream and why serious corpora invest in it."
+  },
+  {
+    "id": "11.1-017",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "How should a WARC file from Common Crawl be processed, given that a crawl shard is far larger than RAM?",
+    "options": [
+      "Load the whole file into memory with a single read and parse it as one JSON document",
+      "Stream it record by record (e.g. with `warcio`), processing each page as it goes past",
+      "Decompress it fully to disk first, then load every record into one pandas DataFrame in memory",
+      "Convert it to a single Python string in memory and split it on newlines into pages"
+    ],
+    "answer_index": 1,
+    "explanation": "A WARC file is gzipped concatenated records, and a single shard is far larger than RAM. You iterate record by record with a library like warcio and process each page as it streams past. This is the same streaming discipline as the memmap approach for packed token data: at this scale everything is a stream."
+  },
+  {
+    "id": "11.1-018",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "2. Where the text comes from: Common Crawl, WARC and WET",
+    "question": "Structurally, what is a WARC file?",
+    "options": [
+      "Gzipped concatenated records",
+      "A single SQLite database of pages",
+      "A JSON array of page objects",
+      "A parquet table with one row per domain"
+    ],
+    "answer_index": 0,
+    "explanation": "A WARC file is just gzipped concatenated records, one per fetch. That structure is what makes record-by-record streaming natural: you decompress and parse one record at a time without ever holding the whole file."
+  },
+  {
+    "id": "11.1-019",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "What is the goal of the text extraction (boilerplate removal) stage of a web pretraining pipeline?",
+    "options": [
+      "Translate every page into English before filtering, so later stages see one language",
+      "Convert raw HTML directly into BPE token ids, skipping any intermediate plain-text representation",
+      "Remove duplicate pages across the whole crawl by hashing each page's full HTML",
+      "Turn one page's raw HTML into its main text, dropping menus, ads, sidebars and footers"
+    ],
+    "answer_index": 3,
+    "explanation": "Extraction takes a single page's raw HTML and keeps only the main body text (e.g. the article), discarding boilerplate such as menus, ads, cookie notices, sidebars and footers. Translation, tokenization and dedup are separate stages."
+  },
+  {
+    "id": "11.1-020",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "In web text extraction, what is meant by 'boilerplate'?",
+    "options": [
+      "The main article body of a page, which extraction keeps and passes downstream",
+      "HTTP response headers and fetch metadata stored with each WARC record",
+      "Navigation, ads, cookie notices, sidebars, footers and similar page cruft",
+      "Repeated words and phrases within a single sentence of the main content"
+    ],
+    "answer_index": 2,
+    "explanation": "Boilerplate is the collective name for the non-content parts of a web page — navigation, ads, cookie banners, sidebars, footers. Extraction aims to drop it and keep only the main textual content."
+  },
+  {
+    "id": "11.1-021",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "What is the recommended approach to HTML text extraction for a pretraining pipeline?",
+    "options": [
+      "Write a custom regex that strips everything between angle brackets, then collapse whitespace",
+      "Use a good open extractor such as trafilatura or resiliparse, not a hand-written parser",
+      "Hand-write a DOM parser tuned to your crawl, since generic tools miss its quirks",
+      "Use Common Crawl's WET text as-is, since its tags have already been stripped"
+    ],
+    "answer_index": 1,
+    "explanation": "Extraction is genuinely hard (nested tags, inline scripts, templated cruft) but solved in practice by good open tools. You do not hand-write an HTML parser; production extractors encode years of edge-case handling. A naive tag-stripping regex or raw WET keeps boilerplate."
+  },
+  {
+    "id": "11.1-022",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "What is trafilatura?",
+    "options": [
+      "A Python library that extracts a page's main text (and optional metadata), removing boilerplate",
+      "A fastText-based language identification model covering 176 languages, with a confidence per label",
+      "A MinHash and LSH library for near-duplicate detection across billions of crawled web pages",
+      "A toxicity classifier for web text that scores each document and flags unsafe pages"
+    ],
+    "answer_index": 0,
+    "explanation": "trafilatura is a Python library for extracting a page's main text and optional metadata, with boilerplate removal tuned for exactly the web-corpus use case. It takes raw HTML in and returns clean-ish main text, or None if the page has no usable content."
+  },
+  {
+    "id": "11.1-023",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "What is resiliparse, as used in web pretraining pipelines?",
+    "options": [
+      "A Python library for detecting and redacting personally identifiable information in crawled text",
+      "A benchmark decontamination tool that removes documents sharing 13-grams with test sets",
+      "A tokenizer that operates directly on raw HTML, skipping the text-extraction stage",
+      "A very fast HTML-to-text extractor from the ChatNoir stack, used when throughput matters"
+    ],
+    "answer_index": 3,
+    "explanation": "resiliparse is part of the ChatNoir web-data stack and is a very fast HTML-to-text extractor. Several large corpora use it when extraction throughput is the bottleneck. Like trafilatura, it maps raw HTML to main text."
+  },
+  {
+    "id": "11.1-024",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "In a pipeline using `trafilatura.extract(raw_html)`, what does a return value of None indicate?",
+    "options": [
+      "The page is in a language other than English",
+      "The page is an exact duplicate of a previous page",
+      "The page has no usable main content",
+      "The page failed the quality filter's symbol-ratio gate"
+    ],
+    "answer_index": 2,
+    "explanation": "trafilatura.extract returns the main body text of a page, or None when the page has no usable content (for example a page that is only navigation). Language ID, dedup and quality filtering are later, separate stages."
+  },
+  {
+    "id": "11.1-025",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "Conceptually, what mechanism does a production HTML main-text extractor use?",
+    "options": [
+      "Hash every block of the page and keep only those whose hashes are unique in the crawl",
+      "Walk the DOM, score blocks by text density, and keep the dense ones",
+      "Run a language model over the HTML and keep only the low-perplexity tokens",
+      "Keep only text inside <title>, <h1> and <p> tags and drop everything else"
+    ],
+    "answer_index": 1,
+    "explanation": "The core mechanism is understandable: walk the DOM tree, score each block by text density, and keep the dense blocks (main content) while dropping sparse, link-heavy blocks (navigation, footers). A production extractor adds years of edge-case handling on top of that idea."
+  },
+  {
+    "id": "11.1-026",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "3. Stage one — text extraction (boilerplate removal)",
+    "question": "What are the typical failure modes of an HTML main-text extractor like trafilatura?",
+    "options": [
+      "It sometimes drops legitimate content and sometimes keeps a stubborn footer",
+      "It often outputs text in the wrong language when a page mixes several scripts",
+      "It tokenizes text incorrectly, so the downstream packing step breaks on its output",
+      "It deduplicates pages it should keep, merging distinct articles from one site"
+    ],
+    "answer_index": 0,
+    "explanation": "Even good extractors are imperfect: they occasionally drop real content and occasionally keep boilerplate like a stubborn footer. You should know these failure modes, but you still use the vetted tool rather than writing your own."
+  },
+  {
+    "id": "11.1-027",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "What is the goal of the language identification stage of a pretraining data pipeline?",
+    "options": [
+      "Translate all documents into a single target language before quality filtering",
+      "Detect which programming language a code file uses so it can be compiled and tested",
+      "Assign each document a quality score that is later used for mixing weights",
+      "Keep documents in the language(s) you are training on and route or drop the rest"
+    ],
+    "answer_index": 3,
+    "explanation": "Language ID decides which documents are in the target language(s), e.g. English, and keeps those while routing or dropping others. It is a filter, not a translator."
+  },
+  {
+    "id": "11.1-028",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "What is the standard tool for language identification in web pretraining pipelines?",
+    "options": [
+      "A large transformer fine-tuned on Wikipedia in each language, run on GPU per page",
+      "A regular expression matching each language's alphabet and its common diacritics",
+      "A fastText language-id classifier: a tiny linear model over character/word n-grams",
+      "A MinHash signature compared against per-language reference sets of known documents"
+    ],
+    "answer_index": 2,
+    "explanation": "The standard tool is a fastText language-id classifier: a small, fast linear model over character and word n-gram features that returns a predicted language label and a confidence score. It is cheap enough to run on billions of pages."
+  },
+  {
+    "id": "11.1-029",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "Given a string, what does a fastText language-id classifier return?",
+    "options": [
+      "A translated version of the string in English",
+      "A predicted language label and a confidence score",
+      "A cleaned version of the string with boilerplate removed",
+      "A list of BPE token ids"
+    ],
+    "answer_index": 1,
+    "explanation": "fastText langid outputs the predicted language and a confidence. The pipeline keeps a document if the top language is the wanted one and the confidence clears a threshold."
+  },
+  {
+    "id": "11.1-030",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "With a fastText language-id classifier, what is the keep rule for documents?",
+    "options": [
+      "Keep the document if its top predicted language is the wanted one and its confidence clears ~0.65",
+      "Keep the document if any of the top-5 predicted languages is the wanted one, at whatever confidence",
+      "Keep the document whenever the predicted label is the wanted one, regardless of its confidence",
+      "Keep the document if the confidence is below the threshold, since uncertain documents are diverse"
+    ],
+    "answer_index": 0,
+    "explanation": "You require both the right top label and a confidence above a threshold such as 0.65. Ignoring confidence would keep garbled or mixed-language text that happens to be labeled correctly."
+  },
+  {
+    "id": "11.1-031",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "Why are low-confidence documents from a language-id classifier often worth dropping regardless of the predicted label?",
+    "options": [
+      "Low-confidence documents are always in a rare language that the model cannot learn",
+      "Low-confidence documents are usually exact duplicates",
+      "Low-confidence documents always contain PII",
+      "Low-confidence documents are often code-switched, very short, or garbled"
+    ],
+    "answer_index": 3,
+    "explanation": "A low langid confidence usually signals text that is code-switched (mixing languages), very short, or garbled. Such documents tend to be poor training data whatever label they get, so the threshold drops them."
+  },
+  {
+    "id": "11.1-032",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "In a toy English-detector that scores a document by the fraction of its words that are common English stop-words, what is the general control flow it shares with real fastText language ID?",
+    "options": [
+      "Tokenize → pack → batch",
+      "Hash → bucket → compare",
+      "Score → threshold → keep/drop",
+      "Translate → classify → rewrite"
+    ],
+    "answer_index": 2,
+    "explanation": "The toy stop-word fraction is not how production langid works, but it has the same shape: compute a cheap score in [0,1], compare to a threshold, and keep or drop. Real fastText is far more accurate and covers 176 languages, but the control flow is identical."
+  },
+  {
+    "id": "11.1-033",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "How many languages does the real fastText language-id model cover?",
+    "options": [
+      "12",
+      "176",
+      "50",
+      "1,000"
+    ],
+    "answer_index": 1,
+    "explanation": "fastText langid covers 176 languages and is far more accurate than a crude stop-word heuristic. The keep/drop control flow (score, threshold, decide) is the same."
+  },
+  {
+    "id": "11.1-034",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "In a toy English detector, `english_score(text)` returns the fraction of lower-cased whitespace tokens that are in a small English stop-word set. What does it return for an empty document?",
+    "options": [
+      "0.0",
+      "1.0",
+      "It raises a ZeroDivisionError",
+      "0.5"
+    ],
+    "answer_index": 0,
+    "explanation": "The function guards the empty case: if there are no tokens, it returns 0.0 before dividing. Otherwise it returns hits divided by number of tokens, a value in [0, 1]."
+  },
+  {
+    "id": "11.1-035",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "4. Stage two — language identification",
+    "question": "Why does the presence of common function words (stop-words like 'the', 'of', 'and') appear both as a language-ID signal and as a quality signal?",
+    "options": [
+      "Function words are the rarest tokens, so they indicate high information content",
+      "Function words only appear in machine-translated text",
+      "Function words indicate the document is a duplicate",
+      "Presence of common function words is a strong 'this is real prose' signal"
+    ],
+    "answer_index": 3,
+    "explanation": "Real natural-language prose is full of function words, while spam, lists, code dumps and gibberish tend to lack them. That makes stop-word presence useful both for identifying a language and for judging whether text is genuine writing."
+  },
+  {
+    "id": "11.1-036",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5. Stage three — quality filtering (the heart of this lesson)",
+    "question": "What is the goal of the quality-filtering stage of a pretraining pipeline?",
+    "options": [
+      "Remove documents that overlap benchmark test sets, so that downstream evaluation scores stay meaningful",
+      "Remove near-duplicate documents across the crawl, so no article is seen many times",
+      "Among extracted, right-language documents, keep real writing and drop junk and list-spam",
+      "Assign mixture weights to each data source, so that higher-quality sources are upsampled"
+    ],
+    "answer_index": 2,
+    "explanation": "Quality filtering runs after extraction and language ID and decides which documents look like genuine writing. It drops machine-generated junk, list spam and degenerate text. Decontamination, dedup and mixing are separate stages."
+  },
+  {
+    "id": "11.1-037",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5. Stage three — quality filtering (the heart of this lesson)",
+    "question": "Which two well-known heuristic quality-filter rule sets are the classic references for web-data quality filtering?",
+    "options": [
+      "Chinchilla (Hoffmann et al., 2022) and GPT-3 (Brown et al., 2020)",
+      "Gopher (Rae et al., 2021) and C4 (Raffel et al., 2020)",
+      "BERT (Devlin et al., 2018) and RoBERTa (Liu et al., 2019)",
+      "MinHash (Broder, 1997) and LSH (Indyk & Motwani, 1998)"
+    ],
+    "answer_index": 1,
+    "explanation": "The Gopher heuristics (Rae et al., 2021) and the C4 heuristics (Raffel et al., 2020) are the classic rule-based quality filters for web text. Chinchilla is about compute-optimal token budgets; MinHash/LSH are for deduplication."
+  },
+  {
+    "id": "11.1-038",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5. Stage three — quality filtering (the heart of this lesson)",
+    "question": "What is the key insight behind heuristic (Gopher/C4-style) quality filtering?",
+    "options": [
+      "A handful of cheap, interpretable per-document statistics catches most junk without a neural classifier",
+      "Only a large neural classifier can tell junk from real prose, so heuristics serve merely as a prefilter",
+      "Quality is best measured after tokenization, by counting unknown tokens and byte fallbacks",
+      "Quality filtering should be done by human annotators on every document before it is kept"
+    ],
+    "answer_index": 0,
+    "explanation": "Most web junk is caught by a few cheap, interpretable statistics like word count, mean word length, symbol ratio and repetition. A learned classifier can be added later for finer distinctions, but the heuristics do the bulk of the cleanup at negligible cost."
+  },
+  {
+    "id": "11.1-039",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5. Stage three — quality filtering (the heart of this lesson)",
+    "question": "What data type do heuristic quality filters like word count, mean word length, symbol ratio and repetition ratio operate on, and why is there no tensor dtype or device involved?",
+    "options": [
+      "They operate on int64 token-id tensors on the GPU, because quality filtering runs after BPE encoding",
+      "They operate on float16 embedding tensors produced by a small encoder model on the GPU",
+      "They operate on packed uint16 memmap arrays of the full corpus, read in large chunks",
+      "They take a raw Python str per document and return plain Python numbers on the CPU, pre-tokenization"
+    ],
+    "answer_index": 3,
+    "explanation": "These filters run on one document's raw string and return ordinary Python numbers on the CPU. There are no tensors because filtering happens before tokenization; the text has not yet been turned into ids."
+  },
+  {
+    "id": "11.1-040",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "Which four signals make up the heuristic `quality_filter` in the course's `llmre.data.quality` module?",
+    "options": [
+      "Perplexity, toxicity score, language confidence, URL length",
+      "Token count, vocabulary size, BPE merge count, sequence length",
+      "Word count, mean word length, symbol ratio, repetition ratio",
+      "Jaccard similarity, MinHash signature, LSH band, n-gram overlap"
+    ],
+    "answer_index": 2,
+    "explanation": "The course's quality filter uses four cheap signals: word count, mean word length, symbol ratio and repetition ratio. Jaccard/MinHash belong to dedup, n-gram overlap to decontamination, and perplexity to model-based scoring."
+  },
+  {
+    "id": "11.1-041",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "Why does the word-count gate of a heuristic quality filter reject both very short and absurdly long documents?",
+    "options": [
+      "Short documents waste GPU memory in padding; long ones overflow the tokenizer's context",
+      "Too short (a nav stub or title) teaches nothing; absurdly long is usually a log dump",
+      "Short documents are always in the wrong language; long ones are always duplicates",
+      "Both extremes contain PII far more often than medium-length documents, so both are dropped"
+    ],
+    "answer_index": 1,
+    "explanation": "A tiny document like a navigation stub or a title has no learnable prose. An absurdly long document is usually a log dump or an artifact of concatenating many pages. Both are bounded by min_words and max_words."
+  },
+  {
+    "id": "11.1-042",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "What is the typical mean word length of real English prose, as used by a heuristic quality filter?",
+    "options": [
+      "About 4–6 characters per word",
+      "About 1–2 characters per word",
+      "About 8–12 characters per word",
+      "About 15–20 characters per word"
+    ],
+    "answer_index": 0,
+    "explanation": "Real English prose averages roughly 4–6 characters per word. The heuristic quality filter uses bounds around this (default 3.0 to 10.0) to catch anomalies."
+  },
+  {
+    "id": "11.1-043",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "In a heuristic quality filter, what does a mean word length far ABOVE the normal range for English prose typically signal?",
+    "options": [
+      "Space-spam or tokenized junk",
+      "Short navigation stubs",
+      "Highly repetitive ad text",
+      "Hash-like or URL-like garbage"
+    ],
+    "answer_index": 3,
+    "explanation": "Very long average word length suggests the 'words' are hashes, URLs or similar garbage strings. A mean far below the normal range instead signals space-spam or tokenized junk."
+  },
+  {
+    "id": "11.1-044",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "In a heuristic quality filter, what does a mean word length far BELOW the normal range for English prose typically signal?",
+    "options": [
+      "Hash-like or URL-like garbage",
+      "Long scientific vocabulary",
+      "Space-spam or tokenized junk",
+      "Machine-translated text"
+    ],
+    "answer_index": 2,
+    "explanation": "When the average word is very short (e.g. single letters separated by spaces), the document is usually space-spam or pre-tokenized junk. A mean far above normal instead suggests hashes or URLs."
+  },
+  {
+    "id": "11.1-045",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "How is the symbol ratio defined in a heuristic quality filter?",
+    "options": [
+      "The fraction of all characters, including whitespace, that are punctuation marks",
+      "The fraction of non-whitespace characters that are neither letters nor digits",
+      "The fraction of words that contain at least one digit or one punctuation mark",
+      "The ratio of uppercase to lowercase letters among all alphabetic characters"
+    ],
+    "answer_index": 1,
+    "explanation": "Symbol ratio counts non-alphanumeric characters among the non-whitespace characters. Clean prose is only a few percent (just punctuation), while markup spam and ASCII art score much higher."
+  },
+  {
+    "id": "11.1-046",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "Roughly what symbol ratio does clean prose have, versus markup spam or ASCII art?",
+    "options": [
+      "Clean prose is a few percent (just punctuation); markup spam and ASCII art are far higher",
+      "Clean prose is around 50%, since roughly half of all characters are punctuation; spam is near 0%",
+      "Clean prose and spam both sit around 20%, so the ratio is only useful with other gates",
+      "Clean prose is near 100%, since letters count as symbols; markup spam is near 0%"
+    ],
+    "answer_index": 0,
+    "explanation": "In ordinary prose almost every non-whitespace character is a letter or digit, so symbols (punctuation) are only a few percent. Markup and ASCII art are dominated by symbols, which is what the gate catches."
+  },
+  {
+    "id": "11.1-047",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "How is the repetition ratio defined in a heuristic quality filter?",
+    "options": [
+      "unique_words / total_words",
+      "total_words / unique_words − 1",
+      "The fraction of sentences that appear more than once",
+      "1 − unique_words / total_words"
+    ],
+    "answer_index": 3,
+    "explanation": "Repetition ratio is 1 minus the fraction of distinct (lower-cased) words. All-distinct words give 0; a document that is one word repeated pushes it toward 1."
+  },
+  {
+    "id": "11.1-048",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.1 The metrics",
+    "question": "Why is the repetition ratio (1 − unique_words / total_words) of natural English text never zero?",
+    "options": [
+      "Because the formula always adds a constant smoothing term",
+      "Because every document contains at least one duplicate sentence",
+      "Natural text repeats function words like 'the' and 'of'",
+      "Because tokenization splits every word into repeated subwords"
+    ],
+    "answer_index": 2,
+    "explanation": "Natural prose reuses function words, so the number of distinct words is less than the total and the ratio is above zero. Spam like 'buy buy buy …' pushes it near 1, which is what the gate is for."
+  },
+  {
+    "id": "11.1-049",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "In the heuristic quality-filter math, how is a document split into words $w_1, \\dots, w_n$?",
+    "options": [
+      "By running BPE and treating each resulting token as a word",
+      "By tokenizing on `\\w+` runs (consecutive word characters)",
+      "By splitting on every character, so each letter is a word",
+      "By splitting only on periods, so each sentence is one word"
+    ],
+    "answer_index": 1,
+    "explanation": "Words are the runs matched by the regex \\w+, so punctuation and whitespace separate words and do not belong to them. n is then the word count and |w_i| is each word's character length."
+  },
+  {
+    "id": "11.1-050",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "What is the formula for mean word length (mwl) over words $w_1, \\dots, w_n$?",
+    "options": [
+      "$\\text{mwl} = \\frac{1}{n}\\sum_{i=1}^{n} |w_i|$",
+      "$\\text{mwl} = \\frac{n}{\\sum_{i=1}^{n} |w_i|}$",
+      "$\\text{mwl} = \\max_{1 \\le i \\le n} |w_i|$",
+      "$\\text{mwl} = \\sum_{i=1}^{n} |w_i|^2 / n$"
+    ],
+    "answer_index": 0,
+    "explanation": "Mean word length is the average of the character lengths |w_i| of the n words. The inverted fraction would be words per character, and max or squared variants are not the mean."
+  },
+  {
+    "id": "11.1-051",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "In the symbol-ratio formula $\\text{sym} = \\frac{1}{M}\\sum_{j=1}^{M} \\mathbb{1}[c_j \\text{ is not a letter or digit}]$, what are $c_1, \\dots, c_M$?",
+    "options": [
+      "All characters of the document including spaces",
+      "The words of the document",
+      "The unique characters of the document",
+      "The non-whitespace characters of the document"
+    ],
+    "answer_index": 3,
+    "explanation": "M counts only non-whitespace characters, so spaces do not dilute the ratio. The indicator is 1 for each such character that is not alphanumeric."
+  },
+  {
+    "id": "11.1-052",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "In the symbol-ratio formula, what does the indicator $\\mathbb{1}[\\cdot]$ mean?",
+    "options": [
+      "It equals the number of times the condition holds in the document",
+      "It is the identity matrix of size M",
+      "It equals 1 when its condition holds and 0 otherwise",
+      "It equals the probability that the condition holds"
+    ],
+    "answer_index": 2,
+    "explanation": "The indicator function is 1 if its bracketed condition is true and 0 if false. Summing it over all non-whitespace characters counts the symbols, and dividing by M gives the ratio."
+  },
+  {
+    "id": "11.1-053",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "In the repetition-ratio formula $\\text{rep} = 1 - U/n$, what is $U$?",
+    "options": [
+      "The number of uppercase words",
+      "The number of distinct lower-cased words",
+      "The number of words that appear exactly once",
+      "The number of unique characters"
+    ],
+    "answer_index": 1,
+    "explanation": "U counts distinct words after lower-casing, so 'Buy' and 'buy' are the same word. n is the total word count. Fewer distinct words relative to total means more repetition."
+  },
+  {
+    "id": "11.1-054",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.2 Mathematics, every symbol named",
+    "question": "How does `quality_filter` combine its individual gates (word count, mean word length, symbol ratio, repetition)?",
+    "options": [
+      "A document is kept only if it clears every threshold; one bad signal is enough to drop it",
+      "A document is kept if it clears a majority of thresholds, so one bad signal is tolerated",
+      "The signals are averaged into one score, which is compared against a single threshold",
+      "A document is kept if it clears at least one threshold, since each gate targets one kind of junk"
+    ],
+    "answer_index": 0,
+    "explanation": "The filter is a conjunction: every gate must pass. Failing any single gate drops the document, which is how different kinds of junk get caught by different gates."
+  },
+  {
+    "id": "11.1-055",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.3 Numerical example, worked by hand",
+    "question": "A junk ad document like 'Great deal!!! Buy now, buy now >>> click <<<' has symbol ratio ≈ 0.278 and repetition ratio ≈ 0.286. With a symbol-ratio ceiling of 0.10 and repetition ceiling of 0.40, why is it rejected?",
+    "options": [
+      "Its repetition ratio exceeds the 0.40 ceiling, which alone is enough to drop it",
+      "Its mean word length is above 10, which alone is enough to drop it",
+      "It is rejected only because both ratios are above their ceilings together",
+      "Its symbol ratio exceeds the 0.10 ceiling, which alone is enough to drop it"
+    ],
+    "answer_index": 3,
+    "explanation": "0.278 is well above the 0.10 symbol-ratio ceiling, and since one failing gate drops a document, it is rejected on symbol ratio alone. Its repetition 0.286 is actually below the 0.40 ceiling. This matches intuition: the text is an ad, not prose."
+  },
+  {
+    "id": "11.1-056",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.3 Numerical example, worked by hand",
+    "question": "When computing the symbol ratio of 'Great deal!!! Buy now, buy now >>> click <<<', which characters count as symbols?",
+    "options": [
+      "Every character including spaces, since M counts all characters of the string",
+      "Only the uppercase letters, since they break the lower-cased word pattern",
+      "The non-alphanumeric, non-whitespace ones: the !, the comma and the angle brackets",
+      "Only characters that appear more than once, such as the repeated ! and > marks"
+    ],
+    "answer_index": 2,
+    "explanation": "Symbols are non-whitespace characters that are not letters or digits. Here those are the three '!', the ',', and the six angle brackets. Spaces are excluded from both the numerator and the denominator M."
+  },
+  {
+    "id": "11.1-057",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.3 Numerical example, worked by hand",
+    "question": "When computing the repetition ratio of 'Great deal!!! Buy now, buy now >>> click <<<', why do 'Buy' and 'buy' count as the same word?",
+    "options": [
+      "Because both are under four characters",
+      "Because distinct words are counted after lower-casing",
+      "Because the regex \\w+ ignores capital letters entirely",
+      "Because the second occurrence is always dropped before counting"
+    ],
+    "answer_index": 1,
+    "explanation": "U is the number of distinct lower-cased words, so case differences do not create new distinct words. That gives distinct words great, deal, buy, now, click (U=5) out of n=7."
+  },
+  {
+    "id": "11.1-058",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.4 From-scratch implementation",
+    "question": "What are the default thresholds of the course's `quality_filter` predicate?",
+    "options": [
+      "min_words 20, max_words 100,000, mean word length 3.0–10.0, max symbol ratio 0.10, max repetition ratio 0.40",
+      "min_words 5, max_words 1,000, mean word length 1.0–20.0, max symbol ratio 0.50, max repetition ratio 0.90",
+      "min_words 100, max_words 250,000, mean word length 4.0–6.0, max symbol ratio 0.01, max repetition ratio 0.10",
+      "min_words 20, max_words 100,000, mean word length 3.0–10.0, max symbol ratio 0.40, max repetition ratio 0.10"
+    ],
+    "answer_index": 0,
+    "explanation": "The defaults are min_words=20, max_words=100_000, min/max mean word length 3.0/10.0, max_symbol_ratio=0.10 and max_repetition_ratio=0.40. They are teaching values representing a small subset of the real Gopher/C4 rule set."
+  },
+  {
+    "id": "11.1-059",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.4 From-scratch implementation",
+    "question": "What does a return value of True from `quality_filter(text)` mean?",
+    "options": [
+      "DROP the document",
+      "The document needs human review",
+      "The document is a duplicate",
+      "KEEP the document"
+    ],
+    "answer_index": 3,
+    "explanation": "quality_filter returns True to keep the document and False to drop it. It returns False as soon as any gate fails and True only if all gates pass."
+  },
+  {
+    "id": "11.1-060",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.4 From-scratch implementation",
+    "question": "In what order does the course's `quality_filter` check its gates?",
+    "options": [
+      "Repetition ratio first, then symbol ratio, then word count, then mean word length",
+      "All four are computed first and then compared together against a combined score",
+      "Word count, mean word length, symbol ratio, repetition — returning False at the first failure",
+      "Symbol ratio first, then word count, then repetition, then mean word length, all evaluated"
+    ],
+    "answer_index": 2,
+    "explanation": "The predicate computes the words, checks min/max word count, then mean word length bounds, then the symbol-ratio ceiling, then the repetition ceiling, returning False immediately on any failure. Only if all pass does it return True."
+  },
+  {
+    "id": "11.1-061",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.4 From-scratch implementation",
+    "question": "How does the course's `quality_filter` relate to the real Gopher/C4 heuristic rule sets?",
+    "options": [
+      "It is an exact reimplementation of the full Gopher rule set",
+      "It is a deliberately small, readable subset of the real rule set",
+      "It is a small neural classifier trained on Gopher's filter outputs",
+      "It replaces the C4 rules with stricter, corpus-specific thresholds"
+    ],
+    "answer_index": 1,
+    "explanation": "The course's predicate is intentionally small and readable — a representative subset of real Gopher/C4 rules. Real rule sets include more rules, such as the fraction of lines ending in a bullet or list marker."
+  },
+  {
+    "id": "11.1-062",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "Why does `quality_filter(\"Click here to win now.\")` return False?",
+    "options": [
+      "It has only 5 words, below min_words = 20",
+      "Its symbol ratio of about 0.25 exceeds 0.10",
+      "Its repetition ratio of about 0.6 exceeds 0.40",
+      "Its mean word length of about 11 is above 10"
+    ],
+    "answer_index": 0,
+    "explanation": "The sentence has 5 words, failing the min_words=20 gate. Its other signals (mean word length 3.40, symbol ratio 0.056, repetition 0.0) are fine, but one failing gate is enough."
+  },
+  {
+    "id": "11.1-063",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "Why does `quality_filter(\"buy \" * 60)` return False?",
+    "options": [
+      "It has fewer than 20 words once duplicates are removed",
+      "Its symbol ratio is above 0.10, since spaces count as symbols",
+      "Its mean word length of 3.0 falls below the 3.0 floor",
+      "Its repetition ratio is about 0.983, above the 0.40 ceiling"
+    ],
+    "answer_index": 3,
+    "explanation": "Sixty copies of 'buy' give 60 words but only one distinct word, so repetition = 1 − 1/60 ≈ 0.983. Word count (60), mean word length (3.00, exactly at the minimum) and symbol ratio (0.0) all pass; repetition is what drops it."
+  },
+  {
+    "id": "11.1-064",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "Why does `quality_filter(\"### >>> @@@ *** ||| \" * 5)` return False?",
+    "options": [
+      "Its repetition ratio is above 0.40, since the pattern repeats five times",
+      "Its mean word length is above 10, since each run of symbols is one long word",
+      "It has no words at all and its symbol ratio is 1.0",
+      "It has more than 100,000 words once each symbol is counted as a word"
+    ],
+    "answer_index": 2,
+    "explanation": "There are no \\w+ runs, so the word count is 0 (failing min_words), and every non-whitespace character is a symbol, giving symbol ratio 1.0. The repetition ratio is 0 because there are no words to repeat."
+  },
+  {
+    "id": "11.1-065",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "Why is it better to have several cheap quality signals rather than a single one?",
+    "options": [
+      "Multiple signals are needed so they can be averaged into a single quality score per document",
+      "Different failure modes hide from different metrics, so each kind of junk trips a different gate",
+      "A single signal cannot be computed without a GPU, while several small ones can run on CPU",
+      "Multiple signals make the filter more lenient, so fewer legitimate documents are dropped"
+    ],
+    "answer_index": 1,
+    "explanation": "A nav stub fails word count, 'buy buy buy' fails repetition, and markup spam fails symbol ratio. No single metric catches all of them, so stacking cheap, orthogonal gates catches far more junk at negligible cost."
+  },
+  {
+    "id": "11.1-066",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "Which kinds of legitimate text are especially at risk of being thrown away by an over-aggressive prose-oriented quality filter?",
+    "options": [
+      "Code, poetry and dialogue",
+      "Encyclopedia articles and news stories",
+      "Well-edited textbooks",
+      "Long-form essays"
+    ],
+    "answer_index": 0,
+    "explanation": "Code, poetry and dialogue violate 'prose' heuristics — code has high symbol ratios, poetry has short lines and repetition, dialogue has short turns. Tuned too aggressively, the filter deletes them."
+  },
+  {
+    "id": "11.1-067",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "What is the risk of tuning a heuristic quality filter too loosely?",
+    "options": [
+      "Good text like code and poetry is thrown away",
+      "The tokenizer vocabulary becomes too small",
+      "Benchmark contamination is guaranteed",
+      "Junk leaks through and wastes compute"
+    ],
+    "answer_index": 3,
+    "explanation": "Too-loose thresholds let spam and junk into the training stream, spending compute on tokens that teach nothing useful. Too-aggressive thresholds have the opposite problem of deleting good text."
+  },
+  {
+    "id": "11.1-068",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "5.5 Accept the good, reject the junk",
+    "question": "What should real projects do before trusting a quality-filter rule?",
+    "options": [
+      "Check only the aggregate fraction of documents kept, and tune until it matches a target",
+      "Train a full model with and without the rule before looking at any of the data",
+      "Inspect samples of what each rule drops — never ship a filter with unseen rejects",
+      "Copy the thresholds from another published corpus, since they were already validated"
+    ],
+    "answer_index": 2,
+    "explanation": "Filters are corpus-specific and lossy, so you must look at samples of what each rule rejects. Aggregate kept-fractions can hide a rule that silently deletes all your code or dialogue."
+  },
+  {
+    "id": "11.1-069",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "6. Real quality filtering goes further: model-based scoring",
+    "question": "What is a model-based quality classifier in pretraining data pipelines?",
+    "options": [
+      "A large language model that rewrites every crawled document into cleaner, well-edited prose before any training",
+      "A small classifier trained on high-quality reference text vs random crawl, then used to score every document",
+      "A classifier that predicts which benchmark a document came from, so contaminated pages can be removed",
+      "A model that predicts the optimal learning rate for each document, so harder text gets smaller updates"
+    ],
+    "answer_index": 1,
+    "explanation": "Modern corpora add a learned quality scorer: train a small classifier on high-quality reference text (e.g. Wikipedia-like or well-edited pages) versus random crawl, then score every document. It runs after the cheap heuristics."
+  },
+  {
+    "id": "11.1-070",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "6. Real quality filtering goes further: model-based scoring",
+    "question": "How did GPT-3's data pipeline (Brown et al., 2020) use a model-based quality classifier?",
+    "options": [
+      "It trained a classifier to recognize WebText-like pages and used it to filter Common Crawl",
+      "It trained a classifier to detect benchmark questions and removed them from WebText entirely",
+      "It used a classifier to translate non-English Common Crawl pages into English before training",
+      "It used a classifier to choose the model's architecture from the statistics of the corpus"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-3 trained a classifier to recognize pages resembling its high-quality WebText reference corpus and used it to filter Common Crawl toward that quality. This is the canonical example of a learned quality filter."
+  },
+  {
+    "id": "11.1-071",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "6. Real quality filtering goes further: model-based scoring",
+    "question": "How did the FineWeb-Edu corpus go beyond a standard model-based quality classifier?",
+    "options": [
+      "It hand-labeled every document with human annotators, then kept the top-rated fraction",
+      "It removed all documents not hosted on .edu domains, keeping only university pages",
+      "It used MinHash similarity to known textbooks to select educational pages from the crawl",
+      "It used an LLM to label educational quality and trained a classifier on those labels"
+    ],
+    "answer_index": 3,
+    "explanation": "FineWeb-Edu had an LLM label documents for educational quality, then trained a cheaper classifier on those labels to score the whole corpus. This scales LLM judgment to billions of pages."
+  },
+  {
+    "id": "11.1-072",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "6. Real quality filtering goes further: model-based scoring",
+    "question": "What does a learned quality scorer capture that simple heuristic ratios cannot?",
+    "options": [
+      "Whether a document has fewer than 20 words",
+      "Whether a document's symbol ratio is above 0.10",
+      "Whether a document is well-written and informative",
+      "Whether a document is a byte-exact duplicate"
+    ],
+    "answer_index": 2,
+    "explanation": "Heuristics remove obvious junk cheaply, but no simple ratio can judge whether text is well-written and informative. A learned scorer captures that. Both layers are normal in modern pipelines."
+  },
+  {
+    "id": "11.1-073",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "How do toxicity and PII filters differ in purpose from quality filters?",
+    "options": [
+      "They are about making documents shorter for faster training, rather than safer",
+      "They are about what should not be in the model, not what teaches it well",
+      "They are about choosing which language to train on, rather than which text",
+      "They are about removing duplicated content, rather than judging its quality"
+    ],
+    "answer_index": 1,
+    "explanation": "Quality filters ask whether text teaches the model well. Toxicity and PII filters ask whether text should be in the model at all, for safety, privacy and legal reasons."
+  },
+  {
+    "id": "11.1-074",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "How do pipelines typically perform toxicity / safety filtering on web crawl data?",
+    "options": [
+      "Run a toxicity classifier (or domain/term block-lists) and drop or down-weight high scorers",
+      "Translate toxic documents into neutral language with an LLM, then keep only the rewritten text",
+      "Keep toxic documents but mask them out of the loss, so they are seen but never learned",
+      "Deduplicate toxic documents with MinHash, keeping one copy of each so they are rare"
+    ],
+    "answer_index": 0,
+    "explanation": "Pipelines score documents with a toxicity classifier or match block-lists of domains and terms, then drop or down-weight those that score high. The thresholds are chosen deliberately."
+  },
+  {
+    "id": "11.1-075",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "Why is choosing toxicity-filter thresholds described as a policy decision as much as a quality one?",
+    "options": [
+      "Because toxicity filters are required by law at one fixed threshold that every lab must apply",
+      "Because toxic text has a higher symbol ratio, so moving the threshold also changes quality filtering",
+      "Because the threshold also determines the tokenizer vocabulary that is trained on the kept text",
+      "Over-filtering deletes legitimate discussion of sensitive topics; under-filtering teaches unwanted output"
+    ],
+    "answer_index": 3,
+    "explanation": "Toxicity thresholds trade off two harms: too strict and you delete legitimate discussions of sensitive topics; too loose and the model learns to produce content you do not want. Choosing the balance is a value judgment, not just a data-quality one."
+  },
+  {
+    "id": "11.1-076",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "What is PII (Personally Identifiable Information)?",
+    "options": [
+      "Any text written in the first person, such as personal blogs, diaries and public forum posts",
+      "Any document scraped from a personal website, whatever its content, topic or author",
+      "Data that identifies a real person: names tied to addresses, phones, emails, IDs, card numbers",
+      "Any text containing the name of a public company, product, brand or registered trademark"
+    ],
+    "answer_index": 2,
+    "explanation": "PII is data that identifies a real individual — for example names tied to addresses, phone numbers, email addresses, government IDs and credit-card numbers. Pipelines detect and redact or drop it."
+  },
+  {
+    "id": "11.1-077",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "Why is PII in a pretraining corpus specifically a problem for a language model?",
+    "options": [
+      "PII raises the symbol ratio of a document, so it breaks the quality filters downstream",
+      "A model can memorize and regurgitate training text verbatim, leaking PII and creating liability",
+      "PII tokens such as emails cannot be encoded by BPE, so they corrupt the packed stream",
+      "PII makes the training loss diverge, because each identifier is a unique and unpredictable token"
+    ],
+    "answer_index": 1,
+    "explanation": "LMs can memorize training text and reproduce it verbatim at generation time. So PII in the corpus can leak private information to users, which is both a privacy harm and in many jurisdictions a legal liability."
+  },
+  {
+    "id": "11.1-078",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "What do pipelines typically do with detected PII in pretraining data?",
+    "options": [
+      "Detect and redact or drop it — replace emails/phones with placeholders, or drop dense documents",
+      "Encrypt it in place so the model learns only the encrypted versions of each identifier",
+      "Move it into a separate held-out evaluation set used to measure memorization later",
+      "Upsample it so the model learns to recognize PII and can refuse to repeat it when asked at inference"
+    ],
+    "answer_index": 0,
+    "explanation": "The standard approaches are redaction (replacing detected emails, phone numbers, etc. with placeholders) or dropping documents that are dense with personal data. Both aim to prevent the model from memorizing and regurgitating it."
+  },
+  {
+    "id": "11.1-079",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "Why does a data-engineering course deliberately NOT build a real PII detector (e.g. a toy email regex)?",
+    "options": [
+      "Because PII is never present in Common Crawl, since sites with personal data block crawlers",
+      "Because building PII detection is legally prohibited without a licence in most of the jurisdictions",
+      "Because PII is already removed automatically by language identification and quality filters",
+      "A toy detector gives false safety; real PII detection is high-stakes, and half-working is worse"
+    ],
+    "answer_index": 3,
+    "explanation": "A toy regex would catch some emails but miss many forms of PII, giving false confidence. Missing something like a Social Security number is a serious failure, so you should use a vetted tool in any real pipeline."
+  },
+  {
+    "id": "11.1-080",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "7. Toxicity filtering and PII",
+    "question": "What is the causal chain that makes PII in training data harmful?",
+    "options": [
+      "Tokenization → packing → loss divergence",
+      "Duplication → contamination → benchmark inflation",
+      "Memorization → regurgitation → privacy/legal harm",
+      "Filtering → upsampling → overfitting"
+    ],
+    "answer_index": 2,
+    "explanation": "The model memorizes training text, can regurgitate it verbatim, and that output leaks personal information, causing privacy and legal harm. That chain is why the PII stage exists."
+  },
+  {
+    "id": "11.1-081",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "8. Where this hands off to Module 4",
+    "question": "How does the output of the data-cleaning funnel (extraction, langid, quality, dedup, decontamination) relate to Module 4's packing pipeline?",
+    "options": [
+      "It replaces Module 4's tokenizer, since clean text no longer needs BPE",
+      "It is exactly the 'pile of documents' Module 4 assumed as its input",
+      "It is fed directly to the model as raw bytes, skipping tokenization",
+      "It is used only for evaluation sets, while training uses the raw crawl"
+    ],
+    "answer_index": 1,
+    "explanation": "Everything in the cleaning funnel runs before the tokenizer. Its output — clean, right-language, quality-passing, decontaminated text — is the document pile that Module 4 encodes with BPE, packs and samples with get_batch."
+  },
+  {
+    "id": "11.1-082",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "8. Where this hands off to Module 4",
+    "question": "In the full hand-off from raw crawl to model, which comes immediately after `quality_filter`?",
+    "options": [
+      "Deduplication",
+      "BPE encoding",
+      "Language identification",
+      "get_batch"
+    ],
+    "answer_index": 0,
+    "explanation": "The order is raw WARC → extract → langid → quality_filter → dedup → decontam → documents → BPE encode → pack_documents → get_batch → model. Dedup comes right after quality filtering."
+  },
+  {
+    "id": "11.1-083",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "8. Where this hands off to Module 4",
+    "question": "Why does every gate in the data funnel improve training at fixed compute?",
+    "options": [
+      "It reduces the number of parameters the model needs to reach a given loss",
+      "It increases the learning rate the optimizer can use without diverging",
+      "It makes the packed token stream cleaner, and at fixed compute cleaner tokens buy lower loss",
+      "It eliminates the need for a held-out validation set during pretraining"
+    ],
+    "answer_index": 2,
+    "explanation": "Only surviving documents are tokenized and packed. Each gate removes junk, so the compute you spend goes to better tokens, which yields lower loss at the same budget."
+  },
+  {
+    "id": "11.1-084",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Exercise",
+    "question": "A ~500-word document that is one comma-separated list of distinct city names ('Paris, London, Tokyo, …') is run through `quality_filter` with default thresholds. Which gate does it most likely fail?",
+    "options": [
+      "Word count — 500 words exceeds the maximum allowed for one document",
+      "Mean word length — city names push the average well above 10 characters",
+      "Symbol ratio — one comma per ~6 letters gives ~0.14, above the 0.10 ceiling",
+      "Repetition ratio — a list repeats the same words, pushing it above 0.40"
+    ],
+    "answer_index": 2,
+    "explanation": "Word count (~500) is in range, mean word length (~5–7) is in range, and repetition is low because the cities are mostly distinct. But one comma per word, with ~6 letters per word, gives a symbol ratio near 1/7 ≈ 0.14, above 0.10. List spam looks fine on every metric except punctuation density."
+  },
+  {
+    "id": "11.1-085",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Exercise",
+    "question": "Which dedicated rule do real Gopher filters add to catch list-style documents?",
+    "options": [
+      "A minimum-perplexity rule, computed by scoring each document with GPT-2",
+      "A 'fraction of lines ending in a bullet/list marker' rule",
+      "A maximum number of distinct URLs or hyperlinks per document rule",
+      "A rule rejecting any document that contains more than one comma"
+    ],
+    "answer_index": 1,
+    "explanation": "Beyond the simple symbol ratio, real Gopher filters include a rule on the fraction of lines ending in (or marked by) bullets or list markers, which directly targets list-style spam."
+  },
+  {
+    "id": "11.1-086",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with trusting a corpus simply because it loaded cleanly via `load_dataset`?",
+    "options": [
+      "Tidy text means someone else filtered it, and their choices are now yours, sight unseen",
+      "Clean-loading corpora are always contaminated with benchmark test sets, by construction",
+      "Clean-loading corpora are always tokenized with the wrong tokenizer for your model",
+      "Clean-loading corpora always consist of duplicate documents copied from other sets"
+    ],
+    "answer_index": 0,
+    "explanation": "A tidy corpus reflects someone else's filtering decisions — what they kept, dropped and how. Those decisions now shape your model, even though you never examined them."
+  },
+  {
+    "id": "11.1-087",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is using Common Crawl WET files blindly, without re-extracting, a common mistake?",
+    "options": [
+      "WET files contain only raw HTML, so they must be tokenized differently from plain text",
+      "WET files are encrypted and unreadable without a separate commercial licence key",
+      "WET files skip all non-English pages, so multilingual corpora cannot be built from them",
+      "Generic tag-stripping keeps boilerplate; the corpora that win re-extract from WARC"
+    ],
+    "answer_index": 3,
+    "explanation": "WET's generic extraction leaves menus, footers and related-article blocks in the text. Winning corpora run a purpose-built extractor on the raw HTML in WARC instead."
+  },
+  {
+    "id": "11.1-088",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is tuning quality-filter thresholds without inspecting rejected documents dangerous?",
+    "options": [
+      "It always makes the filter too lenient, so junk floods the training stream without anyone noticing",
+      "It makes the filter slower to run, since the thresholds must be recomputed on every pass over data",
+      "A rule that quietly deletes all your code or dialogue can hurt a capability unseen in aggregates",
+      "It causes the tokenizer to fail on rejected documents that later re-enter the corpus"
+    ],
+    "answer_index": 2,
+    "explanation": "Aggregate statistics such as 'percent kept' can look reasonable while a rule silently removes an entire category of useful text. Only by inspecting rejects do you catch that."
+  },
+  {
+    "id": "11.1-089",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why should you not roll your own PII or toxicity detector for a real pretraining pipeline?",
+    "options": [
+      "Because they are far too slow to run on CPU at the scale of billions of documents",
+      "These are high-stakes systems that are easy to get subtly, dangerously wrong; use vetted tools",
+      "Because they require labeled benchmark data that cannot be obtained outside large labs",
+      "Because homemade detectors always over-filter code, deleting most of the programming data in the crawl"
+    ],
+    "answer_index": 1,
+    "explanation": "PII and toxicity detection are specialized and high-stakes; a homemade version can miss serious cases while appearing to work. Vetted tools are the right choice."
+  },
+  {
+    "id": "11.1-090",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Research connection",
+    "question": "Which paper documents a frontier-model Common Crawl pipeline using a learned quality classifier plus fuzzy deduplication, and is a canonical reference for what the data funnel looks like at scale?",
+    "options": [
+      "GPT-3 (Brown et al., 2020)",
+      "Chinchilla (Hoffmann et al., 2022)",
+      "Attention Is All You Need (Vaswani et al., 2017)",
+      "BERT (Devlin et al., 2018)"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-3's data section describes filtering Common Crawl with a learned quality classifier toward high-quality reference text and applying fuzzy deduplication. Llama 3 and OLMo 2 are later references for modern data-quality and annealing details."
+  },
+  {
+    "id": "11.1-091",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A document scores mean word length 6.0, symbol ratio 0.03, repetition ratio 0.05, and has 12 words. With default `quality_filter` thresholds, is it kept?",
+    "options": [
+      "Yes — three of the four signals are fine, which is a majority",
+      "Yes — word count is only a soft signal",
+      "No — its symbol ratio is above the ceiling",
+      "No — 12 is below min_words = 20, and every gate must pass"
+    ],
+    "answer_index": 3,
+    "explanation": "The mean word length, symbol ratio and repetition ratio are all within thresholds, but the word count of 12 fails min_words=20. Because quality_filter requires all gates to pass, it is dropped. Short snippets are usually nav stubs or titles."
+  },
+  {
+    "id": "11.1-092",
+    "chapter": "11.1",
+    "chapter_name": "Common Crawl → clean text",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-01.md",
+    "section": "Next",
+    "question": "After quality filtering, what major problem still remains in clean, right-language web documents that the next stage addresses?",
+    "options": [
+      "Every document is still in raw HTML, so it must be re-extracted from WARC before tokenizing",
+      "Documents are still in many languages, since language ID only flags them for later manual review",
+      "Massive duplication — articles mirrored across sites and paragraphs templated onto many pages",
+      "Documents still lack an end-of-text separator, so they cannot be packed into windows"
+    ],
+    "answer_index": 2,
+    "explanation": "Even quality-passing documents contain huge amounts of duplication from mirrors and templates. Duplicated data wastes compute and worsens memorization, which is why exact and fuzzy (MinHash) deduplication follow."
+  }
+]

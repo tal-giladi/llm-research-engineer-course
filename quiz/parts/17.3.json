@@ -1,0 +1,938 @@
+[
+  {
+    "id": "17.3-001",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Prerequisites / why it matters",
+    "question": "What does DeepSeek-R1 show is sufficient to grow long chain-of-thought and self-correction out of a base model?",
+    "options": [
+      "Large-scale RL with a verifiable reward",
+      "A large human-labelled process reward dataset",
+      "Pretraining on many more math tokens alone",
+      "Self-consistency voting at inference time"
+    ],
+    "answer_index": 0,
+    "explanation": "R1 is the capstone of the reasoning track because it shows that large-scale RL with a verifiable reward, and nothing more, can grow long chain-of-thought and self-correction out of a base model. No learned reward model or human step labels were needed for that emergence."
+  },
+  {
+    "id": "17.3-002",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "1. Two paths, one insight",
+    "question": "What distinguishes R1-Zero from R1 in DeepSeek-R1 (DeepSeek-AI 2025)?",
+    "options": [
+      "R1-Zero is trained with a learned process reward model; R1 replaces it with a rule-based accuracy and format reward",
+      "R1-Zero runs only verifiable-reward RL on a base model with no SFT; R1 wraps the same RL engine in supervised stages",
+      "R1-Zero is a small dense model distilled from R1's traces; R1 is the large MoE model trained with RL from scratch",
+      "R1-Zero is optimised with PPO and a learned critic; R1 switches to GRPO with a group baseline to cut memory roughly in half"
+    ],
+    "answer_index": 1,
+    "explanation": "R1-Zero is the striking result: a base model trained only with rule-based verifiable-reward RL, with no SFT at all, and reasoning emerges. R1 is the production system: the same RL engine wrapped in SFT stages to fix R1-Zero's rough edges and make it usable. Both use the same rule-based reward."
+  },
+  {
+    "id": "17.3-003",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "1. Two paths, one insight",
+    "question": "What is the shared insight behind both R1-Zero and R1?",
+    "options": [
+      "Human-written long chains are required to bootstrap reasoning, after which RL only polishes their format and language",
+      "With a verifiable reward and GRPO, RL is cheap enough to run at huge scale, and that scale grows reasoning",
+      "Distillation from a stronger teacher is the only practical way to train reasoning, so RL serves mainly to label the data",
+      "A process reward model is needed to keep long chains reliable, so both models score every step during RL training"
+    ],
+    "answer_index": 1,
+    "explanation": "When the reward is verifiable (answer-correct plus format checks, scored by a program) and optimized with GRPO, RL is cheap enough to run at huge scale. That scale grows reasoning behaviour instead of requiring human-written demonstration chains."
+  },
+  {
+    "id": "17.3-004",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.1 The setup",
+    "question": "Which base model and initial procedure does R1-Zero start from?",
+    "options": [
+      "A distilled Qwen-based model, given a cold-start SFT pass on curated long chains first",
+      "DeepSeekMath, after first training a process reward model on its own step-level labels",
+      "GPT-2 fine-tuned with InstructGPT-style RLHF on human preference comparisons",
+      "The DeepSeek-V3 base model, with no SFT, running GRPO directly"
+    ],
+    "answer_index": 3,
+    "explanation": "R1-Zero starts from the DeepSeek-V3 base model, does no supervised fine-tuning, and runs GRPO directly with a purely rule-based reward."
+  },
+  {
+    "id": "17.3-005",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.1 The setup",
+    "question": "What two rule-based rewards does R1-Zero use?",
+    "options": [
+      "An accuracy reward (answer vs gold, or code vs tests) and a format reward (reasoning inside <think>...</think>)",
+      "A helpfulness reward and a harmlessness reward, both from Bradley-Terry models trained on human preference pairs",
+      "A per-step reward from a process reward model and a length penalty that discourages chains beyond a token budget",
+      "A KL reward that keeps the policy near the base model and an entropy bonus that keeps exploration high during RL"
+    ],
+    "answer_index": 0,
+    "explanation": "R1-Zero's documented reward is purely rule-based: an accuracy reward that parses the final answer and compares to gold (or runs code against tests), and a format reward for placing reasoning between <think>...</think> tags with the answer after. Both are programs, not learned networks."
+  },
+  {
+    "id": "17.3-006",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.1 The setup",
+    "question": "Why does R1-Zero's format reward require reasoning inside <think>...</think> tags?",
+    "options": [
+      "To keep the chain short, since tokens outside the tags are penalised per token",
+      "So the chain is machine-parseable and the answer can be extracted after it",
+      "To hide the reasoning from the reward model so it cannot be gamed by the chain",
+      "Because GRPO only computes gradients for tokens that fall inside the tags"
+    ],
+    "answer_index": 1,
+    "explanation": "The format reward makes the output machine-parseable: reasoning goes between <think> tags and the answer after, so the accuracy checker can find the answer. A well-formed output earns a small reward."
+  },
+  {
+    "id": "17.3-007",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.1 The setup",
+    "question": "Which of these does R1-Zero use?",
+    "options": [
+      "A process reward model scoring each step",
+      "An outcome reward model trained on answers",
+      "A rule-based checker plus GRPO's group baseline",
+      "Human preference data with a Bradley-Terry fit"
+    ],
+    "answer_index": 2,
+    "explanation": "R1-Zero uses no PRM, no ORM and no human preference data. It uses only a rule-based checker for accuracy and format, and GRPO's group-mean baseline in place of a critic."
+  },
+  {
+    "id": "17.3-008",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.2 What emerges",
+    "question": "Over R1-Zero's RL training, which two quantities rise together in the R1 report's headline figure?",
+    "options": [
+      "Learning rate and batch size",
+      "KL divergence and entropy",
+      "Number of tool calls and latency",
+      "Response length and accuracy"
+    ],
+    "answer_index": 3,
+    "explanation": "The documented headline result is that response length and accuracy grow together. The model learns on its own to write longer chains because spending more test-time compute earns more reward on hard problems."
+  },
+  {
+    "id": "17.3-009",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.2 What emerges",
+    "question": "Why does R1-Zero's response length grow during RL?",
+    "options": [
+      "Longer correct chains were rewarded, so the model learned that spending more test-time compute earns more reward",
+      "A length bonus was explicitly added to the reward so that longer chains of thought would be favoured over short ones",
+      "The maximum generation length was increased on a schedule, and the policy simply filled the extra budget it was given",
+      "The format reward pays a small amount per token inside the think tags, so longer chains collect more format reward"
+    ],
+    "answer_index": 0,
+    "explanation": "No one told the model to write longer chains and no length bonus was described. Longer correct chains simply earned more accuracy reward on hard problems, so the policy discovered that more test-time compute pays."
+  },
+  {
+    "id": "17.3-010",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.2 What emerges",
+    "question": "What is the 'aha moment' described in the R1 report?",
+    "options": [
+      "The step where training loss first hits zero and the policy stops changing on already-solved problems",
+      "A 'wait, let me reconsider' self-correction behaviour that emerges inside the chains during RL",
+      "The moment the curated cold-start dataset is introduced and chains suddenly become readable",
+      "A sudden jump in rollout throughput once the policy learns to stop generating at the answer"
+    ],
+    "answer_index": 1,
+    "explanation": "As accuracy grows, qualitatively new behaviours appear in R1-Zero's chains: re-checking earlier steps, trying an alternative approach after a dead end, and the famous 'wait, let me reconsider' self-correction the report calls an aha moment."
+  },
+  {
+    "id": "17.3-011",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.2 What emerges",
+    "question": "How did R1-Zero acquire reasoning strategies such as re-checking and backtracking?",
+    "options": [
+      "They were demonstrated in a set of curated chain-of-thought examples shown to the base model before RL began",
+      "They were incentivised by a verifiable reward and discovered by RL search, not demonstrated",
+      "They were hard-coded into the decoding algorithm, which re-samples a step whenever confidence drops",
+      "They were copied from a larger teacher model's traces through a distillation pass during training"
+    ],
+    "answer_index": 1,
+    "explanation": "The key conceptual payoff: reasoning strategies were not demonstrated to the model. They were incentivised by the verifiable reward and discovered by search during on-policy RL from a base model with no reasoning examples."
+  },
+  {
+    "id": "17.3-012",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.2 What emerges",
+    "question": "How does R1-Zero go beyond what STaR showed?",
+    "options": [
+      "STaR needed a learned reward model to filter chains, while R1-Zero replaces it with a rule-based checker of the final answer",
+      "STaR used on-policy RL with a critic, while R1-Zero instead used offline SFT on its own filtered correct chains of thought",
+      "STaR worked without any correctness signal at all, while R1-Zero was the first method to add a verifiable reward",
+      "STaR imitated filtered correct chains; R1-Zero shows on-policy RL grows the behaviour from a base model with no examples"
+    ],
+    "answer_index": 3,
+    "explanation": "STaR hinted at self-taught reasoning by filtering for correct chains and imitating them in offline SFT rounds, starting from few-shot CoT. R1-Zero shows on-policy RL can grow the behaviour from a base model with no reasoning examples at all."
+  },
+  {
+    "id": "17.3-013",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.3 Why R1-Zero alone is not enough",
+    "question": "What documented limitations do R1-Zero's chains have?",
+    "options": [
+      "They mix languages mid-chain, are poorly formatted, and are hard for a human to follow",
+      "They are nearly always wrong on hard problems, since RL only improved the easy ones",
+      "They are too short to be useful, because GRPO's group baseline penalises long outputs relative to short ones",
+      "They often cannot be parsed by the accuracy checker, since the answer tags drift away"
+    ],
+    "answer_index": 0,
+    "explanation": "R1-Zero's chains work but read badly: they mix languages mid-chain, are poorly formatted and hard to follow. That gap is what the full R1 pipeline closes."
+  },
+  {
+    "id": "17.3-014",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "2.3 Why R1-Zero alone is not enough",
+    "question": "Why does optimizing only a correctness signal produce R1-Zero's readability problems?",
+    "options": [
+      "Because the correctness checker actively penalises readable text that repeats the question",
+      "Because it optimises for getting the answer, not for being readable or general",
+      "Because GRPO cannot represent multilingual tokens, so it splits them into byte noise",
+      "Because the base model had seen very little English text during its pretraining run"
+    ],
+    "answer_index": 1,
+    "explanation": "Pure optimisation of a correctness signal rewards reaching the answer and nothing else, so readability and generality are not incentivised. This is why cold-start SFT comes back in the full R1 pipeline."
+  },
+  {
+    "id": "17.3-015",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "What is the documented order of the four stages of the full R1 pipeline?",
+    "options": [
+      "Reasoning RL, cold-start SFT, final RL, rejection-sampling SFT",
+      "Rejection-sampling SFT, cold-start SFT, reasoning RL, final RL",
+      "Cold-start SFT, reasoning RL, rejection-sampling SFT, final RL",
+      "Cold-start SFT, distillation, reasoning RL, rejection-sampling SFT"
+    ],
+    "answer_index": 2,
+    "explanation": "R1 is documented as: (1) cold-start SFT, (2) reasoning RL with verifiable reward, (3) rejection-sampling SFT, (4) final RL. Distillation into small models is a separate step after R1 is trained."
+  },
+  {
+    "id": "17.3-016",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "What is R1's cold-start SFT stage?",
+    "options": [
+      "Fine-tuning the base model on millions of web documents and math papers to extend its pretraining before any RL begins",
+      "A short RL phase with a strong length penalty that teaches the base model to stop early before the main reasoning RL",
+      "Fine-tuning a small dense model on R1-generated traces so that it can be used as the starting policy for full-scale RL",
+      "Fine-tuning the base model on a small curated set of long chain-of-thought examples in a readable format before RL"
+    ],
+    "answer_index": 3,
+    "explanation": "Cold-start SFT fine-tunes the base model on thousands of curated, readable long-CoT examples. It primes the pump so RL starts from a sane, readable format instead of a raw base model, fixing R1-Zero's readability problem before RL begins."
+  },
+  {
+    "id": "17.3-017",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "What does R1's reasoning RL stage add beyond R1-Zero's rewards?",
+    "options": [
+      "A reward for language consistency so chains stop code-switching",
+      "A process reward model that scores each step of the chain",
+      "A learned critic that replaces the group baseline for stability",
+      "Human preference rewards that judge the chain's writing style"
+    ],
+    "answer_index": 0,
+    "explanation": "R1's reasoning RL runs GRPO with the verifiable reward as in R1-Zero, on the cold-started model, and also rewards language consistency so chains stop switching languages. Reasoning climbs while staying readable."
+  },
+  {
+    "id": "17.3-018",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "What happens in R1's rejection-sampling SFT stage?",
+    "options": [
+      "The RL'd model is discarded and the base model is fine-tuned from scratch on a new human-written set of reasoning chains and general data",
+      "The RL'd model samples many solutions; correct, well-formed ones plus non-reasoning data (writing, QA, safety) become a broader SFT set",
+      "A process reward model is trained on the RL'd model's samples to reject bad steps, and that model is then used as the reward for final RL",
+      "Wrong solutions sampled from the RL'd model are used as negative examples in a contrastive loss alongside the correct ones as positives"
+    ],
+    "answer_index": 1,
+    "explanation": "Rejection-sampling SFT uses the RL'd model to generate many solutions, keeps the correct and well-formed ones (best-of-N rejection sampling, with STaR's correctness filter), adds general non-reasoning data, and fine-tunes on it. This generalises the model beyond narrow verifiable tasks."
+  },
+  {
+    "id": "17.3-019",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "What does R1's final RL stage optimize?",
+    "options": [
+      "Only the format reward, to make sure the general-purpose model still wraps its reasoning in think tags",
+      "Only a distillation loss against a larger teacher model's outputs on both reasoning and general prompts",
+      "Reasoning prompts (verifiable reward) and general prompts (helpfulness/harmlessness), to align the all-round model",
+      "Only a language-consistency reward, since answer accuracy was already maximised in the earlier reasoning RL stage"
+    ],
+    "answer_index": 2,
+    "explanation": "The last RL stage covers reasoning prompts with the verifiable reward and general prompts with helpfulness/harmlessness objectives, aligning the all-round model."
+  },
+  {
+    "id": "17.3-020",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "Which summary captures the shape of the R1 pipeline?",
+    "options": [
+      "RL to prime, SFT to grow reasoning, RL to broaden, SFT to align",
+      "SFT only, repeated four times on progressively harder data",
+      "RL only, run four times with steadily growing group sizes",
+      "SFT to prime, RL to grow reasoning, SFT to broaden, RL to align"
+    ],
+    "answer_index": 3,
+    "explanation": "Stages alternate supervised imitation and reward-driven search: SFT sets format and breadth, RL discovers capability. R1 is the STaR loop and DeepSeekMath's GRPO, industrialised and interleaved."
+  },
+  {
+    "id": "17.3-021",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "3. R1: the multi-stage pipeline",
+    "question": "Which parts of R1's pipeline are publicly documented, and which are proprietary?",
+    "options": [
+      "The four-stage structure is documented; the exact data and hyperparameters are proprietary",
+      "Everything is published, including every dataset, reward weight and hyperparameter used",
+      "Only the distillation step is documented; the RL stages, their rewards and their order are all proprietary",
+      "The hyperparameters are published in full, but the stage structure itself is kept secret"
+    ],
+    "answer_index": 0,
+    "explanation": "The R1 report documents the four-stage pipeline, but exact datasets, reward weights and hyperparameters are proprietary. Stage descriptions are a documented structure, not a line-for-line recipe."
+  },
+  {
+    "id": "17.3-022",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "4. Distillation: reasoning into small models",
+    "question": "How did DeepSeek distill R1's reasoning into smaller models?",
+    "options": [
+      "By running GRPO on each small model, with R1 itself serving as the learned reward model that scores sampled chains",
+      "By plain SFT of smaller dense models (Qwen- and Llama-based, 1.5B to 70B) on a large set of R1-generated traces",
+      "By pruning R1's least-used experts and merging the remainder into dense models of 1.5B to 70B parameters",
+      "By matching R1's full output distribution with a token-level KL loss on every position of every training sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "DeepSeek ran R1 to generate many high-quality reasoning traces and then plain-SFT'd smaller dense models (about 1.5B to 70B, Qwen- and Llama-based) on them. No RL was applied to the small models: just supervised imitation of the big model's chains."
+  },
+  {
+    "id": "17.3-023",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "4. Distillation: reasoning into small models",
+    "question": "What did the R1 report find when comparing distillation with running RL directly on the same small model?",
+    "options": [
+      "RL directly on the small model was clearly better, since it explores its own solutions",
+      "Both gave essentially identical results at every model size tested in the report",
+      "Distilling R1's traces gave better reasoning than RL directly on that small model",
+      "Distillation only beat RL for the 70B model; below that, RL on the small model won"
+    ],
+    "answer_index": 2,
+    "explanation": "The documented finding is that SFT on R1's traces gives a small dense model better reasoning than running RL directly on it. This is the surprising part: imitation beat small-model RL."
+  },
+  {
+    "id": "17.3-024",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "4. Distillation: reasoning into small models",
+    "question": "What is the (partly inferred) interpretation of why distillation beats RL on small models?",
+    "options": [
+      "Small models cannot run GRPO at all, because the group baseline needs a model large enough to produce mixed groups on every prompt",
+      "Small models have no latent chain-of-thought capability, so any reasoning they show after distillation is memorised from R1's traces",
+      "Distillation simply uses far more compute than the RL run on the small model, so the comparison reflects budget rather than method",
+      "Patterns large-model RL discovers are hard for a small model to find by RL itself but easy to imitate: search once at scale, then copy"
+    ],
+    "answer_index": 3,
+    "explanation": "The interpretation, which is inference rather than a proven claim, is that the big model's RL-discovered patterns are hard for a small model to rediscover through its own RL but relatively easy to imitate. It mirrors STaR's 'generate then imitate' with R1 as the generator."
+  },
+  {
+    "id": "17.3-025",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5. Mapping the pipeline to runnable code: mini_r1",
+    "question": "What is llmre.reasoning.r1_pipeline.mini_r1?",
+    "options": [
+      "A didactic skeleton of R1's stage sequence on a toy task, with a tiny logit table in place of a language model",
+      "A small transformer language model trained with GRPO on GSM8K to reproduce R1's accuracy curve at laptop scale",
+      "A distilled 1.5B version of R1, packaged with the course so lessons can run real reasoning chains on a single GPU",
+      "A thin wrapper that calls the DeepSeek-R1 API and logs each stage's outputs so that the whole pipeline can be inspected live"
+    ],
+    "answer_index": 0,
+    "explanation": "mini_r1 runs R1's control flow on a toy task in milliseconds on CPU. The policy is a logit table with one row per problem and one column per candidate answer, yet it exercises the same two learning signals R1 uses: supervised cross-entropy and verifiable-reward RL."
+  },
+  {
+    "id": "17.3-026",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.1 The toy task and the verifier",
+    "question": "In mini_r1's toy task, what does toy_verifier(actions, correct) return?",
+    "options": [
+      "The log-probability that the policy assigns to the correct answer key",
+      "(actions == correct).float(): 1.0 if the sampled answer matches the gold key, else 0.0",
+      "A per-step PRM score for each action, averaged over the group of samples",
+      "The cross-entropy between the sampled actions and the correct answer indices, averaged over the group of samples"
+    ],
+    "answer_index": 1,
+    "explanation": "toy_verifier is a local rule-based checker, the miniature of R1's accuracy reward. It returns a float tensor of 1.0 where the sampled answer equals the gold key and 0.0 elsewhere. It is deliberately not imported from Module 16's shared code."
+  },
+  {
+    "id": "17.3-027",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.1 The toy task and the verifier",
+    "question": "What is the shape, dtype, device and initialisation of mini_r1's policy, and why?",
+    "options": [
+      "(A, P), float16, on GPU, initialised from a random normal so that early exploration is high across all answers",
+      "(P, A, G), int64, on CPU, initialised to ones so that every candidate answer starts with equal count",
+      "(P, A), float32, CPU, zeros so the starting policy is uniform, mirroring an untrained base model",
+      "(P,), float32, on CPU, initialised to the correct answer indices so the verifier has a reference policy"
+    ],
+    "answer_index": 2,
+    "explanation": "The policy is a logit table of shape (P, A), float32 on CPU, with P problems and A candidate answers. Zero logits give a uniform softmax: the policy has learned nothing, like a base model."
+  },
+  {
+    "id": "17.3-028",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.2 The stages, mapped",
+    "question": "Which R1 stage does mini_r1's 'sft' stage correspond to, and what does it do?",
+    "options": [
+      "Final RL; it optimises a helpfulness reward over the whole problem set",
+      "Distillation; it copies a teacher table into the student policy's logits",
+      "Rejection-sampling SFT; it keeps only the sampled answers that the verifier accepts as correct",
+      "Cold-start SFT; cross-entropy on a few curated problems toward their correct answer"
+    ],
+    "answer_index": 3,
+    "explanation": "mini_r1's stages are base (uniform policy, the base model), sft (cold-start SFT: cross-entropy on a few curated demo problems toward their known answers), and rl (reasoning RL with GRPO and the toy verifier)."
+  },
+  {
+    "id": "17.3-029",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.2 The stages, mapped",
+    "question": "In mini_r1's rl stage, which line is the critic-free baseline?",
+    "options": [
+      "The group-mean subtraction in adv = (rewards - rewards.mean(-1, keepdim=True)) / (rewards.std(-1, keepdim=True) + eps)",
+      "probs = softmax(logits, dim=-1), which normalises the policy so that every problem's answer probabilities sum to one",
+      "actions = multinomial(probs, group_size), which draws a group of G answers per problem from the current policy",
+      "loss = -(adv.detach() * log_prob(actions)).mean(), which averages the weighted log-probabilities over the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "The group's mean reward, subtracted in the advantage, replaces PPO's learned value network. That is GRPO's group-relative advantage (r - mean)/std from 17.2 driving a policy-gradient step."
+  },
+  {
+    "id": "17.3-030",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.2 The stages, mapped",
+    "question": "In mini_r1's rl stage, what are the shapes of actions and rewards for P problems and group size G?",
+    "options": [
+      "actions (P,), rewards (G,), one action per problem",
+      "actions (P, G), rewards (P, G), with rewards in {0, 1}",
+      "actions (G, A), rewards (P, A), one-hot over answers",
+      "actions (P, A), rewards (P,), summed over the group"
+    ],
+    "answer_index": 1,
+    "explanation": "multinomial(probs, group_size) samples a group of G answers per problem, giving actions of shape (P, G). The verifier scores each, giving rewards of shape (P, G) with values in {0, 1}. The mean and std are taken along the last (group) dimension."
+  },
+  {
+    "id": "17.3-031",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.2 The stages, mapped",
+    "question": "Why is adv detached in mini_r1's loss = -(adv.detach() * log_prob(actions)).mean()?",
+    "options": [
+      "To move it to the CPU before the multiply, since log_prob lives on the CPU while the advantages were computed on the GPU",
+      "To convert it to float16, so the product with log_prob stays in half precision and the backward pass uses less memory",
+      "The advantage is a fixed weight on the log-probs in a REINFORCE/GRPO update; gradients should flow only through log_prob",
+      "Because rewards are integers, and autograd raises an error when it tries to differentiate through an integer-valued tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "In a REINFORCE/GRPO update the advantage is a constant weight telling each log-probability how much to be pushed up or down. Detaching it ensures gradients flow only through log_prob(actions), the policy's own probabilities."
+  },
+  {
+    "id": "17.3-032",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.2 The stages, mapped",
+    "question": "Why is mini_r1's toy accuracy monotonic across the rl stage?",
+    "options": [
+      "Because the learning rate decays to zero over the stage, so later updates are too small to undo progress on any problem",
+      "Because a short SFT pass reruns between RL steps, pulling every problem back toward its known correct answer each time",
+      "Because the verifier gives partial credit to near-miss answers, so the reward signal never points away from the gold answer key",
+      "A fully solved problem gives an all-correct group with advantage about 0, so no update pushes it back toward a wrong answer"
+    ],
+    "answer_index": 3,
+    "explanation": "If every sampled answer is correct, r - mean is 0 for all of them, so the advantage is about 0 and the problem receives no update. Solved problems are never pushed back, so accuracy_after >= accuracy_before holds by construction."
+  },
+  {
+    "id": "17.3-033",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.3 Run it",
+    "question": "In a representative mini_r1 run, the base uniform policy over 4 answers gets accuracy 0.333 on 6 problems. Why is that not exactly 1/4?",
+    "options": [
+      "Chance is 1/A = 1/4, but with only 6 problems it lands at 2/6 by how ties and samples fall",
+      "Because the base policy table was pre-trained on the demo problems before evaluation",
+      "Because the verifier gives half credit when the answer is adjacent to the gold key",
+      "Because only 3 of the 4 candidate answers can ever be sampled by the zero-initialised uniform policy table"
+    ],
+    "answer_index": 0,
+    "explanation": "Chance for a uniform policy over A = 4 answers is 1/4, but with just 6 problems the measured accuracy lands at 2/6 = 0.333. It is a small-sample artefact, not a sign the base learned anything."
+  },
+  {
+    "id": "17.3-034",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.3 Run it",
+    "question": "In mini_r1, why does the cold-start SFT demo loss start at 1.386?",
+    "options": [
+      "It is an arbitrary initial value set by the random seed of the logit table",
+      "It equals ln 4, the cross-entropy of a uniform distribution over 4 answers",
+      "It equals 1/A + 1 = 1.25 plus a small regularisation term on the logits",
+      "It is the KL divergence from the uniform policy to the reference policy"
+    ],
+    "answer_index": 1,
+    "explanation": "The zero-initialised policy is uniform over 4 answers, so the cross-entropy of the correct answer is -ln(1/4) = ln 4 = 1.386. SFT then drives the demo loss to about 0.071."
+  },
+  {
+    "id": "17.3-035",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.3 Run it",
+    "question": "In the representative mini_r1 run, what does the RL stage show that SFT could not?",
+    "options": [
+      "It lowers the cold-start demo loss further, from ln 4 down to zero, on the curated problems",
+      "It reproduces R1's aha moment, with the policy revising its first sampled answer mid-episode",
+      "Using only the verifiable reward, it lifts accuracy from 0.5 to 1.0, including on problems SFT never saw",
+      "It distils the trained policy into a smaller logit table that keeps the same accuracy on every problem"
+    ],
+    "answer_index": 2,
+    "explanation": "Cold-start SFT lifts accuracy to 0.5 but only on the curated demos. Reasoning RL, using nothing but the verifiable reward, raises accuracy to 1.0 on every problem, including those SFT never touched: R1-Zero's 'emerging from reward alone' phenomenon shrunk to a toy."
+  },
+  {
+    "id": "17.3-036",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.4 What the toy does and does not show",
+    "question": "Which of these does mini_r1 faithfully reproduce?",
+    "options": [
+      "Emergent self-correction in long chains, with the toy policy learning to revisit and revise its own earlier answers mid-episode",
+      "R1's distillation stage, in which the trained logit table is copied into a smaller student table that matches its accuracy",
+      "A language model's chain-of-thought, with the toy policy generating intermediate tokens before committing to a final answer",
+      "The pipeline structure (cold-start SFT, then critic-free verifiable-reward RL) and RL improving problems SFT never touched"
+    ],
+    "answer_index": 3,
+    "explanation": "mini_r1 reproduces the control flow and the qualitative result. It has no language model, no long chain of thought, no emergent self-correction and no distillation stage; its 'reasoning' is choosing one of four answers."
+  },
+  {
+    "id": "17.3-037",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "5.4 What the toy does and does not show",
+    "question": "What is the honest scope of mini_r1?",
+    "options": [
+      "A control-flow scale model, for seeing how the stages fit together, not a reproduction of R1's capability",
+      "A faithful small-scale reproduction of R1's reasoning ability that can stand in for it in course experiments",
+      "A benchmark harness for comparing reasoning models' accuracy on the same toy problems across pipelines",
+      "A drop-in replacement for real R1 training when only limited hardware such as a laptop GPU is available"
+    ],
+    "answer_index": 0,
+    "explanation": "mini_r1 is a didactic control-flow scale model. It shows the stages fitting together but not R1's substance; over-claiming from it is a listed common mistake."
+  },
+  {
+    "id": "17.3-038",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Hardware track",
+    "question": "What hardware does mini_r1 need?",
+    "options": [
+      "A single 24 GB GPU for about an hour, since the RL stage samples large groups for every problem",
+      "CPU only: under a second and a few MB of memory, since the policy is a (6, 4) float tensor",
+      "A small multi-node cluster, since the stages are run in parallel across separate worker processes",
+      "At least 8 H100 GPUs, matching the minimum configuration the R1 report gives for GRPO training"
+    ],
+    "answer_index": 1,
+    "explanation": "mini_r1 is CPU-only, runs in under a second and uses a few MB, because the policy is just a (6, 4) float tensor. It runs anywhere Python and PyTorch install."
+  },
+  {
+    "id": "17.3-039",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Hardware track",
+    "question": "What is the scale of DeepSeek-V3, the base for real R1 training?",
+    "options": [
+      "A 67B dense model with grouped-query attention, whose pretraining took about 2.79M H800 GPU-hours on 2T tokens",
+      "A 70B dense model trained on a single 8-GPU node, with about 37B parameters frozen during the RL stages",
+      "A 671B-parameter MoE with about 37B active; V3 pretraining alone was reported at about 2.79M H800 GPU-hours",
+      "A 236B-parameter MoE with about 21B active, whose pretraining was reported at roughly 280k H800 GPU-hours"
+    ],
+    "answer_index": 2,
+    "explanation": "DeepSeek-V3 is a 671B-parameter mixture-of-experts model with about 37B active per token. Pretraining it was reported at roughly 2.79M H800 GPU-hours, and R1's RL and SFT stages add large-scale generation and training on top, needing hundreds of GPUs for weeks."
+  },
+  {
+    "id": "17.3-040",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "6. Documented vs inferred — read the report critically",
+    "question": "Which of these is publicly documented in the R1 report?",
+    "options": [
+      "The exact cold-start dataset, its size, and the reward weights used in each stage",
+      "That OpenAI's o-series reasoning models are trained with the same four-stage pipeline",
+      "The precise data mixture and prompt sources used during the final general-purpose RL",
+      "That distilling R1 traces into smaller dense models beats RL on those small models directly"
+    ],
+    "answer_index": 3,
+    "explanation": "The report documents R1-Zero's pure RL with accuracy and format rewards, emergent reasoning and length growth, the four-stage R1 pipeline, and that distillation beats small-model RL. Exact datasets, reward weights, hyperparameters and mixtures are proprietary, and nothing is claimed about other labs."
+  },
+  {
+    "id": "17.3-041",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "6. Documented vs inferred — read the report critically",
+    "question": "Which statement about R1 is inference rather than documented fact?",
+    "options": [
+      "That distillation beats small-model RL because large-model patterns are easier to imitate than rediscover",
+      "That R1-Zero was trained with only rule-based rewards: an accuracy check on answers and a format check on tags",
+      "That R1-Zero's average response length grows steadily over the course of RL training alongside its accuracy",
+      "That R1 uses a cold-start SFT, reasoning RL, rejection-sampling SFT, then final RL pipeline in that order"
+    ],
+    "answer_index": 0,
+    "explanation": "The empirical result that distillation wins is documented, but the explanation of why is interpretation, not a proven claim. The other three statements are stated in the R1 report."
+  },
+  {
+    "id": "17.3-042",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "6. Documented vs inferred — read the report critically",
+    "question": "Can the R1 pipeline be attributed to OpenAI's or Anthropic's reasoning models?",
+    "options": [
+      "Yes; all the frontier labs have publicly confirmed that they use the same four stages, differing only in data and scale",
+      "No; R1 is DeepSeek's published system, and other labs' reasoning models are not documented at this level and may differ",
+      "Yes, but only the R1-Zero part, since every lab is known to start reasoning RL from a base model without SFT",
+      "Yes, because GRPO is now an industry standard, so any lab's reasoning model must follow the R1 recipe end to end"
+    ],
+    "answer_index": 1,
+    "explanation": "R1 is DeepSeek's published system. Other labs' reasoning models, such as the o-series, are not documented at this level and may use entirely different methods, so mini_r1 is a teaching reconstruction of the R1 report only."
+  },
+  {
+    "id": "17.3-043",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Research connection",
+    "question": "What is the full title of the DeepSeek-R1 paper?",
+    "options": [
+      "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models",
+      "Let's Verify Step by Step: Process Supervision for Reasoning via Reinforcement Learning",
+      "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+      "STaR: Bootstrapping Reasoning With Reasoning via Large-Scale Reinforcement Learning"
+    ],
+    "answer_index": 2,
+    "explanation": "The paper is 'DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning' (DeepSeek-AI 2025). It pulls together GRPO (DeepSeekMath), verifiable rewards, STaR's generate-filter-imitate loop and process-vs-outcome supervision."
+  },
+  {
+    "id": "17.3-044",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What does 'pure RL' mean for R1-Zero?",
+    "options": [
+      "It used no reward signal at all: the policy improved purely from self-play between groups of its own samples",
+      "It used only human preference rewards, collected online during RL, with no supervised fine-tuning stage beforehand",
+      "It used only a learned outcome reward model trained on gold answers, with no SFT and no rule-based checker",
+      "It used no SFT and no learned reward model, but did use a rule-based verifiable reward (answer-correct plus format)"
+    ],
+    "answer_index": 3,
+    "explanation": "'Pure RL' means pure of supervised fine-tuning and of learned reward models, not pure of reward. R1-Zero absolutely used a reward: a rule-based verifiable one checking answer correctness and format."
+  },
+  {
+    "id": "17.3-045",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is reading R1's four-stage diagram as a copyable recipe a mistake?",
+    "options": [
+      "The stage structure is documented, but datasets, reward weights and hyperparameters are not, so do not assert exact numbers",
+      "The diagram is a simplified illustration that DeepSeek later retracted, so its stages do not match the model actually released",
+      "The stages can run in any order with the same result, so the diagram's sequence carries no real information about training",
+      "The diagram describes only R1-Zero, and the full R1 used a different single-stage pipeline that the report does not show"
+    ],
+    "answer_index": 0,
+    "explanation": "The structure is documented; the specifics are proprietary. You cannot reproduce R1 line for line from the report, and asserting exact numbers overstates what is known."
+  },
+  {
+    "id": "17.3-046",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Which statement about R1's distillation is correct?",
+    "options": [
+      "The small models were trained with GRPO, using R1 as the reward model that scores their chains",
+      "Distillation is plain SFT on R1's generated traces, with no RL on the small models",
+      "Distillation matched R1's full logits with a token-level KL loss rather than using sampled text",
+      "Distillation required new human-labelled reasoning steps to correct R1's mixed-language chains"
+    ],
+    "answer_index": 1,
+    "explanation": "Assuming distillation used RL on the small models is a common mistake. It was plain SFT on R1's traces, and the surprise is that this imitation beat RL on the small models."
+  },
+  {
+    "id": "17.3-047",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Exercise",
+    "question": "In mini_r1, if you set n_demos=0 to skip cold-start SFT, which R1 variant are you simulating?",
+    "options": [
+      "R1 with rejection-sampling SFT, since the RL stage then filters its own samples",
+      "A distilled small model, since the policy learns only from verifier-approved samples",
+      "R1-Zero: verifiable-reward RL directly on the base (uniform) policy with no SFT",
+      "Final-stage alignment RL, since the policy starts from the already-trained table"
+    ],
+    "answer_index": 2,
+    "explanation": "Skipping cold-start SFT and going straight to verifiable-reward RL from the uniform base policy is R1-Zero: pure RL, no SFT."
+  },
+  {
+    "id": "17.3-048",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Exercise",
+    "question": "With n_demos=0 in mini_r1, should the RL stage still raise accuracy, and why does the toy not show a difference from R1-style training?",
+    "options": [
+      "No: without SFT demos every group is all-wrong, so the verifier gives zero reward and RL never gets a learning signal",
+      "No: the group advantage is always exactly zero without SFT, because the uniform policy samples every answer equally often",
+      "Yes, but only on the demo problems, since RL can only reinforce answers that cold-start SFT has already made more likely",
+      "Yes: the verifier gives signal wherever a group is mixed; the toy has no notion of readability, the real benefit of cold start"
+    ],
+    "answer_index": 3,
+    "explanation": "The RL stage scores every problem, and any group with mixed correct and wrong answers produces nonzero advantages, so it never needed the demos. In the real system cold-start improves readability, which the toy cannot measure, so R1-Zero-style and R1-style reach the same toy accuracy."
+  },
+  {
+    "id": "17.3-049",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Check yourself",
+    "question": "What is the single most important claim of R1-Zero, and what did it deliberately leave out?",
+    "options": [
+      "Reasoning can emerge from pure RL on a base model with only a rule-based verifiable reward; it left out SFT and learned RMs",
+      "Process reward models are necessary for long chains; it left out the format reward to isolate the effect of the PRM",
+      "Distillation beats RL for every model size; it left out the base model and trained directly from R1's own traces",
+      "Long chains of thought hurt accuracy past a length limit; it left out GRPO and used PPO with a learned value critic instead"
+    ],
+    "answer_index": 0,
+    "explanation": "R1-Zero's claim is that long chains, self-correction and growing response length can emerge from pure RL with a verifiable reward. It deliberately had no curated CoT demonstrations (no SFT) and no ORM/PRM; reasoning was incentivised by a checker and discovered by search."
+  },
+  {
+    "id": "17.3-050",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does the full R1 add cold-start SFT when R1-Zero showed RL alone already works?",
+    "options": [
+      "Because RL alone gives mostly wrong answers on hard problems, and cold-start SFT supplies the correct reasoning steps",
+      "R1-Zero's chains read badly; a small curated readable long-CoT set gives RL a clean format so the reasoning it grows is usable",
+      "Because GRPO cannot start from a base model: with no SFT, every group is all-wrong and the advantages are always zero",
+      "Because cold-start SFT on enough long readable chains replaces the need for large-scale RL, which is then kept only for alignment"
+    ],
+    "answer_index": 1,
+    "explanation": "R1-Zero's chains are correct but mix languages and are hard to follow. Cold-start SFT trades a little supervision for a large gain in readability and controllability, so the reasoning RL then grows is usable."
+  },
+  {
+    "id": "17.3-051",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Someone says 'R1 proves OpenAI trains its reasoning models with GRPO and no SFT.' What is wrong with this?",
+    "options": [
+      "Nothing; the R1 report explicitly states that OpenAI's o1 uses GRPO and skips supervised fine-tuning entirely",
+      "Only that GRPO was actually invented by OpenAI and later adopted by DeepSeek, so the attribution runs the other way round",
+      "'No SFT' is true only of R1-Zero (R1 uses cold-start and rejection-sampling SFT), and R1 says nothing about OpenAI",
+      "Only that R1 was trained with PPO and a learned critic, not GRPO, so the algorithm named in the claim is wrong"
+    ],
+    "answer_index": 2,
+    "explanation": "Two errors: even within R1, only R1-Zero skips SFT, and R1 is DeepSeek's published system, which says nothing about how any other lab trains reasoning models. The right framing is that R1 is a documented example of one lab's verifiable-reward RL pipeline."
+  },
+  {
+    "id": "17.3-052",
+    "chapter": "17.3",
+    "chapter_name": "DeepSeek-R1 case study",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-03.md",
+    "section": "Next",
+    "question": "After the reasoning track (Modules 16-17), what does the course turn to?",
+    "options": [
+      "Pretraining data curation and deduplication at scale",
+      "Quantisation and serving reasoning models cheaply",
+      "Scaling laws for test-time compute and chain length",
+      "How a model acts: calling tools and running as an agent"
+    ],
+    "answer_index": 3,
+    "explanation": "Having gone from CoT prompting through verifiable-reward RL and GRPO to a full reasoning model, the course turns from how a model reasons to how it acts: tool use and agents."
+  }
+]

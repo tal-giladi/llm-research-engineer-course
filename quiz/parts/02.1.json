@@ -1,0 +1,974 @@
+[
+  {
+    "id": "02.1-001",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In LLM training, what question does the gradient of the loss answer for each parameter?",
+    "options": [
+      "How many training steps remain before the parameter stops changing",
+      "What value the parameter should be set to so the loss becomes exactly zero",
+      "Which way, and how hard, to nudge that parameter to make the loss smaller",
+      "Which training examples the parameter has memorised most strongly"
+    ],
+    "answer_index": 2,
+    "explanation": "Training is repeatedly asking which direction and how strongly to nudge each of millions of parameters to reduce the loss, and the gradient answers exactly that. It gives a local direction and rate, not a target value. It says nothing about remaining steps or memorisation."
+  },
+  {
+    "id": "02.1-002",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Every optimizer step in gradient-based LLM training is a step in which direction?",
+    "options": [
+      "Along a random direction scaled by the loss value",
+      "Along the direction of the largest single parameter",
+      "Along the negative gradient of the loss, -∇(loss)",
+      "Along the positive gradient of the loss, +∇(loss)"
+    ],
+    "answer_index": 2,
+    "explanation": "Gradient descent steps downhill, and downhill is -∇(loss) because the gradient itself points uphill (steepest increase). Stepping along +∇ would increase the loss. Random or parameter-magnitude directions are not what gradient descent uses."
+  },
+  {
+    "id": "02.1-003",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "1. Intuition: a derivative is a sensitivity",
+    "question": "Operationally, what does the derivative f'(x) measure?",
+    "options": [
+      "The largest value f can reach anywhere on its domain, found by scanning x",
+      "The value of the output f(x) at the current input x, read off the curve",
+      "The average of f over a large interval around x, smoothing out noise",
+      "The ratio of output change to input change for a tiny nudge of x"
+    ],
+    "answer_index": 3,
+    "explanation": "The derivative is a sensitivity: if you increase x by a tiny amount, how much does f(x) move per unit of x, in the limit of a tiny change. It is not the function value itself (a classic confusion). It is local, not an average over a large interval or a global maximum."
+  },
+  {
+    "id": "02.1-004",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "1. Intuition: a derivative is a sensitivity",
+    "question": "If f'(x) < 0 at some point, what happens to f when x is increased slightly there?",
+    "options": [
+      "f goes down",
+      "f jumps to zero",
+      "f stays exactly the same",
+      "f goes up"
+    ],
+    "answer_index": 0,
+    "explanation": "The sign of the derivative gives direction. A negative derivative means pushing x up pushes f down. A positive derivative would mean f goes up; a zero derivative would mean f is locally flat."
+  },
+  {
+    "id": "02.1-005",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "1. Intuition: a derivative is a sensitivity",
+    "question": "What does the magnitude of a derivative, such as f'(x) = 100 versus f'(x) = 0.001, tell you?",
+    "options": [
+      "Whether f is increasing or decreasing at that point",
+      "How many inputs the function f takes",
+      "How far x is from the minimum of f",
+      "How sensitive f is to x at that point"
+    ],
+    "answer_index": 3,
+    "explanation": "Magnitude encodes sensitivity: 100 means f reacts violently to small changes in x, 0.001 means f barely notices. Direction (increasing vs decreasing) comes from the sign, not the magnitude. The magnitude does not directly tell you distance to a minimum."
+  },
+  {
+    "id": "02.1-006",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "1. Intuition: a derivative is a sensitivity",
+    "question": "To make the loss go down using its derivative with respect to an input, how should the input be stepped?",
+    "options": [
+      "Only when the derivative is exactly zero",
+      "Opposite to the sign of the derivative",
+      "By an amount equal to the loss value",
+      "In the same direction as the sign of the derivative"
+    ],
+    "answer_index": 1,
+    "explanation": "We want the loss to decrease, so we read the derivative and step the input against its sign. Stepping with the sign would increase the loss. Applying this move to every parameter at once is gradient descent."
+  },
+  {
+    "id": "02.1-007",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "In the limit definition f'(x) = lim_{h→0} [f(x+h) − f(x)] / h, what do the numerator and h represent?",
+    "options": [
+      "The output change and the input change, respectively",
+      "The input change and the output change, respectively",
+      "The average slope and the tangent slope, respectively",
+      "The function value and the derivative value, respectively"
+    ],
+    "answer_index": 0,
+    "explanation": "f(x+h) − f(x) is how much the output changes, and h is how much the input changed; their ratio is a rate. Taking h → 0 pins down that rate exactly at x rather than over a finite stretch. Swapping them would give the reciprocal, not the derivative."
+  },
+  {
+    "id": "02.1-008",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "Why does the limit h → 0 appear in the definition of the derivative?",
+    "options": [
+      "It converts the average rate over [x, x+h] into the function's value at x",
+      "It guarantees the derivative is always a positive, finite number for any f",
+      "It makes the derivative independent of the particular function f being studied",
+      "It pins the rate of change down exactly at x rather than over a finite stretch"
+    ],
+    "answer_index": 3,
+    "explanation": "With finite h, the ratio is an average rate of change over [x, x+h]. Shrinking h to zero gives the instantaneous rate exactly at x. It does not force positivity, independence from f, or turn the rate into a function value."
+  },
+  {
+    "id": "02.1-009",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "How is the notation df/dx meant to be read?",
+    "options": [
+      "As 'd times f over d times x', where d is a constant",
+      "As the integral of f with respect to x",
+      "As 'f divided by x': the function value over the input",
+      "As 'df per dx': output change per input change"
+    ],
+    "answer_index": 3,
+    "explanation": "df/dx is deliberately fraction-like: it reads as output change per input change. It is not literally f/x, there is no constant d, and it denotes differentiation, not integration."
+  },
+  {
+    "id": "02.1-010",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "By the power rule, what is the derivative of f(x) = x^n?",
+    "options": [
+      "(n−1)·x^n",
+      "n·x^(n−1)",
+      "x^(n+1)/(n+1)",
+      "n·x^n"
+    ],
+    "answer_index": 1,
+    "explanation": "The power rule gives d/dx x^n = n·x^(n−1); for example x^2 → 2x. x^(n+1)/(n+1) is the antiderivative (integral), not the derivative. The other options mis-handle the exponent."
+  },
+  {
+    "id": "02.1-011",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "Why is the derivative of a constant equal to 0?",
+    "options": [
+      "Because constants cancel out whenever they are added to other terms in f",
+      "Because the power rule cannot be applied to constants, so they default to 0",
+      "Because a constant never changes, so nudging the input moves it by nothing",
+      "Because a constant term is itself always equal to zero once x is fixed"
+    ],
+    "answer_index": 2,
+    "explanation": "A derivative measures output change per input change; a constant has no output change at all, so its rate is 0. Constants are not themselves zero, and the power rule actually covers them (x^0 gives 0·x^−1 = 0)."
+  },
+  {
+    "id": "02.1-012",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "What does linearity of differentiation state?",
+    "options": [
+      "The derivative of a·f(x) + b·g(x) is f'(x) + g'(x)",
+      "The derivative of f(x)·g(x) is f'(x)·g'(x)",
+      "The derivative of f(g(x)) is f'(x) + g'(x)",
+      "The derivative of a·f(x) + b·g(x) is a·f'(x) + b·g'(x)"
+    ],
+    "answer_index": 3,
+    "explanation": "Linearity says constants factor out and sums differentiate term by term. The product of derivatives is not the derivative of a product, and dropping the constants a, b is wrong. Compositions are handled by the chain rule, not linearity."
+  },
+  {
+    "id": "02.1-013",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "2. Mathematics: the definition and the three rules we actually use",
+    "question": "Why is the derivative of f(x) = 3x + 1 the constant 3 for every x?",
+    "options": [
+      "Because the derivative of any polynomial is constant when evaluated at integer inputs",
+      "Because 3x + 1 equals 3 near zero, and that value carries over to every other x",
+      "Because the +1 term contributes a slope of 3 at every point, while 3x contributes 0",
+      "A line has the same slope everywhere: nudging x by h always moves f by 3h"
+    ],
+    "answer_index": 3,
+    "explanation": "By linearity and the power rule, 3x differentiates to 3 and the constant 1 to 0, so f'(x) = 3. That makes sense geometrically: a line has constant slope. The +1 contributes nothing, and derivatives are not generally constant."
+  },
+  {
+    "id": "02.1-014",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "3. Numerical example: a derivative as a measured slope",
+    "question": "Checking f(x) = x^2 at x = 3 with a finite step h = 0.001 gives a ratio of 6.001 instead of the exact 6. What is the 0.001 discrepancy?",
+    "options": [
+      "The second derivative of f, which is 2, being scaled by h and added to the first",
+      "Floating-point round-off caused by squaring 3.001 in float32 arithmetic",
+      "The error from using a finite h instead of an infinitesimal one",
+      "A sign that the power rule is only approximately correct"
+    ],
+    "answer_index": 2,
+    "explanation": "The finite-step ratio approximates the limit; the leftover 0.001 comes purely from h not being zero (for x^2 the forward-difference error is exactly h). The power rule is exact. It is not mainly floating-point round-off here."
+  },
+  {
+    "id": "02.1-015",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "3. Numerical example: a derivative as a measured slope",
+    "question": "What is the 'wiggle the input, watch the output' finite-difference check used for in practice?",
+    "options": [
+      "Computing the exact derivative with no approximation error, for any function",
+      "Sanity-checking a hand-derived gradient, as torch.autograd.gradcheck does",
+      "Replacing backpropagation entirely in large-scale training of big models",
+      "Choosing the learning rate for an optimizer automatically before training"
+    ],
+    "answer_index": 1,
+    "explanation": "Finite differences approximate the derivative numerically, so they are a good independent check of an analytic or autograd gradient; gradcheck works this way internally. They are approximate, not exact, and far too expensive to replace backprop for many parameters."
+  },
+  {
+    "id": "02.1-016",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "4. Partial derivatives: one knob at a time",
+    "question": "What is the rule for computing a partial derivative ∂f/∂x of a multi-input function?",
+    "options": [
+      "Differentiate with respect to every variable in turn and sum all the results",
+      "Differentiate with respect to x, then multiply the result by each other variable",
+      "Differentiate in x while treating every other variable as a fixed constant",
+      "Set every other variable to zero first, and then differentiate the result in x"
+    ],
+    "answer_index": 2,
+    "explanation": "A partial derivative differentiates in one variable while holding all others still as constants. Summing derivatives in all variables is not a partial. Setting others to zero is different from holding them constant at their current values."
+  },
+  {
+    "id": "02.1-017",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "4. Partial derivatives: one knob at a time",
+    "question": "What does the curly symbol ∂ (instead of d) signal in ∂f/∂x?",
+    "options": [
+      "There are other variables, and they are being held still",
+      "The derivative is taken with respect to a vector, not a scalar",
+      "The derivative is only an approximation of the true slope",
+      "The function f has no other inputs besides x"
+    ],
+    "answer_index": 0,
+    "explanation": "The curly ∂ marks a partial derivative: f has other inputs and they are frozen while differentiating in x. It is not an approximation marker. If f had only x as input, ordinary d would be used."
+  },
+  {
+    "id": "02.1-018",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "4. Partial derivatives: one knob at a time",
+    "question": "For f(x, y) = x^2·y + y^3, what is ∂f/∂x?",
+    "options": [
+      "2xy + 3y^2",
+      "2x + y",
+      "x^2 + 3y^2",
+      "2xy"
+    ],
+    "answer_index": 3,
+    "explanation": "Holding y constant, x^2·y differentiates to 2xy (y rides along as a constant multiplier) and y^3 contains no x, so it is a constant and contributes 0. x^2 + 3y^2 is ∂f/∂y. Adding 3y^2 wrongly differentiates a term that has no x."
+  },
+  {
+    "id": "02.1-019",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "4. Partial derivatives: one knob at a time",
+    "question": "For f(x, y) = x^2·y + y^3, what is ∂f/∂y?",
+    "options": [
+      "x^2·y + 3y^2",
+      "x^2 + 3y^2",
+      "2xy + 3y^2",
+      "2xy"
+    ],
+    "answer_index": 1,
+    "explanation": "Holding x constant, x^2·y differentiates in y to x^2 and y^3 differentiates to 3y^2, giving x^2 + 3y^2. 2xy is the partial in x. Keeping the y in x^2·y forgets to differentiate it."
+  },
+  {
+    "id": "02.1-020",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "4. Partial derivatives: one knob at a time",
+    "question": "What question does each partial derivative of a multi-input function answer?",
+    "options": [
+      "How sensitive f is to all of its inputs changing together at the same time",
+      "How sensitive f is to this one input if all the others are frozen",
+      "Which input currently has the largest value, and so dominates f at this point",
+      "What value f takes when this one input is set to zero and the others are kept"
+    ],
+    "answer_index": 1,
+    "explanation": "Each partial isolates one knob: freeze all other inputs and ask how f reacts to that one. Simultaneous change of all inputs is described by the full gradient (directional derivative), not a single partial."
+  },
+  {
+    "id": "02.1-021",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "5. The chain rule: differentiating a pipeline",
+    "question": "Why is the chain rule needed to differentiate a neural network?",
+    "options": [
+      "A network's loss is always a linear function of its weights",
+      "A network has no parameters that depend on the input",
+      "A network is a composition of layers, each feeding the next",
+      "A network is a sum of independent functions of the input"
+    ],
+    "answer_index": 2,
+    "explanation": "Neural networks are compositions: the input flows layer after layer. Differentiating a composition requires the chain rule. Sums differentiate by linearity alone, and the loss is generally highly nonlinear in the weights."
+  },
+  {
+    "id": "02.1-022",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "5. The chain rule: differentiating a pipeline",
+    "question": "If z depends on y and y depends on x, what does the chain rule give for dz/dx?",
+    "options": [
+      "dz/dy · dy/dx",
+      "dz/dy + dy/dx",
+      "dy/dz · dx/dy",
+      "dz/dy ÷ dy/dx"
+    ],
+    "answer_index": 0,
+    "explanation": "The chain rule multiplies local sensitivities: how much z moves per unit x equals (z per unit y) times (y per unit x). Sensitivities compose by multiplication, not addition or division. The reciprocal form is upside down."
+  },
+  {
+    "id": "02.1-023",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "5. The chain rule: differentiating a pipeline",
+    "question": "If wiggling x moves y twice as fast, and wiggling y moves z five times as fast, how fast does wiggling x move z?",
+    "options": [
+      "Ten times as fast",
+      "Two and a half times as fast",
+      "Seven times as fast",
+      "Five times as fast"
+    ],
+    "answer_index": 0,
+    "explanation": "By the chain rule, sensitivities along a pipeline multiply: 2 × 5 = 10. Adding them (7) or dividing them (2.5) is wrong, and ignoring the first stage (5) drops a factor."
+  },
+  {
+    "id": "02.1-024",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "5. The chain rule: differentiating a pipeline",
+    "question": "How does backpropagation get the gradient of the loss with respect to an early parameter?",
+    "options": [
+      "Add the local sensitivities of every layer in the network together, from input to loss",
+      "Take the derivative of only the last layer and ignore earlier ones, which cancel",
+      "Multiply the local sensitivities along every step of the path to the loss",
+      "Perturb the parameter slightly and rerun the forward pass to measure the effect on loss"
+    ],
+    "answer_index": 2,
+    "explanation": "Backprop is the chain rule applied systematically from the loss backward: multiply local derivatives along the path (once per edge). Perturbation is finite differences, which is far more expensive. Ignoring earlier layers would give the wrong gradient."
+  },
+  {
+    "id": "02.1-025",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Worked numeric example: y = 3x + 1, z = y^2, at x = 2",
+    "question": "For y = 3x + 1 and z = y^2 at x = 2, what is dz/dx?",
+    "options": [
+      "14",
+      "6",
+      "49",
+      "42"
+    ],
+    "answer_index": 3,
+    "explanation": "Forward: y = 7, z = 49. Local derivatives: dy/dx = 3, dz/dy = 2y = 14. Chain: 14 × 3 = 42. 49 is the value of z (not its derivative), and 14 is only dz/dy."
+  },
+  {
+    "id": "02.1-026",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Worked numeric example: y = 3x + 1, z = y^2, at x = 2",
+    "question": "To evaluate dz/dy = 2y for z = y^2 during the backward pass, what does an autodiff system need?",
+    "options": [
+      "Only the symbolic expression of y, never its numeric value",
+      "The value of y computed and cached during the forward pass",
+      "A second forward pass run after the backward pass finishes",
+      "The value of z, from which y is recomputed by square root"
+    ],
+    "answer_index": 1,
+    "explanation": "dz/dy = 2y depends on the actual value of y (7 at x = 2), which the forward pass produced. That is why autodiff runs forward first and caches intermediate values for backward. No second forward pass is needed, and recovering y from z is not how it is done."
+  },
+  {
+    "id": "02.1-027",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "What is the gradient ∇f of a scalar function f(x) of a vector x?",
+    "options": [
+      "The value of f evaluated at each component x_i",
+      "The vector stacking all partial derivatives ∂f/∂x_i",
+      "The sum of all partial derivatives ∂f/∂x_i",
+      "The largest partial derivative among the ∂f/∂x_i"
+    ],
+    "answer_index": 1,
+    "explanation": "The gradient is the vector of every partial: [∂f/∂x_1, ..., ∂f/∂x_n]. It keeps each component separately rather than summing them or picking the largest, and it contains derivatives, not function values."
+  },
+  {
+    "id": "02.1-028",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "If a weight tensor has shape (768, 768), what is the shape of the gradient of a scalar loss with respect to it?",
+    "options": [
+      "(768, 768, 768)",
+      "(1,)",
+      "(768, 768)",
+      "(768,)"
+    ],
+    "answer_index": 2,
+    "explanation": "The gradient of a scalar always has exactly the same shape as the variable it is taken with respect to. So a (768, 768) weight has a (768, 768) gradient: one partial per entry."
+  },
+  {
+    "id": "02.1-029",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "Why is it essential that a parameter and its gradient share shape, dtype and device?",
+    "options": [
+      "It guarantees the loss decreases after every optimizer step",
+      "It makes the optimizer's update param -= lr * param.grad type-check",
+      "It lets PyTorch skip storing the gradient in memory entirely",
+      "It ensures the gradient always has a smaller norm than the parameter"
+    ],
+    "answer_index": 1,
+    "explanation": "The update subtracts lr * grad elementwise from the parameter, which only works if they match in shape, dtype and device. Matching shapes do not save memory, bound the norm, or guarantee a loss decrease."
+  },
+  {
+    "id": "02.1-030",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "Where does PyTorch store the gradient of a leaf tensor param, and what shape does it have?",
+    "options": [
+      "In param.grad, with param.grad.shape == param.shape",
+      "In param.grad_fn, with shape (1,) for every parameter",
+      "In loss.grad, with one row per parameter tensor",
+      "In param.data, with shape equal to the loss's shape"
+    ],
+    "answer_index": 0,
+    "explanation": "PyTorch stores a tensor's gradient in its .grad attribute, and that gradient always has the tensor's shape. .data holds the values, and grad_fn records how a non-leaf tensor was produced, not its gradient."
+  },
+  {
+    "id": "02.1-031",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "For f(x, y) = x^2·y + y^3, what is ∇f at (2, 3)?",
+    "options": [
+      "[31, 12]",
+      "[12, 31]",
+      "[39, 39]",
+      "[12, 27]"
+    ],
+    "answer_index": 1,
+    "explanation": "∇f = [2xy, x^2 + 3y^2]. At (2, 3): 2·2·3 = 12 and 4 + 27 = 31. Swapping the order mislabels which partial is which, and 39 is f(2, 3) itself, not a derivative."
+  },
+  {
+    "id": "02.1-032",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "What is the key geometric fact about the gradient ∇f?",
+    "options": [
+      "It points in the direction of steepest increase of f, and its length is how steep",
+      "It points along a direction in which f stays constant, tracing a level curve",
+      "It points in the direction of steepest decrease of f, and its length is how steep",
+      "It points straight toward the global minimum of f, from whatever point it is taken"
+    ],
+    "answer_index": 0,
+    "explanation": "The gradient points uphill (steepest increase), with its length measuring steepness; so −∇f points steepest downhill. It is a local direction, not a pointer to the global minimum. Directions where f stays constant are perpendicular to the gradient."
+  },
+  {
+    "id": "02.1-033",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "6. Tensor shapes: the gradient is a vector",
+    "question": "Why does gradient descent step against the gradient rather than along it?",
+    "options": [
+      "Because −∇f is the direction of steepest decrease, walking directly downhill",
+      "Because the gradient points toward regions of zero loss, which training must leave",
+      "Because stepping along the gradient converges too slowly to be practical at scale",
+      "Because autograd computes the gradient with the wrong sign, so the minus corrects it"
+    ],
+    "answer_index": 0,
+    "explanation": "The gradient points toward steepest increase, so its negative points toward steepest decrease, which is what we want for a loss. Autograd's sign is correct; the minus sign is deliberate in the update rule."
+  },
+  {
+    "id": "02.1-034",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "In PyTorch, what does marking x = torch.tensor(2.0, requires_grad=True) do?",
+    "options": [
+      "It converts x to float64 so that the derivatives computed later are exact",
+      "It freezes x so that its value cannot be changed by an optimizer during training",
+      "It immediately computes the gradient of x and stores it in x.grad for later",
+      "It tells autograd to record operations on x so gradients wrt x can be computed"
+    ],
+    "answer_index": 3,
+    "explanation": "requires_grad=True makes autograd record a graph of operations that use x, so a later backward() can fill x.grad. It does not compute anything immediately, change dtype, or freeze the tensor (that is the opposite)."
+  },
+  {
+    "id": "02.1-035",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "After x = torch.tensor(2.0, requires_grad=True); y = 3*x + 1; z = y**2; z.backward(), what is x.grad?",
+    "options": [
+      "49.0",
+      "7.0",
+      "42.0",
+      "14.0"
+    ],
+    "answer_index": 2,
+    "explanation": "backward() seeds dz/dz = 1 and multiplies local derivatives back along the chain: 1 · 2y · 3 = 1 · 14 · 3 = 42. 49 is z, 7 is y, and 14 is only dz/dy."
+  },
+  {
+    "id": "02.1-036",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "When z.backward() runs for z = (3x + 1)^2, what value does it seed at the start of the backward pass?",
+    "options": [
+      "dz/dz = z",
+      "dz/dz = 0",
+      "dz/dz = 2y",
+      "dz/dz = 1"
+    ],
+    "answer_index": 3,
+    "explanation": "The backward pass starts from the output's sensitivity to itself, which is 1, then multiplies local derivatives back along the graph. Seeding 0 would make every gradient zero, and seeding z or 2y would scale the result wrongly."
+  },
+  {
+    "id": "02.1-037",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "During the forward pass of z = (3x + 1)^2 with requires_grad on x, what did PyTorch record for the y**2 step?",
+    "options": [
+      "The numeric value of dz/dx = 42, computed eagerly at forward time and stored",
+      "That z came from y via y**2 with local derivative 2y, and it stashed y = 7",
+      "That z came from x directly, folding the intermediate y into one node for speed",
+      "Only the final value z = 49, discarding y to save memory until backward runs"
+    ],
+    "answer_index": 1,
+    "explanation": "Autograd records each op and the values its backward needs: for y**2 that is the local derivative 2y and the cached y = 7. It does not compute dz/dx eagerly, and it keeps the intermediate node y rather than collapsing the graph."
+  },
+  {
+    "id": "02.1-038",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "For v = torch.tensor([2.0, 3.0], requires_grad=True) and f = v[0]**2 * v[1] + v[1]**3, what are f.backward()'s results in v.grad and its shape?",
+    "options": [
+      "[39.0], shape (1,)",
+      "[31.0, 12.0], shape (2,)",
+      "[12.0, 31.0], shape (1, 2)",
+      "[12.0, 31.0], shape (2,)"
+    ],
+    "answer_index": 3,
+    "explanation": "f = 4·3 + 27 = 39, and ∇f = [2xy, x^2 + 3y^2] = [12, 31]. v.grad always has the shape of v, which is (2,). 39 is the function value, and the swapped order mislabels the partials."
+  },
+  {
+    "id": "02.1-039",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "7. From-scratch PyTorch: verifying dz/dx = 42",
+    "question": "On what kind of tensor can .backward() be called without passing any argument?",
+    "options": [
+      "Only a matrix with as many rows as parameters",
+      "Only a scalar, such as a loss",
+      "Any tensor, regardless of its shape",
+      "Only a tensor that has requires_grad=False"
+    ],
+    "answer_index": 1,
+    "explanation": "Implicit backward requires a scalar output: the gradient of a scalar with respect to an input has the input's shape, which is what an optimizer needs. For a vector output you must reduce to a scalar or pass an explicit vector."
+  },
+  {
+    "id": "02.1-040",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "8. Under the hood: why gradients, and not the function itself, are the whole game",
+    "question": "Why is the gradient, rather than the loss function itself, what training works with for a model of 10^9–10^12 parameters?",
+    "options": [
+      "It describes the entire loss surface globally, including the location of all minima",
+      "It is the only quantity that can be computed without running a forward pass first",
+      "At any point it gives a cheap local linear picture, enough for one good downhill step",
+      "It removes the need to evaluate the loss itself at all during the training loop"
+    ],
+    "answer_index": 2,
+    "explanation": "No one can reason about a billion-dimensional surface directly, but the gradient gives a flat local picture: each entry says how the loss reacts to that parameter. That is enough for one step, and training is millions of such steps. It is local, not global, and it requires a forward pass."
+  },
+  {
+    "id": "02.1-041",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "8. Under the hood: why gradients, and not the function itself, are the whole game",
+    "question": "Roughly how does the cost of the backward pass compare to the forward pass?",
+    "options": [
+      "About the same order, roughly 2x the forward pass, regardless of parameter count",
+      "About one hundred times the forward pass for large models, growing with depth",
+      "About the square of the number of parameters, since every pair of weights interacts",
+      "About one forward pass per parameter, since each needs its own sensitivity"
+    ],
+    "answer_index": 0,
+    "explanation": "Reverse-mode autodiff gets the entire gradient for roughly the cost of a forward pass (about 2x in practice), no matter how many parameters there are. One pass per parameter is the cost of finite differences, which is what reverse mode avoids."
+  },
+  {
+    "id": "02.1-042",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "8. Under the hood: why gradients, and not the function itself, are the whole game",
+    "question": "What makes training billion-parameter models feasible from a gradient-computation standpoint?",
+    "options": [
+      "Backprop delivers the full gradient for about the price of a forward pass",
+      "The loss surface of large models is linear in the parameters",
+      "Only a random subset of parameters needs a gradient per step",
+      "Each parameter's derivative can be estimated independently by perturbation"
+    ],
+    "answer_index": 0,
+    "explanation": "The chain rule organised as backpropagation yields the full gradient at a cost comparable to one forward pass, independent of parameter count. Per-parameter perturbation would need billions of forward passes. Large-model loss surfaces are not linear."
+  },
+  {
+    "id": "02.1-043",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Exercise",
+    "question": "For y = x^3 and z = sin(y), what is dz/dx at x = 1?",
+    "options": [
+      "cos(1) ≈ 0.5403",
+      "3·sin(1) ≈ 2.5244",
+      "cos(3) ≈ −0.9900",
+      "3·cos(1) ≈ 1.6209"
+    ],
+    "answer_index": 3,
+    "explanation": "Chain rule: dz/dx = cos(y) · 3x^2. At x = 1, y = 1, so dz/dx = 3·cos(1) ≈ 1.6209; PyTorch's x.grad prints 1.6209069. cos(1) alone omits dy/dx = 3, and sin is not its own derivative."
+  },
+  {
+    "id": "02.1-044",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "For f(x) = x^2, f(3) = 9 and f'(3) = 6. Which pass of a network computes each kind of quantity?",
+    "options": [
+      "The forward pass gives function values like f(3); the backward pass gives derivatives",
+      "Both are produced together by the forward pass alone; backward only applies updates",
+      "The forward pass gives derivatives like f'(3); the backward pass gives function values",
+      "Both are produced together by the backward pass alone, which re-evaluates the function"
+    ],
+    "answer_index": 0,
+    "explanation": "A common mistake is confusing a derivative's value with the function's value. The forward pass evaluates the function (9); the backward pass evaluates its derivative (6). They answer different questions."
+  },
+  {
+    "id": "02.1-045",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "When differentiating x^2·y with respect to x, what is the correct treatment of y?",
+    "options": [
+      "As a constant multiplier, giving 2xy",
+      "As a variable that is also differentiated, giving 2x + x^2",
+      "As a variable that is differentiated, giving 2xy + x^2",
+      "As zero, so the whole term vanishes"
+    ],
+    "answer_index": 0,
+    "explanation": "In a partial derivative all other variables are held fixed; y is just a constant multiplier, so x^2·y → 2xy. Differentiating y too is the common mistake of forgetting to hold others fixed. Treating y as zero changes the function's value, not just freezes it."
+  },
+  {
+    "id": "02.1-046",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A parameter tensor has shape (512, 256) but its .grad has shape (256, 512). What does this indicate?",
+    "options": [
+      "Normal behaviour for any parameter used in a matrix multiply",
+      "A bug: the gradient must always match the parameter's shape",
+      "Normal behaviour: gradients are stored transposed in PyTorch",
+      "A sign the learning rate is too large for that parameter"
+    ],
+    "answer_index": 1,
+    "explanation": "∇f always has the shape of the variable it is taken with respect to, so a shape mismatch between a parameter and its .grad is always a bug. PyTorch does not store gradients transposed, and the learning rate does not affect shapes."
+  },
+  {
+    "id": "02.1-047",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Calling .backward() with no argument on a vector-valued output raises which PyTorch error?",
+    "options": [
+      "Trying to backward through the graph a second time",
+      "element 0 of tensors does not require grad and does not have a grad_fn",
+      "one of the variables needed for gradient computation has been modified by an inplace operation",
+      "grad can be implicitly created only for scalar outputs"
+    ],
+    "answer_index": 3,
+    "explanation": "PyTorch can only implicitly seed backward for a scalar; for a vector output it raises 'grad can be implicitly created only for scalar outputs'. Fix it by reducing to a scalar (e.g. a loss) or passing an explicit vector. The other messages are different autograd errors."
+  },
+  {
+    "id": "02.1-048",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "What is ∇f for f(x, y, z) = xyz, evaluated at (1, 2, 3)?",
+    "options": [
+      "[6, 6, 6]",
+      "[6, 3, 2]",
+      "[1, 2, 3]",
+      "[2, 3, 6]"
+    ],
+    "answer_index": 1,
+    "explanation": "∇f = [yz, xz, xy], each partial holding the other two fixed. At (1, 2, 3): [2·3, 1·3, 1·2] = [6, 3, 2], a length-3 vector matching the 3 inputs. [6, 6, 6] is just f's value repeated."
+  },
+  {
+    "id": "02.1-049",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "If ∂L/∂w = −4 for some weight w, how should w move to reduce L under gradient descent with learning rate η?",
+    "options": [
+      "Increase w: w ← w − η·(−4) = w + 4η",
+      "Decrease w: w ← w − 4η",
+      "Set w to −4, the value of its gradient",
+      "Leave w unchanged, since a negative gradient means L is minimal"
+    ],
+    "answer_index": 0,
+    "explanation": "A negative partial means increasing w decreases L. Gradient descent moves against the gradient, so w goes up by 4η. The magnitude 4 says L is fairly sensitive to w there. A negative gradient does not imply a minimum."
+  },
+  {
+    "id": "02.1-050",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Estimating a model's gradient by perturbing each parameter and rerunning the forward pass costs how many forward passes for a million parameters?",
+    "options": [
+      "About two, one forward and one backward",
+      "About a million, one per parameter",
+      "About one, the same as reverse mode",
+      "About a thousand, the square root of the parameter count"
+    ],
+    "answer_index": 1,
+    "explanation": "Perturbation measures one parameter's effect per forward pass, so a million parameters need about a million passes. Reverse-mode autodiff avoids this, getting the whole gradient in roughly 2–3 forward-pass costs."
+  },
+  {
+    "id": "02.1-051",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does reverse-mode autodiff avoid recomputing work for each parameter?",
+    "options": [
+      "It skips parameters whose gradients are small, so most of the network is never visited",
+      "It computes each parameter's gradient in parallel, using a separate forward pass for each",
+      "Walking back from L, each node's ∂L/∂(node) is computed once and reused upstream",
+      "It approximates every gradient at once with a single shared finite-difference step"
+    ],
+    "answer_index": 2,
+    "explanation": "Reverse mode runs one forward pass, caches intermediates, then computes at each step how much L changes per unit of that intermediate; all upstream parameters share that number. E.g. for L = (a+b)^2, ∂L/∂(a+b) = 18 is computed once and used for both w_1 and w_2."
+  },
+  {
+    "id": "02.1-052",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "For L = (a + b)^2 with a = w_1·x, b = w_2·x, x = 3, w_1 = 1, w_2 = 2, what are ∂L/∂w_1 and ∂L/∂w_2?",
+    "options": [
+      "Both are 54",
+      "54 and 108",
+      "Both are 18",
+      "18 and 36"
+    ],
+    "answer_index": 0,
+    "explanation": "a + b = 9, so ∂L/∂(a+b) = 18. Both a and b feed a+b with coefficient 1, so ∂L/∂a = ∂L/∂b = 18. Then ∂L/∂w_1 = 18·x = 54 and ∂L/∂w_2 = 18·x = 54. The w values don't appear in ∂a/∂w_1 = x."
+  },
+  {
+    "id": "02.1-053",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does the full reverse-mode gradient cost only about 2–3 forward passes, independent of parameter count?",
+    "options": [
+      "Because the backward pass runs in lower precision than the forward pass, so each op is cheaper",
+      "Because most parameters have zero gradient and are skipped during the backward pass",
+      "Each op is visited once going backward, and its backward costs about as much as its forward",
+      "Because the gradients of later layers are reused as the gradients of earlier layers unchanged"
+    ],
+    "answer_index": 2,
+    "explanation": "Reverse mode visits each op once in reverse, and each op's backward costs about the same as its forward, so total cost scales with the graph size, not parameter count. It does not rely on sparsity or lower precision, and earlier-layer gradients are computed via local derivatives, not copied."
+  },
+  {
+    "id": "02.1-054",
+    "chapter": "02.1",
+    "chapter_name": "Derivatives, partials, chain rule, gradients",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-01.md",
+    "section": "Next",
+    "question": "In the next step after the scalar chain rule, the chain rule is lifted to vectors and matrices. What object generalises the derivative there?",
+    "options": [
+      "The integral",
+      "The Hessian",
+      "The Jacobian",
+      "The Laplacian"
+    ],
+    "answer_index": 2,
+    "explanation": "Moving from scalars to vector-valued functions of vectors, the derivative becomes the Jacobian matrix of all output-input partials; reverse mode applies it via vector-Jacobian products. The Hessian is the matrix of second derivatives, a different object."
+  }
+]

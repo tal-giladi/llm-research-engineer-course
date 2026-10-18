@@ -1,0 +1,704 @@
+[
+  {
+    "id": "14.2-001",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is masking the prompt out of the SFT loss important?",
+    "options": [
+      "It trains the model to answer rather than also learning to parrot the question",
+      "It halves activation memory, since prompt positions skip the backward pass",
+      "It stops the model attending to the prompt, so responses stay independent of it",
+      "It removes the need for a chat template, since role headers are never scored"
+    ],
+    "answer_index": 0,
+    "explanation": "Masking the prompt means the model is only trained to produce responses, not to reproduce questions. The prompt still feeds attention as context; masking only affects which positions contribute to the loss."
+  },
+  {
+    "id": "14.2-002",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is sequence packing used in SFT?",
+    "options": [
+      "Mixing unrelated examples in one block acts as a regularizer and improves final accuracy",
+      "The loss mask only works on full blocks, so short examples must be packed before masking",
+      "Packing merges frequent token pairs across examples, shrinking the effective vocabulary size",
+      "Instruction examples are short and uneven, so padding each to the block wastes most compute"
+    ],
+    "answer_index": 3,
+    "explanation": "Instruction examples vary wildly in length; padding each to a fixed block wastes most positions. Packing concatenates short examples to fill blocks with real tokens, keeping SFT GPU-efficient. Mixing examples is a hazard to manage, not a benefit."
+  },
+  {
+    "id": "14.2-003",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which production SFT trainers perform response-only loss masking and packing under the hood?",
+    "options": [
+      "Only DeepSpeed ZeRO",
+      "Only vLLM",
+      "TRL's SFTTrainer and Axolotl",
+      "None; production trainers compute loss on all tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "Every SFT trainer you will use, such as TRL's SFTTrainer and Axolotl, does both response-only masking and packing. vLLM is an inference engine and DeepSpeed is a distributed-training system, not an SFT recipe."
+  },
+  {
+    "id": "14.2-004",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "1. Intuition: only score what you want the model to generate",
+    "question": "Why is every position a legitimate prediction target in pretraining but not in SFT?",
+    "options": [
+      "Pretraining sequences are shorter, so every position fits in memory, while SFT conversations do not",
+      "Pretraining should continue any text; in SFT the prompt is supplied at inference, never generated",
+      "In SFT the prompt tokens are not fed to the model at all, so there is nothing to predict there",
+      "In SFT the response tokens are already known from the dataset, so only prompt positions need loss"
+    ],
+    "answer_index": 1,
+    "explanation": "Pretraining wants the model to continue any text, so all positions are scored. In SFT, the user and template supply the prompt at inference; the model only generates the response. So training it to predict the prompt is wasted, and masking keeps the loss on responses."
+  },
+  {
+    "id": "14.2-005",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "1. Intuition: only score what you want the model to generate",
+    "question": "What harm can come from including prompt tokens in the SFT loss?",
+    "options": [
+      "It drives the gradients on response tokens to exactly zero, so the assistant text is never learned",
+      "It spends capacity predicting user and system text and can teach the model to continue prompts",
+      "It prevents the model from attending to the prompt, since scored positions are hidden from attention",
+      "It makes the loss negative on prompt tokens, which cancels out the response-token loss in the mean"
+    ],
+    "answer_index": 1,
+    "explanation": "Scoring prompt tokens optimizes the model to predict user questions and system messages — a distribution we do not care about. Worse, it can teach the model to continue prompts instead of responding, the very failure SFT is supposed to cure."
+  },
+  {
+    "id": "14.2-006",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "1. Intuition: only score what you want the model to generate",
+    "question": "In SFT, which positions contribute to the loss under the standard loss rule?",
+    "options": [
+      "Only assistant-response tokens; system text, user text and role headers are all ignored",
+      "Only user tokens, because they carry the instruction the assistant response follows",
+      "All tokens except the final <|end|>, which the sampler handles",
+      "Only the role headers, because they define the turn structure to emit"
+    ],
+    "answer_index": 0,
+    "explanation": "SFT computes cross-entropy on assistant-response tokens only. Every prompt position — system and user text and all role headers — contributes zero loss and zero gradient. Ignoring is implemented with the sentinel label -100."
+  },
+  {
+    "id": "14.2-007",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "1. Intuition: only score what you want the model to generate",
+    "question": "In SFT loss masking, what is the gradient contribution of an ignored prompt position?",
+    "options": [
+      "Half of a response position's contribution",
+      "The same as a response position, but with opposite sign",
+      "Proportional to the prompt length",
+      "Exactly zero"
+    ],
+    "answer_index": 3,
+    "explanation": "Ignored positions contribute exactly zero to the loss and zero gradient. They are simply excluded from the average. They still affect gradients indirectly as context the response tokens attend to, but they are not targets."
+  },
+  {
+    "id": "14.2-008",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "In the full (pretraining) cross-entropy over N positions, how is the loss formed?",
+    "options": [
+      "The sum over response positions of -log softmax(z_i)[y_i], divided by N",
+      "The maximum over positions of -log softmax(z_i)[y_i]",
+      "The mean over all N positions of -log softmax(z_i)[y_i]",
+      "The mean over positions of the squared error between z_i and y_i"
+    ],
+    "answer_index": 2,
+    "explanation": "L_full = (1/N) * sum_i of -log softmax(z_i)_{y_i}, where z_i is the logit row at position i and y_i the true token id. Every one of the N positions counts equally."
+  },
+  {
+    "id": "14.2-009",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "In the masked SFT loss L_SFT = sum_i m_i * (-log softmax(z_i)[y_i]) / sum_i m_i, what is the denominator?",
+    "options": [
+      "The total sequence length N, prompt included",
+      "The vocabulary size V",
+      "The number of response tokens",
+      "The number of prompt tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "The denominator is sum_i m_i, the count of response positions. We average over what we actually scored, not over N. Dividing by N would shrink the loss in proportion to the prompt fraction."
+  },
+  {
+    "id": "14.2-010",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "In the SFT masked loss, what does the mask value m_i mean?",
+    "options": [
+      "m_i = 1 if position i is padding or a role header, else 0",
+      "m_i = 1 if position i is an assistant-response token, else 0",
+      "m_i is the attention weight that position i receives from the last token",
+      "m_i is the probability the model assigns to the true token"
+    ],
+    "answer_index": 1,
+    "explanation": "m_i is a binary response mask: 1 for assistant-response positions, 0 for prompt positions. It multiplies the per-position loss, so prompt positions drop out of the numerator, and sum_i m_i forms the denominator."
+  },
+  {
+    "id": "14.2-011",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "In the SFT masked loss formula, what do z_i, y_i and V denote?",
+    "options": [
+      "z_i is the logit row at position i, y_i the true token id there, V the vocabulary size",
+      "z_i is the final hidden state at position i, y_i the predicted id, V the number of layers",
+      "z_i is the softmax probability vector, y_i the mask bit, V the sequence length",
+      "z_i is the input embedding of token i, y_i its position index, V the model width"
+    ],
+    "answer_index": 0,
+    "explanation": "z_i in R^V is the logit vector at position i, y_i is the target token id, and V is the vocabulary size. The per-position loss is -log softmax(z_i)_{y_i}."
+  },
+  {
+    "id": "14.2-012",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "In code, how is the SFT response mask usually applied to cross-entropy?",
+    "options": [
+      "Passed as a separate float weight tensor that is multiplied into the logits row-wise",
+      "Applied by zeroing the logits at prompt positions so their softmax becomes uniform",
+      "Applied by deleting prompt tokens from the input before the forward pass",
+      "Folded into the labels: y_i where m_i = 1, the sentinel -100 where m_i = 0"
+    ],
+    "answer_index": 3,
+    "explanation": "Instead of carrying a separate mask, the labels themselves encode it: keep the true id where the mask is 1 and write ignore_index = -100 elsewhere. Cross-entropy skips -100 labels, which yields exactly L_SFT. Deleting prompt tokens from the input would remove the context the response needs."
+  },
+  {
+    "id": "14.2-013",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "The course's GPT.forward uses ignore_index = -1 while the SFT modules use -100. What matters about the choice of value?",
+    "options": [
+      "It must be exactly -100, since cross-entropy errors on any other negative value",
+      "It must equal the padding token id, so pads and prompts share one code path",
+      "It must equal the vocabulary size V, the first id past the embedding table",
+      "It must never be a valid token id, and build_labels and the loss must agree on it"
+    ],
+    "answer_index": 3,
+    "explanation": "The sentinel is arbitrary as long as it can never be a real token id and both label construction and the loss agree on it. -100 is HuggingFace's convention and the default of torch.nn.functional.cross_entropy."
+  },
+  {
+    "id": "14.2-014",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "2. Mathematics: the masked loss",
+    "question": "What is the default ignore_index of torch.nn.functional.cross_entropy?",
+    "options": [
+      "-1",
+      "0",
+      "-100",
+      "None; there is no default"
+    ],
+    "answer_index": 2,
+    "explanation": "torch.nn.functional.cross_entropy defaults to ignore_index=-100, which is also HuggingFace's convention. The course's Module 6 GPT.forward used -1, which also works as long as it is used consistently."
+  },
+  {
+    "id": "14.2-015",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "3. Numerical example (worked by hand, verified in Python)",
+    "question": "For a sequence with mask m = [0, 0, 1, 1] and targets y = [0, 1, 2, 0], what labels does build_labels produce?",
+    "options": [
+      "[0, 1, -100, -100]",
+      "[-100, -100, 2, 0]",
+      "[0, 0, 2, 0]",
+      "[-100, -100, -100, 0]"
+    ],
+    "answer_index": 1,
+    "explanation": "build_labels keeps the target id where the mask is 1 and writes -100 elsewhere. Positions 0 and 1 are prompt, so they become -100; positions 2 and 3 keep 2 and 0. Using 0 instead of -100 would wrongly train the model to predict token 0 on the prompt."
+  },
+  {
+    "id": "14.2-016",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "3. Numerical example (worked by hand, verified in Python)",
+    "question": "In a worked masked-loss example, the response-only loss is 0.3876 while the full loss over all positions is 0.3136. Why do they differ?",
+    "options": [
+      "The full loss also averages in the prompt positions, which were easy here",
+      "The masked loss double-counts response positions as input and target",
+      "The full loss uses log base 2 while the masked loss uses the natural log",
+      "The masked loss divides by vocabulary size, not by position count"
+    ],
+    "answer_index": 0,
+    "explanation": "The masked loss averages only over response positions; the full loss averages over all four, including the confident prompt positions, which pulls it down. They measure different things; SFT wants the response-only number."
+  },
+  {
+    "id": "14.2-017",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "3. Numerical example (worked by hand, verified in Python)",
+    "question": "What equality serves as the correctness test for the SFT masking mechanism?",
+    "options": [
+      "Masked cross-entropy on the full sequence equals plain cross-entropy on just the response rows",
+      "Masked cross-entropy equals full cross-entropy over all rows whenever the prompt is non-empty",
+      "Masked cross-entropy equals exactly log V at initialization, matching a uniform predictor",
+      "Masked cross-entropy equals the full-sequence loss multiplied by the fraction of response tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "masked_cross_entropy(logits, labels) must equal cross_entropy(logits[response], ids[response]). That identity proves the mask selects exactly the right positions and averages over them, and it is what tests/test_sft.py checks."
+  },
+  {
+    "id": "14.2-018",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "In the SFT masking code, what dtype and shape are the labels returned by build_labels?",
+    "options": [
+      "torch.float32, shape (T, V)",
+      "torch.bool, same shape as input_ids, True where kept",
+      "torch.long, shape (V,)",
+      "torch.long, same shape as input_ids"
+    ],
+    "answer_index": 3,
+    "explanation": "build_labels returns labels with the same shape as input_ids ((T,) or (B, T)) and dtype torch.long, with labels[i] = input_ids[i] where the mask is truthy and -100 elsewhere. The response_mask itself can be bool or int."
+  },
+  {
+    "id": "14.2-019",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "What does masked_cross_entropy(logits, labels) return, given logits of shape (B, T, V)?",
+    "options": [
+      "A (B, T) tensor of per-position losses, zero at ignored spots",
+      "A (B,) tensor of per-example mean losses in nats",
+      "A scalar () tensor in nats, on the logits' device",
+      "A (V,) tensor of per-class losses summed over positions"
+    ],
+    "answer_index": 2,
+    "explanation": "masked_cross_entropy accepts logits (..., V) and labels (...), flattens them, and returns the mean over kept positions as a scalar tensor in nats on the logits' device."
+  },
+  {
+    "id": "14.2-020",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "4. Tensor shapes / dtype / device",
+    "question": "masked_cross_entropy scores logits[i] against labels[i] one-to-one. How should a real SFT training loop handle the next-token shift?",
+    "options": [
+      "Pass unshifted ids and let masked_cross_entropy shift logits and labels internally by one",
+      "Feed ids[:-1] as input and build labels from ids[1:] and response_mask[1:], outside the loss",
+      "Shift the logits left by one inside the model's forward pass and again inside the loss",
+      "No shift is needed, because the causal attention mask already stops position i from seeing token i"
+    ],
+    "answer_index": 1,
+    "explanation": "Positions are aligned one-to-one, so the caller must shift: input x = ids[:-1], labels from ids[1:] with response_mask[1:], then masked_cross_entropy(model(x)[0], labels). Doing the shift once outside the loss avoids double-shifting or forgetting it."
+  },
+  {
+    "id": "14.2-021",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "How does build_labels construct the label tensor?",
+    "options": [
+      "It copies input_ids and then overwrites the response positions with the sentinel value -100",
+      "It fills a tensor with ignore_index, then writes the true ids back only at response positions",
+      "It multiplies input_ids by the response mask so that every prompt position becomes ignored",
+      "It deletes prompt positions from input_ids and returns a shorter tensor of response ids only"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.full_like(input_ids, ignore_index) creates an all-ignored tensor, then labels[mask] = input_ids[mask] restores response ids. This 'ignore everything, then un-ignore responses' framing is the inverse of masking out the prompt and is less error-prone. Multiplying by the mask would produce 0, a valid token id."
+  },
+  {
+    "id": "14.2-022",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the from-scratch masked_cross_entropy, how are ignored positions removed?",
+    "options": [
+      "Flatten to (N, V) and (N,), keep rows with label != ignore_index, then log-softmax only those",
+      "Set logits at ignored positions to negative infinity so their softmax mass vanishes before the loss",
+      "Compute loss on all rows, multiply ignored ones by zero, and divide the sum by the full row count N",
+      "Sort the labels so ignored ones come first, then drop that many leading rows from the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "It reshapes logits to (N, V) and labels to (N,), builds keep = labels != ignore_index, selects the kept rows, and computes the stable log-softmax and gather only on them, returning the mean. So the mean is over kept rows only."
+  },
+  {
+    "id": "14.2-023",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "How does the from-scratch masked_cross_entropy compute log-probabilities in a numerically stable way?",
+    "options": [
+      "Apply softmax to each logit row, then take the elementwise log of the probabilities",
+      "Divide each logit row by its maximum, then take the log of the normalised row",
+      "Exponentiate the logits and normalise by the vocabulary size before taking the log",
+      "Subtract logsumexp of each logit row, then gather the true-token log-prob"
+    ],
+    "answer_index": 3,
+    "explanation": "logp = logits - logsumexp(logits, dim=-1, keepdim=True) is a stable log-softmax that avoids overflow and log(0). Then the true-token entries are gathered with an arange row index. Taking log of softmax directly is less stable."
+  },
+  {
+    "id": "14.2-024",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does torch.nn.functional.cross_entropy(logits, labels, ignore_index=-100) do compared to the from-scratch masked_cross_entropy?",
+    "options": [
+      "It ignores the ignore_index argument and averages over all positions",
+      "It divides by the full sequence length instead of by the count of kept positions",
+      "The same masking, but fused: log-softmax, gather and mask run in a single kernel",
+      "It needs a separate float mask, since ignore_index only covers padding"
+    ],
+    "answer_index": 2,
+    "explanation": "F.cross_entropy with ignore_index=-100 skips those positions and averages over the rest, just like the from-scratch version, but fuses the steps into one kernel. Its default ignore_index is even -100. Writing it by hand only makes the mechanism visible."
+  },
+  {
+    "id": "14.2-025",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 1. Intuition",
+    "question": "Why does padding every instruction example to a fixed block size waste compute?",
+    "options": [
+      "Padding tokens are more expensive to process than real tokens because they bypass the fused kernels",
+      "Padding forces the model to recompute attention twice, once with and once without the pad mask",
+      "Examples are short and uneven, so most positions in a padded row are padding, not real tokens",
+      "Padding adds a new pad token to the vocabulary, enlarging the embedding and output layers"
+    ],
+    "answer_index": 2,
+    "explanation": "If an example of 20 tokens is padded to 1024, almost all of the row is padding, yet the GPU still processes every position. Packing several examples into one block fills nearly every position with real tokens, raising throughput on the same hardware."
+  },
+  {
+    "id": "14.2-026",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 1. Intuition",
+    "question": "What is sequence packing in SFT?",
+    "options": [
+      "Compressing each example's tokens with a smaller vocabulary so more of them fit per block",
+      "Concatenating several short examples end-to-end into one full block of length T",
+      "Splitting long examples into many short rows so every row has exactly the same length",
+      "Sorting examples by length so each batch holds similar lengths and needs little padding"
+    ],
+    "answer_index": 1,
+    "explanation": "Packing concatenates multiple short examples into one block of the full length T so almost every position is real. Sorting by length (bucketing) is a different technique that still pads. Splitting long examples is truncation/chunking."
+  },
+  {
+    "id": "14.2-027",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 2. The catch, and the fix",
+    "question": "When packing several SFT examples into one block, how is each example's loss mask kept correct?",
+    "options": [
+      "Concatenate per-example response masks in token order, then apply build_labels to the block",
+      "Recompute a single mask that marks only the last example's response, since earlier ones are context",
+      "Mask the whole block except its final token, which is the only position predicted at inference",
+      "Copy the first example's mask across the block, since all examples share one chat template"
+    ],
+    "answer_index": 0,
+    "explanation": "Each example keeps its own prompt/response split. Concatenating the masks just like the tokens means build_labels still masks each example's prompt independently."
+  },
+  {
+    "id": "14.2-028",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 2. The catch, and the fix",
+    "question": "Besides the loss mask, what must stay correct per example when packing SFT data?",
+    "options": [
+      "Each example must have the same length",
+      "Each example must use a different chat template so roles stay distinct",
+      "Each example must be placed at position 0",
+      "Attention must not cross example boundaries"
+    ],
+    "answer_index": 3,
+    "explanation": "Example B's tokens must not attend to example A's, or the model 'reads' an unrelated earlier conversation. The fix is a block-diagonal attention mask, often implemented via document ids or position resets."
+  },
+  {
+    "id": "14.2-029",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 2. The catch, and the fix",
+    "question": "What is the clean fix that prevents cross-example attention in a packed block?",
+    "options": [
+      "A plain causal mask over the whole block, which already stops each token from seeing the future",
+      "Shuffling token order within the block so no example forms a coherent prefix for the next one",
+      "Inserting a padding token between examples, since pad positions are excluded from attention",
+      "A block-diagonal attention mask (e.g. via document_ids) so each example attends only to itself"
+    ],
+    "answer_index": 3,
+    "explanation": "A block-diagonal mask restricts each token to attend only within its own example. A plain causal mask allows later examples to see earlier ones. Shuffling tokens would destroy the sequences."
+  },
+  {
+    "id": "14.2-030",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 2. The catch, and the fix",
+    "question": "What cheaper approximation to block-diagonal attention is sometimes used in packed SFT, and what is its cost?",
+    "options": [
+      "Training one example per row with no padding, accepting slower convergence from small batches",
+      "Masking every token except the separator, accepting that most positions get zero gradient",
+      "Concatenate with a separator token and only a causal mask, accepting some cross-contamination",
+      "Using bidirectional attention within the block, accepting some leakage of future tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "In practice some pipelines just concatenate with a separator token and rely on the causal mask, accepting a little cross-example contamination. The honest version resets attention at each boundary."
+  },
+  {
+    "id": "14.2-031",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 3. Worked shape",
+    "question": "Three examples of lengths 20, 50 and 30 are packed into a block of T = 100. How much padding is there?",
+    "options": [
+      "50 tokens, half the block",
+      "None; the block is exactly filled",
+      "80 tokens, padding the shortest example",
+      "200 tokens, padding each to T = 100"
+    ],
+    "answer_index": 1,
+    "explanation": "20 + 50 + 30 = 100, so the block is exactly full with zero padding. Padding each to 100 separately would waste 80%, 50% and 70% of their rows — over half the compute."
+  },
+  {
+    "id": "14.2-032",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Sequence packing: 3. Worked shape",
+    "question": "Why is a plain causal mask across a packed SFT block a dangerous bug?",
+    "options": [
+      "Later examples attend back to earlier unrelated ones, yet nothing crashes and the loss looks fine",
+      "It makes the loss NaN on the first step, because separator rows have no valid attention targets",
+      "It stops each example attending to its own prompt, since the mask only sees the block start",
+      "It raises a shape error in attention, since the mask must match each example's length"
+    ],
+    "answer_index": 0,
+    "explanation": "A plain causal mask lets example C attend all the way back to A. There is no error and the loss looks normal, but the model quietly learns to condition responses on unrelated preceding examples. Always reset attention at boundaries or verify your trainer does."
+  },
+  {
+    "id": "14.2-033",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Exercise",
+    "question": "Two examples are packed: example 1 has prompt [a, b] and response [c]; example 2 has prompt [d] and response [e, f]. What labels does build_labels produce?",
+    "options": [
+      "[-100, -100, c, -100, e, f]",
+      "[a, b, -100, d, -100, -100]",
+      "[-100, -100, c, d, e, f]",
+      "[-100, -100, -100, -100, e, f]"
+    ],
+    "answer_index": 0,
+    "explanation": "Concatenated tokens are [a, b, c, d, e, f] and concatenated masks [0,0,1] + [0,1,1] = [0,0,1,0,1,1]. build_labels keeps ids where the mask is 1 and writes -100 elsewhere. Each example's prompt is masked independently."
+  },
+  {
+    "id": "14.2-034",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Exercise",
+    "question": "When applying build_labels to a packed block, what happens to the input tokens themselves?",
+    "options": [
+      "Prompt tokens are replaced by -100 in the input as well",
+      "Prompt tokens are removed from the input before the forward pass",
+      "Response tokens are shifted to the start of the block",
+      "They are unchanged; only the labels get -100 at masked positions"
+    ],
+    "answer_index": 3,
+    "explanation": "Masking only affects labels. The input still contains every token so responses can attend to their prompts. Replacing input ids with -100 would be an invalid token id."
+  },
+  {
+    "id": "14.2-035",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if the masked SFT loss numerator is divided by the sequence length N instead of by the response count?",
+    "options": [
+      "The loss becomes NaN whenever the prompt is longer than the response in a given example",
+      "The gradient on prompt tokens becomes nonzero, so the model starts learning to parrot questions",
+      "The loss shrinks silently and gradients are skewed between short- and long-response examples",
+      "Nothing; dividing by N and by the response count are equivalent up to a fixed global constant"
+    ],
+    "answer_index": 2,
+    "explanation": "Dividing by N shrinks the loss by the prompt fraction and weights examples by how much prompt they have rather than how much response. That distorts the gradient. The correct denominator is sum_i m_i."
+  },
+  {
+    "id": "14.2-036",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with setting ignored SFT labels to token id 0 instead of a sentinel?",
+    "options": [
+      "It makes cross-entropy raise an error, since 0 is reserved for the ignore_index default",
+      "It trains the model to predict token 0 at every prompt position instead of ignoring it",
+      "It has no effect, because token 0 is always the padding token and is skipped automatically",
+      "It only affects the first position of each sequence, where the BOS token is predicted"
+    ],
+    "answer_index": 1,
+    "explanation": "0 is a valid token id, so cross-entropy will score those positions with target 0, actively training the model to predict token 0 on the prompt. Use a sentinel like -100 that can never be a real id."
+  },
+  {
+    "id": "14.2-037",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What symptom indicates an off-by-one shift bug in an SFT training loop, where logits[i] is scored against token i?",
+    "options": [
+      "The loss explodes to infinity on the first step and stays there",
+      "The loss collapses toward zero and the model learns nothing useful",
+      "The model only learns to emit <|end|> after every prompt",
+      "The loss stays exactly constant at log V from step one"
+    ],
+    "answer_index": 1,
+    "explanation": "Without the shift, each position is asked to predict the token it already sees as input, which is trivial. The loss collapses toward zero but the model learns nothing about predicting the next token."
+  },
+  {
+    "id": "14.2-038",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Given input_ids = [5, 6, 7] and response_mask = [0, 1, 1], what does build_labels return?",
+    "options": [
+      "[-100, 6, 7]",
+      "[5, -100, -100]",
+      "[0, 6, 7]",
+      "[-100, -100, 7]"
+    ],
+    "answer_index": 0,
+    "explanation": "Position 0 is prompt and becomes -100; positions 1 and 2 are response and keep ids 6 and 7. Writing 0 would train toward token 0."
+  },
+  {
+    "id": "14.2-039",
+    "chapter": "14.2",
+    "chapter_name": "Loss masking & packing",
+    "module": "14",
+    "module_name": "Supervised fine-tuning",
+    "source": "lessons/module-14/lesson-02.md",
+    "section": "Check yourself",
+    "question": "If an SFT model's prompt positions are easy (low loss), how does the full-sequence loss compare to the response-only loss?",
+    "options": [
+      "The full loss is higher, because summing over more positions raises the average",
+      "They are always equal, because prompt positions carry zero gradient anyway",
+      "The full loss is always exactly half the response-only loss",
+      "The full loss is lower, because easy prompt positions pull the average down"
+    ],
+    "answer_index": 3,
+    "explanation": "Averaging easy, confident prompt positions into the mean lowers the full loss. The masked loss ignores them and reflects only response difficulty. Neither is wrong; SFT wants the response-only number."
+  }
+]

@@ -1,0 +1,992 @@
+[
+  {
+    "id": "08.1-001",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why are FLOP counts alone not enough to predict how long a GPU kernel will take?",
+    "options": [
+      "A kernel with few FLOPs can still be slow if it moves a lot of data across the memory hierarchy",
+      "FLOP counts ignore the time spent in the Python interpreter, which usually dominates GPU runtime",
+      "FLOP counts are only defined for matrix multiplies, so elementwise kernels have no FLOP count",
+      "GPUs execute FLOPs at a rate that varies randomly, so counts never correlate with runtime"
+    ],
+    "answer_index": 0,
+    "explanation": "Runtime depends on both arithmetic and data movement. A kernel that does very little arithmetic but drags a large tensor through HBM is limited by bandwidth, not by its FLOP count. This is why the memory hierarchy is needed alongside FLOP accounting to reason about performance."
+  },
+  {
+    "id": "08.1-002",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What single governing fact about GPUs underlies most performance decisions for LLM kernels?",
+    "options": [
+      "Arithmetic is expensive and moving data is cheap, so most LLM kernels are compute-bound",
+      "Kernel launches are free, so splitting work into many tiny kernels is always faster",
+      "Host RAM is faster than HBM, so tensors should be kept on the CPU whenever possible",
+      "Arithmetic is cheap and moving data is expensive, so most LLM kernels are memory-bound"
+    ],
+    "answer_index": 3,
+    "explanation": "A GPU can perform far more arithmetic per second than its memory can deliver bytes. As a result, most kernels outside the large matmuls spend their time waiting on data rather than computing. Recognizing this is what makes the roofline, fusion and FlashAttention make sense."
+  },
+  {
+    "id": "08.1-003",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "According to the GPU-performance view of training, how does FlashAttention achieve its speedup?",
+    "options": [
+      "It approximates softmax with a cheaper polynomial, cutting the FLOPs per score",
+      "It skips attention for most token pairs, using a fixed block-sparse pattern",
+      "It avoids moving large intermediates through HBM, without reducing the math",
+      "It runs attention on the CPU while the GPU handles the projection matmuls"
+    ],
+    "answer_index": 2,
+    "explanation": "FlashAttention does essentially the same arithmetic as standard attention (slightly more, in fact). Its win comes from not writing and re-reading the large score matrices to and from HBM. Understanding where data lives explains why that is faster even though the math is not reduced."
+  },
+  {
+    "id": "08.1-004",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "1. Intuition: a GPU is a very wide, very shallow factory",
+    "question": "How does a typical CPU's design differ from a GPU's?",
+    "options": [
+      "A CPU has thousands of simple lanes; a GPU has a few powerful out-of-order cores with big caches",
+      "A CPU has a few powerful out-of-order cores and big caches; a GPU has thousands of simple lanes",
+      "A CPU and a GPU share the same core design, but the GPU runs every core at a higher clock",
+      "A CPU has no caches, while a GPU relies on large branch predictors and out-of-order execution"
+    ],
+    "answer_index": 1,
+    "explanation": "A CPU is tuned to finish one complicated, branchy instruction stream as fast as possible, with 8–64 sophisticated cores. A GPU bets on raw parallel width: thousands of simple lanes executing the same operation across many data elements. The clock-speed answer is wrong because the difference is architectural, not frequency."
+  },
+  {
+    "id": "08.1-005",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "1. Intuition: a GPU is a very wide, very shallow factory",
+    "question": "What kind of workload is a CPU's design (deep out-of-order cores, branch prediction) best suited for?",
+    "options": [
+      "Large dense matrix multiplications with no data dependency between output elements",
+      "Branchy, pointer-chasing code such as operating systems, web servers and compilers",
+      "Applying an activation function independently to every element of a huge tensor",
+      "Adding two vectors of a million floats element by element with no branches at all"
+    ],
+    "answer_index": 1,
+    "explanation": "Branch prediction and out-of-order execution help when the instruction stream is irregular and dependent, as in OS kernels, servers and compilers. Dense, uniform, branch-free work like matmuls and elementwise ops is the GPU's territory, because thousands of lanes can do it in parallel."
+  },
+  {
+    "id": "08.1-006",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "1. Intuition: a GPU is a very wide, very shallow factory",
+    "question": "Why does deep learning run 10–100x faster on GPUs than on CPUs?",
+    "options": [
+      "It is mostly identical operations on many independent elements, run across thousands of lanes",
+      "Deep learning code is full of branches, which GPU branch predictors handle better than CPUs",
+      "GPUs have larger per-core caches than CPUs, so each individual operation finishes sooner",
+      "GPUs execute Python bytecode directly, avoiding the interpreter overhead that CPUs suffer"
+    ],
+    "answer_index": 0,
+    "explanation": "Matmuls, vector adds and elementwise activations have no branching and no dependency between elements, so the same instruction can be applied across thousands of lanes at once. That data-parallel structure maps directly onto GPU hardware. GPUs are not better at branches; branchy code is actually expensive on them."
+  },
+  {
+    "id": "08.1-007",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "1. Intuition: a GPU is a very wide, very shallow factory",
+    "question": "What is usually the real performance question on a GPU?",
+    "options": [
+      "Whether there are enough arithmetic units to perform the required FLOPs",
+      "Whether the CPU clock speed is high enough to run the kernels",
+      "Whether the kernel's code has been compiled with optimization flags",
+      "Whether data can be delivered to the compute units fast enough"
+    ],
+    "answer_index": 3,
+    "explanation": "GPU arithmetic units can consume numbers much faster than memory can supply them. So the bottleneck is rarely raw compute; it is almost always feeding data to the lanes. This is the theme of the whole GPU-performance module."
+  },
+  {
+    "id": "08.1-008",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "1. Intuition: a GPU is a very wide, very shallow factory",
+    "question": "Because a GPU trades single-thread cleverness for raw parallel width, which resource becomes scarce?",
+    "options": [
+      "Arithmetic throughput",
+      "Instruction decoding",
+      "Data movement",
+      "Branch prediction capacity"
+    ],
+    "answer_index": 2,
+    "explanation": "With thousands of lanes, arithmetic is abundant and cheap. The scarce resource is moving data to those lanes, so most GPU optimization is about not moving data you do not have to. Arithmetic throughput is the abundant resource, not the scarce one."
+  },
+  {
+    "id": "08.1-009",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "In NVIDIA's CUDA execution model, what is a thread?",
+    "options": [
+      "A group of 32 lanes that execute the same instruction in lockstep on different data",
+      "The physical processor that holds a register file, shared memory and Tensor Cores",
+      "The smallest unit of work: one lane running the kernel, usually on one element",
+      "A group of warps guaranteed to run on the same SM and share its on-chip memory"
+    ],
+    "answer_index": 2,
+    "explanation": "A thread is the finest unit: one lane running the kernel on (usually) one element, and a launch can create millions of them. A group of 32 lockstep threads is a warp, a group of warps on one SM is a thread block, and the physical processor is the SM."
+  },
+  {
+    "id": "08.1-010",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "How many threads make up a warp on NVIDIA GPUs?",
+    "options": [
+      "16",
+      "32",
+      "64",
+      "1024"
+    ],
+    "answer_index": 1,
+    "explanation": "Threads execute in lockstep groups of 32 called warps. 1024 is the maximum size of a thread block, not a warp. The warp is the real unit of scheduling: the hardware issues one instruction per warp."
+  },
+  {
+    "id": "08.1-011",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "What does SIMT (single instruction, multiple threads) mean for the threads of a warp?",
+    "options": [
+      "All threads in the warp execute the same instruction at the same time, each on its own data",
+      "Each thread in the warp runs a different instruction stream independently",
+      "Only one thread in the warp runs at a time while the others wait",
+      "The threads of a warp share a single register so they always compute the same value"
+    ],
+    "answer_index": 0,
+    "explanation": "In SIMT, the 32 threads of a warp are issued one instruction together, and each applies it to its own data element. The hardware issues instructions per warp, not per thread. Threads are not independent instruction streams, which is why divergence costs performance."
+  },
+  {
+    "id": "08.1-012",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "What is the real unit of scheduling on an NVIDIA GPU?",
+    "options": [
+      "The individual thread: each thread is scheduled independently",
+      "The whole kernel: the GPU schedules one kernel instruction at a time across all SMs",
+      "The SM: one instruction is issued per SM for all its threads",
+      "The warp: the hardware issues one instruction per warp"
+    ],
+    "answer_index": 3,
+    "explanation": "Although threads are the smallest unit of work, the hardware issues instructions to whole warps of 32 threads. That is why warp-level behaviour (lockstep execution, divergence, latency hiding by switching warps) matters for performance."
+  },
+  {
+    "id": "08.1-013",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "What property distinguishes a thread block (CTA) from an arbitrary set of threads?",
+    "options": [
+      "Its threads are guaranteed to be spread across different SMs for load balancing",
+      "Its threads each get a private region of HBM that no other block is allowed to read",
+      "It always contains exactly 32 threads that execute the same instruction in lockstep",
+      "Its warps share one SM, so they can use shared memory and sync at a barrier"
+    ],
+    "answer_index": 3,
+    "explanation": "A thread block is a group of warps (up to 1024 threads) placed together on one SM. That placement lets them share a fast scratchpad (shared memory) and synchronize with a barrier. Exactly 32 lockstep threads describes a warp, not a block."
+  },
+  {
+    "id": "08.1-014",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "What is the maximum number of threads in a single CUDA thread block?",
+    "options": [
+      "32",
+      "108",
+      "1024",
+      "65536"
+    ],
+    "answer_index": 2,
+    "explanation": "A thread block can hold up to 1024 threads, organized as warps of 32. 32 is the warp size and 108 is the number of SMs on an A100."
+  },
+  {
+    "id": "08.1-015",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "Which capability of thread blocks does FlashAttention exploit?",
+    "options": [
+      "A block can write directly into another GPU's HBM without going through NVLink",
+      "A block can load a tile into shared memory once and have all its threads reuse it",
+      "A block can skip computing scores whose values its threads predict to be small",
+      "A block can be spread over several SMs at once to get access to more registers"
+    ],
+    "answer_index": 1,
+    "explanation": "Threads in a block share on-chip shared memory and can synchronize. FlashAttention uses this to stage tiles of Q, K and V in shared memory once and reuse them across many computations, instead of repeatedly reading from HBM. A block is never split across SMs."
+  },
+  {
+    "id": "08.1-016",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "How many streaming multiprocessors (SMs) do an A100 and an H100 have, respectively?",
+    "options": [
+      "108 and 132",
+      "32 and 64",
+      "1024 and 2048",
+      "80 and 141"
+    ],
+    "answer_index": 0,
+    "explanation": "An A100 has 108 SMs and an H100 has 132. The numbers 80 and 141 are HBM capacities in GB, and 1024 is the maximum thread-block size."
+  },
+  {
+    "id": "08.1-017",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "What are Tensor Cores?",
+    "options": [
+      "Dedicated matrix-multiply-accumulate units in each SM that do most transformer FLOPs",
+      "A separate chip next to the GPU that stores tensors between consecutive kernel launches",
+      "The portion of HBM reserved for model weights so they are never evicted during training",
+      "Software threads PyTorch uses to schedule tensor operations from the CPU onto the GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Each SM contains, along with its register file, shared memory and warp schedulers, a set of arithmetic units including Tensor Cores. These are specialized matrix-multiply-accumulate units, and they perform most of the FLOPs in transformer training. They are hardware compute units, not memory."
+  },
+  {
+    "id": "08.1-018",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "2. The execution hierarchy: threads, warps, blocks, SMs",
+    "question": "In GPU terminology, what is a kernel?",
+    "options": [
+      "A single SM together with its private register file and its shared memory",
+      "The operating-system driver that copies tensors from host RAM into the HBM",
+      "A group of 32 threads that execute the same instruction in lockstep on an SM",
+      "One function launched across a whole grid of threads, blocks and SMs"
+    ],
+    "answer_index": 3,
+    "explanation": "A kernel is one GPU function, launched over a grid of many thread blocks that the GPU distributes across its SMs. The hierarchy is thread, warp, thread block, SM, GPU. A group of 32 lockstep threads is a warp."
+  },
+  {
+    "id": "08.1-019",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Two consequences worth remembering",
+    "question": "Why do GPUs want many warps in flight (high occupancy)?",
+    "options": [
+      "Because each additional resident warp raises the clock speed of the SM it runs on",
+      "Because warps share registers, so more warps means more registers for every thread",
+      "So a warp stalled on memory can be swapped for a ready one, keeping units busy",
+      "Because a kernel can only start once every SM is filled with exactly one warp of work"
+    ],
+    "answer_index": 2,
+    "explanation": "Many warps are about latency hiding, not per-warp speed. When a warp waits on a slow memory read, the SM switches instantly to another ready warp so the units never sit idle. More warps actually means fewer registers per thread, since the register file is shared."
+  },
+  {
+    "id": "08.1-020",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Two consequences worth remembering",
+    "question": "Why can a training run with a tiny batch or very short sequence show low MFU even though the kernels are correct?",
+    "options": [
+      "Tiny batches force every operation to run in fp64, which is much slower on Tensor Cores",
+      "Too few warps exist to hide memory latency, so arithmetic units idle during stalls",
+      "Short sequences make attention compute-bound, which leaves the Tensor Cores starved",
+      "The GPU disables its Tensor Cores whenever the batch size falls below 32 sequences"
+    ],
+    "answer_index": 1,
+    "explanation": "With too little parallel work, the scheduler has no other ready warp to switch to when one stalls on memory. The arithmetic units then idle, and model FLOPs utilization drops. This is one concrete cause of very low MFU numbers on small workloads."
+  },
+  {
+    "id": "08.1-021",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Two consequences worth remembering",
+    "question": "What happens when the threads of one warp take different sides of an if statement?",
+    "options": [
+      "Each thread runs only its own path in parallel with the others, at no extra cost",
+      "The warp runs both paths in turn, masking inactive threads, which wastes throughput",
+      "The GPU moves the diverging threads to a different SM so each path runs separately",
+      "The kernel aborts with a launch error, because divergent branches are not allowed"
+    ],
+    "answer_index": 1,
+    "explanation": "Because a warp issues one instruction for all 32 threads, divergent threads cannot run their paths simultaneously. The warp runs both paths in turn and masks out threads not on the current path. Data-parallel numeric code avoids this, which is part of why deep learning suits GPUs."
+  },
+  {
+    "id": "08.1-022",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "What trade-off defines the levels of the GPU memory hierarchy?",
+    "options": [
+      "Size against speed: small memories are fast and near the units, large ones slow and far",
+      "Precision against range: each lower level stores numbers in a lower-precision format",
+      "Cost against reliability: the larger, cheaper levels lose or corrupt data more often",
+      "Read speed against write speed: each level is fast for one but slow for the other"
+    ],
+    "answer_index": 0,
+    "explanation": "The hierarchy trades capacity for speed. Each level down is roughly 10x bigger and several times slower. Registers are tiny and instant; host RAM is huge and slowest."
+  },
+  {
+    "id": "08.1-023",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Which ordering of GPU memory levels runs from fastest/smallest to slowest/largest?",
+    "options": [
+      "Shared memory/SRAM, registers, HBM, L2 cache, host RAM",
+      "Registers, L2 cache, shared memory/SRAM, host RAM, HBM",
+      "HBM, L2 cache, shared memory/SRAM, registers, host RAM",
+      "Registers, shared memory/SRAM, L2 cache, HBM, host RAM"
+    ],
+    "answer_index": 3,
+    "explanation": "The order is registers (per-thread, instant), shared memory/SRAM (per-SM scratchpad), L2 (one cache for the whole GPU), HBM (the large off-chip 'GPU memory') and host RAM (CPU memory across PCIe). Each step down is bigger and slower."
+  },
+  {
+    "id": "08.1-024",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Why does each GPU thread get only a few dozen registers?",
+    "options": [
+      "Registers are stored in HBM, which limits how many each thread can address",
+      "Each thread is allowed exactly one register for every warp it belongs to",
+      "An SM's ~256 KB register file is split across all of its live threads",
+      "Registers are pooled across all SMs, so each thread gets a slice of the whole GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Registers are per-thread private storage physically inside the SM, with effectively zero-cycle access. But the whole SM has a register file of roughly 256 KB, divided among all live threads, so each thread has only a few dozen registers. Registers are on-chip, not in HBM."
+  },
+  {
+    "id": "08.1-025",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Roughly how much shared memory (SRAM) is available per SM on an A100 and an H100?",
+    "options": [
+      "About 40 MB on A100 and about 50 MB on H100",
+      "About 80 GB on A100 and about 141 GB on H100",
+      "Up to about 164 KB on A100 and about 228 KB on H100",
+      "About 256 bytes on A100 and about 512 bytes on H100"
+    ],
+    "answer_index": 2,
+    "explanation": "Shared memory is a small configurable scratchpad per SM: up to ~164 KB on A100 and ~228 KB on H100. The 40–50 MB figures are the L2 cache for the whole GPU, and 80–141 GB are HBM capacities."
+  },
+  {
+    "id": "08.1-026",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Why is the aggregate bandwidth of on-chip shared memory enormous even though each SM's scratchpad is small?",
+    "options": [
+      "Shared memory is one cache spanning all SMs, connected by a single 1 PB/s bus",
+      "Each SM gets a few hundred GB/s and there are 100+ SMs, so tens of TB/s in total",
+      "Shared memory is backed by HBM, so it simply inherits HBM's multi-TB/s bandwidth",
+      "Shared memory compresses tiles on the fly, so each access moves far fewer bytes"
+    ],
+    "answer_index": 1,
+    "explanation": "Shared memory is per-SM and on-chip, with a few hundred GB/s per SM. Multiplied across ~100+ SMs, aggregate on-chip bandwidth reaches tens of TB/s, far above HBM's ~2–3 TB/s. That is why staging data in SRAM pays off."
+  },
+  {
+    "id": "08.1-027",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Which memory level does FlashAttention use to stage tiles of Q, K and V so it can do lots of arithmetic without going back to HBM?",
+    "options": [
+      "Shared memory / SRAM",
+      "The GPU-wide L2 cache",
+      "Pinned host RAM",
+      "HBM, the off-chip DRAM"
+    ],
+    "answer_index": 0,
+    "explanation": "FlashAttention lives in shared memory: it loads tiles of Q, K and V into the per-SM SRAM and does many operations on them there. The point is to avoid HBM traffic, so HBM is the level it minimizes, not the one it stages in."
+  },
+  {
+    "id": "08.1-028",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "What is the L2 cache on an A100/H100-class GPU?",
+    "options": [
+      "A private per-thread store of a few dozen values with effectively instant access",
+      "A per-SM scratchpad of up to ~228 KB that each thread block manages explicitly",
+      "The off-chip DRAM stack of 40–80 GB holding weights, gradients and activations",
+      "One ~40–50 MB cache shared by all SMs that caches recent HBM data automatically"
+    ],
+    "answer_index": 3,
+    "explanation": "L2 is one cache for the whole GPU (~40 MB A100, ~50 MB H100). It caches recent HBM accesses automatically and sits between SRAM and HBM in speed. The explicitly managed per-SM scratchpad is shared memory, and the off-chip DRAM is HBM."
+  },
+  {
+    "id": "08.1-029",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "When someone says 'an 80 GB A100', which memory level are they referring to?",
+    "options": [
+      "The L2 cache shared by all SMs on the die",
+      "The total shared memory of all SMs combined",
+      "The host RAM the GPU reaches over PCIe",
+      "HBM, the off-chip DRAM stacked by the die"
+    ],
+    "answer_index": 3,
+    "explanation": "The quoted 'GPU memory' is HBM (High-Bandwidth Memory), off-chip DRAM stacked beside the die. It is where weights, gradients, optimizer state and activations live. L2 and shared memory are tiny by comparison."
+  },
+  {
+    "id": "08.1-030",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Roughly what HBM bandwidth do the A100 and H100 provide?",
+    "options": [
+      "About 32–64 GB/s on both, set by the PCIe link",
+      "About 312 TB/s on A100 and 990 TB/s on H100",
+      "About 1.5–2 TB/s on A100 and 3.3 TB/s on H100",
+      "About tens of TB/s on both, like on-chip SRAM"
+    ],
+    "answer_index": 2,
+    "explanation": "HBM bandwidth is ~1.5–2 TB/s on A100 and ~3.3 TB/s on H100. 32–64 GB/s is PCIe to host RAM, and tens of TB/s is aggregate on-chip SRAM bandwidth. 312 is the A100's bf16 TFLOP/s figure, not a bandwidth."
+  },
+  {
+    "id": "08.1-031",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Where do a model's weights, gradients, optimizer state and activations actually live during GPU training?",
+    "options": [
+      "In the L2 cache",
+      "In HBM",
+      "In registers",
+      "In shared memory"
+    ],
+    "answer_index": 1,
+    "explanation": "These large tensors live in HBM, the big off-chip GPU memory. Every time a kernel reads a tensor 'from GPU memory', it reads from HBM. Registers, shared memory and L2 are far too small to hold them."
+  },
+  {
+    "id": "08.1-032",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "3. The memory hierarchy: the central object of this module",
+    "question": "Why should tensors be moved from host to device (or between GPUs) rarely?",
+    "options": [
+      "PCIe/NVLink is about 10x slower than HBM, so every crossing is a bottleneck",
+      "Each transfer permanently reduces the HBM capacity available to the program",
+      "Host-to-device copies silently upcast the tensor's dtype to fp64 on arrival",
+      "The GPU must flush and reset its L2 cache and all SMs after every transfer"
+    ],
+    "answer_index": 0,
+    "explanation": "Host RAM is reached over PCIe (~32–64 GB/s) or NVLink, an order of magnitude slower than HBM. Calling .to('cuda') or moving data between GPUs crosses this slow link, so the practice is to move data to the GPU once and keep it there."
+  },
+  {
+    "id": "08.1-033",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Representative numbers (approximate — orders of magnitude, not spec sheets)",
+    "question": "Relative to HBM bandwidth, roughly how fast is host RAM accessed over PCIe?",
+    "options": [
+      "About 0.02–0.03x of HBM",
+      "About 2–5x faster than HBM",
+      "About 10–20x faster than HBM",
+      "About the same speed as HBM"
+    ],
+    "answer_index": 0,
+    "explanation": "PCIe gives ~32–64 GB/s against HBM's ~1.5–3.3 TB/s, about 0.02–0.03x. The 2–5x figure is L2 and 10–20x is shared memory, both faster than HBM."
+  },
+  {
+    "id": "08.1-034",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Representative numbers (approximate — orders of magnitude, not spec sheets)",
+    "question": "Why should the GPU memory sizes and bandwidths quoted for A100/H100 be treated as orders of magnitude rather than exact specs?",
+    "options": [
+      "Bandwidth figures drift every time the GPU is rebooted, so no value is stable for long",
+      "Vendors publish no official figures, so every quoted number is a community estimate",
+      "The effective values depend on the Python and PyTorch versions used to run the model",
+      "They vary by SKU (40 vs 80 GB, SXM vs PCIe) and by peak vs sustained quoting"
+    ],
+    "answer_index": 3,
+    "explanation": "The numbers are ballpark, publicly documented figures. Real values differ between variants such as 40 GB vs 80 GB A100 or SXM vs PCIe, and between peak and sustained quotes. They are meant for reasoning, not for spec-sheet precision."
+  },
+  {
+    "id": "08.1-035",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Representative numbers (approximate — orders of magnitude, not spec sheets)",
+    "question": "Which two A100 numbers should be held side by side to understand GPU performance?",
+    "options": [
+      "About 108 SMs and about 32 threads per warp",
+      "About 40 MB of L2 and 256 KB of registers per SM",
+      "About 2 TB/s HBM and about 312 TFLOP/s bf16",
+      "About 80 GB of HBM and about 64 GB/s of PCIe"
+    ],
+    "answer_index": 2,
+    "explanation": "Comparing ~312 TFLOP/s of bf16 compute with ~2 TB/s of HBM bandwidth reveals how many FLOPs the chip can do per byte read. That ratio is what decides whether a kernel is memory-bound or compute-bound."
+  },
+  {
+    "id": "08.1-036",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "4. The central fact: arithmetic is cheap, data movement is expensive",
+    "question": "Roughly how many FLOPs can an A100 perform in the time it reads one byte from HBM?",
+    "options": [
+      "About 1",
+      "About 150",
+      "About 15",
+      "About 1500"
+    ],
+    "answer_index": 1,
+    "explanation": "Dividing ~312x10^12 FLOP/s by ~2x10^12 bytes/s gives about 156 FLOPs per byte. A kernel needs at least that many FLOPs per byte of HBM traffic to keep the arithmetic units busy."
+  },
+  {
+    "id": "08.1-037",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "4. The central fact: arithmetic is cheap, data movement is expensive",
+    "question": "A kernel reads a byte from HBM and does only one or two FLOPs with it before needing the next byte. On an A100, what happens?",
+    "options": [
+      "The kernel is compute-bound, because each FLOP has to wait for the FLOP before it",
+      "The arithmetic units idle ~99% of the time waiting on data: it is memory-bound",
+      "The kernel runs at peak FLOP/s, because it does so little work for each byte read",
+      "The kernel automatically keeps its data in registers, so HBM is never read again"
+    ],
+    "answer_index": 1,
+    "explanation": "The A100 can do ~150 FLOPs per HBM byte. Doing only 1–2 FLOPs per byte leaves the units waiting almost all the time, so runtime is set by how fast HBM delivers bytes. That is the definition of a memory-bound (bandwidth-bound) kernel."
+  },
+  {
+    "id": "08.1-038",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "4. The central fact: arithmetic is cheap, data movement is expensive",
+    "question": "What makes a kernel compute-bound?",
+    "options": [
+      "It does hundreds of FLOPs per byte loaded, like a large matmul reusing each value",
+      "It reads very large tensors from HBM and does one FLOP per element it loads",
+      "It launches thousands of tiny kernels in a row, each saturating the Tensor Cores",
+      "It moves data between the CPU and GPU every step, keeping the PCIe link busy"
+    ],
+    "answer_index": 0,
+    "explanation": "A compute-bound kernel has enough arithmetic per byte that the arithmetic units stay saturated and memory is not the bottleneck. Large matmuls achieve this by reusing each loaded value across a whole row or column of outputs. Elementwise ops over big tensors are the classic memory-bound case."
+  },
+  {
+    "id": "08.1-039",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "4. The central fact: arithmetic is cheap, data movement is expensive",
+    "question": "Which of these transformer operations is typically memory-bound on a GPU?",
+    "options": [
+      "The QKV projection matmul",
+      "The MLP up-projection matmul",
+      "The attention output projection matmul",
+      "LayerNorm"
+    ],
+    "answer_index": 3,
+    "explanation": "Elementwise and reduction operations such as activations, LayerNorm, dropout, bias add, softmax and the attention score matrix are memory-bound. The large weight matmuls (QKV, output projection, MLP layers) reuse each loaded value many times and are compute-bound."
+  },
+  {
+    "id": "08.1-040",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Why LLM kernels are so often memory-bound",
+    "question": "Why are the big weight matmuls in a transformer (QKV, output projection, MLP) considered 'good' from a performance standpoint?",
+    "options": [
+      "They are memory-bound, which makes them the easiest ops to speed up with fusion",
+      "They do almost no FLOPs, so they finish instantly compared with elementwise ops",
+      "They are compute-bound: each loaded number is reused, keeping Tensor Cores busy",
+      "They run on the CPU in parallel, freeing the GPU for the attention computation"
+    ],
+    "answer_index": 2,
+    "explanation": "These matmuls are the 6N FLOPs of training and genuinely compute-bound. Each loaded value participates in many multiply-adds, so the Tensor Cores stay saturated. The inefficiency lies in the elementwise and reduction ops around them."
+  },
+  {
+    "id": "08.1-041",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Why LLM kernels are so often memory-bound",
+    "question": "Why can the many small elementwise and reduction ops between transformer matmuls eat a large share of wall-clock time despite having few FLOPs?",
+    "options": [
+      "Each one is dispatched to the CPU instead of the GPU, adding a PCIe round trip",
+      "Each one recomputes the whole forward pass from scratch to get its inputs back",
+      "Each reads a big activation from HBM and writes it back, a bandwidth-bound trip",
+      "Each one forces the GPU into fp64 precision, which runs at a fraction of peak"
+    ],
+    "answer_index": 2,
+    "explanation": "Ops like bias add, GELU, dropout, LayerNorm, residual add and softmax do tiny arithmetic per element but read and write whole activation tensors in HBM. Their arithmetic intensity is near the floor, so their runtime is set by bandwidth, and summed together they cost a lot."
+  },
+  {
+    "id": "08.1-042",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Why LLM kernels are so often memory-bound",
+    "question": "Which attention-related cost is singled out as a crucial memory-bound part of the transformer forward pass?",
+    "options": [
+      "Loading the Q, K and V weight matrices, which are kept in fp32",
+      "The softmax and the reading/writing of the T x T score matrix",
+      "The positional embedding lookup repeated at every layer",
+      "The token embedding matmul over the whole vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "Among the memory-bound tail, the attention softmax and the T x T score matrix traffic stand out, since that matrix grows quadratically with sequence length. FlashAttention is designed specifically to stop touching HBM for it."
+  },
+  {
+    "id": "08.1-043",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Why LLM kernels are so often memory-bound",
+    "question": "Which pairing correctly matches the next GPU-performance tools to the memory-bound problem?",
+    "options": [
+      "Roofline/fusion: measure and cut round trips; profiler/mixed precision: find kernels, halve bytes; FlashAttention: skip HBM",
+      "Roofline/fusion: halve bytes and add FLOPs; profiler/mixed precision: fuse kernels; FlashAttention: raise score precision",
+      "Roofline/mixed precision: find hot kernels; fusion: halve bytes per element; FlashAttention: move scores to host RAM",
+      "Profiler/fusion: change dtypes; roofline: avoid HBM entirely; FlashAttention: time kernels and approximate the softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "The roofline quantifies memory-bound versus compute-bound and fusion cuts HBM round trips. The profiler finds the offending kernels and mixed precision halves the bytes moved. FlashAttention rebuilds attention so the score matrix never goes to HBM."
+  },
+  {
+    "id": "08.1-044",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "What does a PyTorch tensor's device attribute tell you physically on a GPU system?",
+    "options": [
+      "How many bytes each element occupies, such as 4 for fp32",
+      "How many elements the tensor holds across all its dimensions",
+      "Which SM will execute the next operation on the tensor",
+      "Which memory holds the bytes: host RAM, or GPU N's HBM"
+    ],
+    "answer_index": 3,
+    "explanation": "device says where the bytes are stored: 'cpu' means host RAM and 'cuda:0' means the HBM of GPU 0. Bytes per element is the dtype, and element count comes from the shape."
+  },
+  {
+    "id": "08.1-045",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "What physically happens when you call x.to('cuda') on a CPU tensor?",
+    "options": [
+      "The tensor is marked as GPU-ready but stays in host RAM until first use, at no cost",
+      "The tensor is moved into the L2 cache of every SM",
+      "The tensor's dtype is converted to bf16 for the GPU",
+      "The tensor's bytes are copied across the PCIe bus into the GPU's HBM"
+    ],
+    "answer_index": 3,
+    "explanation": "x.to('cuda') performs a real copy across the slow PCIe link into HBM. Because that transfer is slow, data should be moved to the GPU once and kept there. It does not change the dtype."
+  },
+  {
+    "id": "08.1-046",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "How does a tensor's dtype affect GPU performance?",
+    "options": [
+      "It only affects numerical accuracy and has no effect on the bytes each op must move",
+      "It decides which SM the tensor is stored on, and so which SM runs ops that use it",
+      "It sets bytes per element, so it fixes both HBM storage and bytes moved per op",
+      "It sets the number of elements in the tensor, and so how many threads are launched"
+    ],
+    "answer_index": 2,
+    "explanation": "dtype fixes the element size: fp32 is 4 bytes and bf16/fp16 are 2 bytes. That size multiplies both storage and the bandwidth cost of every op reading or writing the tensor, so halving it halves both — the core performance argument for mixed precision."
+  },
+  {
+    "id": "08.1-047",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "How is the total byte size of a PyTorch tensor computed?",
+    "options": [
+      "numel() divided by element_size()",
+      "numel() times element_size()",
+      "The product of the shape dimensions only, ignoring dtype",
+      "element_size() times the number of dimensions"
+    ],
+    "answer_index": 1,
+    "explanation": "The total bytes are the number of elements (from the shape) times bytes per element (from the dtype). The shape alone gives element count but not bytes."
+  },
+  {
+    "id": "08.1-048",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "Why did the GPT-2-small logits tensor of shape (8, 1024, 50257) in fp32 dominate the activation memory bucket?",
+    "options": [
+      "It is about 1.65 GB, written to HBM by the final matmul and read back by the loss",
+      "It is kept in host RAM and must cross the PCIe bus twice in every training step",
+      "It is stored in fp64 by default, which doubles its size relative to the hidden states",
+      "It is recomputed from scratch in every layer, so its traffic is multiplied by n_layer"
+    ],
+    "answer_index": 0,
+    "explanation": "8 x 1024 x 50257 x 4 bytes is about 1.65 GB. That much data is written to HBM and read back by the loss, so its size directly sets its HBM cost and memory footprint. Its large vocabulary dimension is what makes it so big."
+  },
+  {
+    "id": "08.1-049",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "5. Tensor shapes, dtype, device — where a tensor physically lives",
+    "question": "What does F.gelu(x) do on the GPU for an activation x of shape (B, T, 4C) in HBM?",
+    "options": [
+      "A kernel reads every element of x from HBM, does a few FLOPs each, and writes y back",
+      "GELU runs entirely inside the L2 cache, so x and y never need to touch HBM at all",
+      "PyTorch sends x to the CPU, applies GELU there with SIMD, and copies the result back",
+      "GELU runs on the Tensor Cores as a matrix multiply against a precomputed lookup table"
+    ],
+    "answer_index": 0,
+    "explanation": "The GELU kernel reads x from HBM, computes a handful of FLOPs per element in registers, and writes y back. Bytes moved are a full read plus a full write, with tiny arithmetic, making it a textbook memory-bound kernel and a prime fusion candidate."
+  },
+  {
+    "id": "08.1-050",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "6. Under the hood: what happens when you call one PyTorch op on the GPU",
+    "question": "When PyTorch runs c = a + b on CUDA tensors, what is the first thing that happens?",
+    "options": [
+      "The GPU immediately starts reading a and b from HBM without the CPU being involved",
+      "PyTorch copies a and b back to host RAM so it can check their shapes and dtypes",
+      "The SMs JIT-compile a new kernel from the Python source of the expression a + b",
+      "PyTorch's C++ dispatcher selects the CUDA kernel for that op and dtype"
+    ],
+    "answer_index": 3,
+    "explanation": "The Python call goes into PyTorch's C++ dispatcher, which picks the right kernel (here elementwise add for fp16 on CUDA). Then PyTorch launches that kernel, which the GPU schedules across its SMs."
+  },
+  {
+    "id": "08.1-051",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "6. Under the hood: what happens when you call one PyTorch op on the GPU",
+    "question": "Why is launching thousands of tiny GPU kernels slow?",
+    "options": [
+      "Each launch reloads the model weights from host RAM before the kernel can start",
+      "Each launch forces the GPU to clear and re-zero the HBM regions it will write",
+      "Each launch has a fixed overhead of a few microseconds, however little work it does",
+      "Each launch can only use a single SM, so thousands of kernels serialize on one SM"
+    ],
+    "answer_index": 2,
+    "explanation": "Every kernel launch costs a few microseconds of fixed overhead. With thousands of tiny kernels this overhead adds up, which is one reason fusing ops into fewer kernels helps."
+  },
+  {
+    "id": "08.1-052",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "6. Under the hood: what happens when you call one PyTorch op on the GPU",
+    "question": "In c = a + b for fp16 tensors of shape (4096, 4096), what is the approximate arithmetic intensity and what does it imply?",
+    "options": [
+      "About 170 FLOPs/byte, above the ~150 ridge, so the kernel is compute-bound",
+      "About 0.17 FLOPs/byte, far below the ~150 ridge, so the kernel is memory-bound",
+      "About 1.7 FLOPs/byte, just at the ridge for fp16, so the kernel is balanced",
+      "About 150 FLOPs/byte, right at the ridge, so it runs near peak FLOP/s"
+    ],
+    "answer_index": 1,
+    "explanation": "The add does one FLOP per element (~1.7x10^7 FLOPs) while moving two reads and one write of 2-byte elements (~100 MB). That gives ~0.17 FLOPs/byte, hopelessly below the ~150 ridge, so runtime is set by HBM bandwidth."
+  },
+  {
+    "id": "08.1-053",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "6. Under the hood: what happens when you call one PyTorch op on the GPU",
+    "question": "For an elementwise add that moves about 100 MB on an A100, what sets its runtime?",
+    "options": [
+      "Peak FLOP/s: about 1.7x10^7 FLOPs / 312 TFLOP/s, well under a microsecond",
+      "HBM bandwidth: about 100 MB / 2 TB/s ≈ 50 µs, with the math hidden behind it",
+      "Kernel launch overhead alone, since one launch dwarfs any data the add moves",
+      "PCIe bandwidth: about 100 MB / 64 GB/s, since the inputs come from host RAM"
+    ],
+    "answer_index": 1,
+    "explanation": "Because the kernel is memory-bound, its runtime is essentially bytes moved divided by HBM bandwidth, about 50 microseconds. The arithmetic is essentially free and overlaps with the memory traffic. PCIe is not involved since the tensors are already in HBM."
+  },
+  {
+    "id": "08.1-054",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does a GPU want thousands of threads in flight even though it can physically execute only a limited number at once?",
+    "options": [
+      "Extra warps hide memory latency: the scheduler runs others while some wait on HBM",
+      "More resident threads raise the clock speed of each SM through dynamic boosting",
+      "Each extra thread brings its own share of HBM bandwidth, so total bandwidth grows",
+      "The GPU driver rejects any kernel launched with fewer than a thousand threads"
+    ],
+    "answer_index": 0,
+    "explanation": "The extra threads are latency hiding, not raw throughput. When a warp stalls on a slow HBM read, the SM switches to another ready warp. With too few warps, the units idle during every stall and utilization collapses."
+  },
+  {
+    "id": "08.1-055",
+    "chapter": "08.1",
+    "chapter_name": "GPU architecture & memory hierarchy",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A GELU over a (B, T, 4C) activation does few FLOPs per element. What is the fix for its cost, as previewed for the roofline/fusion discussion?",
+    "options": [
+      "Rewrite GELU with a cheaper approximation so it does fewer FLOPs per element",
+      "Run GELU on the CPU in parallel so the GPU is free for the next matmul",
+      "Assign more SMs to the GELU kernel so its arithmetic finishes sooner",
+      "Fuse GELU with the bias add and dropout so intermediates stay on chip"
+    ],
+    "answer_index": 3,
+    "explanation": "GELU is memory-bound: its cost is the HBM round trip of a big tensor, not its arithmetic. Fusing it with bias add and dropout means one HBM read and one write instead of three round trips. Reducing FLOPs would barely help since arithmetic is not the bottleneck."
+  }
+]

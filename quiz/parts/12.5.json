@@ -1,0 +1,1424 @@
+[
+  {
+    "id": "12.5-001",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In a 2026 model card, what do you need to know about a layer labelled 'Gated DeltaNet' or 'KDA' sitting next to 'GQA' and 'MoE'?",
+    "options": [
+      "Which tokenizer and vocabulary it was trained with, since that fixes how many state slots it allocates",
+      "Which optimizer and learning-rate schedule trained it, since linear layers only converge under Muon",
+      "What state the layer carries, what it costs, and what it gives up compared with softmax attention",
+      "How many experts it routes each token to, and how its router balances load across those experts"
+    ],
+    "answer_index": 2,
+    "explanation": "Gated DeltaNet and KDA are linear-attention token-mixing layers used in hybrid stacks. Understanding them means knowing their fixed-size state, their compute and memory cost, and the exact recall they give up relative to softmax attention. They are not MoE routing or optimizer choices."
+  },
+  {
+    "id": "12.5-002",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which inference engines are noted as supporting hybrid linear/full-attention models such as Qwen3-Next?",
+    "options": [
+      "vLLM and SGLang",
+      "Only TensorRT-LLM",
+      "No serving engine; they run only in research code",
+      "llama.cpp exclusively"
+    ],
+    "answer_index": 0,
+    "explanation": "Hybrid linear/full-attention stacks are shipped in open-weight frontier MoE models and supported by vLLM and SGLang, which use flash-linear-attention Triton kernels for the linear layers. They are not limited to research code."
+  },
+  {
+    "id": "12.5-003",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Hardware track",
+    "question": "What hardware is needed for the Gated DeltaNet teaching code and tests, and what do production versions of these layers need?",
+    "options": [
+      "A single A100 is required even for the toy tests, and production needs a multi-node cluster of H100s",
+      "CPU-only works for the tests, and production training simply runs the same per-token Python recurrent loop on CPU",
+      "Both need TPU pods, because the d_v x d_k state per head is too large to fit in a single GPU's HBM",
+      "CPU-only suffices for toy sizes; production training needs flash-linear-attention's chunked Triton kernels on GPU"
+    ],
+    "answer_index": 3,
+    "explanation": "The teaching code runs on toy sizes (T at most 512, C at most 64) on CPU in seconds, with zero GPU-hours. Production training uses the chunked Triton kernels of flash-linear-attention on GPUs because a Python loop over time would leave a GPU idle."
+  },
+  {
+    "id": "12.5-004",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "1. Intuition: GQA made the cache smaller, not bounded",
+    "question": "After GQA, the KV cache is $2\\,n_{\\text{layer}}\\,g\\,d_h\\,T\\,b$ bytes. Which factor does GQA reduce, and which remains a problem at long context?",
+    "options": [
+      "GQA removes the $T$ factor by caching once per group, but $g$ still grows with layer count",
+      "GQA shrinks $g$, but the cache still grows linearly with context length $T$",
+      "GQA shrinks $b$ by quantizing cached keys to int8, but $d_h$ still grows with context length",
+      "GQA shrinks $n_{\\text{layer}}$ by sharing caches across layers, but $g$ still grows with $T$"
+    ],
+    "answer_index": 1,
+    "explanation": "GQA reduces the number of KV heads $g$, making the cache smaller by a constant factor. But every new token still appends a key and value to every layer, so memory grows with $T$, and each decode step reads the whole cache. At 256K context, that growing cache decides how many sequences fit and how fast decoding is."
+  },
+  {
+    "id": "12.5-005",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "1. Intuition: GQA made the cache smaller, not bounded",
+    "question": "At very long contexts such as 256K tokens, what decides how many sequences fit on a GPU and how fast each decode step is?",
+    "options": [
+      "The model weights, which must be re-read and grow with context",
+      "The KV cache, not the weights or the FLOPs",
+      "The tokenizer's vocabulary size",
+      "The optimizer state"
+    ],
+    "answer_index": 1,
+    "explanation": "At long context the per-sequence KV cache becomes the dominant memory, limiting batch size, and every decode step must read all of it, limiting speed. Weights do not grow with context, and the optimizer is not used at inference."
+  },
+  {
+    "id": "12.5-006",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "1. Intuition: GQA made the cache smaller, not bounded",
+    "question": "What is the core trade-off of using an RNN-style fixed-size state instead of a growing KV cache?",
+    "options": [
+      "Memory becomes constant in T and recall stays exact, because the state stores every token",
+      "Recall becomes exact for every past token, but memory grows quadratically with context",
+      "Decode becomes slower per token, but memory grows only linearly instead of quadratically",
+      "Decode cost and memory become constant in T, but the summary of the past is lossy"
+    ],
+    "answer_index": 3,
+    "explanation": "An RNN keeps a fixed-size summary updated once per token, so decode memory and compute do not grow with context. The price is that a fixed-size state cannot remember everything a growing cache can, so recall is approximate."
+  },
+  {
+    "id": "12.5-007",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "1. Intuition: GQA made the cache smaller, not bounded",
+    "question": "What are the steps from softmax attention to a production hybrid model?",
+    "options": [
+      "Drop the softmax (linear attention), add a forget gate, use the delta rule to correct instead of add, keep full attention in one layer of four",
+      "Add more query heads, quantize the KV cache to int4, prune every other layer, then keep softmax attention only in the final layer",
+      "Replace attention with an MoE, add a decay gate to the router, use the delta rule on expert weights, then keep dense layers in one of four",
+      "Use sliding-window attention, then block-sparse attention, then GQA, then keep one full-attention layer in every eight layers of the stack"
+    ],
+    "answer_index": 0,
+    "explanation": "Linear attention turns attention into an RNN with a matrix state; a decay gate alpha lets it forget; the delta rule beta corrects the stored value for a key; and a hybrid stack keeps a full softmax attention layer in one of every four for exact long-range lookup."
+  },
+  {
+    "id": "12.5-008",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "1. Intuition: GQA made the cache smaller, not bounded",
+    "question": "How do softmax attention and a linear-attention layer differ in what they store and how they look up the past?",
+    "options": [
+      "Softmax compresses the past into one fixed matrix per head and reads it approximately; linear attention stores every key and value and looks them up exactly",
+      "Both store every past key and value exactly, but linear attention uses fewer heads and replaces the exp in the scores with a cheaper dot product",
+      "Softmax stores every past key and value and looks them up exactly; linear attention compresses the past into one fixed matrix per head, read approximately",
+      "Linear attention stores only the most recent key and value per head; softmax stores a fixed-size matrix summary of the past that it reads exactly"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax attention keeps the full K and V history (memory growing with T) and reads it exactly. A linear-attention layer folds the history into a fixed-size state per head, constant in T, at the cost of approximate reads. A hybrid uses mostly the cheap layer plus a few exact ones."
+  },
+  {
+    "id": "12.5-009",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "In causal softmax attention, why can you not pre-sum the past into a single summary independent of the query?",
+    "options": [
+      "Because keys and values have different head dimensions, so their sum has no consistent shape",
+      "Because the causal mask changes every step, so any stored summary would include future tokens",
+      "The softmax denominator depends on $q_t$ and couples all past positions non-linearly",
+      "Because the $\\sqrt{d_k}$ scaling is applied separately per position and cannot be factored out"
+    ],
+    "answer_index": 2,
+    "explanation": "The weights $\\exp(q_t\\cdot k_s)/\\sum_{s'}\\exp(q_t\\cdot k_{s'})$ depend non-linearly on the query, so the past cannot be combined into one query-independent object; every $k_s, v_s$ must be kept. Different key and value dimensions are no obstacle, as linear attention shows."
+  },
+  {
+    "id": "12.5-010",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "What change does linear attention (Katharopoulos et al. 2020) make to softmax attention, in the modern form?",
+    "options": [
+      "It replaces $\\exp(q\\cdot k)$ by a plain dot product (generally $\\phi(q)\\cdot\\phi(k)$), with $\\phi$ folded into projections and the normalizer dropped",
+      "It replaces the $q\\cdot k$ dot product with a negative L1 distance $-\\lVert q-k\\rVert_1$, keeping the softmax normalizer so weights still sum to 1",
+      "It applies the softmax over the value dimension $d_v$ instead of over past positions, so each output channel is normalized and the cache can be dropped",
+      "It restricts each query to a fixed window of the most recent $w$ tokens and keeps $\\exp(q\\cdot k)$, so the cache stops growing beyond $w$ entries"
+    ],
+    "answer_index": 0,
+    "explanation": "Linear attention swaps the exponential kernel for a dot product of (feature-mapped) queries and keys. Modern variants fold the feature map $\\phi$ into the projections and drop the normalizer. This removes the softmax coupling that prevented pre-summing. A sliding window is a different technique."
+  },
+  {
+    "id": "12.5-011",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "In linear attention, how does $o_t = \\sum_{s\\le t}(q_t\\cdot k_s)v_s$ become a recurrence?",
+    "options": [
+      "It equals $q_t^\\top(\\sum_s k_s v_s^\\top)$, but the sum must be rebuilt every step from all past queries, so no recurrence exists",
+      "It equals $\\sum_s k_s\\,(v_s\\cdot q_t)$, so the state is a single vector of size $d_k$ updated by $s_t = s_{t-1} + k_t$",
+      "It equals $S_t = S_{t-1}\\,v_t k_t^\\top$, a running product of outer products, with output $o_t = q_t^\\top S_t$",
+      "It equals $(\\sum_{s\\le t} v_s k_s^\\top)\\,q_t$, so the state $S_t = S_{t-1} + v_t k_t^\\top$ with $o_t = S_t q_t$"
+    ],
+    "answer_index": 3,
+    "explanation": "Since $(q_t\\cdot k_s)v_s = v_s(k_s^\\top q_t)$, the sum over the past factors as a matrix times $q_t$. That matrix is accumulated additively, one outer product per token. The recurrence is additive, not a product of outer products."
+  },
+  {
+    "id": "12.5-012",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "In linear attention, what are the shape of the state $S_t$ and its initial value?",
+    "options": [
+      "$S_t\\in\\mathbb{R}^{T\\times d_k}$, with $S_0 = I$",
+      "$S_t\\in\\mathbb{R}^{d_v\\times d_k}$, with $S_0 = 0$",
+      "$S_t\\in\\mathbb{R}^{d_k\\times d_k}$, with $S_0 = I$",
+      "$S_t\\in\\mathbb{R}^{d_v}$, a vector, with $S_0 = \\mathbf{1}$"
+    ],
+    "answer_index": 1,
+    "explanation": "Each write $v_t k_t^\\top$ is $d_v\\times d_k$, so the state is a $d_v\\times d_k$ matrix starting at zero. Its size has no $T$ axis, which is the whole point. Reading $S_t q_t$ gives a $d_v$-dimensional output."
+  },
+  {
+    "id": "12.5-013",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "In linear attention, what does each outer product $v_t k_t^\\top$ represent?",
+    "options": [
+      "A full-rank $d_v\\times d_k$ matrix that stores all past values at once",
+      "A rank-1 $d_v\\times d_k$ matrix that stores $v_t$ under address $k_t$",
+      "A scalar similarity between $v_t$ and $k_t$ that weights the next read",
+      "The attention weight of token $t$ on itself, before normalization by the sum"
+    ],
+    "answer_index": 1,
+    "explanation": "The outer product is rank 1: reading it with a query $q$ gives $v_t(k_t\\cdot q)$, i.e. the value scaled by how well $q$ matches the key. So it acts like storing $v_t$ at address $k_t$. Reading the summed state returns a mix of stored values weighted by key match."
+  },
+  {
+    "id": "12.5-014",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.1 Linear attention",
+    "question": "How many numbers does a linear-attention state hold per head, as a function of sequence length T?",
+    "options": [
+      "$T\\,d_k$, growing linearly with $T$",
+      "$T^2$, one score per query-key pair",
+      "$2\\,T\\,d_v$, a key and value per token",
+      "$d_v d_k$, regardless of $T$"
+    ],
+    "answer_index": 3,
+    "explanation": "The state is a $d_v\\times d_k$ matrix whose size does not depend on how many tokens have been processed. By contrast, softmax attention stores $T$ keys and $T$ values per head."
+  },
+  {
+    "id": "12.5-015",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.2 Decay gate",
+    "question": "Why does pure (undecayed) linear attention's state degrade after thousands of tokens?",
+    "options": [
+      "Nothing is ever removed, so it sums thousands of rank-1 matrices in a $d_k$-dimensional space and reads become mush",
+      "The state overflows float32 after about 1024 tokens because each outer product doubles its largest entry",
+      "The keys become mutually orthogonal as $T$ grows, so every read $S_t q_t$ returns a vector close to zero",
+      "The state is reset to zero at every chunk boundary by the kernel, so history older than one chunk is lost entirely"
+    ],
+    "answer_index": 0,
+    "explanation": "Each token adds an outer product and none is ever subtracted. With far more writes than the $d_k$ dimensions available, stored items interfere and reads return blurred mixtures. A decay gate addresses this by letting old content fade."
+  },
+  {
+    "id": "12.5-016",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.2 Decay gate",
+    "question": "How does the decay gate modify the linear-attention recurrence, and where does the idea come from?",
+    "options": [
+      "$S_t = S_{t-1} + \\alpha_t v_t k_t^\\top$, scaling only the new write, an idea from the original Transformer",
+      "$S_t = \\alpha_t(S_{t-1} + v_t k_t^\\top)$ with one learned scalar per layer, taken from LSTM forget gates",
+      "$S_t = \\alpha_t S_{t-1} + v_t k_t^\\top$ with per-token scalar $\\alpha_t\\in(0,1]$, the Mamba2 / GLA idea",
+      "$S_t = S_{t-1} - \\alpha_t S_{t-1}k_t k_t^\\top$ with per-token $\\alpha_t$, the Switch Transformer routing idea"
+    ],
+    "answer_index": 2,
+    "explanation": "The decay multiplies the past state before the new write is added, so old contributions shrink geometrically. Scaling only the write would not forget anything, and decaying after the write (third option) would also shrink the token just written. This gating comes from Mamba2 and GLA."
+  },
+  {
+    "id": "12.5-017",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.2 Decay gate",
+    "question": "With the decayed recurrence $S_t = \\alpha_t S_{t-1} + v_t k_t^\\top$, by what factor is token $s$'s contribution multiplied when it reaches step $t$?",
+    "options": [
+      "$D_{t,s} = \\prod_{r=1}^{s}\\alpha_r$",
+      "$D_{t,s} = \\alpha_t^{\\,t}$",
+      "$D_{t,s} = \\prod_{r=s+1}^{t}\\alpha_r$",
+      "$D_{t,s} = \\sum_{r=s}^{t}\\alpha_r$ (a running sum)"
+    ],
+    "answer_index": 2,
+    "explanation": "Token $s$ is written at step $s$ and then multiplied by each later decay $\\alpha_{s+1},\\dots,\\alpha_t$. So its weight is the product of decays strictly after it. Decays before $s$ do not affect it, and the effect is multiplicative, not additive."
+  },
+  {
+    "id": "12.5-018",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.2 Decay gate",
+    "question": "What is the equivalent quadratic (parallel) form of linear attention with a decay gate?",
+    "options": [
+      "$o_t = \\sum_{s\\le t} D_{t,s}(q_t\\cdot k_s)v_s$: causal attention with no softmax and a decay mask",
+      "$o_t = \\sum_{s\\le t}\\operatorname{softmax}_s(D_{t,s}\\,q_t\\cdot k_s)v_s$: softmax attention with a decay bias",
+      "$o_t = D_{t,t}\\,(q_t\\cdot k_t)\\,v_t$: each token attends only to itself, scaled by its own gate",
+      "$o_t = \\sum_{s} (q_t\\cdot k_s)v_s$ over all positions including future ones, with no decay mask"
+    ],
+    "answer_index": 0,
+    "explanation": "Unrolling the recurrence gives a $(T,T)$ matrix of $q_t\\cdot k_s$ scores multiplied elementwise by the causal decay mask $D$, with no softmax. The function causal_linear_attention_parallel computes this, and tests check the recurrence against it. Including future positions would break causality."
+  },
+  {
+    "id": "12.5-019",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "What problem with decay gating does the delta rule address?",
+    "options": [
+      "Decay makes the recurrence non-differentiable, so the delta rule restores usable gradients",
+      "Decay cannot be computed in parallel over the sequence, while the delta rule can be chunked",
+      "Decay requires a growing KV cache at decode, while the delta rule keeps the state fixed",
+      "Decay forgets everything uniformly, while the delta rule edits one slot selectively"
+    ],
+    "answer_index": 3,
+    "explanation": "A scalar decay shrinks all stored associations equally. The delta rule instead reads what the memory currently returns for the new key and corrects just that association. This is selective editing rather than blanket forgetting."
+  },
+  {
+    "id": "12.5-020",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "In the delta rule for linear attention, what is done before writing a new key/value pair?",
+    "options": [
+      "Reset the state to zero, then write $v_t k_t^\\top$ so the new pair is the only thing stored",
+      "Read the memory's current answer $\\hat v_t = S_{t-1}k_t$, then move it a fraction $\\beta_t$ toward $v_t$",
+      "Add $v_t k_t^\\top$ twice to reinforce it, then scale the whole state down by a factor $\\beta_t$",
+      "Normalize the whole state $S_{t-1}$ to unit Frobenius norm, then add $\\beta_t v_t k_t^\\top$ on top of the result"
+    ],
+    "answer_index": 1,
+    "explanation": "The delta rule first predicts what key $k_t$ currently retrieves, computes the error $v_t - S_{t-1}k_t$, and writes only $\\beta_t$ times that error along $k_t$. So existing content for that key is corrected rather than accumulated."
+  },
+  {
+    "id": "12.5-021",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "What is the delta-rule state update?",
+    "options": [
+      "$S_t = S_{t-1} + \\beta_t(v_t + S_{t-1}k_t)k_t^\\top = S_{t-1}(I + \\beta_t k_t k_t^\\top) + \\beta_t v_t k_t^\\top$",
+      "$S_t = S_{t-1} + \\beta_t(v_t - S_{t-1}k_t)k_t^\\top = S_{t-1}(I - \\beta_t k_t k_t^\\top) + \\beta_t v_t k_t^\\top$",
+      "$S_t = (I - \\beta_t k_t k_t^\\top)S_{t-1} + v_t k_t^\\top$, erasing along $k_t$ from the left and writing at full strength",
+      "$S_t = \\beta_t S_{t-1} + (1-\\beta_t) v_t k_t^\\top$, an exponential moving average of outer products with rate $\\beta_t$"
+    ],
+    "answer_index": 1,
+    "explanation": "The prediction error times $\\beta_t$ is written along $k_t^\\top$; expanding gives the state multiplied on the right by $I - \\beta_t k_t k_t^\\top$ plus a scaled write. The first distractor is just scaled linear attention with no correction, and the last is an interpolation that does not depend on the key's current content."
+  },
+  {
+    "id": "12.5-022",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "In the delta rule, what do $\\beta_t$ and $(v_t - S_{t-1}k_t)$ represent?",
+    "options": [
+      "$\\beta_t$ is the decay of old memory; $(v_t - S_{t-1}k_t)$ is the attention score of token $t$",
+      "$\\beta_t$ is Adam's momentum coefficient; $(v_t - S_{t-1}k_t)$ is the gradient norm of the layer",
+      "$\\beta_t$ is the norm of the key; $(v_t - S_{t-1}k_t)$ is the new query used for the next read",
+      "$\\beta_t$ is the write strength; $(v_t - S_{t-1}k_t)$ is the prediction error, the 'delta'"
+    ],
+    "answer_index": 3,
+    "explanation": "$\\beta_t\\in[0,1]$ controls how far the stored answer moves toward the new value, and the difference between the target value and the memory's current answer is the error being corrected. Decay is the separate $\\alpha_t$."
+  },
+  {
+    "id": "12.5-023",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "In the delta rule, under what conditions does key $k_t$ return exactly $v_t$ after the update?",
+    "options": [
+      "When $\\lVert k_t\\rVert = 1$ and $\\beta_t = 1$",
+      "Whenever $\\beta_t > 0$, for any key norm",
+      "Only when $S_{t-1} = 0$",
+      "When $\\lVert k_t\\rVert = 2$ and $\\beta_t = 0.5$"
+    ],
+    "answer_index": 0,
+    "explanation": "$S_t k_t = S_{t-1}k_t + \\beta_t(v_t - S_{t-1}k_t)(k_t^\\top k_t)$. With unit key and $\\beta_t = 1$ this is exactly $v_t$. Smaller $\\beta_t$ moves only partway, and an empty prior state is not required."
+  },
+  {
+    "id": "12.5-024",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "What optimization interpretation does the delta rule have?",
+    "options": [
+      "One Newton step on the language-model loss with respect to $S$, with $\\beta_t$ approximating the inverse Hessian of the state",
+      "A closed-form least-squares solve $S = VK^{+}$ over all past keys and values, recomputed exactly at every time step",
+      "One gradient-descent step on $\\tfrac12\\lVert S k_t - v_t\\rVert^2$ with learning rate $\\beta_t$: an associative memory trained online",
+      "One step of gradient ascent on the attention entropy, with $\\beta_t$ as the step size that sharpens reads over the past"
+    ],
+    "answer_index": 2,
+    "explanation": "The gradient of $\\tfrac12\\lVert Sk_t - v_t\\rVert^2$ with respect to $S$ is $(Sk_t - v_t)k_t^\\top$, so stepping with rate $\\beta_t$ gives exactly the delta-rule update. It is a single online step per token, not a full least-squares solve over history."
+  },
+  {
+    "id": "12.5-025",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.3 The delta rule",
+    "question": "Who are credited with the delta rule and its use in linear attention?",
+    "options": [
+      "Vaswani et al. 2017 originally; applied to linear attention by Katharopoulos et al. 2020 and scaled by Dao 2024",
+      "Hochreiter and Schmidhuber 1997 originally; used for linear attention by Fedus et al. 2021 and scaled by Gu 2023",
+      "Widrow–Hoff originally; used for linear attention by Schlag et al. 2021 and scaled up by Yang et al. 2024",
+      "Kingma and Ba 2015 originally; used for linear attention by Dai et al. 2024 and scaled up by Shazeer et al. 2017"
+    ],
+    "answer_index": 2,
+    "explanation": "The delta rule is the classic Widrow–Hoff learning rule. Schlag et al. (2021) applied it to linear attention and Yang et al. (2024) scaled it up with a parallel training algorithm. Katharopoulos et al. introduced linear attention itself."
+  },
+  {
+    "id": "12.5-026",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "What is the Gated DeltaNet state update (Yang, Kautz & Hatamizadeh, ICLR 2025)?",
+    "options": [
+      "$S_t = \\alpha_t S_{t-1}(I - \\beta_t k_t k_t^\\top) + \\beta_t v_t k_t^\\top$, with $o_t = S_t q_t$",
+      "$S_t = \\alpha_t S_{t-1} + \\beta_t v_t k_t^\\top$, with $o_t = q_t^\\top S_t$ and no erase term at all",
+      "$S_t = S_{t-1}(I - \\alpha_t k_t k_t^\\top) + \\beta_t v_t k_t^\\top$, with $o_t = S_t q_t$",
+      "$S_t = \\beta_t S_{t-1}(I - \\alpha_t k_t k_t^\\top) + v_t k_t^\\top$, with $o_t = S_t q_t$"
+    ],
+    "answer_index": 0,
+    "explanation": "Gated DeltaNet combines decay $\\alpha_t$ with the delta-rule correction of strength $\\beta_t$. The first distractor is gated linear attention without the correction, and the others swap the roles of $\\alpha$ and $\\beta$."
+  },
+  {
+    "id": "12.5-027",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "What is the 'forget first, then correct' form of the gated delta rule?",
+    "options": [
+      "$S_t = \\alpha_t S_{t-1} + \\beta_t(v_t - S_{t-1}k_t)k_t^\\top$",
+      "$S_t = \\alpha_t\\big(S_{t-1} + \\beta_t(v_t - S_{t-1}k_t)k_t^\\top\\big)$",
+      "$S_t = S_{t-1} + \\beta_t(v_t - \\alpha_t k_t)k_t^\\top$ with no decay of $S$",
+      "$S_t = \\alpha_t S_{t-1} + \\beta_t(v_t - \\alpha_t S_{t-1}k_t)k_t^\\top$"
+    ],
+    "answer_index": 3,
+    "explanation": "The state is decayed first, and the prediction is made from the decayed state $\\alpha_t S_{t-1}$. Using the undecayed state in the error term (first distractor) is exactly the debugging-exercise bug: the correction then targets a value the decayed state no longer holds."
+  },
+  {
+    "id": "12.5-028",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "In Gated DeltaNet, what do $\\alpha_t$ and $\\beta_t$ each do, and how are they produced?",
+    "options": [
+      "Both are fixed hyperparameters chosen before training, $\\alpha$ near 0.99 for slow forgetting and $\\beta$ near 0.5 for gentle writes",
+      "$\\alpha_t$ erases fast (e.g. at a topic change), $\\beta_t$ edits precisely; both come per token and per head from small linear layers on $x_t$",
+      "$\\alpha_t$ is learned once per layer and shared by all tokens, while $\\beta_t$ is a constant 1 so every write fully overwrites its slot",
+      "$\\alpha_t$ controls how strongly each new value is written; $\\beta_t$ controls global forgetting, both computed per token from a softmax over heads"
+    ],
+    "answer_index": 1,
+    "explanation": "The decay $\\alpha_t$ wipes the state broadly, useful when context changes, while $\\beta_t$ performs targeted writes. Both are computed per token and head from the input by small projections, so the model learns when to forget and how hard to write. The last distractor swaps their roles."
+  },
+  {
+    "id": "12.5-029",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "What special cases does Gated DeltaNet reduce to when $\\alpha_t = 1$ or $\\beta_t = 0$?",
+    "options": [
+      "$\\alpha_t = 1$ recovers softmax attention; $\\beta_t = 0$ resets the state to zero for that token",
+      "$\\alpha_t = 1$ recovers DeltaNet; $\\beta_t = 0$ means don't write (a pure decay step)",
+      "$\\alpha_t = 1$ recovers plain linear attention; $\\beta_t = 0$ recovers the ungated DeltaNet",
+      "$\\alpha_t = 0$ recovers DeltaNet; $\\beta_t = 1$ means don't write anything (a pure decay step)"
+    ],
+    "answer_index": 1,
+    "explanation": "With no decay, the update is just the delta rule (DeltaNet). With zero write strength, the correction term vanishes and only decay acts. Neither choice yields softmax attention, and plain linear attention would need the correction removed entirely."
+  },
+  {
+    "id": "12.5-030",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "Why does Gated DeltaNet L2-normalize q and k?",
+    "options": [
+      "So the softmax denominator equals 1 and the normalizer can be dropped from the read",
+      "To make each outer product $v_t k_t^\\top$ rank 2, so the state can store twice as much",
+      "To reduce the state from $d_v\\times d_k$ to $d_k$ numbers, since unit keys need no matrix",
+      "So $I - \\beta k k^\\top$ has eigenvalues in $[0,1]$ and the state cannot blow up"
+    ],
+    "answer_index": 3,
+    "explanation": "With unit keys and $\\beta\\in[0,1]$, $I - \\beta kk^\\top$ has eigenvalue $1-\\beta$ along $k$ and 1 elsewhere, all in $[0,1]$, so it is a contraction and the state stays bounded. There is no softmax in this layer and normalization does not change the state's shape."
+  },
+  {
+    "id": "12.5-031",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "Besides L2-normalizing q and k, what other components does the published Gated DeltaNet layer include?",
+    "options": [
+      "A short causal convolution before the projections and an output gate $\\mathrm{RMSNorm}(o_t)\\odot\\mathrm{SiLU}(W_g x_t)$",
+      "A softmax over the state's key axis before every read and a learned absolute positional embedding added to $q$ and $k$",
+      "A mixture-of-experts router inside each head that selects which of several states $S^{(e)}$ receives each token's write",
+      "A sliding-window KV cache of the last 64 tokens alongside the state, and rotary position embeddings applied to the values"
+    ],
+    "answer_index": 0,
+    "explanation": "The paper documents a short causal convolution ahead of the projections and an output gating of RMSNorm-ed outputs by a SiLU-activated projection of the input. These are PUBLICLY DOCUMENTED details. None of the distractors are part of the layer."
+  },
+  {
+    "id": "12.5-032",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "2.4 Gated delta rule (Gated DeltaNet)",
+    "question": "How does Kimi Linear's KDA differ from Gated DeltaNet?",
+    "options": [
+      "It removes the delta rule's error term and keeps only the scalar decay $\\alpha_t$, like Mamba2",
+      "It uses one decay per value channel (a diagonal on rows of $S$) and drops the write strength $\\beta_t$",
+      "It replaces the scalar decay $\\alpha_t$ with one decay per key channel (a diagonal matrix)",
+      "It replaces the fixed state with a growing compressed KV cache, keeping the delta rule only for writes"
+    ],
+    "answer_index": 2,
+    "explanation": "KDA (Kimi Delta Attention) generalizes the scalar decay to a per-key-channel decay, effectively a diagonal decay matrix, so different key dimensions can forget at different rates. It keeps the delta-rule structure and the fixed-size state."
+  },
+  {
+    "id": "12.5-033",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "With $d_k = 2$, $d_v = 1$, writes $k=(1,0),v=3$ then $k=(1,0),v=5$, why does pure linear attention read 8 at $q=(1,0)$ instead of 5?",
+    "options": [
+      "Linear attention keeps the maximum of the two writes, 5, and adds the initial bias of 3 on top",
+      "The dropped softmax normalizer is replaced by a fixed scale, which multiplies the second value by 1.6",
+      "Two writes under the same key collide and add, giving 3 + 5 = 8, neither the old nor the new value",
+      "The second key is treated as a new address and ignored by the read, and 8 comes from the initial state"
+    ],
+    "answer_index": 2,
+    "explanation": "Linear attention adds $v_t k_t^\top$ unconditionally, so writing the same address twice sums the values. There is no mechanism to overwrite an address, which is the collision problem the delta rule fixes."
+  },
+  {
+    "id": "12.5-034",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "In the same example, how does the delta rule ($\\alpha=\\beta=1$) handle the second write (k=(1,0), v=5) after storing 3?",
+    "options": [
+      "It predicts 3, writes only the error 5 - 3 = 2, so the address now returns 5",
+      "It adds 5 on top to get 8, then halves the slot so the address returns the average 4",
+      "It zeroes the whole state first and then writes 5, so every address now returns 5",
+      "It writes 5 under a new key orthogonal to (1,0), so the old address still returns 3"
+    ],
+    "answer_index": 0,
+    "explanation": "The delta rule reads the current answer for the key (3), computes the error (2), and adds that along the key, giving state (5, 0). The address is overwritten. It does not reset the whole state."
+  },
+  {
+    "id": "12.5-035",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "In the delta-rule hand example, after overwriting address e_1 to 5, the third token writes v = 2 under k = (0,1). What does reading q = (1,0) return, and why?",
+    "options": [
+      "7, because writes accumulate in the state and every read sees their sum",
+      "2, because the most recent write wins globally and overrides every address",
+      "0, because the third write overwrites the whole state with its own outer product",
+      "Still 5, because the orthogonal write does not disturb address e_1"
+    ],
+    "answer_index": 3,
+    "explanation": "The prediction for k=(0,1) is 0, so the error 2 is written along (0,1), giving state (5, 2). Reading with (1,0) still returns 5, and reading with (0,1) returns 2. Orthogonal keys occupy separate slots."
+  },
+  {
+    "id": "12.5-036",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "3. Numerical example by hand",
+    "question": "In the gated delta rule hand example, $\\alpha_2 = 0.5$ and $\\beta_2 = 0.5$ at step 2 with prior state (3, 0) and new value 5 under key (1,0). What is the resulting read and its meaning?",
+    "options": [
+      "4.0: the average of the old value 3 and the new value 5, since both gates are 0.5",
+      "3.25: a half-forgotten old value (1.5) plus a half-strength correction (1.75)",
+      "5.0: the new value exactly, because the error term fully corrects the decayed slot",
+      "2.5: half of the new value, because the decay wipes the old 3 before the write"
+    ],
+    "answer_index": 1,
+    "explanation": "Forgetting gives 1.5; the error is 5 - 1.5 = 3.5; half-strength correction is 1.75; total 3.25. Because the gates are learned, the model chooses per token how much to forget and how hard to write."
+  },
+  {
+    "id": "12.5-037",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In the Gated DeltaNet layer, how are q and k processed before the recurrence?",
+    "options": [
+      "Softmax over $d_k$, then multiplied by $\\sqrt{d_k}$ so the dot products keep unit scale",
+      "SiLU, then L2-normalized over $d_k$, with q additionally scaled by $d_k^{-1/2}$",
+      "Left raw from the projection with no activation, then q alone is scaled by $d_k^{-1/2}$",
+      "Layer-normalized over the sequence axis, then passed through a ReLU before the recurrence"
+    ],
+    "answer_index": 1,
+    "explanation": "q and k of shape (B, H, T, d_k) pass through SiLU and are L2-normalized along $d_k$; q is also scaled by $d_k^{-1/2}$. Leaving k raw is a listed common mistake that can make the state explode."
+  },
+  {
+    "id": "12.5-038",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "How are the decay alpha and write strength beta computed in the Gated DeltaNet layer, and what are their ranges?",
+    "options": [
+      "alpha $= \\sigma(W_a x)\\in(0,1)$; beta $= \\mathrm{softplus}(W_b x)\\in(0,\\infty)$, unbounded above",
+      "alpha $= \\tanh(W_a x)\\in(-1,1)$; beta $= \\exp(W_b x)\\in(0,\\infty)$, both per head",
+      "alpha $= \\mathrm{ReLU}(W_a x)\\in[0,\\infty)$; beta $= 1 - \\alpha$, tied to the decay",
+      "alpha $= \\exp(-\\mathrm{softplus}(W_a x))\\in(0,1)$; beta $= \\sigma(W_b x)\\in(0,1)$"
+    ],
+    "answer_index": 3,
+    "explanation": "softplus is positive, so $\\exp(-\\mathrm{softplus})$ lies in (0,1), a valid decay. The sigmoid keeps beta in (0,1), a valid write strength. Both have shape (B, H, T): one scalar per token and head. An unbounded beta could break the contraction."
+  },
+  {
+    "id": "12.5-039",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "What is the shape of the Gated DeltaNet state S, and what precision is it kept in in practice?",
+    "options": [
+      "(B, H, d_v, d_k) with no T axis, kept in fp32",
+      "(B, H, T, d_k), one row per token, kept in bf16",
+      "(B, T, C) like the hidden states, kept in int8",
+      "(B, H, T, T) like the attention map, kept in fp16"
+    ],
+    "answer_index": 0,
+    "explanation": "The state is one d_v x d_k matrix per batch element and head, with no time axis, so it does not grow during decoding. It is kept in fp32 because it accumulates many updates and bf16 would lose precision."
+  },
+  {
+    "id": "12.5-040",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "At decode time, how does one layer's per-sequence memory differ between softmax attention and Gated DeltaNet?",
+    "options": [
+      "Both store (B, H, T, d) tensors that grow with T, but Gated DeltaNet keeps them in int8 so each one is a quarter the size",
+      "Softmax stores a fixed state of shape (B, H, d, d); Gated DeltaNet appends one key and value of shape (B, H, d) per token",
+      "Softmax stores K and V of shape (B, g, T, d_h) each, growing with T; Gated DeltaNet stores S of shape (B, H, d_v, d_k), fixed",
+      "Gated DeltaNet stores only K of shape (B, g, T, d_h) and recomputes V from it, halving softmax's growing (B, g, T, d_h) cache"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax attention's cache appends a key and value per token per KV head. Gated DeltaNet carries only its fixed state matrix per head; nothing is ever appended."
+  },
+  {
+    "id": "12.5-041",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In gated_delta_rule_recurrent, what is the order of operations per time step?",
+    "options": [
+      "Read o_t = S q_t first, then decay S by alpha, then add beta v_t k_t^T with no prediction or error term",
+      "Write v_t k_t^T, then decay S by alpha, then predict pred = S k_t and subtract it from the next value",
+      "Decay S by alpha, predict pred = S k_t, compute err = beta (v_t - pred), add err k_t^T, then read o_t = S q_t",
+      "Predict pred = S k_t from the undecayed S, then decay S by alpha, add beta (v_t - pred) k_t^T, and read o_t = S q_t"
+    ],
+    "answer_index": 2,
+    "explanation": "The loop forgets first, then measures the prediction error against the decayed state, adds the rank-1 correction, and finally reads with the query. Predicting from the undecayed state is the bug in the debugging exercise; decaying after writing is a listed common mistake."
+  },
+  {
+    "id": "12.5-042",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "How does linear_attention_recurrent differ from gated_delta_rule_recurrent?",
+    "options": [
+      "It uses S = alpha*S + v_t k_t^T with no prediction or error term",
+      "It uses a softmax over the state's key axis before each read o_t = S q_t",
+      "It stores all past keys and values in a list and sums them at each read",
+      "It applies the write strength beta to each write but never decays S by alpha"
+    ],
+    "answer_index": 0,
+    "explanation": "Linear attention (with optional decay) simply decays and adds the outer product, without first reading what the key currently returns. The delta rule adds the prediction/correction step."
+  },
+  {
+    "id": "12.5-043",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the GatedDeltaNet layer, how are the per-head decay and write strength produced?",
+    "options": [
+      "From a single shared scalar parameter per layer, broadcast to every head and every token",
+      "From the router logits of the following MoE block, one value per expert per token",
+      "From the attention scores of the previous full-attention layer, averaged over its heads",
+      "From a_proj and b_proj, each nn.Linear(C, n_head), giving one value per head per token"
+    ],
+    "answer_index": 3,
+    "explanation": "a_proj and b_proj map the C-dimensional input to n_head outputs, giving one decay and one write strength per head for every token. The layer also has q/k/v projections, per-head RMSNorm, a SiLU output gate and o_proj."
+  },
+  {
+    "id": "12.5-044",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What two entry points does the GatedDeltaNet layer provide?",
+    "options": [
+      "forward() for training on (B, T, C), and generate() that rebuilds a per-layer KV cache of shape (B, H, T, d_h) at decode",
+      "layer(x) mapping (B, T, C) to (B, T, C), and forward_with_state(x_t, state) for token-by-token decode carrying a fixed state",
+      "A parallel entry and a chunked entry, both mapping (B, T, C) to (B, T, C) and both requiring the full sequence up front",
+      "An encoder entry over (B, T, C) inputs, and a decoder cross-attention entry that reads the encoder's final state for each new token"
+    ],
+    "answer_index": 1,
+    "explanation": "The full-sequence call behaves like GroupedQueryAttention as a drop-in token mixer. The decode call takes one token and the previous (B, H, d, d) state and returns the output and new state, so nothing grows with T."
+  },
+  {
+    "id": "12.5-045",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What do hybrid_layer_pattern and hybrid_decode_cache_bytes compute?",
+    "options": [
+      "The optimal ratio of experts to dense layers in a 3:1 stack, and the total expert parameter count per routed token",
+      "The layer types of a 3:1 stack, and the decode memory as KV cache of 'full' layers plus states of 'linear' layers",
+      "The chunk size for the Triton kernels of 'linear' layers, and the FLOPs per chunk for the 'full' attention layers",
+      "The RoPE frequencies for each 'full' layer, and the decode memory needed to cache rotary embeddings per token"
+    ],
+    "answer_index": 1,
+    "explanation": "hybrid_layer_pattern(n_layer, 3) lists which layers are linear and which are full in a 3:1 layout. hybrid_decode_cache_bytes sums the growing KV cache of the full layers and the fixed states of the linear layers."
+  },
+  {
+    "id": "12.5-046",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Which property is checked by the Gated DeltaNet unit tests about carried state?",
+    "options": [
+      "The state is identical for every input sequence once the decay gate has saturated to 1",
+      "The state grows by exactly one row per token, matching the softmax KV cache length",
+      "Splitting the sequence in two halves the output norm, because the state is reset between the halves",
+      "Running on a split sequence while carrying the state equals running on the whole sequence"
+    ],
+    "answer_index": 3,
+    "explanation": "Because the state summarizes the entire prefix, processing a sequence in two pieces and passing the state between them must give the same result as one pass. Tests also check the hand example, causality, beta=0 never writing, write-then-read returning v, and decode matching the full forward."
+  },
+  {
+    "id": "12.5-047",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What does the Gated DeltaNet test 'recurrent linear attention equals the quadratic form' verify, and at what precision?",
+    "options": [
+      "The recurrent loop matches the (T, T) decay-masked quadratic form with and without decay, in float64 to 1e-10",
+      "The recurrent loop matches full softmax attention with a causal mask, with and without decay, in bf16 to 1e-3",
+      "The recurrent loop runs faster than the (T, T) quadratic form on CPU for every tested sequence length",
+      "The (T, T) quadratic form matches the flash-linear-attention Triton kernels on GPU, in fp16 to 1e-4"
+    ],
+    "answer_index": 0,
+    "explanation": "The test compares the RNN form to causal_linear_attention_parallel in float64 with tight tolerance, confirming the two formulations are the same function. It does not compare with softmax attention, which is a different function."
+  },
+  {
+    "id": "12.5-048",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "Why is the Python loop over time not how production kernels implement Gated DeltaNet?",
+    "options": [
+      "The loop computes a different function than the kernels, so its outputs cannot be trusted",
+      "The loop cannot handle causal masking, so it leaks future tokens into the state",
+      "A loop over T with tiny matmuls leaves a GPU idle; production uses a chunkwise form",
+      "The loop uses too much memory because it stores every intermediate state for backward"
+    ],
+    "answer_index": 2,
+    "explanation": "The loop is the definition, not the implementation. Tiny sequential matmuls cannot saturate a GPU, so kernels like flash-linear-attention compute the same function in chunks using tensor-core-friendly matmuls. Results match up to float rounding."
+  },
+  {
+    "id": "12.5-049",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "How does the chunkwise form used by flash-linear-attention compute linear attention?",
+    "options": [
+      "Within chunks of e.g. 64 tokens it runs full softmax attention, then discards the state entirely at each chunk boundary",
+      "It assigns one token per GPU thread and runs the recurrence in parallel with no matmuls and no state passing",
+      "Within chunks of e.g. 64 tokens it uses a small masked quadratic matmul; between chunks it passes the state S along",
+      "It builds one global T x T decay-masked matrix for the whole sequence and multiplies it by V in a single matmul"
+    ],
+    "answer_index": 2,
+    "explanation": "Splitting into chunks gives intra-chunk work as small dense matmuls (the decay-masked quadratic form) and inter-chunk work as a state hand-off. This balances parallelism and the linear-in-T cost."
+  },
+  {
+    "id": "12.5-050",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "For the delta rule's chunkwise kernel, how is the non-diagonal product of $(I - \\beta k k^\\top)$ factors within a chunk handled?",
+    "options": [
+      "With a compact WY / Householder-product representation so it also becomes a few matmuls (Yang et al. 2024)",
+      "By approximating the product with the identity matrix inside each chunk, since $\\beta k k^\\top$ is small",
+      "By running the sequential part of the product on the CPU while the GPU handles the matmuls (Yang et al. 2024)",
+      "By ignoring the $\\beta_t$ terms inside a chunk and applying them once at the boundary as a scalar correction"
+    ],
+    "answer_index": 0,
+    "explanation": "The product of identity-minus-rank-1 factors is not diagonal like a scalar decay, so Yang et al. (2024) represent it compactly in WY / Householder form, turning it into matmuls. This keeps the kernel exact, not approximate."
+  },
+  {
+    "id": "12.5-051",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "What are the training (prefill) FLOPs per head of softmax attention versus Gated DeltaNet, for T tokens and head dim d?",
+    "options": [
+      "Softmax $O(Td^2)$; Gated DeltaNet $O(T^2 d)$ (chunked $O(T^2 c)$ for chunk size $c$)",
+      "Both $O(T^2 d)$, because the chunked kernel still materializes the full $T\\times T$ decay mask",
+      "Softmax $O(T d)$; Gated DeltaNet $O(d^3)$ per token, so $O(Td^3)$ over the sequence",
+      "Softmax $O(T^2 d)$; Gated DeltaNet $O(Td^2)$ (chunked $O(Tcd + Td^2)$ for chunk size $c$)"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax compares every pair of positions, giving $T^2$ scaling. Gated DeltaNet does a $d\\times d$ state update per token, linear in $T$; the chunked form adds an intra-chunk quadratic term in chunk size $c$."
+  },
+  {
+    "id": "12.5-052",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "What are the per-token decode FLOPs and decode memory per head of softmax attention versus Gated DeltaNet?",
+    "options": [
+      "Softmax $O(d^2)$ FLOPs and $d^2$ memory (constant); Gated DeltaNet $O(Td)$ FLOPs and $2Td$ memory per head (growing)",
+      "Softmax $O(Td)$ FLOPs and $2Td$ memory per KV head (growing); Gated DeltaNet $O(d^2)$ FLOPs and $d^2$ memory (constant)",
+      "Both $O(Td)$ FLOPs per token, and both constant memory, since GQA and the state each cap the per-head cache at $d^2$ numbers",
+      "Softmax $O(T^2)$ FLOPs and constant memory per KV head; Gated DeltaNet $O(T)$ FLOPs and memory growing as $Td$"
+    ],
+    "answer_index": 1,
+    "explanation": "Each softmax decode step reads the whole cache of $T$ keys and values. Gated DeltaNet updates and reads a fixed $d\\times d$ state, independent of $T$. The price is that its recall is lossy."
+  },
+  {
+    "id": "12.5-053",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "Can Gated DeltaNet exactly recall any past token, as softmax attention can?",
+    "options": [
+      "Yes; the delta rule guarantees exact recall of every token it wrote",
+      "No; its memory is lossy, holding only $d^2$ numbers per head",
+      "Yes, as long as the keys are L2-normalized and $\\beta_t = 1$ always",
+      "No, but softmax attention cannot recall exactly either at long context"
+    ],
+    "answer_index": 1,
+    "explanation": "A fixed $d\\times d$ state cannot store an unbounded number of facts exactly; old associations get overwritten or interfere. Softmax attention keeps every key and value and can retrieve any past token exactly."
+  },
+  {
+    "id": "12.5-054",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "With head dim d = 128, how does one Gated DeltaNet state compare with what a softmax head reads per step at 256K context?",
+    "options": [
+      "16,384 numbers versus 32,768 numbers (2 x 128 x 128 for K and V)",
+      "128 numbers versus about 33 million numbers (262,144 x 128)",
+      "About 67 million numbers in both, since the state is also per token",
+      "16,384 numbers versus about 67 million numbers (2 x 262,144 x 128)"
+    ],
+    "answer_index": 3,
+    "explanation": "One state is $128^2 = 16{,}384$ numbers. A softmax head at 262,144 tokens touches the keys and values: $2 \\times 262{,}144 \\times 128 \\approx 67$M numbers per decode step."
+  },
+  {
+    "id": "12.5-055",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "What is Qwen3-Next-80B-A3B's layer layout, as given on its model card?",
+    "options": [
+      "48 layers repeating 3 Gated DeltaNet layers then 1 gated softmax attention layer",
+      "48 layers, all gated softmax attention with GQA, each followed by a Gated DeltaNet output gate",
+      "48 layers alternating strictly between 1 Gated DeltaNet layer and 1 gated softmax attention layer",
+      "24 Gated DeltaNet layers stacked first, followed by 24 gated softmax attention layers on top"
+    ],
+    "answer_index": 0,
+    "explanation": "Qwen3-Next uses a 3:1 hybrid, giving 36 Gated DeltaNet layers and 12 full-attention layers interleaved. Its attention layers have 2 KV heads of dimension 256; its DeltaNet layers have 32 value heads and 16 query/key heads of dimension 128."
+  },
+  {
+    "id": "12.5-056",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "For Qwen3-Next at 262,144 tokens (bf16 KV, fp32 states), why does the hybrid approach but not quite reach a 4x memory saving over an all-full-attention stack?",
+    "options": [
+      "The DeltaNet states also grow with T, at one quarter the rate of the KV cache of the full layers",
+      "The 12 full layers use 4x more KV heads than a dense model would, cancelling part of the saving",
+      "Only 12 of 48 layers keep a KV cache (a 4x cut), but the 36 fixed states add a small constant 75.5 MB",
+      "The bf16 KV cache of the full layers is upcast to fp32 at long context, doubling its size per token"
+    ],
+    "answer_index": 2,
+    "explanation": "Keeping a cache in one layer of four gives up to 4x savings, and the 36 states add a constant 75.5 MB: 6.44 GB + 0.075 GB = 6.52 GB versus 25.8 GB. At long context that constant is negligible, so the ratio approaches 4.0x."
+  },
+  {
+    "id": "12.5-057",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "For Qwen3-Next at 4,096 tokens, the hybrid saves only about 2.3x rather than 4x. Why?",
+    "options": [
+      "The DeltaNet layers fall back to a full KV cache at short contexts, so they briefly cost like attention",
+      "Below 8K tokens the model runs full attention in every layer, so the hybrid layout only applies to long inputs",
+      "At short context the constant state memory (75.5 MB) is comparable to the small KV cache of the full layers",
+      "Prefix caching keeps two snapshots of each DeltaNet state at short contexts, doubling the constant memory"
+    ],
+    "answer_index": 2,
+    "explanation": "At 4K the full layers' KV is only 0.101 GB, so the fixed 0.075 GB of states is a large fraction: 0.176 GB total versus 0.403 GB. Only at long context does the KV cache dominate and the ratio approach 4x."
+  },
+  {
+    "id": "12.5-058",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "Why do newer designs such as the Qwen3.8-Next preview (2026) add sparse attention to the full layers?",
+    "options": [
+      "At long context the remaining cost is the 12 full layers' growing KV cache, so they make even those cheaper",
+      "Because the Gated DeltaNet states grow too large at long context and need sparse reads to stay cheap",
+      "Because sparse attention in the full layers removes the need for any Gated DeltaNet layers in the stack at all",
+      "Because the MoE experts require sparse attention patterns to route tokens to the right expert per layer"
+    ],
+    "answer_index": 0,
+    "explanation": "In a 3:1 hybrid at long context, nearly all decode memory comes from the full-attention layers' KV cache, since the linear states are constant. Replacing those full layers with sparse attention attacks the remaining cost."
+  },
+  {
+    "id": "12.5-059",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "Why did vLLM need a hybrid cache manager to serve Qwen3-Next?",
+    "options": [
+      "Because Qwen3-Next keeps its KV cache on the CPU and pages only the active blocks into GPU memory at each decode step",
+      "Because each MoE expert needs its own set of KV pages, so the manager must track 512 caches per layer",
+      "Because Gated DeltaNet states grow faster than KV pages, so they need larger blocks than the attention layers",
+      "A paged KV manager assumes every layer grows one slot per token, but hybrids also keep a fixed state per linear layer"
+    ],
+    "answer_index": 3,
+    "explanation": "Hybrid models have two kinds of per-sequence memory: growing pages for full-attention layers and one fixed state per linear layer. vLLM added a hybrid cache manager and flash-linear-attention kernels to handle both. This is PUBLICLY DOCUMENTED for vLLM."
+  },
+  {
+    "id": "12.5-060",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "6. Under the hood: what production kernels do, and the cost",
+    "question": "Why is prefix caching harder for hybrid linear/full-attention models?",
+    "options": [
+      "Linear layers have no state at all, so only the full layers' KV pages can be cached and the whole prefix must be re-prefilled",
+      "A linear-layer state summarizes the whole prefix, so it can only be reused at exact positions where a snapshot was saved",
+      "Prefix caching needs a softmax in every layer to merge cached keys with new keys, and linear layers have no softmax",
+      "The linear states are recomputed from scratch at every token, so a cached prefix state is always stale on reuse"
+    ],
+    "answer_index": 1,
+    "explanation": "With a KV cache you can reuse any prefix length by keeping the first n entries. A recurrent state folds the whole prefix into one matrix and cannot be truncated, so reuse is only possible at positions where a snapshot was stored."
+  },
+  {
+    "id": "12.5-061",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "7. Side by side: which to use",
+    "question": "In a side-by-side comparison, how does decode memory differ between MHA/GQA, pure linear attention/GDN, and a 3:1 hybrid?",
+    "options": [
+      "Constant; grows with T; grows with T squared because of the hybrid's mask",
+      "Grows with T; constant; about one quarter of full plus a constant",
+      "Grows with T in all three, since even linear layers append to a cache",
+      "About one quarter of full; constant; grows with T like plain attention"
+    ],
+    "answer_index": 1,
+    "explanation": "GQA's cache grows with context; a pure linear stack has only fixed states; a 3:1 hybrid has a cache in a quarter of the layers plus constant states. The hybrid recovers exact retrieval through those full layers."
+  },
+  {
+    "id": "12.5-062",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "7. Side by side: which to use",
+    "question": "Which models are cited as using 3:1 hybrid layouts (2025–26)?",
+    "options": [
+      "Llama 3.1 and GPT-2 XL",
+      "Mixtral and Switch Transformer",
+      "BERT-large and T5-11B",
+      "Qwen3-Next and Kimi Linear"
+    ],
+    "answer_index": 3,
+    "explanation": "Qwen3-Next uses 3 Gated DeltaNet layers to 1 gated attention layer, and Kimi Linear uses 3 KDA layers to 1 MLA layer. Llama 3 and most models use plain MHA/GQA."
+  },
+  {
+    "id": "12.5-063",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "7. Side by side: which to use",
+    "question": "When would you still choose plain softmax attention (GQA) over a linear or hybrid stack?",
+    "options": [
+      "Short contexts where the cache is small, tasks needing exact recall of arbitrary earlier tokens, or when you want the simplest supported stack",
+      "Only when the context exceeds 1M tokens, since only there is a growing KV cache cheaper than the fixed per-head states of the linear layers",
+      "Whenever the model also uses MoE layers, because routed experts cannot be combined with linear-attention token mixing in one block",
+      "When decode memory must stay constant in T and the batch is large, since GQA caps each head's cache at a fixed size"
+    ],
+    "answer_index": 0,
+    "explanation": "With short context the cache is small anyway; exact copying and long-range lookup are where fixed-state models struggle; and GQA has universal tooling. Constant decode memory is the strength of linear layers, not GQA."
+  },
+  {
+    "id": "12.5-064",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "7. Side by side: which to use",
+    "question": "In the claim labels for hybrid models, which statement is classified as a company claim rather than PUBLICLY DOCUMENTED?",
+    "options": [
+      "The Gated DeltaNet update and its online-learning view, as published in the ICLR 2025 paper by Yang, Kautz and Hatamizadeh",
+      "The 3:1 layouts of Qwen3-Next and Kimi Linear, as stated on their official model cards and config files",
+      "Kimi Linear 'outperforms full MLA' with up to 75% less KV cache and up to 6x decode throughput at 1M context",
+      "vLLM and SGLang support for serving these hybrid models, as listed in their release notes and docs"
+    ],
+    "answer_index": 2,
+    "explanation": "The update rule, the 3:1 layouts on the model cards, and vLLM/SGLang support are publicly documented. Kimi Linear's headline performance comparison is reported by Moonshot and not independently reproduced, so it is a company claim."
+  },
+  {
+    "id": "12.5-065",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "7. Side by side: which to use",
+    "question": "Which statement about hybrid attention is labelled INFERENCE?",
+    "options": [
+      "That Qwen3-Next-80B-A3B uses a 3:1 Gated DeltaNet to full-attention layout",
+      "That Gated DeltaNet L2-normalizes q and k before the recurrence, as its paper describes",
+      "That hybrid linear/sparse attention will become the default for long-context open models",
+      "That vLLM added a hybrid cache manager to serve Qwen3-Next and similar models"
+    ],
+    "answer_index": 2,
+    "explanation": "Several labs are moving toward hybrid layouts, but full-attention models remain common, so predicting it will become the default is an inference. The other statements are documented facts from papers, model cards, or vLLM."
+  },
+  {
+    "id": "12.5-066",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Experiment: watch linear attention fill up",
+    "question": "In the experiment writing N random unit-key / scalar-value pairs (d_k = 16), how does linear attention's read-back error behave as N grows?",
+    "options": [
+      "It grows roughly like N/d, so after 256 writes it is far worse than guessing 0 (MSE well above 1)",
+      "It stays near zero for any N, because each unit key writes into its own orthogonal slot",
+      "It decreases as more pairs are written, because the growing sum of writes averages out the interference noise",
+      "It stays bounded at about 0.2 for any N, because unit keys keep the state's norm fixed"
+    ],
+    "answer_index": 0,
+    "explanation": "Every stored pair adds cross-talk to every read and nothing is removed, so error scales with the number of writes relative to dimension. At N = 256 its MSE was about 15.6, versus 1 for always predicting 0."
+  },
+  {
+    "id": "12.5-067",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Experiment: watch linear attention fill up",
+    "question": "In the same experiment, how does the delta rule (alpha = beta = 1) behave over all pairs versus the last 4 written?",
+    "options": [
+      "Error over all pairs stays at zero for any N, because each write is corrected exactly and nothing is ever lost",
+      "Old pairs stay readable for any N, but the most recent writes become unreadable once N exceeds d_k = 16",
+      "It behaves identically to linear attention, with error over all pairs growing like N/d and recent writes lost too",
+      "Error over all pairs stays bounded as old pairs get overwritten, while recent writes stay readable (about 0.2)"
+    ],
+    "answer_index": 3,
+    "explanation": "The delta rule overwrites old associations, so total error is limited by the fixed 1 x 16 memory, but recent pairs remain accurate regardless of how many came before. That recency is what the learned gates shape and what the full-attention layers of a hybrid compensate for."
+  },
+  {
+    "id": "12.5-068",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "If the decode 'cache' of your linear-attention layer grows per token, what has gone wrong?",
+    "options": [
+      "Nothing is wrong; linear-attention caches also grow per token, only at half the rate of softmax KV",
+      "You have effectively implemented softmax attention with extra steps; the state should have no T axis",
+      "You forgot to apply the decay gate, so the state keeps an extra row for each token it has not forgotten",
+      "You are storing the state in bf16 instead of fp32, so the kernel appends a correction term per token"
+    ],
+    "answer_index": 1,
+    "explanation": "The defining property of a linear-attention layer is a fixed-size state, so a growing cache means you are storing history like softmax attention. Missing decay would degrade reads but not make the state grow in size."
+  },
+  {
+    "id": "12.5-069",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "Why can unnormalized keys make the delta-rule state explode?",
+    "options": [
+      "Unnormalized keys push $\\beta_t$ above 1 through the sigmoid gate, so every write overshoots its target value by a factor $\\lVert k\\rVert$",
+      "With $\\lVert k\\rVert>1$, $I - \\beta kk^\\top$ has eigenvalue $1 - \\beta\\lVert k\\rVert^2$, below $-1$ once $\\beta\\lVert k\\rVert^2 > 2$",
+      "Large keys make the softmax denominator overflow in bf16, so the normalized reads $S q_t$ become infinite",
+      "Large keys shrink every eigenvalue of $I - \\beta kk^\\top$ toward 0, so the state collapses to zero rather than exploding"
+    ],
+    "answer_index": 1,
+    "explanation": "Along $k$, the factor scales by $1-\\beta\\lVert k\\rVert^2$. When this magnitude exceeds 1 the update amplifies the state each step instead of contracting it. L2-normalizing $k$ keeps the eigenvalue in $[0,1]$."
+  },
+  {
+    "id": "12.5-070",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with writing the decay as $S_t = \\alpha_t(S_{t-1} + v_t k_t^\\top)$?",
+    "options": [
+      "Nothing; it is algebraically identical, since $\\alpha_t$ distributes over the sum",
+      "It decays only the new write $v_t k_t^\\top$ and leaves the past state untouched",
+      "It makes the state grow without bound, because $\\alpha_t$ multiplies after the add",
+      "It also decays the token just written; the definition decays only the past"
+    ],
+    "answer_index": 3,
+    "explanation": "The correct form is $\\alpha_t S_{t-1} + v_t k_t^\\top$, so the fresh write enters at full strength. Wrapping both in $\\alpha_t$ shrinks the new contribution too, changing the function."
+  },
+  {
+    "id": "12.5-071",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "Why is computing the outer product as k_t v_t^T instead of v_t k_t^T a dangerous bug when d_k = d_v?",
+    "options": [
+      "The shapes still match, so it runs silently but computes the transpose S^T",
+      "It raises a shape error immediately, because torch checks outer-product order",
+      "It makes the state rank 2 instead of rank 1, so reads mix two addresses",
+      "It doubles memory usage, because the transpose is materialized as a copy"
+    ],
+    "answer_index": 0,
+    "explanation": "$S$ must be $(d_v, d_k)$ with writes $v_t k_t^\\top$. When $d_k = d_v$, the swapped product has the same shape and produces no error, but reads with $q_t$ then use the wrong orientation."
+  },
+  {
+    "id": "12.5-072",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Common mistakes",
+    "question": "Is it correct to assume a 3:1 hybrid saves 4x decode memory at every context length?",
+    "options": [
+      "Yes; the saving is always exactly 4x, because 3 of every 4 layers drop their cache",
+      "No; the saving is largest at short context, and it shrinks toward 1x as the context grows longer",
+      "No; at short context the constant state memory dominates (only about 2.3x at 4K for Qwen3-Next)",
+      "Yes, as long as the states are stored in bf16, which makes them negligible at any length"
+    ],
+    "answer_index": 2,
+    "explanation": "The 4x factor applies only to the KV-cache part. The fixed state memory is a large share when the KV cache is small, so short-context savings are lower, approaching 4x only at long context."
+  },
+  {
+    "id": "12.5-073",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Exercise",
+    "question": "A 64-layer 3:1 hybrid has full layers with 8 KV heads of dim 128 (bf16) and linear layers with 16 heads, d_k = d_v = 128 (fp32 states). At batch 1, at what context length does full-layer KV equal total linear-state memory?",
+    "options": [
+      "4,096 tokens",
+      "256 tokens",
+      "768 tokens",
+      "32,768 tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "16 full and 48 linear layers. KV $= 2\\cdot16\\cdot8\\cdot128\\cdot T\\cdot2 = 65{,}536\\,T$ bytes; states $= 48\\cdot16\\cdot128\\cdot128\\cdot4 = 50{,}331{,}648$ bytes. Equal at $T = 768$; beyond a few thousand tokens the full layers dominate."
+  },
+  {
+    "id": "12.5-074",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Exercise",
+    "question": "How would Kimi Linear's per-channel decay (KDA) be applied to the state in a from-scratch implementation?",
+    "options": [
+      "alpha of shape (B, H, T, d_k), applied as S = S * alpha_t[..., None, :], scaling each key-channel column of S",
+      "alpha of shape (B, H, T, d_v), applied as S = S * alpha_t[..., :, None], scaling each value-channel row of S",
+      "alpha of shape (B, H), one scalar per head, applied as S = S * alpha once at the start of each new sequence",
+      "alpha of shape (B, H, T, T), applied to the outputs as a decay mask after the recurrence has finished"
+    ],
+    "answer_index": 0,
+    "explanation": "S is (d_v, d_k); broadcasting alpha_t over the last axis scales its columns, one decay per key channel. When all channels of alpha are equal it must reduce to the scalar-decay version, which is the suggested test."
+  },
+  {
+    "id": "12.5-075",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Debugging exercise",
+    "question": "A Gated DeltaNet decode drifts in bf16 and its state norm grows. The update is S = alpha_t * S + beta_t * (v_t - S @ k_t)[..., None] * k_t[..., None, :], with k straight from k_proj. What are the two problems?",
+    "options": [
+      "beta_t should multiply S rather than the error, and the outer product should be k_t v_t^T",
+      "alpha_t should be applied after the write rather than before, and v_t should be L2-normalized too",
+      "The state should be kept in bf16 to match the activations, and q should not be normalized",
+      "The prediction uses the undecayed state (should be alpha_t * S @ k_t), and k is not L2-normalized"
+    ],
+    "answer_index": 3,
+    "explanation": "Forget first, then predict: the error must be measured against $\\alpha_t S$, otherwise $S_tk_t\\ne v_t$ even with $\\beta_t=1$ when $\\alpha_t<1$. And without normalizing k, $I-\\beta kk^\\top$ stops being a contraction, the state grows, and bf16 loses precision. Fix: normalize k and keep the state in fp32."
+  },
+  {
+    "id": "12.5-076",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Research connection",
+    "question": "Which paper introduced the chunked (parallel over sequence length) training algorithm for delta-rule linear attention?",
+    "options": [
+      "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention (Katharopoulos et al. 2020)",
+      "Parallelizing Linear Transformers with the Delta Rule over Sequence Length (Yang et al. 2024)",
+      "Gated Delta Networks: Improving Mamba2 with Delta Rule (Yang, Kautz & Hatamizadeh, ICLR 2025)",
+      "Switch Transformers: Scaling to Trillion Parameter Models (Fedus et al. 2021)"
+    ],
+    "answer_index": 1,
+    "explanation": "Yang et al. 2024 provides the chunkwise WY algorithm. Katharopoulos et al. introduced linear attention, and the ICLR 2025 paper introduced the gated delta rule itself."
+  },
+  {
+    "id": "12.5-077",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Research connection",
+    "question": "When reading the Gated DeltaNet paper, which sections should you prioritize and which can you skim?",
+    "options": [
+      "Read only the ablation tables and the long-context benchmarks, and skip the method sections since the code shows the update",
+      "Read §2 (background) and §3.1 (gated delta rule, online-learning view); skim §3.2–3.3 (chunkwise WY) unless writing kernels",
+      "Read §3.2–3.3 (chunkwise WY kernels) first since they define the layer, then skip §2 because it is only background",
+      "Read the appendix proofs and hyperparameter tables only, since the main text repeats the DeltaNet paper almost verbatim"
+    ],
+    "answer_index": 1,
+    "explanation": "Background and the core update with its online-learning interpretation are the essentials. The chunkwise WY algorithm matters only for kernel work, and ablation tables can wait. For Kimi Linear, read the architecture and 3:1 ablation and treat headline comparisons as company claims."
+  },
+  {
+    "id": "12.5-078",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Check yourself",
+    "question": "Why do Qwen3-Next and Kimi Linear keep one full-attention layer in four instead of going fully linear?",
+    "options": [
+      "Full attention layers are needed to compute the decay gates $\\alpha_t$ for the linear layers, which read their attention scores",
+      "Linear layers cannot be trained stably without full layers in between, because their gradients otherwise vanish across long chains of fixed states",
+      "Full layers are required for MoE routing, since the router needs softmax scores over all past tokens to pick the right experts",
+      "A fixed per-head state cannot store unbounded facts exactly, so a few full layers restore exact retrieval while linear layers mix cheaply"
+    ],
+    "answer_index": 3,
+    "explanation": "Tasks like copying, needle-in-a-haystack and long-range lookup need precise access to arbitrary past tokens, which lossy fixed states struggle with. The full-attention layers provide that, and both models chose a 3:1 ratio."
+  },
+  {
+    "id": "12.5-079",
+    "chapter": "12.5",
+    "chapter_name": "Linear attention, Gated DeltaNet & hybrid stacks",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-05.md",
+    "section": "Check yourself",
+    "question": "Where do the remaining ~6.5 GB of Qwen3-Next's decode memory at 256K tokens come from?",
+    "options": [
+      "Almost entirely the KV cache of the 12 full-attention layers; the 36 DeltaNet states add only 75.5 MB",
+      "Mostly the 36 DeltaNet states, which grow with context, while the 12 full layers' KV cache is small",
+      "The MoE expert weights that are loaded once per sequence and kept resident alongside the KV cache",
+      "Activation memory from the SiLU output gates and short convolutions, which scales with the batch size"
+    ],
+    "answer_index": 0,
+    "explanation": "$2\\cdot12\\cdot2\\cdot256\\cdot262{,}144\\cdot2 \\approx 6.44$ GB from the full layers' bf16 KV cache, plus a constant 75.5 MB of fp32 states. The states do not grow with context."
+  }
+]

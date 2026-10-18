@@ -1,0 +1,2144 @@
+[
+  {
+    "id": "09.1-001",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In data parallelism with W workers, what does each worker hold and process during a training step?",
+    "options": [
+      "A 1/W slice of the model's layers and the full global batch",
+      "A 1/W slice of each weight matrix and a 1/W shard of the batch",
+      "A complete copy of the model and the full global batch, processed redundantly",
+      "A complete copy of the model and a 1/W shard of the global batch"
+    ],
+    "answer_index": 3,
+    "explanation": "Data parallelism replicates the full model on every worker and splits each global batch into W shards, one per worker. The workers then average their per-shard gradients with an all-reduce. Splitting layers or weight matrices across workers is model (pipeline or tensor) parallelism, not data parallelism."
+  },
+  {
+    "id": "09.1-002",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In data parallelism, why do all W workers apply the identical optimizer update each step?",
+    "options": [
+      "Because each worker's shard happens to produce the same local gradient",
+      "Because worker 0 computes the update and broadcasts new weights to the others",
+      "Because the optimizer state is shared in one memory location across GPUs",
+      "Because an all-reduce gives every worker the same averaged gradient before the step"
+    ],
+    "answer_index": 3,
+    "explanation": "Each worker computes a different local gradient from its own shard, but the all-reduce replaces every local gradient with the common average. Since every worker starts with identical weights and applies the identical averaged gradient, they stay identical. No weight broadcast is needed after the step."
+  },
+  {
+    "id": "09.1-003",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How many communication steps does ring all-reduce take for W workers, and how much of the tensor does each link carry per step?",
+    "options": [
+      "2(W-1) steps, each carrying 1/W of the tensor",
+      "W steps, each carrying the full tensor",
+      "W-1 steps, each carrying 2/W of the tensor",
+      "log2(W) steps, each carrying half the tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "Ring all-reduce runs a reduce-scatter phase of W-1 steps followed by an all-gather phase of W-1 steps, for 2(W-1) steps total. On every step each link carries exactly one chunk, which is 1/W of the tensor. That keeps per-worker traffic near 2 tensors' worth regardless of W."
+  },
+  {
+    "id": "09.1-004",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is data parallelism described as the foundation for the rest of a distributed-training toolkit (ZeRO, FSDP, tensor/pipeline parallelism)?",
+    "options": [
+      "Because those strategies replace the training loop entirely and only reuse its data loader",
+      "Because those strategies require the model to be replicated unchanged on every worker",
+      "Because those strategies are all built on top of the same collective-communication operations",
+      "Because those strategies only work when the global batch fits on one GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Data parallelism introduces the collective (all-reduce, and its parts reduce-scatter and all-gather) that coordinates devices. ZeRO, FSDP and tensor/pipeline parallelism are all built on top of these collectives. ZeRO and FSDP in particular specifically stop replicating the full model state, so they do not require unchanged replication."
+  },
+  {
+    "id": "09.1-005",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Single-CPU note",
+    "question": "A NumPy example simulates data parallelism with a Python loop that plays all W workers in one process. What does such a simulation demonstrate?",
+    "options": [
+      "The wall-clock speedup to expect when the same job runs on W real GPUs",
+      "The network bandwidth an all-reduce of the gradients would consume on NVLink",
+      "The arithmetic of gradient averaging and all-reduce, not a multi-GPU speedup",
+      "How much gradient computation and communication overlap on real multi-GPU hardware"
+    ],
+    "answer_index": 2,
+    "explanation": "A single-process loop executes each simulated worker in turn, so it reproduces the numbers the collective produces but cannot run anything in parallel. It therefore says nothing about speedup, bandwidth, or overlap. Those require real multi-GPU hardware."
+  },
+  {
+    "id": "09.1-006",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "1. Intuition: clone the model, split the batch, agree on the update",
+    "question": "What is the correct order of the four things data parallelism does every training step?",
+    "options": [
+      "Shard the batch, all-reduce the inputs, compute local gradients, replicate the update",
+      "Replicate the model, compute the full-batch gradient, shard it, all-reduce the weights",
+      "Replicate the model, shard the batch, compute local gradients, all-reduce the gradients",
+      "Shard the model, replicate the batch, all-reduce activations, compute gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "Every worker holds an identical replica, the global batch is cut into W shards, each worker runs forward and backward on its shard to get a local gradient, and an all-reduce averages those gradients across workers. Then each worker runs the identical optimizer step. The all-reduce operates on gradients, not inputs, activations, or weights."
+  },
+  {
+    "id": "09.1-007",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "1. Intuition: clone the model, split the batch, agree on the update",
+    "question": "With a global batch of B examples split across W data-parallel workers, how many examples does each worker's local gradient come from?",
+    "options": [
+      "B/W examples",
+      "B examples",
+      "W examples",
+      "B times W examples"
+    ],
+    "answer_index": 0,
+    "explanation": "The global batch of B examples is cut into W equal shards, so each worker processes B/W examples and computes its local gradient from them. The all-reduce then combines the W local gradients into one gradient that reflects all B examples."
+  },
+  {
+    "id": "09.1-008",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "1. Intuition: clone the model, split the batch, agree on the update",
+    "question": "What does an all-reduce do?",
+    "options": [
+      "Combines one tensor from every worker and returns the combined result to all of them",
+      "Sends one worker's tensor, unchanged, to every other worker in the group",
+      "Combines one tensor from every worker and leaves the combined result only on worker 0",
+      "Splits one tensor into equal pieces and gives each worker a different piece of it"
+    ],
+    "answer_index": 0,
+    "explanation": "An all-reduce takes an equally shaped tensor from every worker, combines them element-wise (for data parallelism, by averaging), and leaves the same combined result on every worker. Sending one tensor unchanged to everyone is a broadcast; leaving the result on one worker is a reduce; giving each worker a different piece is a scatter."
+  },
+  {
+    "id": "09.1-009",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "1. Intuition: clone the model, split the batch, agree on the update",
+    "question": "Why do data-parallel workers remain bit-for-bit identical across training steps?",
+    "options": [
+      "They periodically compare weights and roll back any worker that drifted",
+      "They start identical and every step applies the same averaged update",
+      "They all process the same shard of data each step",
+      "They share one set of weights stored on worker 0"
+    ],
+    "answer_index": 1,
+    "explanation": "Workers begin with identical weights and, after the all-reduce, each applies exactly the same averaged gradient with the same optimizer. Identical inputs to identical updates give identical outputs, so the replicas never diverge. They process different data, which is why their local gradients differ before averaging."
+  },
+  {
+    "id": "09.1-010",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "1. Intuition: clone the model, split the batch, agree on the update",
+    "question": "Relative to a single-GPU training loop, what is the one new operation that data parallelism introduces?",
+    "options": [
+      "An all-reduce of the gradients",
+      "A second backward pass per step",
+      "A new optimizer that accepts W gradients",
+      "A broadcast of the loss value after each step"
+    ],
+    "answer_index": 0,
+    "explanation": "Data parallelism runs the same loop on W workers, each on different data. The only new step is the all-reduce that averages gradients across workers. The optimizer is unchanged, and the loss value is not what is synchronized."
+  },
+  {
+    "id": "09.1-011",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "Is data-parallel training with gradient averaging an approximation of full-batch training or an exact equivalent?",
+    "options": [
+      "An approximation whose error shrinks as the number of workers W grows",
+      "Exactly equal to the full-batch gradient, for a mean loss and equal shards",
+      "An approximation whose error shrinks as the global batch size B grows larger",
+      "Exactly equal, but only when W is a power of two so the shards stay balanced"
+    ],
+    "answer_index": 1,
+    "explanation": "For a mean loss and equal-size shards, the average of per-shard mean-loss gradients equals the full-batch mean-loss gradient exactly, as an algebraic identity. Only floating-point reduction order can cause tiny numerical differences. There is no approximation error that depends on W or batch size."
+  },
+  {
+    "id": "09.1-012",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "A worker computes the gradient of the mean loss over its shard of B/W examples. Why does its local gradient carry a factor of W/B in front of the sum of per-example gradients?",
+    "options": [
+      "Because the gradient is pre-scaled by W so that it cancels the later averaging over workers",
+      "Because the shard mean divides by the shard size B/W, which equals multiplying by W/B",
+      "Because the learning rate is divided by B on each worker before the gradient is formed",
+      "Because each example is counted W times in total across all of the workers' shards"
+    ],
+    "answer_index": 1,
+    "explanation": "A mean over a shard of B/W examples divides the sum by B/W, which is the same as multiplying by W/B. When the W local gradients are then averaged (multiplied by 1/W), the W cancels and leaves 1/B times the sum over all examples, which is the full-batch gradient."
+  },
+  {
+    "id": "09.1-013",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "In the proof that averaged shard gradients equal the full-batch gradient, why does the double sum over workers and over each worker's indices collapse into one sum over all B examples?",
+    "options": [
+      "Because the shards overlap, so each example is counted once on average",
+      "Because gradients of different examples are orthogonal",
+      "Because the shards partition the batch: every example is in exactly one shard",
+      "Because the per-example losses are all equal at initialization"
+    ],
+    "answer_index": 2,
+    "explanation": "The shards are disjoint and together cover the whole batch, so summing over workers and then over each worker's examples visits every example exactly once. That makes the double sum identical to a single sum over all B examples. Overlapping shards would double-count examples and break the identity."
+  },
+  {
+    "id": "09.1-014",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "Which two conditions does the exact equality 'average of per-shard gradients = full-batch gradient' require?",
+    "options": [
+      "A sum loss and an even number of workers",
+      "Identical shards and a sum loss",
+      "A convex loss and a learning rate below 1",
+      "A mean loss and equal-size shards"
+    ],
+    "answer_index": 3,
+    "explanation": "The proof relies on each worker's loss being a mean over its shard and on all shards having the same size, so that a plain average over workers gives the global mean. With a sum loss or unequal shards, a plain average no longer reproduces the full-batch mean-loss gradient. Convexity and the learning rate play no role."
+  },
+  {
+    "id": "09.1-015",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "If data-parallel shards have unequal sizes, how should per-worker mean-loss gradients be combined to recover the full-batch mean-loss gradient?",
+    "options": [
+      "A size-weighted average, weighting each worker by its share of the examples",
+      "A plain sum over workers, since each shard mean is already normalized",
+      "A plain average over workers, exactly as with equal-size shards",
+      "Keep only the gradient from the largest shard and broadcast it to all workers"
+    ],
+    "answer_index": 0,
+    "explanation": "With unequal shards, each worker's mean already divides by its own size, so a plain average over-weights examples in small shards. Weighting each worker's gradient by its share of the examples restores the global mean. A plain sum would scale the gradient by roughly W."
+  },
+  {
+    "id": "09.1-016",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "2. The correctness fact: averaging shard gradients == the full-batch gradient",
+    "question": "Why does the data-parallel all-reduce use an average rather than a sum of the per-worker gradients?",
+    "options": [
+      "Because the averaged gradient has lower variance than the sum, which is what stabilizes training",
+      "Because averaging per-shard mean-loss gradients reproduces the full-batch mean-loss gradient",
+      "Because NCCL only supports averaging collectives, not sums, for floating-point tensors",
+      "Because summing W fp32 gradient tensors would overflow the fp32 range for large W"
+    ],
+    "answer_index": 1,
+    "explanation": "Each worker's gradient is from a mean loss over its shard. Averaging W such gradients gives exactly the full-batch mean-loss gradient, while summing them gives a gradient W times larger. Collective libraries support sums; averaging is a sum followed by division by W."
+  },
+  {
+    "id": "09.1-017",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Verify it numerically",
+    "question": "For the mean-squared-error loss (1/n) sum_i (x_i . theta - y_i)^2 used in a linear-regression check of data parallelism, what is the closed-form gradient with respect to theta?",
+    "options": [
+      "(1/n) X^T (X theta - y)",
+      "2 X^T (X theta - y)",
+      "(2/n) X^T (X theta - y)",
+      "(2/n) (X theta - y)^T X theta"
+    ],
+    "answer_index": 2,
+    "explanation": "Differentiating (1/n) times the sum of squared residuals gives 2/n times X transposed times the residual vector (X theta - y). The factor 1/n comes from the mean, and the factor 2 from differentiating the square. Dropping the 1/n would give the gradient of a sum loss instead."
+  },
+  {
+    "id": "09.1-018",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Verify it numerically",
+    "question": "A NumPy check of data parallelism finds the maximum absolute difference between the full-batch gradient and the average of four shard gradients is about 2.2e-16. What does this show?",
+    "options": [
+      "The two gradients differ by a small approximation error that grows with the number of workers W",
+      "The shard gradients were computed in fp16, so they lost precision relative to the full batch",
+      "The two gradients are equal up to floating-point noise, i.e. exactly equal mathematically",
+      "The averaged gradient is slightly biased toward the first shard, which is reduced first"
+    ],
+    "answer_index": 2,
+    "explanation": "A difference around 2.2e-16 is at the level of double-precision machine epsilon, which is pure floating-point rounding. It confirms the algebraic identity: the averaged shard gradient equals the full-batch gradient. It is not an approximation error that depends on the number of workers."
+  },
+  {
+    "id": "09.1-019",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Verify it numerically",
+    "question": "Training uses a per-token mean loss on variable-length sequences with padding, so data-parallel workers have different numbers of valid tokens. What is wrong with a plain average of worker gradients?",
+    "options": [
+      "Nothing: per-token mean losses always make a plain average over workers exact",
+      "It double-counts the padding tokens, so padding gradients must be summed instead of averaged",
+      "It is subtly wrong; each worker's gradient must be weighted by its share of the valid tokens",
+      "It is only wrong if W is odd, since an even split always balances the valid tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "A plain average assumes each worker contributes equally to the global mean. When valid-token counts differ, the global token-mean gradient is sum(n_w * g_w) / sum(n_w), so each worker must be weighted by its token count. Ignoring this silently changes how much each token contributes."
+  },
+  {
+    "id": "09.1-020",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Verify it numerically",
+    "question": "What symptom does getting the data-parallel gradient normalization wrong (for example, using a sum loss with a plain average) typically produce?",
+    "options": [
+      "An immediate crash in the all-reduce with a tensor shape mismatch error",
+      "An effective learning rate that depends on the number of workers W",
+      "Workers whose weights slowly diverge from each other over many steps",
+      "A deadlock in the all-reduce once the gradient values grow too large"
+    ],
+    "answer_index": 1,
+    "explanation": "If the gradient is scaled by a factor that depends on W, the step size the optimizer actually takes scales with W too, so changing the worker count silently changes the effective learning rate. This is a classic silent scaling bug: no error is raised, and the replicas still stay identical because they all use the same wrong gradient."
+  },
+  {
+    "id": "09.1-021",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "3. All-reduce: the collective, and why \"ring\"",
+    "question": "What property must the element-wise combine operation of an all-reduce have, so that partial results can be combined in any grouping?",
+    "options": [
+      "It must be idempotent",
+      "It must be associative",
+      "It must be invertible",
+      "It must be linear in the learning rate"
+    ],
+    "answer_index": 1,
+    "explanation": "An all-reduce combines tensors from many workers in some order and grouping chosen by the algorithm, so the operation must be associative (sum, max, and so on). For data parallelism the op is a sum, followed by division by W to get the mean. Idempotence or invertibility are not required."
+  },
+  {
+    "id": "09.1-022",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "3. All-reduce: the collective, and why \"ring\"",
+    "question": "Which of these is a family of collective communication operations that coordinate many devices at once?",
+    "options": [
+      "all-reduce, all-gather, reduce-scatter, broadcast",
+      "forward, backward, optimizer.step, zero_grad",
+      "fork, join, mutex, semaphore, condition variable, barrier",
+      "map, filter, sort, shuffle, partition, group-by"
+    ],
+    "answer_index": 0,
+    "explanation": "Collective communication operations involve all participating devices together: all-reduce, all-gather, reduce-scatter, and broadcast are the standard members. Ring all-reduce itself is built from a reduce-scatter followed by an all-gather. The other options are training-loop steps or generic programming primitives."
+  },
+  {
+    "id": "09.1-023",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "3. All-reduce: the collective, and why \"ring\"",
+    "question": "In a naive all-reduce where every worker sends its tensor to worker 0, which sums and sends the result back, what is the problem?",
+    "options": [
+      "The result is numerically different from a true sum because of the reduction order at worker 0",
+      "Workers other than worker 0 never receive the summed result, so they cannot step",
+      "Worker 0's link carries W-1 tensors in and W-1 out, a bottleneck that worsens as W grows",
+      "It only works when W is a power of two, so arbitrary GPU counts cannot use it"
+    ],
+    "answer_index": 2,
+    "explanation": "The naive scheme is correct but funnels all traffic through worker 0: it receives W-1 tensors and sends W-1 back. With gradients of hundreds of megabytes and hundreds of workers, that single link becomes a fatal bottleneck. Ring all-reduce avoids routing everything through one node."
+  },
+  {
+    "id": "09.1-024",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "In ring all-reduce, which workers does worker w send to?",
+    "options": [
+      "Every other worker, in parallel",
+      "Only worker 0",
+      "Worker w+1 in reduce-scatter and worker w-1 in all-gather, plus worker 0",
+      "Only worker w+1, wrapping around at the end"
+    ],
+    "answer_index": 3,
+    "explanation": "Ring all-reduce arranges workers in a logical ring: worker w sends only to its right neighbour w+1, with the last worker wrapping to worker 0. No node handles all the traffic. Every link carries the same small amount per step."
+  },
+  {
+    "id": "09.1-025",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "Before ring all-reduce starts exchanging data, how does each worker divide its tensor?",
+    "options": [
+      "Into 2 halves",
+      "Into W-1 chunks",
+      "Into W chunks",
+      "Into one chunk per layer"
+    ],
+    "answer_index": 2,
+    "explanation": "Each worker splits its tensor into W chunks (near-equal when the length does not divide evenly). Each step of the ring moves one chunk per link. After the reduce-scatter phase, each worker owns one fully summed chunk."
+  },
+  {
+    "id": "09.1-026",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "What is the state at the end of the reduce-scatter phase of ring all-reduce (after W-1 steps)?",
+    "options": [
+      "Every worker already holds the full summed tensor, all W chunks",
+      "Each worker holds the fully summed value of one distinct chunk",
+      "Worker 0 holds the full sum and the other workers hold nothing",
+      "Each worker still holds its original tensor, with nothing summed yet"
+    ],
+    "answer_index": 1,
+    "explanation": "During reduce-scatter, each worker repeatedly sends one chunk to its right neighbour and adds the chunk it receives into its own buffer. After W-1 steps each worker has the complete sum for exactly one distinct chunk: the sum is 'scattered' across workers. The all-gather phase then spreads those finished chunks to everyone."
+  },
+  {
+    "id": "09.1-027",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "What happens during the all-gather phase of ring all-reduce?",
+    "options": [
+      "Each worker adds the chunks it receives into its own buffer to finish the partial sums",
+      "The finished chunks are passed around the ring until every worker has all W of them",
+      "Worker 0 broadcasts the full summed result to all the other workers in one step",
+      "Each worker discards all chunks except its own finished chunk and divides by W"
+    ],
+    "answer_index": 1,
+    "explanation": "After reduce-scatter, each worker owns one finished chunk. The all-gather phase circulates these finished chunks around the ring for W-1 steps until every worker holds all W finished chunks. It copies results rather than adding them."
+  },
+  {
+    "id": "09.1-028",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "Over a whole ring all-reduce, roughly how much data does each worker send, as W grows large?",
+    "options": [
+      "About W tensors' worth, one per other worker",
+      "About log2(W) tensors' worth, as in a tree",
+      "About 1/W of a tensor, its own chunk only",
+      "About 2 tensors' worth, independent of W"
+    ],
+    "answer_index": 3,
+    "explanation": "Each worker sends one chunk (1/W of the tensor) per step over 2(W-1) steps, which totals 2(W-1)/W, approaching 2 tensors' worth regardless of W. This is why ring all-reduce is called bandwidth-optimal. The naive scheme instead piles 2(W-1) tensors onto one link."
+  },
+  {
+    "id": "09.1-029",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Ring all-reduce",
+    "question": "Why is ring all-reduce called bandwidth-optimal?",
+    "options": [
+      "Because per-worker data stays about 2 tensors regardless of W, and no single link is a bottleneck",
+      "Because it finishes in a constant number of communication steps, regardless of how large W gets",
+      "Because it compresses the gradients to a lower precision before sending them around the whole ring",
+      "Because it only sends the nonzero entries of the gradient, which cuts the bytes on every link"
+    ],
+    "answer_index": 0,
+    "explanation": "Each link carries only 1/W of the tensor per step, and the total each worker moves stays near 2 tensors' worth however many workers there are. No link carries more than its share. Its number of rounds, 2(W-1), still grows with W, so latency is not constant."
+  },
+  {
+    "id": "09.1-030",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Worked example: three workers, by hand",
+    "question": "In ring all-reduce with three workers holding [1,2,3], [4,5,6] and [7,8,9], what does each worker hold at the end of the full all-reduce with op='mean'?",
+    "options": [
+      "[12, 15, 18]",
+      "[4, 5, 6]",
+      "[1, 2, 3], [4, 5, 6], [7, 8, 9] unchanged",
+      "[6, 15, 24]"
+    ],
+    "answer_index": 1,
+    "explanation": "The element-wise sum is [12, 15, 18]; dividing by W = 3 gives the mean [4, 5, 6], which every worker ends up holding. [12, 15, 18] is the op='sum' result. [6, 15, 24] would be per-worker sums, which is not what an all-reduce computes."
+  },
+  {
+    "id": "09.1-031",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Worked example: three workers, by hand",
+    "question": "In the second reduce-scatter step of a ring all-reduce, which chunk does worker i send onward?",
+    "options": [
+      "Its own original chunk i again, unchanged from the start",
+      "A random chunk chosen by the ring scheduler each step",
+      "The chunk it just updated in the previous step, (i-1) mod W",
+      "Chunk 0 always, which every worker forwards first in each step"
+    ],
+    "answer_index": 2,
+    "explanation": "On each reduce-scatter step a worker forwards the chunk it just accumulated into, which for step 1 is chunk (i-1) mod W. That keeps partial sums moving around the ring and growing by one contribution per hop. After W-1 hops each chunk has collected all W contributions on one worker."
+  },
+  {
+    "id": "09.1-032",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Worked example: three workers, by hand",
+    "question": "In a three-worker ring all-reduce of [1,2,3], [4,5,6], [7,8,9], after reduce-scatter which finished chunk does each worker own?",
+    "options": [
+      "Worker 0 owns chunk 0 (12), worker 1 owns chunk 1 (15), worker 2 owns chunk 2 (18)",
+      "Worker 0 owns all three chunks; workers 1 and 2 own none",
+      "Worker 0 owns chunk 1 (15), worker 1 owns chunk 2 (18), worker 2 owns chunk 0 (12)",
+      "Worker 0 owns chunk 2 (18), worker 1 owns chunk 0 (12), worker 2 owns chunk 1 (15)"
+    ],
+    "answer_index": 2,
+    "explanation": "Tracing the ring, worker 0 finishes chunk 1 (2+13 = 15), worker 1 finishes chunk 2 (6+12 = 18), and worker 2 finishes chunk 0 (7+5 = 12). Together they are the true sum [12, 15, 18], scattered one per worker. All-gather then distributes them so everyone holds the full result."
+  },
+  {
+    "id": "09.1-033",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "4. The simulated implementation",
+    "question": "In a simulated ring all-reduce, each round first copies every worker's outgoing chunk into a 'sent' list before any worker adds. Why?",
+    "options": [
+      "So no worker reads a neighbour's already-updated value mid-step, mirroring simultaneous sends",
+      "To save memory by reusing the same send buffers across all rounds instead of allocating new ones",
+      "To convert the chunks to fp16 before sending, halving the bytes that travel around the ring",
+      "So that the whole reduce-scatter phase can be skipped when there is only one worker, W = 1"
+    ],
+    "answer_index": 0,
+    "explanation": "On real hardware all workers send at the same moment from the state they had at the start of the step. In a sequential loop, updating worker i before worker i+1 reads from it would leak updated values into the same round. Snapshotting the outgoing chunks first reproduces the simultaneous semantics."
+  },
+  {
+    "id": "09.1-034",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "4. The simulated implementation",
+    "question": "In a ring all-reduce implementation, why does the reduce-scatter phase add received chunks while the all-gather phase overwrites with them?",
+    "options": [
+      "Reduce-scatter combines partial sums; all-gather only copies already finished results around",
+      "Adding is faster during the first phase and overwriting is faster during the second phase",
+      "All-gather must undo the additions made during reduce-scatter, so that each chunk is counted only once",
+      "Overwriting during all-gather is what converts the accumulated sum into the final mean"
+    ],
+    "answer_index": 0,
+    "explanation": "During reduce-scatter each chunk accumulates contributions from all workers, so received data must be added. During all-gather the chunks are already fully summed, so a worker just copies the finished chunk into place. Adding during all-gather would double-count and give wrong results. The mean comes from a separate division by W."
+  },
+  {
+    "id": "09.1-035",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "4. The simulated implementation",
+    "question": "Why does a ring all-reduce implementation compute W near-equal chunk bounds rather than assuming the tensor length divides by W?",
+    "options": [
+      "So it works for tensor lengths that do not divide evenly by the number of workers",
+      "Because NCCL requires chunks of different sizes for each worker position in the ring",
+      "So that the last worker receives an empty chunk and can skip communication",
+      "Because the first chunk must be twice as large to hold the running partial sums"
+    ],
+    "answer_index": 0,
+    "explanation": "Real gradient tensors rarely have a length that is an exact multiple of W. Near-equal chunk bounds let the algorithm split any length into W pieces whose sizes differ by at most one element. The accompanying tests specifically cover lengths that do not divide evenly."
+  },
+  {
+    "id": "09.1-036",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "4. The simulated implementation",
+    "question": "Why is a ring all-reduce implementation tested against np.sum and np.mean for worker counts 1 to 8 and uneven tensor lengths?",
+    "options": [
+      "Because ring all-reduce is only approximate and needs a tolerance check against exact sums",
+      "Because ring all-reduce only works for even W, and the odd counts must be shown to fail",
+      "Because NumPy uses a different reduction order for each worker count, so results must be compared",
+      "Because the reduce-scatter/all-gather index arithmetic is fiddly and easy to get off by one"
+    ],
+    "answer_index": 3,
+    "explanation": "The schedule of which chunk each worker sends on each step is easy to get subtly wrong by one position. Comparing the ring's output to a direct sum or mean across many worker counts and awkward lengths catches such off-by-one errors. If you re-derive the schedule, the test protects you."
+  },
+  {
+    "id": "09.1-037",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "5. Tying it back to the training loop: data_parallel_grads",
+    "question": "In data-parallel training, what does the ring all-reduce combine?",
+    "options": [
+      "Gradients, before the optimizer changes the weights",
+      "Model predictions from different workers",
+      "Training examples from different workers",
+      "Updated weights, after each worker's optimizer step"
+    ],
+    "answer_index": 0,
+    "explanation": "Data parallelism all-reduces the .grad tensors produced by backward, before optimizer.step() runs. It does not move examples, predictions, or updated weights. Averaging weights after independent local updates would be a different (and here incorrect) algorithm."
+  },
+  {
+    "id": "09.1-038",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Follow one optimizer step, with actual numbers",
+    "question": "Three data-parallel workers start with the same parameters and compute different local gradients. After all-reduce and SGD, why do they hold the same new parameters without exchanging weights?",
+    "options": [
+      "Because SGD is invariant to the gradient value, so any gradient gives the same step",
+      "Because each worker's local gradient was already equal to the global average beforehand",
+      "Because worker 0 sends its updated weights to all the other workers after each step",
+      "Because all workers apply the same averaged gradient to the same starting weights"
+    ],
+    "answer_index": 3,
+    "explanation": "The all-reduce replaces each worker's local gradient with the common average, and every worker starts from identical parameters. Applying theta_new = theta_old - lr * g_avg on each worker therefore gives identical results. No weight broadcast is needed after the step."
+  },
+  {
+    "id": "09.1-039",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Follow one optimizer step, with actual numbers",
+    "question": "If data-parallel workers use Adam instead of SGD, what additional condition is needed for their weights to stay identical?",
+    "options": [
+      "Nothing; Adam is stateless",
+      "Each worker must use a different learning rate",
+      "A separate all-reduce of the updated weights after every step",
+      "Matching optimizer state and settings on every worker"
+    ],
+    "answer_index": 3,
+    "explanation": "Adam keeps per-parameter moment buffers and hyperparameters. Identical averaged gradients only yield identical updates if every worker also has the same moment state and settings. Starting from the same state and applying the same gradients keeps that state identical too."
+  },
+  {
+    "id": "09.1-040",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Follow one optimizer step, with actual numbers",
+    "question": "Which action in a data-parallel training step actually changes the model's parameters?",
+    "options": [
+      "loss.backward()",
+      "optimizer.step()",
+      "The gradient all-reduce",
+      "optimizer.zero_grad()"
+    ],
+    "answer_index": 1,
+    "explanation": "backward() computes gradients into .grad, and the all-reduce makes those gradients agree across workers, but neither touches the parameters. Only optimizer.step() reads .grad and updates the parameters. zero_grad() only resets gradients."
+  },
+  {
+    "id": "09.1-041",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "In a manual data-parallel training step, where should the gradient all-reduce be inserted?",
+    "options": [
+      "Before the forward pass, so every worker starts the step from synchronized gradients",
+      "After local backward and before gradient clipping and optimizer.step()",
+      "After optimizer.step() and before the next forward, so the new weights get averaged",
+      "Between gradient clipping and optimizer.step(), so each local gradient is clipped first"
+    ],
+    "answer_index": 1,
+    "explanation": "Local backward first fills each parameter's .grad, then the all-reduce averages them, then clipping and the optimizer act on the averaged gradient. Synchronizing after the step is too late because the workers would already have diverged. Clipping before averaging gives a different result because clipping is nonlinear."
+  },
+  {
+    "id": "09.1-042",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "A manual data-parallel loop calls dist.all_reduce(parameter.grad, op=dist.ReduceOp.SUM) and then parameter.grad.div_(world_size). What is the purpose of the division?",
+    "options": [
+      "To normalize by the number of parameters",
+      "To reduce the learning rate for stability",
+      "To undo the in-place modification made by all_reduce",
+      "To convert the sum into the mean gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "The SUM all-reduce leaves the sum of all workers' gradients in .grad. Dividing in place by world_size turns that sum into the mean, which is the gradient equal to the full-batch mean-loss gradient. Without it the gradient would be W times too large."
+  },
+  {
+    "id": "09.1-043",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "How does torch.distributed.all_reduce deliver its result?",
+    "options": [
+      "It returns a new result tensor and leaves the input tensor unchanged on every process",
+      "It writes the result only into rank 0's tensor, leaving the others with their local values",
+      "It modifies the supplied tensor in place on every participating process",
+      "It stores the result in a separate pinned buffer on the CPU that each process must read"
+    ],
+    "answer_index": 2,
+    "explanation": "all_reduce overwrites the tensor you pass on each process. For example, worker 0's .grad [1, 2, 3] becomes the sum [12, 15, 18] after a three-worker SUM all-reduce, and dividing by 3 gives [4, 5, 6]. The optimizer then reads that updated .grad."
+  },
+  {
+    "id": "09.1-044",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "Does data-parallel training require a special optimizer that understands multiple workers?",
+    "options": [
+      "Yes; it needs a special optimizer that accepts all W gradients",
+      "No; the ordinary optimizer reads the already averaged .grad",
+      "Yes; it needs an optimizer that broadcasts updated weights",
+      "Only if the model has more than one layer of parameters"
+    ],
+    "answer_index": 1,
+    "explanation": "After the all-reduce, each parameter's .grad already holds the averaged gradient. The ordinary optimizer just reads .grad and updates its local copy as usual. Synchronization happens entirely in the gradient step."
+  },
+  {
+    "id": "09.1-045",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "A manual data-parallel loop iterates 'for parameter in model.parameters(): dist.all_reduce(parameter.grad, ...)'. What does each iteration of that loop correspond to?",
+    "options": [
+      "One worker process in the data-parallel group of W",
+      "One micro-batch of the gradient accumulation window",
+      "One training example from this worker's shard of data",
+      "One parameter tensor, such as a layer's weight or bias"
+    ],
+    "answer_index": 3,
+    "explanation": "The loop walks over parameter tensors, not workers; every worker runs the same loop. A linear layer has a weight tensor and a bias tensor, so it causes two collective calls. The other workers participate by making matching calls in the same order."
+  },
+  {
+    "id": "09.1-046",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "Across processes participating in manual gradient all-reduces, what must agree for the collectives to work correctly?",
+    "options": [
+      "Their random seeds for dropout and data shuffling",
+      "Tensor shapes, types, and the order of collective calls",
+      "Their local loss values at the end of each step",
+      "Their data shards, which must contain the same examples"
+    ],
+    "answer_index": 1,
+    "explanation": "Collectives pair up tensors across processes by call order, so every process must issue the same sequence of calls with matching shapes and dtypes (weights with weights, biases with biases). Losses, dropout masks, and data shards are expected to differ across workers."
+  },
+  {
+    "id": "09.1-047",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "What goes wrong if each data-parallel worker calls optimizer.step() on its local gradient and the gradients are averaged afterward?",
+    "options": [
+      "The workers have already made different updates, so their weights diverge",
+      "Nothing; the order of stepping and averaging does not matter at all for plain SGD",
+      "The all-reduce fails because .grad was already cleared by the step",
+      "The learning rate ends up applied twice to the same averaged gradient"
+    ],
+    "answer_index": 0,
+    "explanation": "If each worker steps on its own local gradient, the replicas apply different updates and their weights no longer match. Averaging gradients afterward cannot undo that. The all-reduce must come before the step so everyone uses the same gradient."
+  },
+  {
+    "id": "09.1-048",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Where the new operation goes",
+    "question": "In data-parallel training, why should gradient clipping be applied after averaging rather than to each local gradient?",
+    "options": [
+      "Because clipping is nonlinear, so clipping local gradients first generally gives a different result",
+      "Because clipping before averaging is mathematically identical but needs W separate norm computations",
+      "Because local gradients are always below the clip threshold, so clipping them would do nothing",
+      "Because the all-reduce itself clips the gradients, so only the averaged result needs checking"
+    ],
+    "answer_index": 0,
+    "explanation": "Clipping rescales a gradient based on its norm, which is nonlinear: the average of clipped gradients is not the clipped average. To clip the gradient the optimizer actually uses, average first and then clip. The all-reduce does not clip anything."
+  },
+  {
+    "id": "09.1-049",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What the CPU simulation represents",
+    "question": "A helper data_parallel_grads(grad_fn, params, batch, world_size) splits the batch, computes a gradient per shard, and ring-all-reduces them with op='mean'. What does it return?",
+    "options": [
+      "Updated parameters after one SGD step on the batch",
+      "The mean loss over the batch, averaged across shards",
+      "A list of W per-shard gradients, one for each worker",
+      "One averaged gradient; it does not update params"
+    ],
+    "answer_index": 3,
+    "explanation": "The helper only produces the gradient: it splits the batch into world_size equal shards, calls grad_fn on each, and averages them with a ring all-reduce. Updating parameters is a separate step, for example theta = theta - lr * grad. Keeping gradient computation and the update separate mirrors the real training loop."
+  },
+  {
+    "id": "09.1-050",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What the CPU simulation represents",
+    "question": "In data_parallel_grads(grad_fn, params, batch, world_size), what must grad_fn(params, shard) compute?",
+    "options": [
+      "The gradient of the sum loss over the whole batch at the given parameters",
+      "The updated parameters after one optimizer step taken on that shard",
+      "The gradient of the mean loss on that shard at the given parameters",
+      "The scalar loss value on the shard, which the helper then differentiates"
+    ],
+    "answer_index": 2,
+    "explanation": "grad_fn must return the gradient of the mean loss over its shard at the current parameters. Averaging those mean-loss gradients over equal shards gives the full-batch mean-loss gradient. A sum-loss gradient would make the result scale with shard size."
+  },
+  {
+    "id": "09.1-051",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What the CPU simulation represents",
+    "question": "A single-process simulation of data parallelism returns just one copy of the averaged gradient. What does it reproduce, and what does it not?",
+    "options": [
+      "It reproduces the parallel execution but not the arithmetic",
+      "It reproduces both the arithmetic and the parallel speedup",
+      "It reproduces the arithmetic, not the parallel execution",
+      "It reproduces neither; it is only a placeholder"
+    ],
+    "answer_index": 2,
+    "explanation": "One Python process computes each shard's gradient in turn and the ring helper returns one copy because all simulated workers' buffers agree. That reproduces the numbers exactly. On real GPUs each process keeps its own copy of the averaged gradient and updates its own model concurrently."
+  },
+  {
+    "id": "09.1-052",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What “one process per GPU” actually means",
+    "question": "What does 'torchrun --standalone --nproc_per_node=4 train.py' start on a machine with four GPUs?",
+    "options": [
+      "One Python process that loops over the four GPUs, running each shard in turn",
+      "Four threads sharing one model and one optimizer inside a single Python process",
+      "Four Python processes running the same file, each with its own model, optimizer and GPU",
+      "One process per layer of the model, each pinned to one of the four GPUs in a pipeline"
+    ],
+    "answer_index": 2,
+    "explanation": "torchrun launches four separate Python processes, each running train.py with its own model replica, optimizer, Python variables, and assigned GPU. Each process is one worker. There is no single process looping over the GPUs."
+  },
+  {
+    "id": "09.1-053",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What “one process per GPU” actually means",
+    "question": "In PyTorch distributed training, what do world_size, rank, and local_rank mean?",
+    "options": [
+      "world_size = total processes; rank = this process's ID in the whole group; local_rank = its GPU index on its machine",
+      "world_size = GPUs per machine; rank = index of this machine in the job; local_rank = index of the layer this process owns",
+      "world_size = number of machines; rank = this process's GPU index; local_rank = index of the thread inside the process",
+      "world_size = global batch size; rank = index of the current micro-batch; local_rank = index of this worker's data shard"
+    ],
+    "answer_index": 0,
+    "explanation": "world_size is the total number of processes in the job, rank uniquely identifies a process across the whole job, and local_rank is the GPU index of that process on its own machine. On one four-GPU machine rank and local_rank coincide (0 to 3)."
+  },
+  {
+    "id": "09.1-054",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What “one process per GPU” actually means",
+    "question": "In a multi-machine data-parallel job, how do global ranks and local ranks behave?",
+    "options": [
+      "Both restart at zero on each machine, so ranks repeat across machines",
+      "Global ranks are unique across the job; local ranks start at zero on each machine",
+      "Global ranks start at zero on each machine; local ranks are unique across the job",
+      "Both are unique across the job, so local rank always equals global rank"
+    ],
+    "answer_index": 1,
+    "explanation": "The global rank is a unique ID for every process in the whole job, while the local rank indexes GPUs on one machine, so it restarts at zero on every machine. A process uses local_rank to pick its GPU and rank to identify itself in collectives."
+  },
+  {
+    "id": "09.1-055",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What “one process per GPU” actually means",
+    "question": "On a four-GPU data-parallel job with a global batch of 32, how is backward executed?",
+    "options": [
+      "One process runs backward four times in a loop, once for each GPU's 8-example shard",
+      "Four processes each run one local backward on 8 examples concurrently and join the collectives",
+      "One process runs backward on all 32 examples and then broadcasts the gradients to the other GPUs",
+      "Each of the four processes runs backward on all 32 examples redundantly and keeps its own result"
+    ],
+    "answer_index": 1,
+    "explanation": "Each of the four processes handles its own 8-example shard and performs one local backward, at the same time as the others, then participates in the gradient collectives. No process loops over the other GPUs' backward calls."
+  },
+  {
+    "id": "09.1-056",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Combining this with gradient accumulation",
+    "question": "With micro-batch size b, A accumulation steps per optimizer update, and W data-parallel workers, how many examples does one optimizer update cover?",
+    "options": [
+      "b times A",
+      "b times A divided by W",
+      "b times (A + W)",
+      "b times A times W"
+    ],
+    "answer_index": 3,
+    "explanation": "Each worker processes A micro-batches of b examples before the update, and W workers contribute, so the global batch is b * A * W. For b = 2, A = 4, W = 3, that is 24 examples per update. Changing any of the three factors changes the global batch."
+  },
+  {
+    "id": "09.1-057",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Combining this with gradient accumulation",
+    "question": "When combining gradient accumulation over A equal micro-batches with data parallelism over W workers, how is the overall averaging achieved for mean losses?",
+    "options": [
+      "Divide each micro-batch loss by A·W before backward and then use a plain sum all-reduce instead",
+      "No division is needed at all; gradient accumulation averages the micro-batches automatically",
+      "Divide the learning rate by A and the gradient by W, so the two factors are applied separately",
+      "Divide each micro-batch loss by A before backward; the worker average supplies the 1/W factor"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward adds into .grad, so dividing each micro-batch's mean loss by A makes the accumulated gradient an average over the accumulation window. The data-parallel all-reduce then averages across workers, contributing the separate 1/W. Without the 1/A, the accumulated gradient would be A times too large."
+  },
+  {
+    "id": "09.1-058",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Combining this with gradient accumulation",
+    "question": "What is the distinction between gradient accumulation and data parallelism?",
+    "options": [
+      "Accumulation combines work across workers; data parallelism combines work over time on each single worker",
+      "Both combine work across workers, but accumulation uses a sum while data parallelism uses a mean",
+      "Accumulation combines work over time on each worker; data parallelism combines work across workers",
+      "Accumulation changes the model's effective depth; data parallelism changes the optimizer's state"
+    ],
+    "answer_index": 2,
+    "explanation": "Gradient accumulation adds several micro-batches' gradients on one worker over successive backward passes. Data parallelism averages gradients computed concurrently on different workers. In both, optimizer.step() runs only once the intended combined gradient is ready."
+  },
+  {
+    "id": "09.1-059",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "What is NCCL?",
+    "options": [
+      "A file format for sharded checkpoints written by each GPU in a distributed job",
+      "A PyTorch module that shards the input batch across GPUs and chooses which data each one sees",
+      "A compiler that fuses CUDA kernels across GPUs to reduce launch overhead",
+      "NVIDIA's Collective Communications Library, which runs collectives across NVIDIA GPUs"
+    ],
+    "answer_index": 3,
+    "explanation": "NCCL (pronounced 'nickel') is NVIDIA's library of GPU collective communication operations such as all-reduce and all-gather. PyTorch distributed uses it as the backend that actually moves and combines tensors between GPUs. It does not choose data or shard batches."
+  },
+  {
+    "id": "09.1-060",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "In data-parallel training, which component is responsible for executing the collectives across NVIDIA GPUs over the available connections?",
+    "options": [
+      "The training loop",
+      "The NCCL backend",
+      "PyTorch distributed / DDP",
+      "The optimizer"
+    ],
+    "answer_index": 1,
+    "explanation": "The training loop chooses data, computes the loss, requests backward, and runs the optimizer. PyTorch distributed and DDP coordinate processes and request gradient collectives. The NCCL backend executes those collectives across the GPUs using whatever links exist."
+  },
+  {
+    "id": "09.1-061",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "What does NCCL know about the training it supports?",
+    "options": [
+      "It knows the loss value and adjusts the learning rate when gradients grow too large",
+      "It knows the model architecture and reorders layers to overlap their communication",
+      "It knows which examples each worker processed and reweights the workers' gradients by their counts",
+      "It knows tensors and collective operations, but nothing about examples, losses or learning rates"
+    ],
+    "answer_index": 3,
+    "explanation": "NCCL just combines corresponding entries of tensors as requested by a collective. The interpretation of the result as 'training on a larger batch' comes from the mean-loss definition and the averaging proof. NCCL itself has no notion of examples, losses, or learning rates."
+  },
+  {
+    "id": "09.1-062",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "Is the ring algorithm a requirement of the all-reduce operation used by NCCL?",
+    "options": [
+      "No; ring is one implementation, and NCCL can pick other algorithms and transports with the same result",
+      "Yes; all-reduce is defined as the ring schedule, so any other algorithm would give a different result",
+      "Yes, but only across nodes; within one node NCCL must use NVLink broadcasts instead of an all-reduce",
+      "No; NCCL always uses a naive gather to rank 0 followed by a broadcast, and the ring is only a teaching aid"
+    ],
+    "answer_index": 0,
+    "explanation": "All-reduce is defined by its result, not its schedule. Ring is one implementation; NCCL can select other algorithms and transports depending on NVLink, PCIe, or network connections. The mathematical result is the same, apart from tiny floating-point differences caused by different reduction orders. NCCL does not always gather to rank 0."
+  },
+  {
+    "id": "09.1-063",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "A DDP script is run on a machine without CUDA. What backend does it use and what should you expect?",
+    "options": [
+      "NCCL on the CPU, with the same speedup as on GPUs",
+      "Gloo on the CPU: correct results with no speedup",
+      "It cannot run at all without CUDA",
+      "MPI only, with approximate gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "Without CUDA, the same DDP code can fall back to the Gloo backend on the CPU. It performs the same gradient averaging, so results are correct, but it is not faster. NCCL is specific to NVIDIA GPUs."
+  },
+  {
+    "id": "09.1-064",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "6. NCCL: the collective library",
+    "question": "Which statement about GPU collective communication in data-parallel training is accurate?",
+    "options": [
+      "It requires NVLink between GPUs and is always free, because copy engines handle all of it",
+      "It is GPU work scheduled on CUDA streams that may overlap computation; NVLink is not required",
+      "It runs only on the host CPU and never uses any GPU resources such as SMs or memory bandwidth",
+      "It can be measured precisely, including overlap and speedup, by a single-process CPU simulation"
+    ],
+    "answer_index": 1,
+    "explanation": "Collectives are GPU work scheduled on CUDA streams and may overlap computation, but they are not guaranteed to be a free transfer handled only by copy engines. NVLink improves bandwidth but is not required. A CPU simulation cannot measure this overlap or predict speedup."
+  },
+  {
+    "id": "09.1-065",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "7. PyTorch DDP: overlapping the all-reduce with backward",
+    "question": "What is PyTorch's DistributedDataParallel (DDP)?",
+    "options": [
+      "A data loader that shards each batch across the GPUs in the job automatically",
+      "An optimizer that averages parameter updates across the GPUs",
+      "A wrapper around the model that arranges gradient synchronization during backward",
+      "A launcher that starts one Python process per GPU and sets each process's rank"
+    ],
+    "answer_index": 2,
+    "explanation": "DDP wraps a model and hooks into backward so that gradients are synchronized (averaged across ranks) as they become ready. It is not an optimizer, a data loader, or a launcher; torchrun launches processes and DistributedSampler chooses data."
+  },
+  {
+    "id": "09.1-066",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What changes in the training step?",
+    "question": "After wrapping a model with DistributedDataParallel, should you also add a manual loop that all-reduces each parameter's .grad and divides by world_size?",
+    "options": [
+      "Yes; DDP only sums gradients across ranks, so the manual division by world_size is still needed",
+      "Only when using plain SGD, since adaptive optimizers like Adam normalize the gradient scale anyway",
+      "Yes; otherwise the optimizer on each rank would still see only its own local gradients",
+      "No; default DDP already averages gradients, and an extra all-reduce plus division would be wrong"
+    ],
+    "answer_index": 3,
+    "explanation": "Default DDP already averages gradients during backward. Adding the manual all-reduce loop would synchronize twice, and the extra division by W would shrink the gradient incorrectly. The manual loop only explains what DDP does."
+  },
+  {
+    "id": "09.1-067",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What changes in the training step?",
+    "question": "Which of these does DDP not do for you?",
+    "options": [
+      "Average gradients across ranks during backward",
+      "Synchronize the starting model across ranks",
+      "Shard the input batch or call the optimizer",
+      "Group gradients into buckets for communication"
+    ],
+    "answer_index": 2,
+    "explanation": "DDP averages gradients, broadcasts the initial model state, and buckets gradients for overlapped communication. It does not decide which examples each rank sees (that is the data pipeline, e.g. DistributedSampler) and it does not call optimizer.step(). You still write those parts of the loop."
+  },
+  {
+    "id": "09.1-068",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Why communication can begin before backward finishes",
+    "question": "Why can DDP begin communicating gradients before backward has finished?",
+    "options": [
+      "Because DDP skips the gradients of early layers, which change slowly, and only sends later ones",
+      "Because DDP computes all of the gradients during the forward pass and caches them for the backward pass",
+      "Because the optimizer step can safely run on each layer before the rest of backward completes",
+      "Because backward produces later layers' gradients first, and those can be reduced while it continues"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward runs in reverse order, so an output layer's gradients exist before an input layer's. Communicating the output layer's gradients does not require waiting for the rest. DDP launches the reduction for a ready bucket while backward continues on other layers."
+  },
+  {
+    "id": "09.1-069",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Why communication can begin before backward finishes",
+    "question": "In DDP, what is a gradient bucket?",
+    "options": [
+      "Exactly one layer's gradients, sent as soon as that layer's backward pass is done",
+      "A copy of the optimizer state for one parameter, kept in sync across ranks",
+      "A buffer holding the loss values from all ranks, reduced together once per step",
+      "A group of parameter gradients reduced together when ready; it need not be one layer"
+    ],
+    "answer_index": 3,
+    "explanation": "DDP groups parameter gradients into buckets and launches one reduction per bucket when all its gradients are ready. A bucket can hold several parameter tensors and does not have to align with a layer. Bucketing enables overlap and amortizes launch overhead."
+  },
+  {
+    "id": "09.1-070",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Why communication can begin before backward finishes",
+    "question": "Three layers each take 4 ms of backward and each bucket takes 3 ms to communicate. With DDP-style overlap the step takes 15 ms rather than 21 ms. What does the remaining 3 ms beyond the 12 ms of computation represent?",
+    "options": [
+      "Optimizer step time, which runs after backward and cannot overlap anything",
+      "Exposed communication: the last bucket's reduction cannot overlap any remaining backward",
+      "Launch overhead of the first bucket's collective, paid before any overlap starts",
+      "Time spent in the forward pass, which DDP counts as part of the training step"
+    ],
+    "answer_index": 1,
+    "explanation": "The first bucket's gradients become ready only after backward has computed them, and the last bucket (the input layer's) becomes ready when backward finishes, leaving nothing to overlap with. Its 3 ms of communication is still exposed. Overlap hides 6 ms here, not all 9 ms."
+  },
+  {
+    "id": "09.1-071",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Why communication can begin before backward finishes",
+    "question": "What trade-off governs DDP bucket size?",
+    "options": [
+      "Bucket size only affects correctness, not speed, since every gradient is reduced exactly once",
+      "Larger buckets use less memory for communication buffers, but they are slower to compute during backward",
+      "Smaller buckets always win, because they start earlier and launch overhead is negligible",
+      "Larger buckets cut launch overhead but become ready later; smaller ones start earlier but need more calls"
+    ],
+    "answer_index": 3,
+    "explanation": "Bucketing avoids paying collective-launch overhead for every tiny parameter tensor, so larger buckets mean fewer calls. But a larger bucket waits for more gradients, so its communication starts later. Real performance depends on both the computation and the interconnect."
+  },
+  {
+    "id": "09.1-072",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Why communication can begin before backward finishes",
+    "question": "What does DDP's communication/computation overlap achieve?",
+    "options": [
+      "It makes the all-reduce disappear entirely, since all communication hides under backward",
+      "It starts reducing ready gradients while others are computed; leftover communication still finishes before step",
+      "It lets the optimizer run on partially reduced gradients, then corrects them after the next step",
+      "It removes the need for any collective after backward, because gradients are exchanged during forward"
+    ],
+    "answer_index": 1,
+    "explanation": "Overlap hides some communication under remaining backward computation, but it does not eliminate communication. Any communication still in flight at the end of backward must finish before the optimizer can use those gradients. It also cannot guarantee proportional speedup from more workers."
+  },
+  {
+    "id": "09.1-073",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP training script, what ensures that all ranks start from the same model weights, even if they initialized differently?",
+    "options": [
+      "torch.manual_seed must be identical on every rank, otherwise training fails to start",
+      "The optimizer copies the weights from rank 0 to every other rank when it takes its first step",
+      "DDP synchronizes the starting model across ranks by default when the model is wrapped",
+      "DistributedSampler broadcasts rank 0's model weights when the first batch is drawn"
+    ],
+    "answer_index": 2,
+    "explanation": "When a model is wrapped in DistributedDataParallel, DDP synchronizes the initial model state across ranks by default. Setting a seed is still good practice but is not what guarantees identical starting weights. The optimizer and sampler do not move model weights."
+  },
+  {
+    "id": "09.1-074",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "What is the role of DistributedSampler in a DDP training script?",
+    "options": [
+      "It averages gradients across ranks after each backward",
+      "It launches one process per GPU and assigns each a rank",
+      "It chooses which dataset indices each rank processes",
+      "It shards the model's parameters across the GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "Every rank refers to the same logical dataset, and DistributedSampler selects a different subset of indices for each rank, so workers see different examples. DDP itself does not split data; the sampler does. Gradient averaging is DDP's job and launching is torchrun's."
+  },
+  {
+    "id": "09.1-075",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "Why does a DDP training loop call sampler.set_epoch(epoch) at the start of each epoch?",
+    "options": [
+      "To reset the learning-rate schedule at the start of each new training epoch",
+      "To produce a new shuffle each epoch that is coordinated across ranks",
+      "To change which GPU each rank uses, balancing load across epochs",
+      "To clear the DDP gradient buckets so the new epoch starts fresh"
+    ],
+    "answer_index": 1,
+    "explanation": "DistributedSampler shuffles using a seed combined with the epoch. Calling set_epoch changes that shuffle every epoch while keeping all ranks consistent, so their shards still partition the data. Without it, every epoch would repeat the same ordering."
+  },
+  {
+    "id": "09.1-076",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "A DDP script sums each rank's batch losses into loss_sum and then calls dist.all_reduce(loss_sum) before rank 0 logs it. Why is that all-reduce needed?",
+    "options": [
+      "Because DDP synchronizes gradients, not the Python loss variable, so a global loss must be aggregated",
+      "Because the optimizer needs the global loss value on every rank to compute its next parameter update",
+      "Because DDP requires one extra collective per epoch to keep the ranks' model replicas in sync",
+      "Because without it the gradients would not be averaged across the ranks during backward"
+    ],
+    "answer_index": 0,
+    "explanation": "DDP only synchronizes gradients; each rank's loss value stays local. To report a global mean loss you must aggregate it yourself, which this separate all-reduce does. It plays no role in gradient synchronization or the optimizer step."
+  },
+  {
+    "id": "09.1-077",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP script, why set drop_last=True on both DistributedSampler and the DataLoader?",
+    "options": [
+      "To keep shard and batch sizes regular: the sampler drops examples to split evenly, the loader drops partial batches",
+      "To make the shuffle deterministic across ranks, so that every rank draws exactly the same sequence of batches each epoch",
+      "To skip the first batch of each epoch, which DDP uses for warmup and bucket construction on every rank",
+      "To prevent DDP from synchronizing the last batch of the epoch, which would otherwise deadlock the job"
+    ],
+    "answer_index": 0,
+    "explanation": "With drop_last on the sampler, examples that do not divide evenly among ranks are discarded rather than padded; without it the sampler can pad with repeated indices. With drop_last on the loader, incomplete final local batches are discarded. Together they keep every rank's batches the same size, which the equal-shard averaging assumes."
+  },
+  {
+    "id": "09.1-078",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "A DDP script uses a local batch of 8 per rank and is launched with four ranks. How many examples contribute to each optimizer step?",
+    "options": [
+      "8 examples",
+      "16 examples",
+      "32 examples",
+      "128 examples"
+    ],
+    "answer_index": 2,
+    "explanation": "Each of four ranks processes a local batch of 8, and DDP averages their gradients into one update, so 8 * 4 = 32 examples contribute per optimizer step. Adding ranks while keeping the local batch fixed increases the global batch."
+  },
+  {
+    "id": "09.1-079",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "A DDP script checks whether LOCAL_RANK is in the environment and raises an error if not. What does that check enforce?",
+    "options": [
+      "That the script was launched by torchrun or an equivalent launcher, not plain 'python train.py'",
+      "That the machine has at least one CUDA GPU visible, since DDP cannot run on a CPU-only machine otherwise",
+      "That only rank 0 runs the training loop while the other ranks just serve gradients",
+      "That the dataset was downloaded to local disk on every machine before training starts"
+    ],
+    "answer_index": 0,
+    "explanation": "torchrun sets LOCAL_RANK (and RANK, WORLD_SIZE, etc.) for every process it launches. If it is missing, the script was probably started directly with python and has no process group to join. The error message tells the user to launch with torchrun."
+  },
+  {
+    "id": "09.1-080",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP script on a CUDA machine, why does each process call torch.cuda.set_device(local_rank) and check local_rank < torch.cuda.device_count()?",
+    "options": [
+      "So that NCCL falls back to running its collectives on the CPU",
+      "So that all processes share GPU 0 and the other GPUs stay free",
+      "So that each local process uses its own distinct GPU",
+      "So that the model's layers are sharded across GPUs by local rank"
+    ],
+    "answer_index": 2,
+    "explanation": "Each process should own one GPU on its machine, selected by its local rank. The check fails fast if more local processes were launched than there are GPUs. With NCCL, one process per GPU is the standard arrangement."
+  },
+  {
+    "id": "09.1-081",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP script, what do dist.init_process_group and dist.destroy_process_group do?",
+    "options": [
+      "They create the model replicas on each rank and delete them all at the end of training",
+      "They start the CUDA kernels on each GPU and stop them when training ends",
+      "They load the latest checkpoint on start-up and save a final checkpoint on exit",
+      "They connect the processes into a communication group and clean it up at the end"
+    ],
+    "answer_index": 3,
+    "explanation": "init_process_group connects the launched processes with the chosen backend (NCCL or Gloo) so collectives can run. destroy_process_group, placed in a finally block, releases those resources at the end even after errors. Launching processes is torchrun's job."
+  },
+  {
+    "id": "09.1-082",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP script's main(), exceptions are logged with the rank and then re-raised. Why re-raise instead of swallowing the error?",
+    "options": [
+      "So that the other ranks continue training without this one",
+      "So the launcher can report the failure",
+      "So that DDP retries the step automatically",
+      "So that the process group is not destroyed"
+    ],
+    "answer_index": 1,
+    "explanation": "Logging with the rank identifies where the failure happened, and re-raising lets the launcher see the process failed and report it. Swallowing the error would hide the failure and could leave peers waiting in collectives. The finally block still destroys the process group."
+  },
+  {
+    "id": "09.1-083",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "In a DDP run, which component is responsible for each job: launching processes, connecting them, choosing each rank's data, synchronizing model and gradients, updating the local replica?",
+    "options": [
+      "DDP; torchrun; the optimizer; DistributedSampler; NCCL",
+      "torchrun; init_process_group; DistributedSampler; DDP; the optimizer",
+      "init_process_group; DDP; torchrun; the optimizer; DistributedSampler",
+      "The optimizer; DistributedSampler; DDP; torchrun; init_process_group"
+    ],
+    "answer_index": 1,
+    "explanation": "torchrun launches the processes, init_process_group connects them, DistributedSampler chooses each rank's indices, DDP synchronizes the model and gradients, and the optimizer updates the local replica. Keeping these roles separate helps locate bugs."
+  },
+  {
+    "id": "09.1-084",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "On Windows, torchrun may fail with a libuv error in CPU builds. How can a DDP script still be launched with four ranks?",
+    "options": [
+      "Set WORLD_SIZE, MASTER_ADDR, MASTER_PORT, RANK and LOCAL_RANK yourself and start four processes",
+      "Run 'python train.py' once and let DDP spawn the other three ranks automatically from inside its wrapper",
+      "Install the NCCL backend for Windows and rerun torchrun with the same arguments",
+      "Use a single process with world_size=4, so that one process plays all four ranks"
+    ],
+    "answer_index": 0,
+    "explanation": "torchrun just sets environment variables and starts processes. You can do the same manually: set WORLD_SIZE, MASTER_ADDR and MASTER_PORT, and for each of four processes set RANK and LOCAL_RANK, then start them. The script then runs with Gloo on the CPU."
+  },
+  {
+    "id": "09.1-085",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "A complete, small DDP training script",
+    "question": "When launching a Gloo DDP job on the CPU, each process prints a 'client socket has failed to connect' warning before training proceeds normally. What does it mean?",
+    "options": [
+      "One rank crashed and the others are training alone",
+      "The process group failed and gradients are not being averaged",
+      "It is harmless: Gloo probing the machine's hostname",
+      "MASTER_PORT is wrong and must be changed"
+    ],
+    "answer_index": 2,
+    "explanation": "This warning comes from Gloo probing the hostname before falling back to a working address. It is harmless, and rank 0 then prints the falling epoch losses. Real failures would stop training or hang."
+  },
+  {
+    "id": "09.1-086",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "When accumulation or conditional branches enter the picture",
+    "question": "When using DDP with gradient accumulation over A micro-batches, how should model.no_sync() be used?",
+    "options": [
+      "Around backward only, for the last micro-batch, so that the final gradient is not synchronized",
+      "Around both forward and backward for the first A-1 micro-batches; synchronize normally on the last",
+      "Around optimizer.step() only, so that the step does not trigger an extra all-reduce of the weights",
+      "Around every micro-batch including the last, followed by one manual all-reduce of .grad after the window"
+    ],
+    "answer_index": 1,
+    "explanation": "no_sync() suppresses the all-reduce for the micro-batches inside it, so gradients just accumulate locally. Wrapping forward and backward for the first A-1 micro-batches and synchronizing on the last means one all-reduce per optimizer step. If every micro-batch were inside no_sync, gradients would never be averaged."
+  },
+  {
+    "id": "09.1-087",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "What does a backward pass inside DDP's model.no_sync() context do?",
+    "options": [
+      "It skips computing gradients entirely, so .grad is left unchanged",
+      "It skips the all-reduce and just adds the gradient into this rank's .grad",
+      "It all-reduces gradients as usual but skips the next optimizer step for the window",
+      "It averages gradients only within the local machine, not across nodes"
+    ],
+    "answer_index": 1,
+    "explanation": "Inside no_sync(), backward still computes gradients and accumulates them into .grad as usual, but DDP does not launch the all-reduce. The first backward outside the block all-reduces .grad, which already holds the sum of the earlier micro-batches, so one exchange averages the whole window."
+  },
+  {
+    "id": "09.1-088",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "Why must the forward pass, not just the backward pass, be inside DDP's no_sync() block?",
+    "options": [
+      "Because forward allocates the gradient buffers that no_sync() later frees, so both must be inside",
+      "Because DDP's forward prepares the reducer and, inside no_sync(), marks it 'do not communicate'",
+      "Because forward performs an all-reduce of activations, which no_sync() must also suppress",
+      "Because no_sync() only takes effect on code that creates new tensors, which backward does not"
+    ],
+    "answer_index": 1,
+    "explanation": "DDP's forward sets up the reducer that launches all-reduce hooks during backward. The 'skip communication' decision is recorded at forward time inside no_sync(). If only backward is wrapped, the reducer was prepared normally and DDP still synchronizes."
+  },
+  {
+    "id": "09.1-089",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "With W ranks, A micro-batches per window, each micro-batch loss divided by A, and one all-reduce at the end, what gradient does every rank hold?",
+    "options": [
+      "The sum over all W*A micro-batch gradients, with no averaging applied",
+      "The mean over all W*A micro-batch gradients: (1/(W A)) sum_w sum_a g_{w,a}",
+      "The mean over the A micro-batches on rank 0 only, which is then broadcast to all ranks",
+      "The mean over the W ranks of only the last micro-batch in the window"
+    ],
+    "answer_index": 1,
+    "explanation": "Each rank's accumulated gradient is G_w = sum_a g_{w,a}/A, and the final all-reduce averages over ranks, giving (1/W) sum_w G_w = (1/(W A)) sum over all micro-batch gradients. For equal-size micro-batches that is exactly what one big batch would give."
+  },
+  {
+    "id": "09.1-090",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "If you forget model.no_sync() when accumulating gradients with DDP, what happens?",
+    "options": [
+      "The result is wrong, because the gradients get averaged across ranks A times too many times",
+      "Training deadlocks after the first micro-batch, because the ranks wait on mismatched collectives",
+      "The result is still correct, but you pay A full-gradient all-reduces per optimizer step instead of one",
+      "The gradients are summed across ranks rather than averaged, so they end up W times too large"
+    ],
+    "answer_index": 2,
+    "explanation": "Averaging is linear, so averaging each micro-batch's gradient and then adding gives the same final gradient as one average at the end. What changes is cost: every micro-batch triggers a full all-reduce. For a 1B-parameter model with fp32 gradients that is about 4 GB per micro-batch, so A = 8 moves 8 times more data."
+  },
+  {
+    "id": "09.1-091",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "How much extra memory does DDP's no_sync() cost during gradient accumulation?",
+    "options": [
+      "One extra gradient copy per micro-batch, held until the final synchronizing backward",
+      "A communication buffer the size of the activations, allocated once per accumulation window",
+      "One extra full copy of the model's parameters, used to store the unsynchronized gradients",
+      "None; accumulation happens in the existing .grad tensors, with shape, dtype and device unchanged"
+    ],
+    "answer_index": 3,
+    "explanation": "no_sync() does not create tensors; backward just keeps adding into the .grad tensors that already exist. Each .grad keeps its parameter's shape, dtype, and device. Skipping communication saves bandwidth without adding memory."
+  },
+  {
+    "id": "09.1-092",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "In a DDP accumulation loop, sync_ctx = contextlib.nullcontext() if is_last_in_window else model.no_sync(). What is contextlib.nullcontext() for?",
+    "options": [
+      "It disables gradient computation for that micro-batch, like torch.no_grad()",
+      "It is a do-nothing with-block, so the same code synchronizes normally on the last micro-batch",
+      "It forces an all-reduce of the loss value on the last micro-batch of each window",
+      "It frees the gradient buffers after the optimizer step so the next window starts clean"
+    ],
+    "answer_index": 1,
+    "explanation": "nullcontext() is a do-nothing context manager. Choosing between it and no_sync() lets one 'with sync_ctx:' block handle both cases: skip communication on intermediate micro-batches, and synchronize normally on the last one."
+  },
+  {
+    "id": "09.1-093",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "In a DDP accumulation loop that synchronizes when (i + 1) % A == 0, why do all ranks reach the synchronizing micro-batch at the same i?",
+    "options": [
+      "Because no_sync() aligns the ranks' loop counters before every micro-batch",
+      "Because DDP automatically pauses fast ranks until the slow ones catch up",
+      "Because DistributedSampler gives every rank the same number of batches",
+      "Because the optimizer broadcasts its step index to every rank after each update"
+    ],
+    "answer_index": 2,
+    "explanation": "Collectives must be called in matching order on all ranks. DistributedSampler (with drop_last) gives every rank the same number of batches, so the same index i is the end of a window everywhere and all ranks join the same all-reduce together."
+  },
+  {
+    "id": "09.1-094",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "In a DDP accumulation loop, what happens if len(loader) is not a multiple of A?",
+    "options": [
+      "The leftovers accumulate into .grad without a step; drop them or make the epoch's last batch end a window",
+      "DDP raises an error at the end of the epoch, because the ranks' collective counts no longer match",
+      "The leftover micro-batches are automatically averaged into the next epoch's first step, with correct scaling",
+      "The optimizer steps on each leftover micro-batch individually, using its unaveraged local gradient"
+    ],
+    "answer_index": 0,
+    "explanation": "The loop only steps when (i + 1) % A == 0, so trailing micro-batches add into .grad but are never used. With zero_grad placement, they could also leak into the next window. Either drop them or make the last batch of the epoch also end a window."
+  },
+  {
+    "id": "09.1-095",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "How can you verify that DDP's no_sync() reduces the number of all-reduces during gradient accumulation?",
+    "options": [
+      "Count the optimizer steps per epoch with and without no_sync() and compare the two totals",
+      "Compare the loss values and final gradients with and without no_sync() on the same batches",
+      "Register a counting comm hook via model.register_comm_hook that increments a counter, then all-reduces",
+      "Check torch.cuda.memory_allocated() after each micro-batch, since every all-reduce allocates a buffer"
+    ],
+    "answer_index": 2,
+    "explanation": "A communication hook runs whenever DDP reduces a bucket. A counting hook that also performs the all-reduce shows one call per A micro-batches with no_sync() and one per micro-batch without it, for a single-bucket model. The losses and final gradients are the same either way, so they cannot reveal the difference."
+  },
+  {
+    "id": "09.1-096",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "What can happen in DDP training if one rank skips a backward pass, crashes, or runs out of batches early?",
+    "options": [
+      "DDP silently averages over the remaining ranks",
+      "The other ranks automatically continue with W-1 workers",
+      "Its peers can be left waiting in a collective",
+      "Nothing; collectives are independent per rank"
+    ],
+    "answer_index": 2,
+    "explanation": "Collectives require every rank to participate in a compatible sequence. If one rank never issues the matching call, the others block waiting for it, so the job hangs or times out. Investigate the first error across all ranks before retrying."
+  },
+  {
+    "id": "09.1-097",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "What model.no_sync() actually does",
+    "question": "When might a DDP model need find_unused_parameters=True?",
+    "options": [
+      "When the model has branches so some parameters may not receive gradients in a step",
+      "Whenever ranks have mismatched training loops or issue different sequences of collectives",
+      "Whenever gradient accumulation with no_sync() is used across micro-batches",
+      "Whenever the model is larger than 1B parameters and needs many gradient buckets"
+    ],
+    "answer_index": 0,
+    "explanation": "Models with conditional branches may leave some parameters unused in a step, and DDP must be told to expect that. The flag is specific to unused parameters; it is not a general fix for ranks with mismatched loops or collective sequences."
+  },
+  {
+    "id": "09.1-098",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Exercise",
+    "question": "A single GPU trains with micro-batch 8 and 4 accumulation steps. Moving to 4 GPUs with DDP, both settings are kept. How many examples contribute to each optimizer step before and after?",
+    "options": [
+      "32 before, 32 after",
+      "32 before, 8 after",
+      "8 before, 32 after",
+      "32 before, 128 after"
+    ],
+    "answer_index": 3,
+    "explanation": "Examples per update are micro_batch * accumulation * world_size: 8 * 4 * 1 = 32 before and 8 * 4 * 4 = 128 after. DDP's averaging normalizes the gradient, but it does not cancel the extra examples processed by additional workers."
+  },
+  {
+    "id": "09.1-099",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Exercise",
+    "question": "Moving from 1 to 4 GPUs with micro-batch 8, how can you keep the original global batch of 32 examples per optimizer step?",
+    "options": [
+      "Disable DDP's gradient averaging",
+      "Multiply the learning rate by 4",
+      "Set micro-batch to 32",
+      "Set gradient accumulation to 1"
+    ],
+    "answer_index": 3,
+    "explanation": "With 4 workers and micro-batch 8, accumulation 1 gives 8 * 1 * 4 = 32. When the worker count grows, one of the other factors must shrink to keep the product constant. Changing the learning rate does not change the number of examples per update."
+  },
+  {
+    "id": "09.1-100",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Exercise",
+    "question": "A 4-GPU run processes 128 examples per update while a 1-GPU run processes 32. For equal example exposure, which comparison is fair?",
+    "options": [
+      "250 updates of the 4-GPU run versus 1,000 of the 1-GPU run",
+      "1,000 updates of each run",
+      "4,000 updates of the 4-GPU run versus 1,000 of the 1-GPU run",
+      "1,000 updates of the 4-GPU run versus 250 of the 1-GPU run"
+    ],
+    "answer_index": 0,
+    "explanation": "1,000 updates at 32 examples is 32,000 examples, and 250 updates at 128 examples is also 32,000. Comparing equal step counts would give the larger-batch run four times the data. For language models, also count valid training tokens."
+  },
+  {
+    "id": "09.1-101",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Exercise",
+    "question": "When a change in the number of GPUs changes the global batch size, what should you do about the learning rate?",
+    "options": [
+      "Always multiply it by the GPU count, since the gradient noise falls by exactly that factor",
+      "Re-evaluate the learning rate, warmup and schedule; there is no universal multiply-by-GPU rule",
+      "Always keep it unchanged, because gradient averaging already makes the step size independent of W",
+      "Always divide it by the GPU count, because the averaged gradient is W times larger than before"
+    ],
+    "answer_index": 1,
+    "explanation": "A changed global batch can change optimization behavior, so the learning rate, warmup, and schedule should be re-evaluated. There is no universally correct rule like multiplying the learning rate by the GPU count, and a larger batch does not automatically make convergence worse. First decide whether to preserve the original setup or tune a new one."
+  },
+  {
+    "id": "09.1-102",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with 'all-reduce updates the weights on every worker' as a description of data parallelism?",
+    "options": [
+      "All-reduce combines gradients; the optimizer then updates each local copy of the weights",
+      "Nothing; all-reduce averages the weights directly, so that description is exactly right as stated",
+      "All-reduce combines activations from the forward pass, not the weights or the gradients",
+      "All-reduce only runs on rank 0, which then sends the updated weights to the others"
+    ],
+    "answer_index": 0,
+    "explanation": "Confusing gradients with weights is a common mistake. The all-reduce averages gradients; each worker's optimizer then updates its own local replica of the weights using that averaged gradient. No weights are communicated in standard data parallelism."
+  },
+  {
+    "id": "09.1-103",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A user wraps the model with DDP and, after loss.backward(), additionally divides every .grad by world_size, believing this is needed to average. What is the effect?",
+    "options": [
+      "The gradients are correct, because default DDP only sums and never divides by W",
+      "The gradients are W times too small, because DDP had already averaged them",
+      "The gradients become W times too large, because the division is applied before averaging",
+      "DDP detects the manual division and skips its own averaging, so the result is unchanged"
+    ],
+    "answer_index": 1,
+    "explanation": "Default DDP already averages gradients during backward, so an extra division by W shrinks the gradient by a factor of W. That silently reduces the effective learning rate. The manual all-reduce-and-divide loop explains DDP's job; it is not extra code to add after DDP backward."
+  },
+  {
+    "id": "09.1-104",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why can adding data-parallel workers accidentally change your training setup?",
+    "options": [
+      "Because DDP changes the model architecture by adding synchronization layers to each block",
+      "Because more workers reduce the number of trainable parameters stored on each replica",
+      "Because DDP automatically lowers the learning rate in proportion to the number of data-parallel workers",
+      "Because keeping the local micro-batch and accumulation count fixed increases examples per update"
+    ],
+    "answer_index": 3,
+    "explanation": "The global batch is micro_batch * accumulation * world_size, so adding workers with the other two factors fixed increases examples per update. Recalculate all three factors together whenever the worker count changes."
+  },
+  {
+    "id": "09.1-105",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Does wrapping a model with DDP make each rank see different training examples?",
+    "options": [
+      "Yes; DDP splits each batch among the ranks automatically when the model is wrapped",
+      "No, and having different examples on each rank would break DDP's gradient averaging",
+      "Yes, but only on the first epoch; afterwards every rank reverts to the full dataset",
+      "No; the input pipeline (e.g. DistributedSampler) must give the workers different samples"
+    ],
+    "answer_index": 3,
+    "explanation": "DDP does not choose examples. If every rank loads the same data, they all compute the same gradient and the extra GPUs are wasted. Configure the input pipeline so each worker contributes different samples."
+  },
+  {
+    "id": "09.1-106",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "With local mean-loss gradients g_w and valid-token counts n_w per data-parallel worker, what is the global token-mean gradient?",
+    "options": [
+      "sum(g_w) / W",
+      "sum(n_w * g_w) / W",
+      "sum(n_w * g_w) / (W * sum(n_w))",
+      "sum(n_w * g_w) / sum(n_w)"
+    ],
+    "answer_index": 3,
+    "explanation": "Each g_w is already a mean over n_w tokens, so n_w * g_w recovers the sum over that worker's tokens. Summing those and dividing by the total token count gives the global per-token mean. The default equal worker average sum(g_w)/W only matches when all n_w are equal."
+  },
+  {
+    "id": "09.1-107",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What should you do when training with a sum loss under data parallelism?",
+    "options": [
+      "Nothing; averaging the local sums across workers is always equivalent to the global sum",
+      "Multiply the learning rate by the global batch size to undo the averaging across workers",
+      "Switch the all-reduce to a max, so the largest local sum is used as the global gradient",
+      "Decide whether the intended objective is a global sum or a global mean, then scale consistently"
+    ],
+    "answer_index": 3,
+    "explanation": "Averaging local sums equals neither the global sum nor the global mean without the appropriate factor. Decide which objective you want and apply the matching scaling. Otherwise the effective learning rate silently depends on W or the batch size."
+  },
+  {
+    "id": "09.1-108",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "When using mixed-precision gradient scaling together with gradient clipping in data-parallel training, what is the correct order?",
+    "options": [
+      "Clip, then average, then unscale",
+      "Average, then unscale, then clip",
+      "Unscale, then clip each local gradient, then average",
+      "Clip, then unscale, then average"
+    ],
+    "answer_index": 1,
+    "explanation": "Clip the gradient the optimizer will actually use: average first, and with a gradient scaler, unscale before clipping so the threshold applies to true gradient magnitudes. Clipping local or still-scaled gradients clips the wrong quantity."
+  },
+  {
+    "id": "09.1-109",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Which of these breaks synchronization between data-parallel replicas, even if their gradients match?",
+    "options": [
+      "Different dropout masks on each rank during the forward pass",
+      "Different local loss values on each rank at the end of each step",
+      "Different optimizer settings or restored optimizer states on each rank",
+      "Different training examples on each rank, as drawn by DistributedSampler"
+    ],
+    "answer_index": 2,
+    "explanation": "Matching gradients only yield matching updates if optimizer settings, optimizer state, and update counts also match. Different local losses, dropout masks, and data are expected in data parallelism and do not by themselves break synchronization."
+  },
+  {
+    "id": "09.1-110",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Check yourself",
+    "question": "What happens if data-parallel workers sum their gradients instead of averaging them (equal shards, local mean losses)?",
+    "options": [
+      "The gradient is W times larger than the global mean-loss gradient",
+      "Nothing changes, because the optimizer normalizes the gradient's scale",
+      "The gradient is W times smaller than the global mean-loss gradient",
+      "The workers' weights diverge, because each applies a different update"
+    ],
+    "answer_index": 0,
+    "explanation": "For equal shards with mean losses, the average reproduces the global mean-loss gradient, so the sum is W times larger. The replicas still agree, but the effective step size scales with W. Even when averaging, different floating-point reduction orders can cause tiny differences from single-device results."
+  },
+  {
+    "id": "09.1-111",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In ring all-reduce of an S-byte tensor across W workers with equal chunks, how many bytes does each worker send?",
+    "options": [
+      "(W-1)S/W",
+      "2(W-1)S/W",
+      "2(W-1)S",
+      "2(W-1)S/W^2"
+    ],
+    "answer_index": 1,
+    "explanation": "Each worker sends W-1 chunks of S/W bytes in each of two phases, for 2(W-1)S/W bytes, and receives the same amount. Each direction approaches 2S as W grows, so sent plus received approaches 4S."
+  },
+  {
+    "id": "09.1-112",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Ring all-reduce keeps per-worker bandwidth roughly constant as W grows. Does that make its latency constant too?",
+    "options": [
+      "Yes, the ring finishes in constant time",
+      "Yes, because chunks get smaller",
+      "No; the ring still has 2(W-1) rounds",
+      "No; latency grows as W squared"
+    ],
+    "answer_index": 2,
+    "explanation": "Bandwidth accounting shows each worker moves about 2S bytes regardless of W, but the algorithm still runs 2(W-1) sequential rounds. Per-round latency costs therefore grow linearly with W. Bandwidth-optimal does not mean latency-constant."
+  },
+  {
+    "id": "09.1-113",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Check yourself",
+    "question": "After a normal synchronized DDP backward, what is ready on every rank, and what remains local?",
+    "options": [
+      "Averaged gradients are ready; the scalar loss stays local unless explicitly aggregated",
+      "Updated weights are ready on every rank; the gradients themselves remain local",
+      "The global mean loss is ready on every rank; the gradients themselves remain local to each rank",
+      "Averaged activations are ready on every rank; the gradients and loss remain local"
+    ],
+    "answer_index": 0,
+    "explanation": "DDP arranges gradient communication during backward, so every rank ends with averaged gradients ready for the optimizer, which still runs on every rank. Forward and backward used local data, so each rank's loss value is local. Aggregate it explicitly to report a global loss."
+  },
+  {
+    "id": "09.1-114",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Check yourself",
+    "question": "What can DDP's overlap of communication with backward not guarantee?",
+    "options": [
+      "That some communication runs while backward is still computing other layers' gradients",
+      "That the optimizer step sees fully synchronized gradients on every rank",
+      "That the final gradients on every rank are correctly averaged across ranks",
+      "That all communication is hidden or that adding workers gives a proportional speedup"
+    ],
+    "answer_index": 3,
+    "explanation": "Overlap can reduce the time spent waiting after gradient computation, but it cannot guarantee that all communication is hidden, that communication costs no GPU resources, or that more workers scale linearly. Correct averaged gradients are guaranteed regardless of overlap."
+  },
+  {
+    "id": "09.1-115",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Hardware track — data-parallel training",
+    "question": "How does ordinary DDP's per-worker memory for model state change as you add workers?",
+    "options": [
+      "It is divided by W, since each worker holds only 1/W of the model state",
+      "It shrinks only for the optimizer state, which ordinary DDP shards evenly across the workers",
+      "It doubles with each added worker, because of extra communication buffers",
+      "It does not shrink; every worker keeps a full model, gradients and optimizer state"
+    ],
+    "answer_index": 3,
+    "explanation": "Ordinary DDP replicates the full model, gradient tensors, and optimizer state on every worker, plus communication buffers. Adding workers adds throughput, not per-worker capacity. Sharding model state is what ZeRO and FSDP add."
+  },
+  {
+    "id": "09.1-116",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Hardware track — data-parallel training",
+    "question": "A memory estimate of 16P bytes for model state is quoted for training. When does it apply?",
+    "options": [
+      "To every optimizer and precision setup, since all training state always scales as 16 bytes per parameter",
+      "Only to SGD without momentum in fp32, where weights, gradients and buffers add up to exactly 16 bytes per parameter",
+      "To one Adam accounting (4 bytes each for params and grads, 8 for moments, or the mixed-precision equivalent)",
+      "Only to inference with a KV cache, where weights and cached keys and values total 16 bytes"
+    ],
+    "answer_index": 2,
+    "explanation": "16P comes from a specific accounting of Adam training: parameters, gradients, and two moment buffers. Other optimizers, precisions, or master-weight choices give different constants. Treat 16P as a model of that setup, not a universal law."
+  },
+  {
+    "id": "09.1-117",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Hardware track — data-parallel training",
+    "question": "For a fixed amount of training work, what happens to total GPU-hours when scaling from 1 to W GPUs with data parallelism?",
+    "options": [
+      "Total GPU-hours always rise by a factor of W, because every GPU repeats the same work in full",
+      "Total GPU-hours always fall by a factor of W, because the work is split evenly across the GPUs",
+      "Total GPU-hours always stay exactly constant, because communication is fully hidden by overlap",
+      "Ideally GPU-hours stay constant, but communication, data loading and small local batches can raise them"
+    ],
+    "answer_index": 3,
+    "explanation": "Ideal scaling runs W GPUs for 1/W of the time, keeping GPU-hours constant. Real overheads reduce scaling efficiency, so GPU-hours can increase. Measure throughput and time to the desired training quality rather than assuming linear speedup."
+  },
+  {
+    "id": "09.1-118",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Next",
+    "question": "When is plain DDP the right tool, and what problem does it not solve?",
+    "options": [
+      "When you need to split each matmul across GPUs; it does not handle data loading or sampling",
+      "When the model is too large for one GPU's memory; it does not make training any faster",
+      "When the model fits on one GPU and you want several GPUs on the data; it does not fix a model-state memory limit",
+      "When the batch does not fit on one GPU; it does not average gradients, so a manual all-reduce is needed"
+    ],
+    "answer_index": 2,
+    "explanation": "DDP distributes examples while replicating the full model state, so it helps when the model already fits on one GPU. If model state exceeds one GPU's memory, replication does not help; ZeRO and FSDP partition optimizer state, gradients, and/or parameters to share the memory burden."
+  },
+  {
+    "id": "09.1-119",
+    "chapter": "09.1",
+    "chapter_name": "Data parallelism, all-reduce, DDP",
+    "module": "9",
+    "module_name": "Distributed training",
+    "source": "lessons/module-09/lesson-01.md",
+    "section": "Next",
+    "question": "What do ZeRO and FSDP change compared with ordinary DDP?",
+    "options": [
+      "They partition optimizer state, gradients and/or parameters across workers instead of replicating them",
+      "They replace gradient averaging with periodic weight averaging, so that workers synchronize only every few steps",
+      "They split each individual matmul across GPUs so that no single device holds a full weight matrix",
+      "They remove the need for collectives by giving each worker an independent copy that never syncs"
+    ],
+    "answer_index": 0,
+    "explanation": "ZeRO and FSDP keep the data-parallel structure but change what each worker stores: depending on stage, they shard optimizer state, gradients, and parameters across workers. That lets workers share the memory burden as well as the computation. Splitting individual matmuls is tensor parallelism."
+  }
+]

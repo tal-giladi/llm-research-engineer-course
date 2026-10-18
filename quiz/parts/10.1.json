@@ -1,0 +1,1028 @@
+[
+  {
+    "id": "10.1-001",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Before launching a training run, which three back-of-the-envelope numbers can be computed from a GPT model config plus a token budget?",
+    "options": [
+      "The number of GPUs needed, the achieved MFU, and the final validation perplexity",
+      "The final loss, the peak learning rate, and the critical batch size for the run",
+      "The tokenizer vocabulary, the context length, and the dropout rate to train with",
+      "The parameter count N, the training compute C ≈ 6ND, and the memory footprint"
+    ],
+    "answer_index": 3,
+    "explanation": "From a config alone you can compute a closed-form parameter count N, the training compute C ≈ 6ND for D tokens, and the memory footprint (params + grads + optimizer state + activations). Loss and perplexity are outcomes of training that must be measured or predicted with scaling laws, not read off the config."
+  },
+  {
+    "id": "10.1-002",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why does estimating N, D, C, wall-clock and memory before a run matter so much in practice?",
+    "options": [
+      "Because the optimizer's learning rate is computed directly from the run's total FLOP count",
+      "Because these estimates determine the final loss exactly, removing the need to train at all",
+      "Because PyTorch refuses to launch a training run unless these numbers are declared up front",
+      "Mistakes show up as OOM at step 0, or as learning weeks in that the run takes far too long"
+    ],
+    "answer_index": 3,
+    "explanation": "Every real run starts as a spreadsheet: a lab estimates size, data, compute, time and memory before spending GPU money. Getting them wrong means either an out-of-memory failure immediately or learning mid-run that it will take far longer than budgeted. The estimates do not determine loss or hyperparameters automatically."
+  },
+  {
+    "id": "10.1-003",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How do FLOP and parameter counting relate to scaling laws such as Kaplan and Chinchilla?",
+    "options": [
+      "Counting formulas measure the final loss, while scaling laws measure memory per GPU",
+      "Scaling laws replace the need to count parameters or FLOPs, since they fit the loss directly",
+      "Scaling laws say how to choose N and D; the counting formulas are the arithmetic they use",
+      "They are unrelated: scaling laws only concern the shape of the learning-rate schedule"
+    ],
+    "answer_index": 2,
+    "explanation": "Scaling laws are the theory of how to split a budget between model size N and data D, and they are expressed in terms of N, D and C = 6ND. Without the counting arithmetic you cannot even state the allocation problem."
+  },
+  {
+    "id": "10.1-004",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "In planning a training run, what does the parameter count N primarily determine?",
+    "options": [
+      "Model quality (capacity) and memory",
+      "Only the number of training tokens",
+      "Only the wall-clock time, independent of tokens",
+      "The tokenizer's vocabulary size"
+    ],
+    "answer_index": 0,
+    "explanation": "N sets how much capacity the model has, which drives quality, and it directly determines parameter, gradient and optimizer memory. Wall-clock depends on C = 6ND, which also involves the token count D."
+  },
+  {
+    "id": "10.1-005",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "In the compute estimate C ≈ 6ND, what does the estimate set for a training run?",
+    "options": [
+      "Whether the model fits in GPU memory, once divided by the bytes per parameter",
+      "The irreducible loss of the data, once divided by the number of training tokens",
+      "The wall-clock time and dollar cost, once divided by an achieved throughput",
+      "The vocabulary size of the tokenizer, once divided by the embedding width C"
+    ],
+    "answer_index": 2,
+    "explanation": "C ≈ 6ND is the total arithmetic of training; dividing by an achieved FLOP/s rate turns it into time, which turns into dollars. Whether the model fits is a memory question governed by the 16P floor plus activations."
+  },
+  {
+    "id": "10.1-006",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "Which of the following determines whether a model fits on a GPU at all?",
+    "options": [
+      "Memory: params + gradients + optimizer state + activations",
+      "The achieved FLOP/s rate the GPU sustains during the run",
+      "The total training compute 6ND alone, divided by the batch",
+      "The number of training tokens D alone, divided by the context"
+    ],
+    "answer_index": 0,
+    "explanation": "Fitting is a memory question: the model's parameters, their gradients, the optimizer's state, and saved activations must all fit. Compute and token count determine how long the run takes, not whether a step can execute."
+  },
+  {
+    "id": "10.1-007",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "How does the treatment of the 6N rule and the memory buckets differ between a running-loop view and a planning view?",
+    "options": [
+      "In planning, the 6N rule is replaced by a cheaper 2N rule, since no backward pass has been run yet",
+      "In planning, memory is ignored entirely and only the compute budget 6ND is estimated up front",
+      "In planning, all three come from just a config and a token budget, before anything is allocated",
+      "In planning, the numbers are measured by profiling a short real run first and then extrapolated"
+    ],
+    "answer_index": 2,
+    "explanation": "Earlier the 6N rule and four memory buckets were seen inside one running loop; the planning view lifts them so that from a config and token budget alone you compute N, C and memory to within a few percent by hand, with no tensors allocated."
+  },
+  {
+    "id": "10.1-008",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "In the formulas N ≈ VC + 12·n_layer·C² and C ≈ 6ND, what is the source of potential confusion with the letter C?",
+    "options": [
+      "C is the context length in the parameter formula and the number of GPUs in the compute formula",
+      "C means the same thing in both formulas: the number of channels in each transformer block",
+      "C is the embedding width (n_embd) in the parameter formula but total FLOPs in the compute one",
+      "C is the cost in dollars in the compute formula and the cache size in the parameter formula"
+    ],
+    "answer_index": 2,
+    "explanation": "By convention model-shape code uses C for channels per token (e.g. 768), while scaling-law papers use C for total compute in FLOPs (e.g. 8.67×10^17). Magnitude disambiguates: widths are hundreds to thousands, compute budgets are 10^17 and up."
+  },
+  {
+    "id": "10.1-009",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "1. Intuition: three numbers from a config",
+    "question": "You see the value C = 1024 in a scaling discussion. Which interpretation is most plausible, and why?",
+    "options": [
+      "An embedding width, because compute budgets are 10^17 FLOPs and up",
+      "A context length, because C stands for context",
+      "A number of GPUs, because C stands for cluster size",
+      "A training compute budget in FLOPs, because C always denotes compute"
+    ],
+    "answer_index": 0,
+    "explanation": "Width values are a few hundred to a few thousand, whereas realistic training compute budgets are around 10^17 FLOPs or more. A value like 1024 is therefore an embedding width (n_embd), not a compute budget."
+  },
+  {
+    "id": "10.1-010",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "In a GPT, how many parameters does the token embedding table wte contain, for vocabulary size V and width C?",
+    "options": [
+      "4·V·C — four projections (Q, K, V, O) per vocabulary token",
+      "C² — one C×C matrix shared by every vocabulary entry",
+      "V·C — one C-vector per vocabulary entry",
+      "T_max·C — one C-vector for each position in the context"
+    ],
+    "answer_index": 2,
+    "explanation": "The token embedding is a V×C lookup table with one C-dimensional vector per vocabulary entry, so it holds V·C parameters. T_max·C is the positional embedding."
+  },
+  {
+    "id": "10.1-011",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "How many parameters does the learned positional embedding wpe have in a GPT with maximum context T_max and width C?",
+    "options": [
+      "T_max·C",
+      "T_max²·C",
+      "12·C²",
+      "V·T_max"
+    ],
+    "answer_index": 0,
+    "explanation": "wpe is a T_max×C table with one C-vector per position, giving T_max·C parameters. V·T_max mixes the vocabulary size with the context length and matches no table in the model; T_max²·C would scale like an attention-mask-sized object, not a per-position parameter table."
+  },
+  {
+    "id": "10.1-012",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "Ignoring biases, how many weights do the attention projections of one transformer block hold, for width C?",
+    "options": [
+      "8C² — two C→4C matrices, one for keys and one for values",
+      "4C² — W_Q, W_K, W_V and the output W_O, each C×C",
+      "C² — a single C×C projection shared by Q, K and V together",
+      "3C² — only W_Q, W_K and W_V; the output projection is free"
+    ],
+    "answer_index": 1,
+    "explanation": "Attention has four C×C matrices: query, key, value, and the output projection W_O, giving 4C². Forgetting W_O gives the tempting but wrong 3C²; 8C² is the MLP."
+  },
+  {
+    "id": "10.1-013",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "Ignoring biases, how many weights does the MLP of one GPT block hold, for width C?",
+    "options": [
+      "16C² — a C→4C Linear counted four times",
+      "4C² — two C×C Linears with a GELU between",
+      "2C² — one C→2C Linear followed by a gate",
+      "8C² — a C→4C Linear plus a 4C→C Linear"
+    ],
+    "answer_index": 3,
+    "explanation": "The MLP expands to 4C and projects back: C×4C plus 4C×C, i.e. 4C² + 4C² = 8C². This is twice the attention projections' 4C²."
+  },
+  {
+    "id": "10.1-014",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "Why are the biases (~9C per block) and LayerNorm parameters (4C per block) dropped from the closed-form parameter count?",
+    "options": [
+      "They are not trainable, so they are not parameters",
+      "They are shared across all layers, so they count only once",
+      "They are recomputed every forward pass rather than stored",
+      "They grow linearly in C and are tiny next to the 12C² terms"
+    ],
+    "answer_index": 3,
+    "explanation": "Biases and LayerNorm gains/biases are trainable parameters, but they scale as C while the matrices scale as C². For realistic widths the linear terms are a negligible fraction (about 0.1% in GPT-2 small)."
+  },
+  {
+    "id": "10.1-015",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "With a tied output head, how many new parameters does lm_head add to a GPT?",
+    "options": [
+      "V·C — one full vocabulary projection, separate from wte",
+      "C² — a square projection applied right before the softmax",
+      "Zero — it reuses the same tensor as the token embedding wte",
+      "T_max·C — one output projection for each position in the context"
+    ],
+    "answer_index": 2,
+    "explanation": "Weight tying makes lm_head the same tensor as wte, so it contributes no additional parameters. An untied head would add another V·C."
+  },
+  {
+    "id": "10.1-016",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "What is the closed-form approximate total parameter count of a GPT with vocab V, width C, max context T_max and L layers?",
+    "options": [
+      "N ≈ V·C + T_max·C + 12·L·C²",
+      "N ≈ 12·L·C² + 4·V·C + T_max",
+      "N ≈ V·C + T_max·C + 12·L·C",
+      "N ≈ 6·L·C² + V·T_max + V·C"
+    ],
+    "answer_index": 0,
+    "explanation": "Summing the dominant terms gives token embedding V·C, positional embedding T_max·C, and 12C² per block over L blocks. The tied head adds nothing, and linear-in-C terms are dropped."
+  },
+  {
+    "id": "10.1-017",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "Why does the scaling literature call 12·L·C² the non-embedding parameter count and use it as N?",
+    "options": [
+      "Because the embedding table is stored on the CPU, not on the GPU",
+      "Because those weights do the matmul work, while embeddings are lookups",
+      "Because 12·L·C² is always larger than the total parameter count",
+      "Because the embedding parameters are frozen and never updated in training"
+    ],
+    "answer_index": 1,
+    "explanation": "The block weights participate in matrix multiplies on every token, so they dominate FLOPs. Embedding tables are indexed lookups with negligible arithmetic, so scaling-law N excludes them. In the course code this is non_embedding_params(cfg) in llmre.training.metrics."
+  },
+  {
+    "id": "10.1-018",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "2. Closed-form parameter count",
+    "question": "Per transformer layer, how do the closed-form weights split between attention and MLP?",
+    "options": [
+      "Attention 8C², MLP 4C², total 12C²",
+      "Attention 3C², MLP 9C², total 12C²",
+      "Attention 6C², MLP 6C², total 12C²",
+      "Attention 4C², MLP 8C², total 12C²"
+    ],
+    "answer_index": 3,
+    "explanation": "Four C×C attention projections give 4C²; the MLP's C→4C and 4C→C Linears give 8C². So the MLP holds two thirds of each block's weights."
+  },
+  {
+    "id": "10.1-019",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: GPT-2 small (parameter count)",
+    "question": "For GPT-2 small (V=50257, C=768, T_max=1024, L=12), how close is the closed-form estimate V·C + T_max·C + 12·L·C² to the exact count of 124,439,808?",
+    "options": [
+      "Exactly equal, because the closed form includes every single bias and LayerNorm term",
+      "Within about 0.1%; the missing ~121k parameters are biases and LayerNorm gains",
+      "Off by about 38.6M, because the tied output head is not counted in the formula",
+      "Off by about 30%, because the closed form leaves out the MLP weights entirely"
+    ],
+    "answer_index": 1,
+    "explanation": "The closed form gives about 124.3M versus 124.4M exact, within 0.1%. The difference is precisely the dropped linear-in-C terms (biases, LayerNorms). Two integers and a multiply predict size to three significant figures."
+  },
+  {
+    "id": "10.1-020",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: GPT-2 small (parameter count)",
+    "question": "In GPT-2 small, roughly what fraction of the ~124M total parameters are in the token embedding table?",
+    "options": [
+      "About 90% (≈112M of ≈124M)",
+      "About 31% (≈38.6M of ≈124M)",
+      "About 68% (≈85M of ≈124M)",
+      "About 1% (≈1M of ≈124M)"
+    ],
+    "answer_index": 1,
+    "explanation": "V·C = 50257·768 ≈ 38.6M, about a third of the 124M total. The non-embedding 12LC² ≈ 85M is the other big piece, and wpe is only ~0.8M. This is why total and non-embedding N differ substantially for small models."
+  },
+  {
+    "id": "10.1-021",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: GPT-2 small (parameter count)",
+    "question": "How does the closed-form non-embedding count 12·L·C² for GPT-2 small compare with its true non-embedding count?",
+    "options": [
+      "84.9M vs 124.4M — the closed form misses the MLP",
+      "They differ by a factor of 12 because L is counted twice",
+      "84.9M vs 38.6M — the closed form double-counts attention",
+      "84.9M vs 85.06M — within about 0.15%"
+    ],
+    "answer_index": 3,
+    "explanation": "12·12·768² = 84,934,656 compares with the true 85,056,000, within 0.15%; the difference again is biases and LayerNorm parameters inside the blocks."
+  },
+  {
+    "id": "10.1-022",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Callout: exact count from the model",
+    "question": "In PyTorch, why does sum(p.numel() for p in model.parameters()) count a tied wte/lm_head tensor only once?",
+    "options": [
+      "model.parameters() de-duplicates shared tensors, yielding each Parameter once",
+      "Tied tensors are registered as buffers rather than parameters, so they are skipped",
+      "PyTorch stores the tied head in half precision, which halves its reported count",
+      "numel() returns zero for any tensor that is a view of another module's tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "parameters() yields each unique Parameter object once, so a tensor registered under two module attributes is counted a single time. That is why weight tying saves V·C ≈ 38.6M parameters in GPT-2 small versus an untied head."
+  },
+  {
+    "id": "10.1-023",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Callout: exact count from the model",
+    "question": "When should you use the closed-form parameter formula versus model.num_params()?",
+    "options": [
+      "Closed form after training; num_params() only before the model has been built",
+      "Closed form to plan before the model exists; num_params() for exact truth once built",
+      "Always the closed form, because num_params() double-counts the tied wte/lm_head weights",
+      "Always num_params(), because the closed form is typically off by tens of percent"
+    ],
+    "answer_index": 1,
+    "explanation": "The closed form needs only config integers and is accurate to ~0.1%, ideal for planning. Once the model is instantiated, num_params() gives the exact count including small terms, with tied weights counted once."
+  },
+  {
+    "id": "10.1-024",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "Why does one forward+backward pass cost about 6N FLOPs per token?",
+    "options": [
+      "6 layers of computation per token, each costing N FLOPs over the weights",
+      "3N forward and 3N backward, since the backward pass mirrors the forward",
+      "2N forward (2 FLOPs per weight) plus 4N backward (two matmuls per weight)",
+      "N forward, N backward, and 4N more for AdamW's optimizer step on each weight"
+    ],
+    "answer_index": 2,
+    "explanation": "Forward does one multiply-add per weight per token, counted as 2 FLOPs, so 2N. Backward needs two matmuls per weight — gradient with respect to the input and with respect to the weight — so about 4N. Total 6N."
+  },
+  {
+    "id": "10.1-025",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "Why is the backward pass about twice the cost of the forward pass in the 6N rule?",
+    "options": [
+      "It must also update the optimizer's two moment buffers m and v for every weight",
+      "It computes gradients w.r.t. both the layer's input and its weight: two matmuls",
+      "It runs in fp32 while the forward pass runs in bf16, halving tensor-core throughput",
+      "It must redo the whole forward pass from scratch before computing any gradient"
+    ],
+    "answer_index": 1,
+    "explanation": "Each weight matrix participates in two backward matmuls: one propagates the gradient to the input (for earlier layers), the other produces the weight gradient. Each is about as costly as the forward matmul, giving 4N versus 2N."
+  },
+  {
+    "id": "10.1-026",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "What does the total-training-compute formula C ≈ 6ND compute, given N parameters and D training tokens?",
+    "options": [
+      "The number of optimizer steps, given N parameters and D tokens per step",
+      "The memory needed in bytes to hold D tokens' activations for N parameters",
+      "The total FLOPs of training: 6N per token times D tokens processed",
+      "The FLOP/s rate the GPU must sustain to process D tokens in one second"
+    ],
+    "answer_index": 2,
+    "explanation": "6N FLOPs per token for forward plus backward, multiplied by the D tokens the run processes, gives total training work in FLOPs. It is a count of work, not a rate."
+  },
+  {
+    "id": "10.1-027",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "In C ≈ 6ND as used in scaling laws, which N is used?",
+    "options": [
+      "The number of attention heads times width",
+      "The total parameter count including embeddings",
+      "The number of layers",
+      "The non-embedding parameter count"
+    ],
+    "answer_index": 3,
+    "explanation": "The scaling convention uses non-embedding N, because embedding lookups contribute negligible FLOPs; it is the block matmuls that perform the 6N work per token."
+  },
+  {
+    "id": "10.1-028",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "Which FLOPs does the 6ND estimate deliberately omit, and when is that safe?",
+    "options": [
+      "The backward pass FLOPs, which are small for short contexts",
+      "The MLP FLOPs, which are small while the vocabulary is large",
+      "The optimizer FLOPs, which dominate only for models under 1M parameters",
+      "The attention-score FLOPs (~6·L·T per token), which are small while T ≪ 12C"
+    ],
+    "answer_index": 3,
+    "explanation": "6ND counts weight matmuls only. The QK^T and attention-times-V work grows with context length T and is small relative to the weight matmuls while T is much less than 12C. At very long contexts the attention term must be added back."
+  },
+  {
+    "id": "10.1-029",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "What does training_flops(N, D) in llmre.evaluation.scaling return?",
+    "options": [
+      "6.0 * N * D divided by the GPU's peak FLOP/s",
+      "6.0 * N * D",
+      "2.0 * N * D",
+      "16 * N bytes plus activations"
+    ],
+    "answer_index": 1,
+    "explanation": "The function is literally return 6.0 * N * D: total training FLOPs. 2ND would be forward-only (inference) work, and dividing by FLOP/s would give time, not compute."
+  },
+  {
+    "id": "10.1-030",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "3. Training compute: the 6ND rule",
+    "question": "Why is C ≈ 6ND described as a measure of work rather than speed?",
+    "options": [
+      "It is measured in FLOP/s, so it already includes the speed of the hardware",
+      "It is a FLOP count; time requires dividing by an achieved FLOP/s rate",
+      "It depends on the GPU type, so it really measures how fast the hardware is",
+      "It changes with the run's MFU, so it encodes how efficient the pipeline is"
+    ],
+    "answer_index": 1,
+    "explanation": "6ND counts operations and is hardware-independent. Converting it to wall-clock requires an achieved FLOP/s rate, which depends on hardware and on how efficiently the pipeline runs (MFU)."
+  },
+  {
+    "id": "10.1-031",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: FLOPs and GPU-hours",
+    "question": "Training N = 85M non-embedding parameters on D = 1.7B tokens is described as Chinchilla-ish. Why?",
+    "options": [
+      "It uses 1.7 tokens per parameter like GPT-3",
+      "It uses exactly 6 tokens per parameter, matching 6ND",
+      "It is about 20 tokens per parameter",
+      "It uses one token per parameter"
+    ],
+    "answer_index": 2,
+    "explanation": "1.7×10^9 / 8.5×10^7 = 20 tokens per parameter, the Chinchilla compute-optimal ratio justified later in the module."
+  },
+  {
+    "id": "10.1-032",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: FLOPs and GPU-hours",
+    "question": "When converting training FLOPs to GPU-hours on an A100, which number is publicly documented and which is an assumption?",
+    "options": [
+      "The 32% MFU is published by NVIDIA for every model; the 312 TFLOP/s peak is an assumption",
+      "The ~312 TFLOP/s bf16 dense peak is a spec-sheet figure; the MFU (e.g. 32%) is assumed",
+      "Both the peak and the MFU are measured constants that hold for every model and pipeline",
+      "Neither is known in advance; it is the FLOP count itself that is the modelling assumption"
+    ],
+    "answer_index": 1,
+    "explanation": "NVIDIA advertises ~312 TFLOP/s (3.12×10^14) bf16 dense peak. The fraction actually achieved (MFU) depends on model size, context length and pipeline tuning, so a figure like 32% is a stated assumption, not a vendor or measured number."
+  },
+  {
+    "id": "10.1-033",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: FLOPs and GPU-hours",
+    "question": "How do you convert a training compute C in FLOPs into wall-clock time?",
+    "options": [
+      "t = 6ND / batch size, then divide by 3600 for hours",
+      "t = C / (6 × peak FLOP/s), then divide by 3600 for hours",
+      "t = C / achieved FLOP/s, then divide by 3600 for hours",
+      "t = C × peak FLOP/s, then divide by 3600 for hours"
+    ],
+    "answer_index": 2,
+    "explanation": "Time is work divided by rate: t = C / achieved FLOP/s, in seconds. The achieved rate (peak × MFU), not the peak, should be used; dividing by 6 again would double-count the 6 already in C."
+  },
+  {
+    "id": "10.1-034",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: FLOPs and GPU-hours",
+    "question": "The same 8.67×10^17-FLOP run takes ~2.4 GPU-hours at 1.0×10^14 FLOP/s but ~12 at 2×10^13 FLOP/s. What lesson does this illustrate?",
+    "options": [
+      "GPU-hours are independent of MFU, so the gap must come from a miscount of FLOPs",
+      "The FLOP count is objective; the time depends on an achieved-throughput assumption",
+      "The 6ND rule is wrong by a factor of five for poorly tuned input pipelines",
+      "Poorly tuned pipelines perform fewer FLOPs in total, so they should finish faster"
+    ],
+    "answer_index": 1,
+    "explanation": "The arithmetic is identical in both cases; only the achieved FLOP/s differs (32% vs 6.4% MFU), giving a 5× difference in time. Always state the throughput assumption, because time is not determined by the FLOP count alone."
+  },
+  {
+    "id": "10.1-035",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "4. Memory: the four buckets, in one number",
+    "question": "In fp32, how many bytes per parameter do parameters, gradients and AdamW state require in total?",
+    "options": [
+      "16 bytes: 4 params + 4 grads + 8 for Adam's m and v",
+      "12 bytes: 4 weights + 4 gradients + 4 for one Adam buffer",
+      "4 bytes: just the weights; grads and state are transient",
+      "8 bytes: 4 weights + 4 gradients, with Adam state on CPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Each fp32 value is 4 bytes. Weights 4, gradients 4, and AdamW's two moment buffers m and v 4 each (8 total), summing to 16 bytes per parameter before any activations."
+  },
+  {
+    "id": "10.1-036",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "4. Memory: the four buckets, in one number",
+    "question": "Why does AdamW's optimizer state cost 8P bytes in fp32?",
+    "options": [
+      "It keeps a full copy of the gradient history over the last 8 steps, per parameter",
+      "It stores a master copy of the weights in fp64, which takes 8 bytes per parameter",
+      "Two buffers per parameter, first moment m and second moment v, at 4 bytes each",
+      "It keeps one buffer m per parameter that needs 8 bytes because its values are squared"
+    ],
+    "answer_index": 2,
+    "explanation": "AdamW tracks a running mean of gradients (m) and of squared gradients (v), one value each per parameter. Two fp32 buffers equal 8 bytes per parameter, twice the weights themselves."
+  },
+  {
+    "id": "10.1-037",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "4. Memory: the four buckets, in one number",
+    "question": "What do activations scale with, as opposed to the other three memory buckets?",
+    "options": [
+      "The optimizer choice, e.g. Adam versus SGD",
+      "Batch size × context length, not the parameter count P",
+      "Only the parameter count P, like the other three",
+      "The number of training tokens D seen so far in the run"
+    ],
+    "answer_index": 1,
+    "explanation": "Activations are intermediate forward tensors saved for backward, so their size grows with how many tokens are in flight (batch × context). Params, grads and optimizer state are fixed by P and independent of batch size."
+  },
+  {
+    "id": "10.1-038",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "4. Memory: the four buckets, in one number",
+    "question": "Which memory bucket do gradient accumulation, activation checkpointing and mixed precision primarily attack?",
+    "options": [
+      "Optimizer state, the largest fixed bucket under AdamW",
+      "Parameters, by deleting unused weights after each step",
+      "Gradients, by skipping part of the backward pass entirely",
+      "Activations, the bucket that scales with batch and context"
+    ],
+    "answer_index": 3,
+    "explanation": "The 16P fixed floor does not change with batch size; activations do. Gradient accumulation shrinks the micro-batch, checkpointing recomputes instead of saving, and mixed precision halves bytes per activation. (Sharding attacks optimizer state.)"
+  },
+  {
+    "id": "10.1-039",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: GPT-2 small (memory)",
+    "question": "For GPT-2 small at batch 8 and context 1024, why does the logits tensor alone matter for memory?",
+    "options": [
+      "B·T·V ≈ 4.1×10^8 floats ≈ 1.65 GB in fp32, rivaling the ~2 GB fixed cost",
+      "It is tiny (a few MB), because logits are only computed for the final token",
+      "It replaces the need to store gradients, so it frees memory rather than using it",
+      "It is stored in int8 by default, so its footprint is negligible next to the weights"
+    ],
+    "answer_index": 0,
+    "explanation": "Logits have shape (B, T, V) = 8×1024×50257 ≈ 4.12×10^8 values, about 1.65 GB in fp32 — nearly as large as the ~1.99 GB of params+grads+Adam. A single activation tensor can rival the entire fixed floor, which motivates mixed precision and checkpointing."
+  },
+  {
+    "id": "10.1-040",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Numerical example: GPT-2 small (memory)",
+    "question": "What is the fp32 fixed memory floor (params + grads + Adam) for GPT-2 small with P ≈ 124.4M parameters?",
+    "options": [
+      "About 124 MB",
+      "About 8 GB",
+      "About 0.5 GB",
+      "About 2 GB"
+    ],
+    "answer_index": 3,
+    "explanation": "16 bytes × 1.244×10^8 ≈ 1.99×10^9 bytes ≈ 2 GB, paid before any activation. 0.5 GB would be weights only (4P)."
+  },
+  {
+    "id": "10.1-041",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "5. Under the hood: why the estimates are trustworthy",
+    "question": "Why is the 6ND compute estimate trustworthy for a standard transformer at moderate context?",
+    "options": [
+      "Weight matmuls dominate; the dropped attention scores, softmax and LayerNorm are a few %",
+      "Because GPUs only execute matmuls and skip elementwise operations such as softmax entirely",
+      "Because 6ND is recalibrated by profiling every new model architecture before training",
+      "Because the attention-score FLOPs exactly cancel out the dropped embedding-lookup FLOPs"
+    ],
+    "answer_index": 0,
+    "explanation": "The omitted operations are small relative to the dense weight matmuls in standard shapes. When that stops being true — very long context, tiny models, MoE routing — you switch to a fuller count."
+  },
+  {
+    "id": "10.1-042",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "5. Under the hood: why the estimates are trustworthy",
+    "question": "In which situations should you abandon the bare 6ND estimate for a fuller FLOP count?",
+    "options": [
+      "Very long context, tiny models, or MoE routing",
+      "Whenever training uses AdamW instead of SGD",
+      "Any model larger than 1B parameters",
+      "Whenever the vocabulary exceeds 50k tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "6ND assumes weight matmuls dominate. With very long context, attention-score FLOPs grow; in tiny models, non-matmul ops are a bigger share; in MoE, only some parameters are active per token. Those cases need a fuller accounting."
+  },
+  {
+    "id": "10.1-043",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "5. Under the hood: why the estimates are trustworthy",
+    "question": "Why can capacity planning predict parameter/optimizer memory to the byte but must profile activation memory?",
+    "options": [
+      "Parameter memory varies with the batch size, while activations are fixed per model",
+      "Optimizer memory must be profiled, while activations are exact from the config alone",
+      "Activations are random from step to step, so they cannot be predicted in any way",
+      "The other buckets are exact (P × dtype size); activations depend on what is saved"
+    ],
+    "answer_index": 3,
+    "explanation": "Params, grads and optimizer state are just P times known byte sizes. Activation memory depends on implementation choices about which intermediates are saved for backward, so it is measured with a short run."
+  },
+  {
+    "id": "10.1-044",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "5. Under the hood: why the estimates are trustworthy",
+    "question": "Why does the whole scaling-laws module rest on C = 6ND?",
+    "options": [
+      "It gives the final loss of any model directly from its N and D",
+      "It removes the need for any experiments when planning a new run",
+      "It makes planning analytic: given C, how to split it between N and D",
+      "It sets the peak learning rate as a closed-form function of N"
+    ],
+    "answer_index": 2,
+    "explanation": "Writing compute in terms of N and D turns 'bigger model or more data?' into a constrained optimisation. You cannot ask that question until C is expressed as a function of N and D, which is what Kaplan and Chinchilla then answer."
+  },
+  {
+    "id": "10.1-045",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "6. The code",
+    "question": "In llmre, what does model_flops_per_token(cfg) return for GPT-2 small?",
+    "options": [
+      "6 × the non-embedding parameter count, ≈ 5.1×10^8",
+      "The total training FLOPs for the full 1.7B-token budget",
+      "The number of parameters each token touches, ≈ 8.5×10^7",
+      "2 × the total parameter count, ≈ 2.5×10^8 FLOPs per token"
+    ],
+    "answer_index": 0,
+    "explanation": "model_flops_per_token returns 6·N_nonemb = 6 × 84,934,656 = 509,607,936 FLOPs per token, the forward+backward cost. Multiplying by D gives training_flops."
+  },
+  {
+    "id": "10.1-046",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "6. The code",
+    "question": "Since training_flops is a one-line function, where does its value lie?",
+    "options": [
+      "In calling it before launch, with the right non-embedding N and an honest D",
+      "In automatically detecting the achieved MFU of the GPU it is run on",
+      "In profiling the actual run and reporting the measured FLOPs per step",
+      "In its fused GPU kernel, which is faster than computing 6ND by hand"
+    ],
+    "answer_index": 0,
+    "explanation": "The function is deliberately trivial; the discipline of estimating compute up front, with the correct N convention and a realistic token count, is what prevents nasty surprises."
+  },
+  {
+    "id": "10.1-047",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Exercise",
+    "question": "If both the non-embedding parameter count N and the token budget D grow 10×, how does training compute C = 6ND change?",
+    "options": [
+      "It grows 20×",
+      "It grows about 3.2×",
+      "It grows 100×",
+      "It grows 10×"
+    ],
+    "answer_index": 2,
+    "explanation": "C is proportional to the product ND, so 10× × 10× = 100×. This quadratic blow-up in compute is the tension scaling laws resolve: you cannot make a model 10× bigger and feed it 10× more data without a 100× budget."
+  },
+  {
+    "id": "10.1-048",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Exercise",
+    "question": "An 850M-parameter model's fp32 fixed memory floor is ~13.6 GB. What does that imply for a 16 GB GPU?",
+    "options": [
+      "It means the model cannot be trained at all on any currently available hardware",
+      "It requires cutting the token budget D until the fixed floor drops below 16 GB",
+      "It fits comfortably, leaving plenty of headroom for activations and larger batches",
+      "It nearly fills the GPU before activations; mixed precision or sharding is needed"
+    ],
+    "answer_index": 3,
+    "explanation": "16 × 8.5×10^8 bytes ≈ 13.6 GB for params, grads and Adam alone. With activations added it will not fit in 16 GB, so you need mixed precision (Module 8) or optimizer-state sharding (Module 9). Token count does not affect memory."
+  },
+  {
+    "id": "10.1-049",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with using the total parameter count (including embeddings) in 6ND?",
+    "options": [
+      "Embedding parameters cost 6× more FLOPs per token than the block parameters do",
+      "The convention uses non-embedding N; embeddings are lookups with negligible FLOPs",
+      "Nothing; the total and non-embedding counts are always equal for a tied model",
+      "Total parameters underestimate the true FLOPs by a factor of 6 for every model"
+    ],
+    "answer_index": 1,
+    "explanation": "6N per token comes from matmul work, which the block weights do. Embedding tables are indexed, not multiplied, so including them overstates compute, especially for small models where embeddings are a large share."
+  },
+  {
+    "id": "10.1-050",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Budgeting memory as 4P bytes in fp32 is a common mistake. What is the honest fixed floor and why?",
+    "options": [
+      "16P bytes, because gradients add 4P and Adam's m and v add 8P",
+      "8P bytes, because gradients double the weights and Adam is in-place",
+      "2P bytes, because modern training stores everything in fp16 by default",
+      "4P bytes is already correct, because the optimizer state lives on the CPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Weights are only one of three fixed buckets. Adding gradients (4P) and AdamW's two moment buffers (8P) gives 16P in fp32, four times the weights-only figure."
+  },
+  {
+    "id": "10.1-051",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to treat the fixed 16P bytes as the whole memory story?",
+    "options": [
+      "Activations scale with batch×context; the (B,T,V) logits alone can rival 16P",
+      "Because parameters are freed after the forward pass and re-loaded for backward",
+      "Because the optimizer state shrinks steadily as training converges to a minimum",
+      "Because the 16P figure already includes the activations for a batch of one"
+    ],
+    "answer_index": 0,
+    "explanation": "16P covers only parameters, gradients and optimizer state. Activations come on top, scale with batch and context, and can be as large as the fixed floor from a single tensor like the logits."
+  },
+  {
+    "id": "10.1-052",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A model has n_layer = 24 and n_embd = 1024. What is its approximate non-embedding parameter count?",
+    "options": [
+      "About 1.2B (48·24·1024²)",
+      "About 25M (24·1024²)",
+      "About 151M (6·24·1024²)",
+      "About 302M (12·24·1024²)"
+    ],
+    "answer_index": 3,
+    "explanation": "12·L·C² = 12 × 24 × 1,048,576 ≈ 301,989,888 ≈ 302M. Using 6 or 1 instead of 12 per layer forgets that each block has 4C² attention plus 8C² MLP weights."
+  },
+  {
+    "id": "10.1-053",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Check yourself",
+    "question": "You double both model size N and token budget D. By what factor does training compute change?",
+    "options": [
+      "8×",
+      "√2×",
+      "2×",
+      "4×"
+    ],
+    "answer_index": 3,
+    "explanation": "C = 6ND, so 2 × 2 = 4. Compute grows with the product, which is why 'make it bigger and train longer' is expensive and why choosing the split of a fixed budget matters."
+  },
+  {
+    "id": "10.1-054",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In fp32, how much fixed memory (params + grads + Adam state) does a 300M-parameter model need, ignoring activations?",
+    "options": [
+      "About 1.2 GB",
+      "About 2.4 GB",
+      "About 4.8 GB",
+      "About 9.6 GB"
+    ],
+    "answer_index": 2,
+    "explanation": "16 × 3×10^8 = 4.8×10^9 bytes: params 1.2 GB, grads 1.2 GB, Adam m and v 2.4 GB. 1.2 GB is the weights alone."
+  },
+  {
+    "id": "10.1-055",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A run needs C = 5×10^20 FLOPs in 24 hours. Roughly how many A100s at ~30% MFU (~10^14 achieved FLOP/s each) are needed?",
+    "options": [
+      "About 6",
+      "About 58",
+      "About 2",
+      "About 580"
+    ],
+    "answer_index": 1,
+    "explanation": "Required rate = 5×10^20 / 86,400 s ≈ 5.8×10^15 FLOP/s. Dividing by ~10^14 FLOP/s achieved per GPU gives ~58 GPUs. Using the peak 312 TFLOP/s instead would underestimate the count by ~3×."
+  },
+  {
+    "id": "10.1-056",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Hardware track",
+    "question": "What hardware does computing parameter counts, 6ND and the memory floor require?",
+    "options": [
+      "A GPU with at least 16 GB of memory to profile the activations",
+      "None beyond any CPU; it is pure arithmetic taking milliseconds",
+      "At least one A100, since FLOPs must be measured with the profiler",
+      "A multi-GPU node, because the memory floor is estimated by sharding"
+    ],
+    "answer_index": 1,
+    "explanation": "These estimates are done before spending any GPU time; they are plain Python arithmetic. A GPU only enters if you want to measure an actual achieved FLOP/s to replace the throughput assumption."
+  },
+  {
+    "id": "10.1-057",
+    "chapter": "10.1",
+    "chapter_name": "FLOPs & parameter counting",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-01.md",
+    "section": "Next",
+    "question": "After learning to size a model and estimate its compute, what empirical question does the next step in scaling address?",
+    "options": [
+      "For a fixed budget, does loss fall faster with more N or more D? Power laws answer it",
+      "How to shard the optimizer state across GPUs once the model no longer fits on a single one",
+      "How to choose the activation function and normalization that give the lowest loss",
+      "How to tokenize the training text into subwords so that D is counted consistently"
+    ],
+    "answer_index": 0,
+    "explanation": "The natural next question is how to spend compute. Empirically, loss follows a power law in N, D and C, which can be fitted from a small sweep and used to plan."
+  }
+]

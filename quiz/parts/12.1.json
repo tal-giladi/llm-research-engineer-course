@@ -1,0 +1,884 @@
+[
+  {
+    "id": "12.1-001",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which family of current open LLMs uses RoPE as its position encoding?",
+    "options": [
+      "LLaMA, Llama 3, Mistral, Qwen and DeepSeek",
+      "Only GPT-2 and GPT-3 style decoder-only models",
+      "Only encoder models such as BERT and RoBERTa",
+      "Only Mixture-of-Experts models such as Switch"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE is the position encoding in nearly every current open LLM: LLaMA, Llama 3, Mistral, Qwen and DeepSeek. GPT-2 used a learned absolute position table (wpe) instead. That is why swapping in RoPE is the first change when turning a GPT-2 into a modern model."
+  },
+  {
+    "id": "12.1-002",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which practical capability does RoPE enable for a model trained at a 4K context?",
+    "options": [
+      "Training it without any causal attention mask at all",
+      "Removing the need for a KV cache during generation",
+      "Halving the number of attention heads at inference",
+      "Stretching it to 32K+ context with light adaptation"
+    ],
+    "answer_index": 3,
+    "explanation": "Because rotation is defined at any position, a RoPE model trained at 4K context can be stretched to 32K+ with light adaptation (e.g. rescaling the frequencies). A learned position table cannot do this, since it has no rows past its trained length. RoPE does nothing about masks, KV caches or head counts."
+  },
+  {
+    "id": "12.1-003",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "In a GPT-2 style model, how is a token's input vector formed with respect to position?",
+    "options": [
+      "Token embedding multiplied elementwise by a fixed sinusoid of the position index, with no learned table at all",
+      "Token embedding rotated by a position-dependent angle in each pair of channels before the first block",
+      "Token embedding plus a learned positional embedding looked up from a table wpe of shape (block_size, C)",
+      "Token embedding concatenated with a one-hot position index, doubling the residual width to 2C"
+    ],
+    "answer_index": 2,
+    "explanation": "GPT-2 sums two learned vectors: the token embedding (which word) and a positional embedding read from the wpe table of shape (block_size, C) (which slot). Row 0 is position 0, row 1 is position 1, and so on. Rotation by position is what RoPE does instead, at attention time."
+  },
+  {
+    "id": "12.1-004",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "A GPT-2 style model with a learned position table was trained with block_size = 1024. What happens at position 1024?",
+    "options": [
+      "It reuses row 0, wrapping around like a ring buffer so positions repeat",
+      "There is no row for it, so the model cannot represent that position at all",
+      "It interpolates between rows 1022 and 1023, extrapolating the learned trend",
+      "It falls back to a sinusoidal encoding automatically for positions past the table"
+    ],
+    "answer_index": 1,
+    "explanation": "The learned table has exactly block_size rows, indexed 0 to 1023. Position 1024 has never been seen and has no vector, so the model simply cannot represent a context longer than it was trained on. There is no built-in wraparound, interpolation or fallback."
+  },
+  {
+    "id": "12.1-005",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "Why is an absolute learned position embedding said to not encode relative position?",
+    "options": [
+      "Because the table is too small to hold relative offsets, so it can only keep one vector per absolute position index",
+      "Nothing makes a gap of 5 look alike at (10, 15) and (300, 305), so each relationship is relearned at every location",
+      "Because absolute embeddings are added to the values V rather than to the queries and keys that form scores",
+      "Because absolute embeddings are frozen after initialization, so they cannot adapt to relative structure"
+    ],
+    "answer_index": 1,
+    "explanation": "The model learns fixed vectors for 'position 5' and 'position 200', but linguistically what matters is usually the gap between tokens. In the absolute scheme nothing makes '5 apart' look identical regardless of where it occurs, so the model must relearn every relationship at every absolute location. The table is learned (not frozen) and is added to the input, not specifically to V."
+  },
+  {
+    "id": "12.1-006",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "What is the core idea of RoPE (Su et al. 2021) compared with absolute position embeddings?",
+    "options": [
+      "Rotate each query and key at attention time by an angle that grows with its position, instead of adding an input vector",
+      "Add a learned relative-position bias, indexed by the offset between two tokens, to every attention score before softmax",
+      "Multiply each token embedding by a position-dependent scalar gain at the input, so later tokens carry larger norms",
+      "Append the position index as one extra channel of the residual stream, so every layer can read it directly"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE does not add any position vector at the input. At attention time it rotates each query and key by an angle proportional to its position. Since the dot product of two rotated vectors depends only on the difference of their angles, the score becomes a function of relative offset, and rotation exists for any position."
+  },
+  {
+    "id": "12.1-007",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "Under RoPE, which of the following is rotated by a position-dependent angle?",
+    "options": [
+      "Queries, keys and values",
+      "Only the values and the residual stream",
+      "The token embeddings at the input layer",
+      "Only the queries and keys"
+    ],
+    "answer_index": 3,
+    "explanation": "RoPE rotates Q and K only; nothing is added to V or to the residual stream. Position should steer who attends to whom (the scores), not alter the content passed along via V. The input embedding is left untouched."
+  },
+  {
+    "id": "12.1-008",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "1. Intuition: why the GPT-2 scheme runs out of room",
+    "question": "Why does RoPE not 'run out of room' the way a learned position table does?",
+    "options": [
+      "It stores a larger table of 1 million rows by default, which covers any practical context length",
+      "It reuses the last learned position for all longer positions, so attention sees them as one token",
+      "Rotation by m*omega is defined for any position m, so there is no fixed-size table to exhaust",
+      "It compresses positions logarithmically into a fixed table, so far positions share nearby rows"
+    ],
+    "answer_index": 2,
+    "explanation": "RoPE computes the rotation angle from the position on the fly (m times a frequency), which is defined for every integer m. A learned table has exactly block_size rows and nothing beyond. RoPE has no learned position table at all."
+  },
+  {
+    "id": "12.1-009",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "2. Intuition: rotating a 2-D vector by its position",
+    "question": "What does rotating a 2-D vector by an angle theta do to its length?",
+    "options": [
+      "Scales the length by cos(theta) and turns it",
+      "Scales the length by theta, measured in radians",
+      "Leaves the length unchanged and only turns its direction",
+      "Doubles the length when theta = pi, and keeps it otherwise"
+    ],
+    "answer_index": 2,
+    "explanation": "A rotation turns the arrow by theta counter-clockwise and keeps its length exactly the same. That is why rotating (1, 0) by angles 0, 1, 2 radians gives (1, 0), (0.5403, 0.8415), (-0.4161, 0.9093), all of length 1. Only the direction encodes position."
+  },
+  {
+    "id": "12.1-010",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "2. Intuition: rotating a 2-D vector by its position",
+    "question": "What is the result of applying the 2-D rotation matrix $R(\\theta)$ to the vector $(x_0, x_1)$?",
+    "options": [
+      "$(x_0\\cos\\theta + x_1\\sin\\theta,\\ -x_0\\sin\\theta + x_1\\cos\\theta)$",
+      "$(x_0\\cos\\theta - x_1\\sin\\theta,\\ x_0\\sin\\theta + x_1\\cos\\theta)$",
+      "$(x_0\\sin\\theta - x_1\\cos\\theta,\\ x_0\\cos\\theta + x_1\\sin\\theta)$",
+      "$(x_0\\cos\\theta,\\ x_1\\sin\\theta)$"
+    ],
+    "answer_index": 1,
+    "explanation": "$R(\\theta)$ has rows $(\\cos\\theta, -\\sin\\theta)$ and $(\\sin\\theta, \\cos\\theta)$. Multiplying gives $x_0\\cos\\theta - x_1\\sin\\theta$ for the first coordinate and $x_0\\sin\\theta + x_1\\cos\\theta$ for the second. The minus sign in the first row is what makes it a counter-clockwise rotation rather than a reflection or scaling."
+  },
+  {
+    "id": "12.1-011",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "2. Intuition: rotating a 2-D vector by its position",
+    "question": "Under RoPE, for a 2-D vector at position m with fixed frequency omega, by what angle is the vector rotated?",
+    "options": [
+      "m * omega",
+      "omega / (m+1)",
+      "omega^m",
+      "m + omega"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE's rule is to rotate by theta = m * omega. Position 0 is not rotated, position 1 is turned by omega, position 2 by 2*omega, and so on, so the angle grows linearly with position. The other forms would not give the clean angle-difference cancellation in the dot product."
+  },
+  {
+    "id": "12.1-012",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "2. Intuition: rotating a 2-D vector by its position",
+    "question": "Under RoPE, what happens to the query or key vector at position 0?",
+    "options": [
+      "It is rotated by the maximum angle, a full half turn of pi",
+      "It is zeroed out, because sin(0) multiplies it",
+      "It is rotated by exactly 90 degrees in every pair",
+      "It is left unchanged, because the rotation angle is 0"
+    ],
+    "answer_index": 3,
+    "explanation": "The angle is m * omega, so at m = 0 the angle is 0 and R(0) is the identity. Rotating (1, 0) at position 0 returns (1.0, 0.0). Later positions are turned progressively further."
+  },
+  {
+    "id": "12.1-013",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3. Mathematics: why the dot product becomes relative",
+    "question": "Under RoPE, a 2-D query $\\mathbf{q}$ at position $m$ and key $\\mathbf{k}$ at position $n$ are rotated and dotted. What does the score simplify to?",
+    "options": [
+      "$\\mathbf{q}^\\top R\\big((n+m)\\omega\\big)\\mathbf{k}$",
+      "$\\mathbf{q}^\\top R(mn\\omega)\\mathbf{k}$",
+      "$\\cos(m\\omega)\\cos(n\\omega)\\,\\mathbf{q}\\cdot\\mathbf{k}$",
+      "$\\mathbf{q}^\\top R\\big((n-m)\\omega\\big)\\mathbf{k}$"
+    ],
+    "answer_index": 3,
+    "explanation": "The score is $\\mathbf{q}^\\top R(m\\omega)^\\top R(n\\omega)\\mathbf{k}$. Using $R(a)^\\top = R(-a)$ and that rotations compose by adding angles, this becomes $\\mathbf{q}^\\top R((n-m)\\omega)\\mathbf{k}$. Positions appear only through their difference, which is the whole point of RoPE; a sum $n+m$ would not be translation-invariant."
+  },
+  {
+    "id": "12.1-014",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3. Mathematics: why the dot product becomes relative",
+    "question": "Which two facts about rotation matrices make RoPE's dot product depend only on relative position?",
+    "options": [
+      "R(a) is symmetric, and rotations commute with all matrices",
+      "R(a) has determinant 0, and R(a)R(b) = R(ab)",
+      "R(a)^T = R(-a), and rotations compose by adding angles",
+      "R(a)^T = R(a), and R(a) + R(b) = R(a + b)"
+    ],
+    "answer_index": 2,
+    "explanation": "Transposing a rotation is rotating backward: R(a)^T = R(-a). Rotations compose additively: R(-m*omega)R(n*omega) = R((n-m)*omega). Together they turn the product of two absolute rotations into a single rotation by the offset. Rotation matrices have determinant 1, are not symmetric in general, and do not add linearly."
+  },
+  {
+    "id": "12.1-015",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3. Mathematics: why the dot product becomes relative",
+    "question": "Under RoPE, two token pairs are both 7 positions apart, one at positions (2, 9) and another at (500, 507). How do their position-dependent score contributions compare (same q and k vectors)?",
+    "options": [
+      "The farther pair gets a smaller score, because its rotation angles are much larger overall",
+      "They are identical, because the score depends on m and n only through their difference",
+      "The farther pair gets a larger score, because rotations accumulate with position",
+      "They differ by a factor of cos(500), the rotation of the farther query"
+    ],
+    "answer_index": 1,
+    "explanation": "After rotation the score is q^T R((n-m)omega) k, which contains the positions only through n - m. Two pairs with the same offset therefore produce the same score regardless of where they sit. This is relative position obtained from purely absolute rotations, with no relative-position table."
+  },
+  {
+    "id": "12.1-016",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3. Mathematics: why the dot product becomes relative",
+    "question": "What does RoPE NOT need in order to obtain relative-position behaviour in attention?",
+    "options": [
+      "A relative-position table or cross terms between positions",
+      "Rotating both the queries and the keys at every layer",
+      "A position-dependent angle for each token in the sequence",
+      "The dot-product form of the query-key attention score"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE gets relative position purely by rotating each side by its own absolute angle; no relative-position table and no cross terms are needed. It does need both Q and K rotated by position-dependent angles, and it relies on the score being a dot product so the rotations cancel to their difference."
+  },
+  {
+    "id": "12.1-017",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "How does RoPE handle a head vector with d_h = 64 or 128 channels rather than 2?",
+    "options": [
+      "It splits the channels into d_h/2 pairs and rotates each pair independently with its own frequency",
+      "It rotates the whole d_h-dimensional vector with one high-dimensional rotation of a single frequency",
+      "It rotates only the first two channels with the base frequency and leaves the other channels untouched",
+      "It projects the vector down to two dimensions, rotates it there, and projects it back up to d_h"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE splits the d_h channels into d_h/2 pairs, (x0, x1), (x2, x3), ..., and applies an independent 2-D rotation to each pair. Each pair gets its own frequency omega_p. The relative-offset identity holds per pair, so it holds for the full dot product, which is just the sum over pairs."
+  },
+  {
+    "id": "12.1-018",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "In RoPE, what is the frequency of coordinate pair $p$ for head dimension $d_h$?",
+    "options": [
+      "$\\omega_p = \\text{base}^{2p/(d_h-1)}$",
+      "$\\omega_p = p/\\text{base}$",
+      "$\\omega_p = \\text{base}^{-p}$",
+      "$\\omega_p = \\text{base}^{-2p/d_h}$"
+    ],
+    "answer_index": 3,
+    "explanation": "Each pair $p = 0, 1, \\dots, d_h/2 - 1$ gets $\\omega_p = \\text{base}^{-2p/d_h}$, with base usually 10000. So pair 0 has $\\omega_0 = 1$ and frequencies shrink geometrically toward the last pair. A positive exponent would make later pairs spin faster, the opposite of the design."
+  },
+  {
+    "id": "12.1-019",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "What is the original base value used in RoPE's frequencies, and where does it come from?",
+    "options": [
+      "1024, matching GPT-2's block_size so angles wrap at the context end",
+      "2, so that the frequency of each successive pair halves exactly",
+      "10000, inherited from the sinusoidal embeddings of the 2017 Transformer",
+      "500000, chosen for the original RoFormer paper to support a 4K context length"
+    ],
+    "answer_index": 2,
+    "explanation": "RoPE uses base = 10000, the same constant as the sinusoidal position encodings of the 2017 Transformer. The frequency for pair p is base^(-2p/d_h). The other values are not the original choice described here."
+  },
+  {
+    "id": "12.1-020",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "In RoPE, which coordinate pair rotates fastest, and at what rate?",
+    "options": [
+      "The last pair, at 1 radian per position",
+      "Pair 0, at 1 radian per position",
+      "Pair 0, at 1/10000 radians per position",
+      "All pairs rotate at the same rate"
+    ],
+    "answer_index": 1,
+    "explanation": "With omega_p = base^(-2p/d_h), pair 0 has exponent 0, so omega_0 = 1 radian per position, the fastest. Later pairs turn ever more slowly, with the last barely moving over the whole sequence. Different speeds per pair are the point of the multi-scale design."
+  },
+  {
+    "id": "12.1-021",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "In RoPE, what kind of positional information do the fast-rotating and slow-rotating pairs carry?",
+    "options": [
+      "Fast pairs carry coarse, long-range position; slow pairs resolve the fine, nearby offsets",
+      "Fast pairs resolve fine, nearby offsets; slow pairs carry coarse, long-range position",
+      "Fast pairs carry token identity, while slow pairs carry the absolute position",
+      "Both carry the same positional information, only at different numerical precision"
+    ],
+    "answer_index": 1,
+    "explanation": "Pairs spin at different speeds like the hands of a clock. A fast pair changes a lot between neighbouring positions, so it distinguishes small offsets; a slow pair changes little locally but distinguishes positions far apart. Together they form a multi-scale position code."
+  },
+  {
+    "id": "12.1-022",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "3.1 More than two dimensions: pairs and per-pair frequencies",
+    "question": "Why does RoPE's relative-offset property hold for a full d_h-dimensional head when it is proven only for one 2-D pair?",
+    "options": [
+      "The full dot product is the sum of per-pair dot products, and the identity holds for each pair",
+      "Because all of the coordinate pairs share one frequency, so the head behaves like a single pair",
+      "Because the high-dimensional rotation is orthogonal as a whole, which makes every product shift-invariant",
+      "Because softmax normalizes away the absolute positions, leaving only the offset between the two tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "Each pair is rotated independently, and for each pair the rotated dot product depends only on n - m. The full head dot product is just the sum over pairs, so it too depends only on the offset. Pairs have different frequencies; it is the per-pair argument plus additivity that matters."
+  },
+  {
+    "id": "12.1-023",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "4. Tensor shapes: where RoPE sits in attention",
+    "question": "At what point in the attention computation is RoPE applied?",
+    "options": [
+      "Before the QKV projection, on the (B, T, C) input, so all three projections see rotated features",
+      "After the softmax, on the (B, n_h, T, T) attention weights before they multiply V",
+      "After multiplying by V, on the (B, n_h, T, d_h) head outputs before the merge",
+      "After the QKV projection and head split, on Q and K of shape (B, n_h, T, d_h), before QK^T"
+    ],
+    "answer_index": 3,
+    "explanation": "RoPE acts on per-head queries and keys of shape (B, n_h, T, d_h), right after projection and head split and right before the scores QK^T. Applying it before the head split would mix pairs across heads, and applying it after the softmax would not affect the scores."
+  },
+  {
+    "id": "12.1-024",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "4. Tensor shapes: where RoPE sits in attention",
+    "question": "How does RoPE change the shape of the query and key tensors?",
+    "options": [
+      "It halves d_h, because each pair of channels is merged into one",
+      "It doubles d_h by appending separate sin and cos channels",
+      "It does not; (B, n_h, T, d_h) in and (B, n_h, T, d_h) out",
+      "It adds one extra position channel to d_h for each head"
+    ],
+    "answer_index": 2,
+    "explanation": "RoPE only rotates within each length-d_h vector, so the shape is unchanged. The complex view temporarily reads d_h real numbers as d_h/2 complex numbers, but the result is flattened back to d_h. Nothing is appended or removed."
+  },
+  {
+    "id": "12.1-025",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "4. Tensor shapes: where RoPE sits in attention",
+    "question": "Why does RoPE leave the value vectors V and the residual stream unrotated?",
+    "options": [
+      "Because V has a different head dimension than Q and K, so its channel pairs would not line up",
+      "Because rotating V as well would make the KV cache too large to store during decoding",
+      "Position should steer who attends to whom, not corrupt the content that gets passed along",
+      "Because V is computed after the softmax, when the position angles are no longer available"
+    ],
+    "answer_index": 2,
+    "explanation": "The relative-position effect comes entirely from rotating Q and K, which changes the attention scores. V carries the content each token contributes; rotating it would distort that content without helping position encoding. V has the same head dim and is computed before the softmax."
+  },
+  {
+    "id": "12.1-026",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "4. Tensor shapes: where RoPE sits in attention",
+    "question": "In RoPE, what is the precomputed table freqs_cis, and how is it used each batch?",
+    "options": [
+      "A float32 table of shape (B, T) that is recomputed from scratch for every batch on the CPU",
+      "A complex64 table of shape (T_max, d_h/2), sliced to [:T] and broadcast over the (B, n_h) axes",
+      "A learned parameter of shape (block_size, C) that is added to the token embeddings at the input",
+      "A complex64 table of shape (n_h, d_h), indexed by head and shared across all sequence positions"
+    ],
+    "answer_index": 1,
+    "explanation": "freqs_cis holds the unit rotation e^{i m omega_p} for every position m up to T_max and every pair p, so its shape is (T_max, d_h/2), dtype complex64. It is precomputed once, sliced to the current length T, and broadcast across batch and heads. It is not learned and not added to the input."
+  },
+  {
+    "id": "12.1-027",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "Why can a 2-D rotation by $\\theta$ be implemented as a complex multiplication?",
+    "options": [
+      "Packing $(x_0, x_1)$ as $x_0 + i x_1$ and multiplying by $e^{i\\theta}$ gives real and imaginary parts equal to the rotated pair",
+      "Because adding $i\\theta$ to $x_0 + i x_1$ rotates it by $\\theta$, since imaginary offsets act as angles in the plane",
+      "Because the complex conjugate of $x_0 + i x_1$ is its rotation by $\\theta$, so taking conj applies the turn directly",
+      "Because multiplying $x_0 + i x_1$ by the real number $\\theta$ itself rotates it by that angle about the origin"
+    ],
+    "answer_index": 0,
+    "explanation": "$(x_0 + i x_1)(\\cos\\theta + i\\sin\\theta) = (x_0\\cos\\theta - x_1\\sin\\theta) + i(x_0\\sin\\theta + x_1\\cos\\theta)$, exactly the rotated pair. So multiplying by the unit complex number $e^{i\\theta}$ (written cis theta) rotates by $\\theta$. Adding or multiplying by a real number does not rotate."
+  },
+  {
+    "id": "12.1-028",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "Why is the LLaMA RoPE implementation built on torch.view_as_complex?",
+    "options": [
+      "Complex tensors use half the memory of the equivalent real-valued tensors on GPU",
+      "view_as_complex adds learned phase parameters to each head",
+      "Real-valued tensors cannot represent the sine and cosine values",
+      "Rotating every coordinate pair becomes one elementwise complex multiply"
+    ],
+    "answer_index": 3,
+    "explanation": "Each adjacent pair of channels is reinterpreted as one complex number, and multiplying by e^{i m omega_p} rotates it. So 'rotate every pair' collapses to a single elementwise complex multiplication over the tensor. It is a convenience and efficiency trick, not a memory saving or a source of learned parameters."
+  },
+  {
+    "id": "12.1-029",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In precompute_freqs_cis, what does torch.polar(torch.ones_like(angles), angles) produce?",
+    "options": [
+      "A real tensor holding cos(angles) only, with the sine part of the rotation discarded",
+      "A complex tensor whose magnitude equals the angle m*omega_p and whose phase is always 0",
+      "A tensor of shape (dim, max_seq_len) of random unit vectors, one per coordinate pair",
+      "A complex tensor of magnitude 1 and phase m*omega_p, i.e. freqs_cis[m, p] = e^{i m omega_p}"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.polar(magnitude, angle) builds magnitude * e^{i angle}. With all magnitudes equal to one, every entry is a unit rotation, which is what RoPE needs so it never changes vector length. The angles come from torch.outer(t, freqs), giving shape (max_seq_len, dim/2)."
+  },
+  {
+    "id": "12.1-030",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In precompute_freqs_cis, what does torch.outer(t, freqs) compute?",
+    "options": [
+      "A (dim/2,) vector of the frequencies omega_p, one entry for each coordinate pair",
+      "A (max_seq_len,) vector of positions m, from 0 to max_seq_len - 1",
+      "A (max_seq_len, dim/2) table of angles m * omega_p for every position and pair",
+      "A (dim, dim) rotation matrix that is shared by every position in the sequence"
+    ],
+    "answer_index": 2,
+    "explanation": "t is the positions 0..max_seq_len-1 and freqs is the dim/2 frequencies omega_p. Their outer product gives every combination m * omega_p, the rotation angle for position m in pair p. This angle table is then turned into unit complex numbers with torch.polar."
+  },
+  {
+    "id": "12.1-031",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In apply_rope, what does torch.view_as_complex do to a tensor reshaped to (B, nh, T, hd//2, 2)?",
+    "options": [
+      "Copies the tensor into a new complex buffer of shape (B, nh, T, hd), one complex number per real channel",
+      "Reinterprets the last axis of size 2 as one complex number without copying, giving (B, nh, T, hd/2)",
+      "Converts each real number into a complex number with zero imaginary part, keeping all axes",
+      "Computes the magnitude of each pair, giving a real tensor of shape (B, nh, T, hd//2)"
+    ],
+    "answer_index": 1,
+    "explanation": "view_as_complex is a view: it treats each trailing pair (real, imag) as a single complex value without copying memory. The shape goes from (..., hd/2, 2) to (..., hd/2). view_as_real reverses the reinterpretation, and flatten(3) merges the pair axis back into hd."
+  },
+  {
+    "id": "12.1-032",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In apply_rope, how is freqs_cis[:T] shaped so it can multiply the complex queries of shape (B, nh, T, hd/2)?",
+    "options": [
+      "It is viewed as (1, 1, T, hd/2) so it broadcasts over the batch and head axes",
+      "It is repeated to (B, nh, T, hd/2) with an explicit memory copy before multiplying",
+      "It is transposed to (hd/2, T) so that it lines up with the last axis of the queries",
+      "It is viewed as (B, 1, 1, hd/2), so one rotation is shared per batch element"
+    ],
+    "answer_index": 0,
+    "explanation": "The rotation depends only on position and pair, not on batch element or head, so freqs_cis[:T].view(1, 1, T, hd // 2) broadcasts across B and nh. No copy is needed. Using the wrong axes would rotate by the wrong position."
+  },
+  {
+    "id": "12.1-033",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In apply_rope, what does .flatten(3) do after torch.view_as_real(q_c * rot)?",
+    "options": [
+      "Merges the trailing pair axis of size 2 back into d_h, restoring shape (B, nh, T, hd)",
+      "Flattens the batch and head axes together into one (B*nh) axis for the matmul",
+      "Removes the imaginary part, keeping only the real channel of each rotated pair",
+      "Sums each pair into one real number, halving the last axis to hd/2 channels"
+    ],
+    "answer_index": 0,
+    "explanation": "view_as_real turns the (B, nh, T, hd/2) complex result into (B, nh, T, hd/2, 2) real numbers. flatten(3) merges axes 3 and 4 into one of size hd. Nothing is summed or dropped; the rotated real and imaginary parts become the two channels of each pair."
+  },
+  {
+    "id": "12.1-034",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "5. From-scratch PyTorch: the complex-number trick",
+    "question": "In apply_rope, why are q and k cast with .float() before the complex view, and then .type_as(q) at the end?",
+    "options": [
+      "Because view_as_complex only accepts float64 inputs, so .float() upcasts first",
+      "Because the rotation must always be returned in float32 for the downstream attention kernel",
+      "Because type_as adds a learned scaling that restores the original activation norm",
+      "The rotation runs in float32/complex64 for precision, then is cast back to the input dtype"
+    ],
+    "answer_index": 3,
+    "explanation": "q.float() ensures the complex view is complex64 and the multiply is done in float32 precision, which matters when activations are half precision. type_as(q) returns the rotated tensor in the original dtype so the rest of attention is unaffected. type_as is just a cast."
+  },
+  {
+    "id": "12.1-035",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "6. Numerical example: the relative property, verified",
+    "question": "Under RoPE with q = (1, 2), k = (3, 1) and omega = 1, the pairs (m, n) = (3, 1), (5, 3) and (4, 2) all produce the score -6.627221. What does this demonstrate?",
+    "options": [
+      "The score is constant for every possible pair of positions m and n, whatever q and k",
+      "RoPE scores are always negative whenever q and k start out non-parallel",
+      "The rotated score depends only on the offset m - n, not on the absolute positions",
+      "The score depends only on the sum m + n, which is 4, 8 and 6 here"
+    ],
+    "answer_index": 2,
+    "explanation": "All three pairs have offset m - n = 2 but different absolute positions, and the scores agree to six decimals. Changing the offset changes the score; keeping it fixed does not. The sums m + n differ (4, 8, 6), so the score cannot depend on the sum."
+  },
+  {
+    "id": "12.1-036",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "7. Under the hood: verify it yourself",
+    "question": "What is the compute cost of applying RoPE compared with computing attention scores?",
+    "options": [
+      "O(B n_h T^2 d_h), the same as the scores, since every pair is rotated once per key",
+      "O(B n_h T d_h) elementwise work, negligible next to the O(B n_h T^2 d_h) of the scores",
+      "O(B n_h T d_h^2), because each coordinate pair needs its own small 2 x 2 matrix multiply",
+      "O(T^3), because of the outer product used to rebuild the angle table at every step"
+    ],
+    "answer_index": 1,
+    "explanation": "Applying RoPE is a single elementwise complex multiply over queries and keys of shape (B, n_h, T, d_h), so it is linear in T. The attention scores are quadratic in T. The freqs_cis table is precomputed once, so its cost is amortized."
+  },
+  {
+    "id": "12.1-037",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "7. Under the hood: verify it yourself",
+    "question": "How many learned parameters does RoPE add to a model?",
+    "options": [
+      "block_size x C, like the wpe table",
+      "None",
+      "d_h/2 per head, one frequency each",
+      "One scalar base per layer"
+    ],
+    "answer_index": 1,
+    "explanation": "RoPE's frequencies come from a fixed formula and the rotations are precomputed, so it has no learned parameters. The GPT-2 wpe table, by contrast, held block_size x C learned weights. The base and frequencies are hyperparameters, not trained weights."
+  },
+  {
+    "id": "12.1-038",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "7. Under the hood: verify it yourself",
+    "question": "How do long-context extension methods such as position interpolation and YaRN work on a RoPE model?",
+    "options": [
+      "They rescale the frequencies omega_p rather than adding new table rows",
+      "They append new learned rows to the position table and fine-tune them",
+      "They remove the slowest-rotating pairs so long positions stay distinct",
+      "They switch the model to absolute sinusoidal embeddings at long context"
+    ],
+    "answer_index": 0,
+    "explanation": "Since RoPE rotation is defined at any position, you can evaluate past the training length. Extension methods like position interpolation and YaRN rescale omega_p so the angles stay in a familiar range. There is no table to grow, unlike a learned absolute scheme."
+  },
+  {
+    "id": "12.1-039",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "7. Under the hood: verify it yourself",
+    "question": "Some RoPE codebases pair adjacent channels (x0, x1), (x2, x3), ..., while others (e.g. GPT-NeoX / HF default) pair halves (x0, x_{d/2}), (x1, x_{d/2+1}), .... What is the practical consequence?",
+    "options": [
+      "The halves convention loses the relative-position property, so only adjacent pairing gives shift-invariant scores",
+      "The adjacent convention only works with complex numbers on GPU, so the halves layout is needed on CPU",
+      "Checkpoints are interchangeable between the two, because the rotations of different pairs commute",
+      "Both are mathematically equivalent, but a checkpoint trained with one is scrambled if loaded with the other"
+    ],
+    "answer_index": 3,
+    "explanation": "Both conventions give identical math and the same relative property; they just apply the rotations to different channel pairs. A trained checkpoint has learned weights tied to its convention, so loading it with the other one rotates the wrong channels and scrambles it. When porting weights, match the convention. LLaMA uses the adjacent (view_as_complex) one."
+  },
+  {
+    "id": "12.1-040",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is rotating V (or the residual stream) with RoPE a mistake?",
+    "options": [
+      "It makes the attention scores depend on absolute position instead of only on the relative offset",
+      "It doubles the number of parameters, since V needs its own frequency table",
+      "It distorts the content each token contributes instead of only shaping the attention pattern",
+      "It prevents softmax from normalizing, because rotated values no longer sum to one"
+    ],
+    "answer_index": 2,
+    "explanation": "RoPE is Q/K only. The score's relative-position property comes from rotating Q and K. Rotating V would change the content being mixed, not the pattern of who attends to whom, and adds nothing useful for position."
+  },
+  {
+    "id": "12.1-041",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why must RoPE be applied after the head split rather than on the full (B, T, C) tensor?",
+    "options": [
+      "Because the full C tensor can have an odd dimension even when every head has an even d_h",
+      "Because rotation is undefined before the softmax has been applied to the attention scores",
+      "The pairing and frequencies are defined per head dimension d_h, not across the full C",
+      "Because the KV cache stores only full-C vectors, so rotations must match that layout"
+    ],
+    "answer_index": 2,
+    "explanation": "RoPE's frequencies omega_p = base^(-2p/d_h) and pairs are defined over each head's d_h channels. Rotating the full C-dimensional vector would use the wrong pairing and frequencies relative to how each head computes its dot product. So it acts on (B, n_h, T, d_h)."
+  },
+  {
+    "id": "12.1-042",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Which requirement on freqs_cis must hold when calling apply_rope?",
+    "options": [
+      "It must have exactly T_max rows and never be sliced, so all positions are covered",
+      "It must be on the same device as q and have at least T rows, sliced to [:T]",
+      "It must be a learned nn.Parameter so the frequencies receive gradients",
+      "It must be float16 to match the half-precision activations of q and k"
+    ],
+    "answer_index": 1,
+    "explanation": "A common bug is a freqs_cis on the wrong device or too short for the current sequence. It needs at least T rows and is sliced [:T] before broadcasting. It is a precomputed complex64 buffer, not a learned parameter."
+  },
+  {
+    "id": "12.1-043",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why must the head dimension d_h be even for RoPE?",
+    "options": [
+      "RoPE rotates channels in pairs, so every channel needs a partner",
+      "Because complex64 requires a power-of-two size along the last axis",
+      "Because base^(-2p/d_h) is undefined for an odd value of d_h",
+      "Because softmax requires an even number of logits for each query"
+    ],
+    "answer_index": 0,
+    "explanation": "RoPE splits d_h into d_h/2 coordinate pairs and rotates each pair. With an odd d_h one channel would be left without a partner. The frequency formula itself is defined for any d_h; the pairing is what requires evenness."
+  },
+  {
+    "id": "12.1-044",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Exercise",
+    "question": "Under RoPE, what score does a query attending to a key at the same position (m = n) get, compared with no RoPE?",
+    "options": [
+      "q . k scaled by cos(m omega), which shrinks as position grows",
+      "Zero, because the two rotations cancel each other out exactly",
+      "q . k rotated by 2 m omega, doubling the angle at each later position",
+      "The plain unrotated dot product q . k, the same at every position"
+    ],
+    "answer_index": 3,
+    "explanation": "With m = n the offset is 0, so the score is q^T R(0) k and R(0) is the identity. That is just q . k, independent of where the token sits. A token is always distance 0 from itself, so RoPE leaves its self-score untouched."
+  },
+  {
+    "id": "12.1-045",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A student's apply_rope rotates queries with freqs_cis but keys with freqs_cis.conj() (rotating keys by -n omega). What goes wrong?",
+    "options": [
+      "Nothing; conjugation is equivalent to transposing the rotation, so every score comes out the same",
+      "The score becomes exactly zero for all positions, because the two rotations cancel each other",
+      "The keys change length under conjugation, so the softmax logits grow and become unstable",
+      "The score now depends on the sum m + n instead of the difference, so it is no longer translation-invariant"
+    ],
+    "answer_index": 3,
+    "explanation": "For the m - n cancellation, Q and K must be rotated in the same direction. Rotating keys by -n omega makes the combined rotation depend on m + n, so the same two tokens get different scores depending on where the pair sits. Conjugation still preserves length, so norms are not the issue."
+  },
+  {
+    "id": "12.1-046",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Research connection",
+    "question": "Which paper introduced RoPE?",
+    "options": [
+      "LLaMA: Open and Efficient Foundation Language Models (Touvron et al. 2023)",
+      "Self-Attention with Relative Position Representations (Shaw et al. 2018)",
+      "RoFormer: Enhanced Transformer with Rotary Position Embedding (Su et al. 2021)",
+      "GLU Variants Improve Transformer (Shazeer 2020)"
+    ],
+    "answer_index": 2,
+    "explanation": "RoFormer (Su et al. 2021) introduced RoPE and derives it in the complex plane for arbitrary dimension. LLaMA and Llama 3 then adopted it as a building block. Shaw et al. 2018 added learned relative-position representations to attention rather than rotations, and Shazeer 2020 introduced gated FFNs like SwiGLU."
+  },
+  {
+    "id": "12.1-047",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Check yourself",
+    "question": "With base 10000 and d_h = 4 (two pairs), what are RoPE's two frequencies omega_0 and omega_1?",
+    "options": [
+      "1 and 0.1 radians per position",
+      "1 and 0.01 radians per position",
+      "0.01 and 1 radians per position",
+      "1 and 0.0001 radians per position"
+    ],
+    "answer_index": 1,
+    "explanation": "omega_p = 10000^(-2p/d_h). For p = 0 it is 10000^0 = 1. For p = 1 it is 10000^(-2/4) = 10000^(-1/2) = 0.01. So pair 0 is the fast hand and pair 1 the slow hand; 0.0001 would be the exponent -1, which is wrong here."
+  },
+  {
+    "id": "12.1-048",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does a RoPE rotation preserve the norm of the query vector?",
+    "options": [
+      "A rotation matrix is orthogonal (R^T R = I), so ||Rq||^2 = q^T R^T R q = ||q||^2",
+      "Because the angles stay small enough that cos is approximately 1 and sin is near 0",
+      "Because freqs_cis is renormalized to unit length after each training batch",
+      "Because RoPE divides each rotated pair by its norm explicitly after rotating"
+    ],
+    "answer_index": 0,
+    "explanation": "Orthogonality gives q^T R^T R q = q^T q, exactly the squared norm. This holds for any angle, not just small ones, and requires no explicit normalization. It is why unit-magnitude complex numbers are used in freqs_cis."
+  },
+  {
+    "id": "12.1-049",
+    "chapter": "12.1",
+    "chapter_name": "RoPE",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why is it desirable that RoPE preserves vector norms?",
+    "options": [
+      "It changes only direction, so it does not rescale the attention logits or destabilize softmax",
+      "It ensures that the attention weights are always uniform across all of the key positions",
+      "It removes the need for the 1/sqrt(d_k) scaling, since the norms then stay exactly at one",
+      "It makes the KV cache smaller, because rotated keys can be stored in lower precision"
+    ],
+    "answer_index": 0,
+    "explanation": "Because RoPE only rotates, the magnitude of q and k is unchanged and only the relative-angle information is injected. The logits keep their scale, so softmax is not destabilized. The 1/sqrt(d_k) scaling is still used, and the cache size is unaffected."
+  }
+]

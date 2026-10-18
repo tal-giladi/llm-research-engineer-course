@@ -1,0 +1,1334 @@
+[
+  {
+    "id": "18.1-001",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In LLM tool use, what three parts make up a tool schema shown to the model?",
+    "options": [
+      "A name, a Python source listing of the function, and its return type annotation",
+      "A name, a natural-language description, and a JSON-Schema parameters object",
+      "A tool id number, an embedding vector of the tool, and a list of example outputs",
+      "A URL endpoint, an authentication token, and an HTTP method"
+    ],
+    "answer_index": 1,
+    "explanation": "A tool schema has a unique name the model emits to select the tool, a description saying when to use it, and a JSON-Schema object describing the arguments. The model never sees the Python source or an embedding; it only reads this text contract in its context to know which tools exist and what arguments they take."
+  },
+  {
+    "id": "18.1-002",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What does 'function calling' mean for a language model?",
+    "options": [
+      "The model emits a structured call (tool name plus arguments) instead of prose, which an external runtime parses and runs",
+      "The model executes Python functions directly inside its forward pass, using an interpreter built into its decoder layers",
+      "The model's weights are updated by calling a training function each time a tool is used, so it learns every tool online",
+      "The model's attention layers are replaced by function lookups for arithmetic tokens, so numbers are computed, not predicted"
+    ],
+    "answer_index": 0,
+    "explanation": "Function calling is a convention on top of text generation: the model generates a structured message naming a tool and its arguments, and code outside the model runs it. The model itself has no interpreter and never executes anything; it only asks."
+  },
+  {
+    "id": "18.1-003",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why do abilities like exact arithmetic, lookup, and code execution come from tools rather than from adding more parameters to an aligned model?",
+    "options": [
+      "They require exact computation, fresh information, or effects outside the text stream, which weights cannot provide",
+      "Larger aligned models are discouraged from learning exact arithmetic by the alignment objective, which rewards plausible text",
+      "More parameters would make the model too slow to emit structured JSON, so labs cap model size once tools are available",
+      "Tools are only needed because current models have too few attention heads to track digits; more heads would remove the need"
+    ],
+    "answer_index": 0,
+    "explanation": "A model generates text from learned patterns, so it cannot guarantee exact arithmetic, cannot know facts that changed after or were never in its training data, and cannot touch the outside world. Tools supply exactly those capabilities, which is why function calling makes a frozen model useful as the brain of an acting system."
+  },
+  {
+    "id": "18.1-004",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which later topic is function calling described as the foundation for?",
+    "options": [
+      "Pretraining tokenizers, which need tools to split text",
+      "Scaling laws, which use tools to fit compute curves",
+      "Agents, which repeatedly call tools to act toward a goal",
+      "Mixed-precision training, which calls tools for loss scaling"
+    ],
+    "answer_index": 2,
+    "explanation": "Function calling is the interface that lets a model act through external functions; agents (Module 19) are built by putting such calls in a loop with observations. It has nothing to do with tokenization, scaling-law fitting, or precision."
+  },
+  {
+    "id": "18.1-005",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "1. The causal story: a smart model that can't multiply",
+    "question": "Why does a language model asked for 4831 * 7772 usually produce a wrong but plausible-looking number?",
+    "options": [
+      "It generates digits token by token from patterns rather than actually performing the multiplication",
+      "It truncates every number to four significant digits during tokenization, so the product loses its precision",
+      "It deliberately rounds large products, because alignment training discourages revealing exact numerical answers",
+      "Its softmax spreads probability across digit tokens, so it cannot commit to any single digit at each position"
+    ],
+    "answer_index": 0,
+    "explanation": "The model has no calculator inside: it predicts likely next tokens, and for long multiplications the pattern-based guess is often wrong. The fix is a calculator tool that performs the exact computation; the model's job is only to ask for it."
+  },
+  {
+    "id": "18.1-006",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "1. The causal story: a smart model that can't multiply",
+    "question": "Why does a model confidently hallucinate when asked for today's exchange rate or the contents of a private file?",
+    "options": [
+      "Exchange rates and file contents are filtered out of all pretraining corpora by policy, so the model fills the gap",
+      "The model refuses numerical questions unless the prompt is in JSON, so it guesses rather than refusing in plain text",
+      "Private files are always tokenized into unknown tokens, so the model sees no content and invents something plausible",
+      "The answer was never in its training data or changed after the cutoff, so it is not in the weights"
+    ],
+    "answer_index": 3,
+    "explanation": "Fresh or private facts cannot be stored in weights trained on a fixed corpus before a cutoff. Without a lookup tool, the model still produces fluent text, which is why it hallucinates confidently instead of saying it does not know."
+  },
+  {
+    "id": "18.1-007",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "1. The causal story: a smart model that can't multiply",
+    "question": "A model can write a correct sorting function but still cannot sort a user's list on its own. Why?",
+    "options": [
+      "Its context window is too short to hold both the list and the function it wrote",
+      "Sorting requires gradients through the comparisons, which are disabled at inference",
+      "It can only produce text and cannot execute code or act outside its text stream",
+      "Code it generates is never valid Python unless a tool checks the syntax first"
+    ],
+    "answer_index": 2,
+    "explanation": "Writing code and running code are different: the model emits text but has no interpreter and no access to anything outside its own output. A code-execution tool run by the runtime is what turns the written code into an actual result."
+  },
+  {
+    "id": "18.1-008",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "1. The causal story: a smart model that can't multiply",
+    "question": "In a tool-augmented system, how is work divided between the model and the tools?",
+    "options": [
+      "Tools do all the reasoning and planning; the model only formats their results into the final answer",
+      "The model and tools alternate generating tokens of the same answer, each writing every other token",
+      "Tools replace the model entirely once registered, and the model only routes the user's request to them",
+      "The model stays the reasoning engine; tools do the exact, up-to-date, or side-effecting work"
+    ],
+    "answer_index": 3,
+    "explanation": "The model decides what to do and interprets results, while tools provide exact computations, lookups, and effects on the world. Neither replaces the other: the tool cannot decide when it is needed and the model cannot compute exactly."
+  },
+  {
+    "id": "18.1-009",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "1. The causal story: a smart model that can't multiply",
+    "question": "What is a 'tool' in the sense used for LLM function calling?",
+    "options": [
+      "A transformer layer specialised for arithmetic tokens that the model routes numbers through",
+      "A fine-tuned adapter that is merged into the weights at load time to add a new skill",
+      "A special token in the vocabulary that triggers a hardware instruction when it is sampled",
+      "Any external function the model can invoke to get something its weights cannot provide"
+    ],
+    "answer_index": 3,
+    "explanation": "A tool is external: an exact computation, a lookup, or an effect on the world, implemented outside the model. Function calling is the protocol by which the model asks for it to run and receives the result back as text."
+  },
+  {
+    "id": "18.1-010",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "2. Intuition: how a model \"calls\" a function",
+    "question": "Since a model only emits text, what is function calling at the mechanical level?",
+    "options": [
+      "A modification of the decoder that adds a jump-to-function instruction the GPU executes mid-sequence",
+      "A second neural network that translates the model's text into machine code and runs it on the host",
+      "A convention on top of text generation, involving schema, model, runtime, and returned result",
+      "A special CUDA kernel that executes Python inside the GPU whenever a call token is sampled"
+    ],
+    "answer_index": 2,
+    "explanation": "The model has no interpreter, no memory beyond its context, and no hands, so function calling is a convention: tools are described in the context, the model emits a structured call, the runtime executes it, and the result is pasted back as a new message."
+  },
+  {
+    "id": "18.1-011",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "2. Intuition: how a model \"calls\" a function",
+    "question": "In the four-actor picture of function calling, what is the runtime's job?",
+    "options": [
+      "Parse the model's JSON, find the real function, run it with those arguments, and capture the result",
+      "Write the tool descriptions that appear in the schema, and retrain the model whenever any of them change",
+      "Sample tokens from the model's logits under a JSON grammar, so the call is always well-formed",
+      "Fine-tune the model on every failed tool call, so it stops making the same argument mistake"
+    ],
+    "answer_index": 0,
+    "explanation": "The runtime is code outside the model: it parses the structured call, dispatches to the matching callable, executes it, and captures the output. That output then goes back into the context so the model can continue with the true answer in front of it."
+  },
+  {
+    "id": "18.1-012",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "2. Intuition: how a model \"calls\" a function",
+    "question": "In function calling, what happens to a tool's result after the runtime executes it?",
+    "options": [
+      "It is pasted into the model's context as a new message and the model continues generating",
+      "It is written directly into the model's weights as a new memory through a single gradient step",
+      "It is shown to the user only, never to the model, which then waits for the user's next message",
+      "It replaces the system prompt for the rest of the session, so later turns are grounded in it"
+    ],
+    "answer_index": 0,
+    "explanation": "The result is returned as text in a new context message, so the model's next generation step can condition on it. Nothing changes in the weights; the model simply sees the true answer it could not compute itself."
+  },
+  {
+    "id": "18.1-013",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "2. Intuition: how a model \"calls\" a function",
+    "question": "In the programmer's analogy for function calling, what role does the runtime play?",
+    "options": [
+      "The API documentation that the model reads before writing each request to an endpoint",
+      "The client developer who decides which endpoints to design and what arguments each takes",
+      "The database index that speeds up the model's lookups by caching the responses of earlier endpoint calls",
+      "The network stack: it takes the model's request, hits the endpoint, and returns the response"
+    ],
+    "answer_index": 3,
+    "explanation": "The model is like a caller who knows a REST API's documentation (the schema) and writes a request (the JSON call) but has no network stack. The runtime is that missing network stack; the schema is the documentation, not the runtime."
+  },
+  {
+    "id": "18.1-014",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "2. Intuition: how a model \"calls\" a function",
+    "question": "Which steps of the function-calling convention form the loop that a single-call setup extends into an observation/action loop?",
+    "options": [
+      "Writing the schema, then retraining the model on it, then evaluating the retrained model",
+      "The model emits a call, the runtime executes it, and the result goes back to the model",
+      "Tokenizing the schema, embedding it once, then deleting it from the context to save space",
+      "Writing the schema again on every turn, since the model forgets tools between messages"
+    ],
+    "answer_index": 1,
+    "explanation": "Steps 2–4 (emit call, execute, return result) repeat in the observation/action loop; step 1, describing tools via the schema, is set up once. Single-call function calling covers describing tools and producing/parsing one call."
+  },
+  {
+    "id": "18.1-015",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "What is the role of the `name` field in a tool schema?",
+    "options": [
+      "It is a human-only label for logs and dashboards that the model ignores",
+      "It is the Python module path the runtime imports the function from",
+      "It is the unique string identifier the model emits to select that tool",
+      "It declares the type of the tool's return value for the runtime to check"
+    ],
+    "answer_index": 2,
+    "explanation": "The model selects a tool by emitting its name, e.g. \"calculator\", and the registry looks the tool up by that exact string. It must be unique so the runtime can dispatch unambiguously."
+  },
+  {
+    "id": "18.1-016",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "Why is the `description` field of a tool schema not just decoration?",
+    "options": [
+      "The model reads it to decide when to use the tool and which of several tools to pick",
+      "It is hashed into the tool's id, so it must be unique across every registered tool",
+      "It is executed as a docstring test before every call, so it must contain a valid example",
+      "It sets the maximum number of times the tool may be called within one conversation"
+    ],
+    "answer_index": 0,
+    "explanation": "The one-line description tells the model when the tool applies, which is how it distinguishes, say, calculator from python_eval. A vague description leads to wrong tool selection, so it is part of the functional contract."
+  },
+  {
+    "id": "18.1-017",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "What does the `parameters` field of a tool schema contain?",
+    "options": [
+      "A list of example input/output pairs used for few-shot prompting",
+      "The default values the runtime substitutes whenever the model omits one of the tool's arguments",
+      "A JSON Schema object describing argument names, types, and which are required",
+      "A regular expression the arguments must match character by character"
+    ],
+    "answer_index": 2,
+    "explanation": "parameters is a JSON Schema describing the argument object: its properties, their types, and the required list. The model uses it to know exactly what shape of arguments to emit."
+  },
+  {
+    "id": "18.1-018",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "What is JSON Schema?",
+    "options": [
+      "A compression format that makes JSON values smaller and cheaper to tokenize",
+      "A small standard for describing the shape of a JSON value, e.g. types and required fields",
+      "A query language for selecting, filtering and joining the fields inside stored JSON documents",
+      "A Python library that converts dataclasses into JSON and back with type checking"
+    ],
+    "answer_index": 1,
+    "explanation": "JSON Schema is a standard for describing what a JSON value should look like: its type, properties, and required keys. Tool schemas use a small subset of it to describe arguments."
+  },
+  {
+    "id": "18.1-019",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "A tool's parameters schema is {\"type\": \"object\", \"properties\": {\"expression\": {\"type\": \"string\"}}, \"required\": [\"expression\"]}. What should the model emit as arguments?",
+    "options": [
+      "A bare string such as \"2+3\" with no surrounding object, since only one parameter exists",
+      "An object with one required string key named expression, e.g. {\"expression\": \"2+3\"}",
+      "An object with any single key, as long as its value is a string, e.g. {\"expr\": \"2+3\"}",
+      "A list of strings, one per operand and operator, e.g. [\"2\", \"+\", \"3\"]"
+    ],
+    "answer_index": 1,
+    "explanation": "Read literally, the arguments are an object with one property named expression of type string, and that property is required. So {\"expr\": 42} would be wrong on both the key name and the type."
+  },
+  {
+    "id": "18.1-020",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "What happens if no tool schema is placed in the model's context?",
+    "options": [
+      "The model invents tool names and argument shapes that the runtime cannot execute",
+      "The model automatically discovers the runtime's functions by introspecting the process",
+      "The runtime refuses to start generation until at least one schema has been registered",
+      "The model falls back to a built-in default calculator and search tool provided by the API"
+    ],
+    "answer_index": 0,
+    "explanation": "The model must be told which tools exist and what arguments each takes; it cannot guess either. Without the schema it hallucinates names and argument keys that do not match any registered callable."
+  },
+  {
+    "id": "18.1-021",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "3. The tool schema — every symbol named",
+    "question": "Why is JSON the usual format for tool calls rather than XML or a custom syntax?",
+    "options": [
+      "XML cannot represent nested or typed arguments, so it was replaced by JSON for every tool API",
+      "Only JSON can be tokenized by byte-level BPE, since XML angle brackets are merged into unknown tokens",
+      "JSON is required by the transformer's output layer, whose logits are arranged as a key-value map",
+      "It is unambiguous to parse and models have seen huge amounts of it, so they generate it reliably"
+    ],
+    "answer_index": 3,
+    "explanation": "XML or a custom syntax could play the same role; JSON won because it is cheap to generate and parse correctly. Its prevalence in training data means models produce well-formed JSON reliably."
+  },
+  {
+    "id": "18.1-022",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "In the course's convention, what two fields does a function-call JSON object have?",
+    "options": [
+      "tool_id (an integer index into the registry) and payload (a base64-encoded argument string)",
+      "name (which tool) and arguments (a dict matching that tool's parameters schema)",
+      "function (the Python source to run) and returns (the output the model expects back)",
+      "role (always assistant) and content (free text that the runtime searches for a tool name)"
+    ],
+    "answer_index": 1,
+    "explanation": "A call looks like {\"name\": \"calculator\", \"arguments\": {\"expression\": \"4831 * 7772\"}}. That is the entire function call: text the model generated in the right shape at the right moment."
+  },
+  {
+    "id": "18.1-023",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "Where does the 'intelligence' of a function call lie, given that the call is just generated text?",
+    "options": [
+      "In the runtime's ability to correct malformed calls automatically, filling in missing fields from the schema",
+      "In generating that text in that shape at the right moment, guided by the schema's shape and description",
+      "In a hidden classifier head, trained alongside the LM head, that decides on each token whether a tool is needed",
+      "In the JSON parser's ability to infer missing arguments from the surrounding prose and the conversation history"
+    ],
+    "answer_index": 1,
+    "explanation": "The call is ordinary generated text; what matters is that the model chose to emit this particular structure exactly when a tool was needed. The schema supplied the shape and the description supplied when to use it."
+  },
+  {
+    "id": "18.1-024",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "What is the weaker of the two mechanisms for getting a model to emit valid JSON tool calls, and its weakness?",
+    "options": [
+      "Constrained decoding; it masks invalid tokens but still occasionally lets malformed JSON through on long schemas",
+      "Fine-tuning on JSON examples; it reliably forgets the schema whenever a new tool is added to the registry",
+      "Setting temperature to zero; it makes outputs deterministic but often longer than the allowed token budget",
+      "Prompting the model to reply with only a JSON object; it usually works but occasionally adds stray prose"
+    ],
+    "answer_index": 3,
+    "explanation": "Prompting via the system prompt is cheap and usually works, but nothing forces compliance, so stray prose sometimes appears. Constrained decoding is the stronger mechanism because it forbids invalid tokens outright."
+  },
+  {
+    "id": "18.1-025",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "How does constrained decoding (JSON mode) guarantee well-formed output?",
+    "options": [
+      "It generates freely and then deletes any characters that are invalid JSON before returning the output",
+      "At each step, tokens that would break the grammar or schema have their probability set to zero before sampling",
+      "It retrains the model on JSON examples until the error rate on the schema falls to zero, and then freezes it",
+      "It raises the temperature so the model explores more formats, and keeps only the samples that parse"
+    ],
+    "answer_index": 1,
+    "explanation": "The sampler is only allowed to pick tokens that keep the output valid against a grammar or JSON Schema, by zeroing the probability of invalid tokens. This is what 'JSON mode' and 'structured outputs' in production APIs do under the hood."
+  },
+  {
+    "id": "18.1-026",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "What does constrained decoding NOT guarantee about a tool call?",
+    "options": [
+      "That the output parses as JSON at all, since the grammar mask can be bypassed",
+      "That every required field is present, since the mask only checks syntax, not keys",
+      "That the output matches the schema's declared types for each property",
+      "That argument values are correct, e.g. that the expression is what the user asked"
+    ],
+    "answer_index": 3,
+    "explanation": "Constrained decoding guarantees syntactic validity against the schema: well-formed JSON with the right fields and types. The model can still put a wrong expression or pick the wrong tool; correctness is handled by executing and feeding results back in the loop."
+  },
+  {
+    "id": "18.1-027",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "4. Function calling: the model emits a structured call",
+    "question": "Instead of modifying the sampler, how does the course's tool-calling code obtain the structured call?",
+    "options": [
+      "It runs constrained decoding with a custom CUDA kernel that masks invalid JSON tokens at each sampling step",
+      "It asks the user to retype the model's intended call as JSON, then validates the result against the schema",
+      "It requires the model to emit calls in a compact binary format, which avoids the ambiguity of parsing text",
+      "It parses robustly after generation, which is enough to build and test the mechanism deterministically"
+    ],
+    "answer_index": 3,
+    "explanation": "The course does not change the sampler; it parses the model's text after generation. That keeps everything deterministic and testable, with the note that a production system would swap in constrained decoding."
+  },
+  {
+    "id": "18.1-028",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "What two things must a tool registry do?",
+    "options": [
+      "Train each tool's parameters on past calls, and store their gradients so tools improve over time",
+      "Tokenize each tool's output and cache its embeddings, so repeated calls can skip execution entirely",
+      "Hold each tool's callable plus schema, and execute a tool safely while handing back the schemas",
+      "Translate tool outputs into the user's language, and rank them by relevance before the model sees them"
+    ],
+    "answer_index": 2,
+    "explanation": "The registry is the single object that stores tools by name (callable plus schema) and offers operations to execute a tool safely and list the schemas to show the model."
+  },
+  {
+    "id": "18.1-029",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "In the `Tool` dataclass, how is the stored callable `func` invoked?",
+    "options": [
+      "As func(arguments), passing the whole dict as a single positional argument",
+      "As func(*arguments.values()), unpacking the values in dictionary insertion order",
+      "As eval(func, arguments), compiling the call from the dict at run time",
+      "As func(**arguments), unpacking the model's arguments dict as keyword arguments"
+    ],
+    "answer_index": 3,
+    "explanation": "The registry calls tool.func(**kwargs), so each key in the model's arguments becomes a keyword argument. This is why schema property names must exactly match the function's parameter names."
+  },
+  {
+    "id": "18.1-030",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "What does `Tool.schema()` return?",
+    "options": [
+      "A JSON-serializable dict with the tool's name, description, and parameters — what the model sees",
+      "The Python source code of the tool's function, so the model can read exactly what the tool will do",
+      "A list of the tool's past call results, so the model can see what earlier calls returned",
+      "A hash of the function and its schema, used by the registry to detect when a tool changes"
+    ],
+    "answer_index": 0,
+    "explanation": "schema() builds {\"name\", \"description\", \"parameters\"} from the dataclass fields. That object is what gets serialized into the model's context."
+  },
+  {
+    "id": "18.1-031",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "When `ToolRegistry.register` is called without an explicit name or description, what defaults does it use?",
+    "options": [
+      "A freshly generated random UUID and an empty description string",
+      "The function's __name__ and the first line of its docstring",
+      "The module name and the function's full source code as the description",
+      "The first argument's name and the string form of its type annotation"
+    ],
+    "answer_index": 1,
+    "explanation": "register uses name or func.__name__, and description or the first line of func.__doc__. That is why giving tools a clear one-line docstring matters even when registering briefly."
+  },
+  {
+    "id": "18.1-032",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "What does `ToolRegistry.call` return when asked for a tool name that is not registered?",
+    "options": [
+      "It raises KeyError so the agent loop stops and the operator can fix it",
+      "A dict {\"ok\": False, \"error\": \"unknown tool ...\", \"error_type\": \"KeyError\"}",
+      "It returns None and logs a warning, leaving the model with no observation at all",
+      "It falls back to the first registered tool and passes the arguments along"
+    ],
+    "answer_index": 1,
+    "explanation": "call looks the tool up with .get and, if missing, returns a structured error dict rather than raising. Like every failure path, it produces something the model can read as an observation."
+  },
+  {
+    "id": "18.1-033",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "What is the single most important design decision in the course's ToolRegistry.call?",
+    "options": [
+      "call retries a failing tool three times with backoff before finally giving up and raising",
+      "call runs every tool in a separate GPU stream so slow tools never block the model's decoding",
+      "call caches each result by its arguments so that no tool is ever executed twice in a session",
+      "call never raises: any exception from a tool is caught and returned as a structured error dict"
+    ],
+    "answer_index": 3,
+    "explanation": "By catching exceptions and returning {\"ok\": False, \"error\": ..., \"error_type\": ...}, the registry lets the observation/action loop feed errors back to the model instead of crashing. Retries and caching are not part of the design."
+  },
+  {
+    "id": "18.1-034",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "On a successful tool execution, what does ToolRegistry.call return?",
+    "options": [
+      "The raw return value of the function, with no wrapper dict around it",
+      "{\"status\": 200, \"body\": <return value>}, mirroring an HTTP response",
+      "{\"ok\": True, \"result\": <the function's return value>}",
+      "A string 'OK: ' followed by the stringified return value"
+    ],
+    "answer_index": 2,
+    "explanation": "Success is wrapped as {\"ok\": True, \"result\": ...} so the caller can always branch on the ok flag. Failures use the same dict shape with ok False plus error and error_type."
+  },
+  {
+    "id": "18.1-035",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "5. The registry and the `Tool` object — from-scratch PyTorch-style code",
+    "question": "What does `ToolRegistry.schemas()` produce?",
+    "options": [
+      "A single merged JSON Schema combining every registered tool's parameters into one object",
+      "A list of the registered tool names only, which the model matches against its own knowledge",
+      "A list of every registered tool's schema dict, to put in the model's context",
+      "The JSON Schema describing the registry object itself, including its internal dictionary"
+    ],
+    "answer_index": 2,
+    "explanation": "schemas() returns [t.schema() for t in tools], i.e. one name/description/parameters dict per tool. This list is what the model reads to know which tools exist."
+  },
+  {
+    "id": "18.1-036",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6. Three deterministic tools — and honest safety",
+    "question": "Why are the course's built-in tools deterministic and offline?",
+    "options": [
+      "Because tools may not have side effects under any circumstance in a tool-use system",
+      "Because online tools cannot be described with JSON Schema, which only covers pure functions",
+      "So the whole tool-use system is reproducible and testable without network flakiness",
+      "Because deterministic tools make the model's own sampling deterministic across runs"
+    ],
+    "answer_index": 2,
+    "explanation": "Deterministic, offline tools mean tests always give the same result and never flake. Real tools could call APIs, but the interface is the same, so the loop can be built and tested offline."
+  },
+  {
+    "id": "18.1-037",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6. Three deterministic tools — and honest safety",
+    "question": "Why is safety the most interesting engineering concern for tools?",
+    "options": [
+      "A tool runs real code with arguments the model chose, and the model can be wrong or adversarially steered",
+      "Tools consume most of the GPU memory during inference, so a badly written tool can crash the whole server",
+      "Tool outputs are usually longer than the context window, so unsafe truncation can drop the system prompt",
+      "Tools change the model's weights each time they run, so a malicious tool can permanently alter its behaviour"
+    ],
+    "answer_index": 0,
+    "explanation": "The arguments come from model-generated text, which may be mistaken or manipulated by adversarial input. Any tool that executes those arguments must be designed so that bad input cannot cause harm."
+  },
+  {
+    "id": "18.1-038",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "Why must a calculator tool never be implemented as eval(expression)?",
+    "options": [
+      "eval is too slow for large multiplications, since it compiles every expression to bytecode before running it",
+      "eval cannot handle operator precedence correctly, so expressions such as 2+3*4 return 20 instead of the right result",
+      "eval runs model-chosen text as real Python, so __import__('os').system(...) would execute a shell command",
+      "eval always returns strings instead of numbers, so the result must be re-parsed and loses its float precision"
+    ],
+    "answer_index": 2,
+    "explanation": "eval on model-chosen text is a remote code execution hole: any valid Python, including imports and system calls, would run. The safe calculator parses to an AST and allows only specific node types instead."
+  },
+  {
+    "id": "18.1-039",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "How does the course's safe calculator evaluate an expression?",
+    "options": [
+      "It strips dangerous substrings such as 'import', '__' and 'os' from the text, then passes the rest to eval",
+      "It sends the expression to a remote math service over HTTPS, which evaluates it in an isolated container",
+      "It parses it into an abstract syntax tree and walks it, allowing only number literals and arithmetic operators",
+      "It tokenizes the expression and asks the model to compute each operation step by step in a hidden scratchpad"
+    ],
+    "answer_index": 2,
+    "explanation": "ast.parse(expression, mode=\"eval\") produces a tree, and _eval_node handles only Expression, number Constants, allowed BinOps (and unary +/-). Anything else raises ValueError, so nothing outside the allow-list ever executes."
+  },
+  {
+    "id": "18.1-040",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "In the safe calculator's _eval_node, why is a bool constant rejected even though Python treats True as an int?",
+    "options": [
+      "Because booleans crash the operator module's arithmetic functions",
+      "The check explicitly rejects bool so only genuine int/float number literals are allowed",
+      "Because ast.parse converts boolean constants into strings, which the evaluator then cannot add",
+      "Because booleans would make the result negative when combined with subtraction"
+    ],
+    "answer_index": 1,
+    "explanation": "isinstance(True, int) is True in Python, so a naive int check would let booleans through. The calculator checks isinstance(node.value, bool) first and raises 'only numbers allowed', keeping the allow-list to real numbers."
+  },
+  {
+    "id": "18.1-041",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "Why does calculator(\"__import__('os').system('rm -rf /')\") raise ValueError instead of running anything?",
+    "options": [
+      "__import__(...) parses to an ast.Call node, which is not on the allow-list, so evaluation fails first",
+      "The string contains the word 'import', which a pre-filter blocks before the expression is ever parsed",
+      "ast.parse refuses to parse any function call, so the expression fails with a syntax error at parse time",
+      "The os module is not installed in the runtime's environment, so the import fails and nothing can execute"
+    ],
+    "answer_index": 0,
+    "explanation": "The calculator never executes the string; it walks the AST. A function call is an ast.Call node, which falls through to the final raise ValueError('disallowed element...'). No block-list of words is involved."
+  },
+  {
+    "id": "18.1-042",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "Why is a block-list (e.g. rejecting strings containing 'import') unsafe for a calculator tool?",
+    "options": [
+      "Block-lists make the calculator reject valid arithmetic like 2+2, because digits overlap with blocked patterns",
+      "It always misses some case — getattr, dunder tricks, unicode — whereas an allow-list is safe by design",
+      "Block-lists are slower than eval, since each blocked pattern must be scanned for before every single expression",
+      "Block-lists cannot be expressed in Python without regular expressions, which are themselves unsafe to evaluate"
+    ],
+    "answer_index": 1,
+    "explanation": "A block-list tries to enumerate everything dangerous, which is impossible; attackers use getattr, dunder attributes, or unicode variants. Enumerating exactly what is permitted — numbers and a few operators — leaves nothing else to slip through."
+  },
+  {
+    "id": "18.1-043",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.1 A *safe* calculator",
+    "question": "Which Python AST operator types does the course's safe calculator map to arithmetic functions?",
+    "options": [
+      "Add, Sub, Mult, Div, FloorDiv, Mod, and Pow",
+      "Only Add and Mult, with subtraction done as negative addition",
+      "Add, Sub, Mult, Div, plus Call for math functions like sqrt",
+      "Every operator in Python's operator module, including attribute access"
+    ],
+    "answer_index": 0,
+    "explanation": "_BIN_OPS maps ast.Add, Sub, Mult, Div, FloorDiv, Mod, and Pow to the corresponding operator functions. Function calls and attribute access are deliberately excluded."
+  },
+  {
+    "id": "18.1-044",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.2 A restricted `python_eval`, honestly labeled",
+    "question": "What does the course's restricted python_eval allow beyond the calculator?",
+    "options": [
+      "Comparisons, boolean logic, and literal lists/dicts in one expression, with an AST vetting step",
+      "Arbitrary multi-line scripts, including imports of a short whitelist of standard-library modules",
+      "File reading via open() restricted to a temporary directory created fresh for each call",
+      "Network requests to a fixed allow-list of hosts, with responses truncated to a few kilobytes"
+    ],
+    "answer_index": 0,
+    "explanation": "python_eval extends the allow-list to comparisons, boolean logic, and literal containers for one expression, vetting the AST the same way as the calculator. It still forbids imports, file access, and network."
+  },
+  {
+    "id": "18.1-045",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.2 A restricted `python_eval`, honestly labeled",
+    "question": "Why does python_eval run the compiled expression with {\"__builtins__\": {}} as globals?",
+    "options": [
+      "So the expression runs faster, since Python skips the builtin namespace lookup on every name",
+      "So the result is always returned as a dict, matching the registry's {ok, result} convention",
+      "So the expression can redefine builtins like print safely without affecting the host process",
+      "So functions like open, __import__, and eval are not available to the expression"
+    ],
+    "answer_index": 3,
+    "explanation": "Emptying __builtins__ removes access to dangerous builtins such as open, __import__, and eval. This is an extra hardening layer on top of the AST allow-list."
+  },
+  {
+    "id": "18.1-046",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.2 A restricted `python_eval`, honestly labeled",
+    "question": "Why is a restricted eval inside the CPython process described as 'hardening, not a sandbox'?",
+    "options": [
+      "It blocks obvious escapes, but truly untrusted code needs OS-level isolation: a separate process, container, seccomp, limits",
+      "Because CPython cannot evaluate restricted expressions without network access to its package index, so it is not self-contained",
+      "Because restricted eval is perfectly safe, but too slow for production, so a real sandbox is only needed for performance",
+      "Because the term sandbox only applies to compiled languages, while Python code can only ever be hardened, never isolated"
+    ],
+    "answer_index": 0,
+    "explanation": "Restricting eval inside the same process reduces risk but cannot guarantee isolation; escapes from in-process restrictions exist. For adversarial input, execution must be isolated at the OS level with separate processes, containers, seccomp, and CPU/memory limits."
+  },
+  {
+    "id": "18.1-047",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.2 A restricted `python_eval`, honestly labeled",
+    "question": "What principle about tool documentation does the honestly labeled python_eval illustrate?",
+    "options": [
+      "A tool's documentation should hide its limits so the model is not confused into avoiding it",
+      "Tools should be documented only in their JSON Schema, since anything else is never read",
+      "A tool's docstring determines its runtime permissions, so it must list every allowed operation",
+      "A schema advertises what a tool does; its docs must also state what it does not protect against"
+    ],
+    "answer_index": 3,
+    "explanation": "Labeling python_eval as hardening rather than a sandbox prevents someone from pointing it at adversarial input and assuming safety. Frontier tool-use systems run code tools in real sandboxes such as containers or microVMs for this reason."
+  },
+  {
+    "id": "18.1-048",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.3 A mock search",
+    "question": "How does the course's mock_search tool work?",
+    "options": [
+      "It scrapes a cached copy of the web stored on disk and returns the top matching page as plain text",
+      "It matches the query against a tiny canned dict and returns a fixed string or 'No results found', offline",
+      "It asks the model itself to imagine plausible search results, and then returns them as if they were real",
+      "It calls a real search API with a fixed random seed, so results are the same each time the test runs"
+    ],
+    "answer_index": 1,
+    "explanation": "mock_search is fully deterministic and offline, so tests never flake. A real search tool would call an API here instead."
+  },
+  {
+    "id": "18.1-049",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "6.3 A mock search",
+    "question": "Why can the agent loop be developed offline with mock_search and later switched to a real search tool?",
+    "options": [
+      "Because real search APIs also accept Python dicts as queries, so the call site does not change",
+      "Because the model is retrained automatically on the new tool's outputs when the registry changes",
+      "The interface is identical — string in, string out — so only the implementation changes",
+      "Because mock_search records every real query it sees so they can be replayed against the real API"
+    ],
+    "answer_index": 2,
+    "explanation": "The loop only depends on the tool's interface. Since both mock and real search take a string and return a string, swapping one for the other does not change the loop."
+  },
+  {
+    "id": "18.1-050",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "7. Numerical example: generating a schema and \"emitting\" a call",
+    "question": "Given register_builtins(ToolRegistry()), what is the calculator's schema description?",
+    "options": [
+      "\"Does math on numbers and returns the answer as text.\"",
+      "\"Run arbitrary Python and return the result.\"",
+      "\"Search the web for numerical facts and physical constants.\"",
+      "\"Evaluate an arithmetic expression and return the number.\""
+    ],
+    "answer_index": 3,
+    "explanation": "The calculator's description is a precise one-liner, 'Evaluate an arithmetic expression and return the number.' A vague 'Does math' would make tool selection worse."
+  },
+  {
+    "id": "18.1-051",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "7. Numerical example: generating a schema and \"emitting\" a call",
+    "question": "Why does reg.call(\"calculator\", expression=\"2+3*4\") return 14 rather than 18?",
+    "options": [
+      "The AST evaluator honors operator precedence, computing 3*4 first and then adding 2",
+      "The calculator evaluates strictly left to right, but the model reordered the terms first",
+      "The calculator rounds intermediate results to the nearest even number before adding",
+      "The model corrected the expression to 2+(3*4) before the call reached the runtime"
+    ],
+    "answer_index": 0,
+    "explanation": "Python's parser builds the tree 2 + (3*4), and walking it gives 2+12 = 14. Left-to-right evaluation would give 18, which is wrong."
+  },
+  {
+    "id": "18.1-052",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "7. Numerical example: generating a schema and \"emitting\" a call",
+    "question": "What does reg.call(\"calculator\", expression=\"__import__('os').system('x')\") return?",
+    "options": [
+      "It executes the shell command and returns {'ok': True, 'result': 0}, the command's exit code",
+      "{'ok': False, 'error': 'disallowed expression element: Call', 'error_type': 'ValueError'}",
+      "It raises ValueError out of call, crashing the caller before any observation is produced",
+      "{'ok': False, 'error': 'unknown tool: calculator', 'error_type': 'KeyError'} from the registry"
+    ],
+    "answer_index": 1,
+    "explanation": "The calculator raises ValueError on the ast.Call node, and the registry's call catches it, returning a structured error dict. The malicious command never runs and the caller never sees an exception."
+  },
+  {
+    "id": "18.1-053",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "8. Parsing the call out of model text",
+    "question": "What does parse_tool_call(text) return?",
+    "options": [
+      "A list of every JSON object found anywhere in the text, whether or not each one is a valid tool call",
+      "The tool's execution result, since parse_tool_call also dispatches the call to the registry",
+      "True if the text contains any JSON object at all, and False if it is plain prose",
+      "A dict with name and arguments for the first valid call, or None if the text is a final answer"
+    ],
+    "answer_index": 3,
+    "explanation": "The parser extracts the first valid {\"name\", \"arguments\"} call. Returning None for plain prose is how the loop detects that the model is done rather than requesting a tool."
+  },
+  {
+    "id": "18.1-054",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "8. Parsing the call out of model text",
+    "question": "In what order does the course's parse_tool_call look for a tool call in model text?",
+    "options": [
+      "Bare {...} objects in prose first, then fenced ```json blocks if no bare object parses",
+      "Only the last line of the text, which the model is instructed to reserve for the call",
+      "Fenced ```json blocks first, then brace-matching any balanced {...} object in prose",
+      "Only text after a literal 'call:' marker, which the system prompt asks the model to emit"
+    ],
+    "answer_index": 2,
+    "explanation": "A fenced json block is the strongest signal of intent, so it is tried first. Then the parser falls back to finding balanced braces embedded in prose."
+  },
+  {
+    "id": "18.1-055",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "8. Parsing the call out of model text",
+    "question": "When brace-matching a JSON object embedded in prose, what must the parser carefully ignore?",
+    "options": [
+      "Every digit inside the object's values",
+      "Braces that appear inside quoted strings",
+      "Whitespace and newlines between the keys",
+      "The first opening brace in the text"
+    ],
+    "answer_index": 1,
+    "explanation": "A brace inside a string value like \"{x}\" is not structural, so counting it would break the balance. The parser tracks quoted strings to avoid miscounting."
+  },
+  {
+    "id": "18.1-056",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "8. Parsing the call out of model text",
+    "question": "What does parse_tool_call('The answer is 14.') return, and why does it matter?",
+    "options": [
+      "{'name': 'answer', 'arguments': {'value': 14}}, inferred from the text so the loop can log the result",
+      "An error dict with error_type ValueError, because the text is not JSON and the loop must retry the model",
+      "None, which signals to the loop that the model produced a final answer rather than a tool request",
+      "The string '14', extracted from the sentence so the runtime can pass it to the next tool as input"
+    ],
+    "answer_index": 2,
+    "explanation": "Plain prose contains no call, so the parser returns None. The loop uses this to distinguish 'the model is done' from 'the model wants a tool.'"
+  },
+  {
+    "id": "18.1-057",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "8. Parsing the call out of model text",
+    "question": "In a production LLM API, who typically does the parsing of tool calls?",
+    "options": [
+      "The end user, who copies the JSON out of the reply and runs the call manually",
+      "The model provider, which returns a typed tool_calls field",
+      "The tokenizer, which emits special call tokens that the client library decodes",
+      "Nobody; production APIs execute the tools inside the model's own forward pass"
+    ],
+    "answer_index": 1,
+    "explanation": "Providers parse the model's output and hand back a typed tool_calls field. Parsing by hand shows exactly what that layer does and keeps the pipeline offline and deterministic for testing."
+  },
+  {
+    "id": "18.1-058",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "9. Tensor shapes / where this sits relative to the model",
+    "question": "How does function calling change a model's forward pass?",
+    "options": [
+      "It adds a tool-selection head producing logits of shape (B, T, num_tools) next to the LM head's (B, T, V) logits",
+      "It doesn't: the model still maps token ids (B, T) to logits (B, T, V); only the context and the use of the output change",
+      "It replaces the final linear layer with a JSON decoder that outputs (B, T, K) logits over a grammar of K JSON tokens",
+      "It doubles the sequence length to (B, 2T) by inserting a call-or-not token at every position before the logits"
+    ],
+    "answer_index": 1,
+    "explanation": "Function calling is orchestration around a frozen model. Schemas and observations go into the context, and generated text is parsed and executed instead of only displayed; the forward pass is unchanged."
+  },
+  {
+    "id": "18.1-059",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "9. Tensor shapes / where this sits relative to the model",
+    "question": "Why can a single trained model be given new tools without retraining?",
+    "options": [
+      "Because tools are stored in a separate embedding table that the runtime hot-swaps whenever a tool is added",
+      "Because models are retrained automatically each time they see a new schema, using the schema as training data",
+      "Tool use is a systems layer: new tools need only new schemas in the context and new runtime code",
+      "Because tools are compiled into the tokenizer vocabulary as single tokens, so adding one only extends the vocab"
+    ],
+    "answer_index": 2,
+    "explanation": "The registry, parser, and tools are plain Python outside the model. Adding a tool means registering it and showing its schema, with no change to weights."
+  },
+  {
+    "id": "18.1-060",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "9. Tensor shapes / where this sits relative to the model",
+    "question": "How does Toolformer's way of adding tools differ from the runtime approach of schemas plus parsing?",
+    "options": [
+      "Toolformer trains the model to emit calls by inserting API calls into training data, touching the weights",
+      "Toolformer removes the need for any runtime, because the model executes its API calls during decoding",
+      "Toolformer uses no tools at all; it memorises the outputs of each API during pretraining instead",
+      "Toolformer modifies the tokenizer so each tool becomes a single token, which the runtime then maps to a function"
+    ],
+    "answer_index": 0,
+    "explanation": "Toolformer is the training-side approach: the model learns when and how to call APIs. The runtime side — schema, parse, execute — remains identical either way."
+  },
+  {
+    "id": "18.1-061",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Unit test",
+    "question": "A unit test asserts {\"calculator\", \"python_eval\", \"mock_search\"} <= names, where names comes from register_builtins(ToolRegistry()).schemas(). What does it check?",
+    "options": [
+      "That exactly these three tools are registered and that no other tools are present at all",
+      "That each of the three built-in tools runs in under a second on the test inputs",
+      "That the schema names come back from the registry sorted alphabetically by tool name",
+      "That the registry advertises all three built-in tools in the schemas shown to the model"
+    ],
+    "answer_index": 3,
+    "explanation": "The subset check confirms each built-in appears in schemas(); extra tools would still pass. It guards that the model would be told about all three built-ins."
+  },
+  {
+    "id": "18.1-062",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Unit test",
+    "question": "What does a test like `with pytest.raises(ValueError): calculator(\"__import__('os').system('echo pwned')\")` verify?",
+    "options": [
+      "That the registry's call method raises ValueError on malicious input instead of returning an error dict",
+      "That the shell command runs in a sandbox and echoes 'pwned' to captured output rather than the real shell",
+      "That the calculator returns an {'ok': False} error dict for the expression instead of executing it",
+      "That the bare calculator function rejects a malicious expression by raising ValueError, not executing it"
+    ],
+    "answer_index": 3,
+    "explanation": "Calling the calculator function directly (not via the registry) raises ValueError on the disallowed ast.Call. The registry wraps that exception into an error dict, but the raw function raises."
+  },
+  {
+    "id": "18.1-063",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "A team chooses tool descriptions like 'Does math'. What is the risk?",
+    "options": [
+      "The model chooses tools by description, so a vague one leads to picking the wrong tool",
+      "Short descriptions overflow the context window once many tools are registered",
+      "The registry rejects any description shorter than ten words at the moment the tool is registered",
+      "The JSON parser cannot handle very short strings inside the schema's description field"
+    ],
+    "answer_index": 0,
+    "explanation": "Tool selection is driven by the description text. 'Evaluate an arithmetic expression and return the number' versus 'Does math' can be the difference between right and wrong selection."
+  },
+  {
+    "id": "18.1-064",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if a tool registry lets a tool's exception propagate out of call?",
+    "options": [
+      "The model's weights are corrupted by the unhandled exception",
+      "The whole agent loop dies instead of the model seeing a readable error",
+      "The tool is automatically unregistered after its first failure",
+      "The exception is silently converted into a success with result None for the model"
+    ],
+    "answer_index": 1,
+    "explanation": "An uncaught exception crashes the loop. Catching it and returning a structured error lets the model read the failure as an observation and recover."
+  },
+  {
+    "id": "18.1-065",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is assuming that valid JSON means correct arguments a mistake?",
+    "options": [
+      "Valid JSON is always semantically correct, since the parser checks it against the schema",
+      "JSON mode guarantees shape, not truth; the model can still pass a wrong expression",
+      "Valid JSON can never contain numeric values, so arithmetic arguments are always strings",
+      "JSON mode only validates the tool name field, leaving the arguments object unchecked"
+    ],
+    "answer_index": 1,
+    "explanation": "Schema validity says the fields and types are right, not that the values solve the task. Correctness comes from executing and feeding back results."
+  },
+  {
+    "id": "18.1-066",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Exercise",
+    "question": "When registering a word_count(text) tool, what must the parameters schema contain?",
+    "options": [
+      "One required string property named text, matching the function's parameter name",
+      "One optional integer property named count, which the function returns to the model",
+      "A property named input, since schema names need not match the function's parameter",
+      "No properties at all, since word_count automatically receives the whole user message"
+    ],
+    "answer_index": 0,
+    "explanation": "The schema must declare a required string text property. Its name must match the Python parameter, because the registry calls func(**arguments)."
+  },
+  {
+    "id": "18.1-067",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Exercise",
+    "question": "If a tool schema's property names don't match the function's parameter names, what does the course's registry return when the tool is called?",
+    "options": [
+      "The correct result, because the registry matches arguments to parameters by position, not name",
+      "A structured error with error_type TypeError, since func(**arguments) gets an unexpected keyword",
+      "An unhandled TypeError that propagates out of call and terminates the whole agent program",
+      "A KeyError-typed error dict saying the tool is unknown, because the mismatched schema failed to register"
+    ],
+    "answer_index": 1,
+    "explanation": "func(**arguments) with a mismatched key raises TypeError: unexpected keyword argument. The registry catches it and returns {\"ok\": False, \"error_type\": \"TypeError\", ...}, so nothing crashes but the tool never works."
+  },
+  {
+    "id": "18.1-068",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A temperature(city) function is registered with a schema whose only property is location. Every call fails. What is the fix?",
+    "options": [
+      "Rename the schema property to city so it matches the callable's parameter name",
+      "Make location optional by removing it from the required list, so calls can omit it",
+      "Change the description to mention location, so the model passes the right argument",
+      "Wrap the function body in try/except so that the bad keyword is silently ignored"
+    ],
+    "answer_index": 0,
+    "explanation": "The model reads the schema and emits {\"location\": \"Paris\"}, so the registry calls temperature(location=\"Paris\"), which raises TypeError. The schema property names must exactly match the callable's parameters; adding try/except only hides the failure."
+  },
+  {
+    "id": "18.1-069",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "With a schema/parameter name mismatch, why do you see repeated error observations rather than a crash?",
+    "options": [
+      "Because call catches the TypeError and returns {\"ok\": False, ...} on every call",
+      "Because the model retries with corrected argument names automatically after each failure",
+      "Because Python ignores unknown keyword arguments, so the function runs with its defaults",
+      "Because the schema is validated against the function before every call and the call is skipped"
+    ],
+    "answer_index": 0,
+    "explanation": "The registry's never-raise design turns the TypeError into a structured error. The loop survives, but the tool silently never works until the schema is fixed."
+  },
+  {
+    "id": "18.1-070",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Research connection",
+    "question": "How does Toolformer learn when to call APIs without hand-annotated data?",
+    "options": [
+      "It uses human annotators to label every position in the corpus where a tool call would help",
+      "It learns from a reward model that scores each tool call by how useful its result appears to a judge",
+      "It copies API calls verbatim from public code repositories and fine-tunes on them as plain text",
+      "It inserts candidate API calls into training text and keeps those that reduce loss on later tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "Toolformer (Schick et al., 2023) is self-supervised: candidate calls (calculator, search, translation) are inserted, and only those whose results make the subsequent text more predictable are kept for training."
+  },
+  {
+    "id": "18.1-071",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Research connection",
+    "question": "What does Gorilla demonstrate about tool use?",
+    "options": [
+      "Models need no schema at all when the API catalog is small, since they recall each API from pretraining",
+      "Constrained decoding is unnecessary for any API, because fine-tuning alone makes every call well-formed",
+      "A model fine-tuned to emit API calls can pick the right call from thousands of real ML APIs and adapt",
+      "Search tools outperform calculators on every task, so retrieval should be the default tool for agents"
+    ],
+    "answer_index": 2,
+    "explanation": "Gorilla (Patil et al., 2023) fine-tunes a schema-aware model against a large, changing catalog of real ML APIs. It shows correct call selection at scale and adaptation to API changes."
+  },
+  {
+    "id": "18.1-072",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Check yourself",
+    "question": "When a model emits {\"name\": \"calculator\", \"arguments\": {\"expression\": \"2+3*4\"}}, which component actually computes the answer?",
+    "options": [
+      "The calculator tool run by the runtime; the model only asked",
+      "The model itself, while generating the digits inside the JSON",
+      "The JSON parser, which evaluates expressions as it loads values",
+      "The tokenizer, which maps digit tokens directly to their values"
+    ],
+    "answer_index": 0,
+    "explanation": "parse_tool_call extracts the call, reg.call runs the safe AST evaluator (3*4=12, 2+12=14), and returns {\"ok\": True, \"result\": 14}. The model never computed anything."
+  },
+  {
+    "id": "18.1-073",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why can't a model 'just call functions it knows' without a schema?",
+    "options": [
+      "Because function names are encrypted in the runtime, so the model cannot reproduce them exactly",
+      "Because models are forbidden by alignment training from writing function names in their output",
+      "It only emits text and cannot know which tools are wired up, their names, or argument shapes",
+      "Because schemas are needed to compile the model's call head, which is built when tools are added"
+    ],
+    "answer_index": 2,
+    "explanation": "The model has no access to the runtime's process. The schema in its context is the only way it learns what tools exist and how to call them."
+  },
+  {
+    "id": "18.1-074",
+    "chapter": "18.1",
+    "chapter_name": "Tool schemas & function calling",
+    "module": "18",
+    "module_name": "Tool use",
+    "source": "lessons/module-18/lesson-01.md",
+    "section": "Next",
+    "question": "Why is a single tool call rarely enough for real tasks?",
+    "options": [
+      "Because each tool may only be called once per session, so a task with several steps needs several sessions",
+      "Real tasks need the model to see results, decide next steps, call more tools, and recover from errors — a loop",
+      "Because a single call cannot carry more than one argument, so multi-argument tasks must be split into calls",
+      "Because the parser handles only one call per program run, so the runtime must restart the process between tool requests"
+    ],
+    "answer_index": 1,
+    "explanation": "Real tasks are multi-step: observe a result, choose another action, maybe fix an error. That repetition is the observation/action loop."
+  }
+]

@@ -1,0 +1,1172 @@
+[
+  {
+    "id": "03.2-001",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which optimizer is the default for essentially every large language model trained today, including GPT, LLaMA and OLMo?",
+    "options": [
+      "AdamW",
+      "Plain SGD",
+      "SGD with Nesterov momentum",
+      "RMSProp without momentum"
+    ],
+    "answer_index": 0,
+    "explanation": "AdamW, Adam with decoupled weight decay, is the standard optimizer for modern LLMs. Its adaptive per-parameter scaling lets one learning rate work across parameters with very different gradient magnitudes, and its decoupled decay regularizes every parameter cleanly."
+  },
+  {
+    "id": "03.2-002",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What property of AdamW lets a single global learning rate work across an embedding table, an attention projection and a LayerNorm gain?",
+    "options": [
+      "Its use of second-order Hessian information per layer",
+      "Its adaptive per-parameter scaling of the step",
+      "Its large fixed learning rate shared by all layers",
+      "Its use of full-batch gradients instead of minibatches"
+    ],
+    "answer_index": 1,
+    "explanation": "These parameter groups have wildly different gradient magnitudes. Adam-family optimizers divide each parameter's step by an estimate of its own recent gradient magnitude, so every parameter moves at a comparable relative pace under one eta. No Hessian is computed."
+  },
+  {
+    "id": "03.2-003",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "1. Intuition: one learning rate cannot fit every parameter",
+    "question": "Why can a single global learning rate not fit every parameter of a real network?",
+    "options": [
+      "Because each layer is trained against a different loss function, so each needs its own rate",
+      "Because gradient scales differ hugely, so a rate safe for large ones is tiny for small ones",
+      "Because the learning rate must be an integer, which is too coarse to suit every parameter",
+      "Because every parameter receives an identical gradient, so one rate would move them in lockstep"
+    ],
+    "answer_index": 1,
+    "explanation": "A rare-token embedding row gets tiny, sparse gradients, while a LayerNorm gain gets large, dense ones. An eta small enough for the large-gradient parameters barely moves the small-gradient ones, and an eta large enough for those blows up the others. One number cannot serve both."
+  },
+  {
+    "id": "03.2-004",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "1. Intuition: one learning rate cannot fit every parameter",
+    "question": "Which kind of parameter typically receives tiny, sparse gradients?",
+    "options": [
+      "A LayerNorm gain, updated on every token",
+      "An attention output projection matrix",
+      "The final output layer's bias vector",
+      "An embedding row for a rare token"
+    ],
+    "answer_index": 3,
+    "explanation": "An embedding row only receives a gradient when its token appears in the batch, so a rare token's row gets small, infrequent updates. A LayerNorm gain, in contrast, participates in every forward pass and gets large, dense gradients."
+  },
+  {
+    "id": "03.2-005",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "1. Intuition: one learning rate cannot fit every parameter",
+    "question": "What is the core idea behind adaptive optimizers like RMSProp and Adam?",
+    "options": [
+      "Track each parameter's recent gradient magnitude and divide its step by it",
+      "Draw a different random learning rate for each parameter on every step of training",
+      "Freeze parameters whose gradients are small so the compute goes to the active ones",
+      "Clip each parameter's gradient to a fixed maximum so no single update can be too large"
+    ],
+    "answer_index": 0,
+    "explanation": "Adaptive optimizers estimate how big each parameter's gradients have been lately and divide the step by that estimate. Large-gradient parameters take proportionally smaller steps, small-gradient ones take larger steps, so all move at a comparable relative pace under one global eta."
+  },
+  {
+    "id": "03.2-006",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "What is the RMSProp update, with decay rate beta, gradient g, learning rate eta and small constant epsilon?",
+    "options": [
+      "v <- beta*v + g; theta <- theta - eta*v, applied per parameter",
+      "v <- beta*v + (1-beta)*g^2; theta <- theta - eta*g/(sqrt(v) + epsilon)",
+      "v <- beta*v + (1-beta)*g; theta <- theta - eta*v/(|g| + epsilon)",
+      "v <- g^2; theta <- theta - eta*g*sqrt(v + epsilon) for every parameter"
+    ],
+    "answer_index": 1,
+    "explanation": "RMSProp keeps an EMA v of the squared gradient and divides the step by its square root. The first option is momentum, which averages g itself rather than g^2. Multiplying by sqrt(v) would amplify large gradients instead of normalizing them."
+  },
+  {
+    "id": "03.2-007",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "In RMSProp, why is the gradient squared elementwise before being averaged into v?",
+    "options": [
+      "To make the averaging cheaper on GPUs, since squaring fuses with the EMA kernel",
+      "To make the update an unbiased estimate of the true full-batch gradient",
+      "So v tracks the gradient's magnitude regardless of sign",
+      "So that v grows linearly with the step count and acts as a built-in decay schedule"
+    ],
+    "answer_index": 2,
+    "explanation": "Squaring each component removes the sign, so positive and negative gradients both contribute to the magnitude estimate rather than cancelling. v is therefore an estimate of the mean squared gradient, the typical size of the gradient."
+  },
+  {
+    "id": "03.2-008",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "What is the typical value of RMSProp's decay rate beta, and what does it control?",
+    "options": [
+      "0.1, controlling how quickly the learning rate itself is decayed",
+      "0.5, controlling the size of epsilon added to the denominator",
+      "1.0, controlling how many examples go into each minibatch",
+      "0.99, controlling how far back the squared-gradient memory reaches"
+    ],
+    "answer_index": 3,
+    "explanation": "beta is typically 0.99. Like momentum's mu, it sets the effective memory of the exponential moving average: higher beta averages over more past steps."
+  },
+  {
+    "id": "03.2-009",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "Where does the name 'RMSProp' come from?",
+    "options": [
+      "sqrt(v), the root of the EMA of squared gradients, is roughly the RMS gradient",
+      "It stands for 'Random Minibatch Stochastic Propagation', the sampling scheme it relies on",
+      "It refers to the root of the mean squared error loss that the optimizer was designed to minimize",
+      "It uses the root-mean-square of the parameters themselves to scale each update step"
+    ],
+    "answer_index": 0,
+    "explanation": "v estimates the mean squared gradient, so sqrt(v) is roughly the RMS gradient magnitude, which is what the step is divided by. It concerns the gradient, not the parameters or the loss function."
+  },
+  {
+    "id": "03.2-010",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "What is the purpose of epsilon (e.g. 1e-8) in the RMSProp and Adam denominators?",
+    "options": [
+      "To set the learning rate for parameters with zero gradient",
+      "To avoid dividing by zero when v is small",
+      "To add regularization toward zero",
+      "To bias-correct the moment estimates"
+    ],
+    "answer_index": 1,
+    "explanation": "epsilon is a tiny constant added to sqrt(v) so the division stays finite when a parameter's squared-gradient estimate is near zero. It is not a regularizer and has nothing to do with bias correction."
+  },
+  {
+    "id": "03.2-011",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "In RMSProp, if a parameter's gradients have recently been large, what happens to its step?",
+    "options": [
+      "It is scaled up, because a large sqrt(v) multiplies the gradient",
+      "It is unchanged, because RMSProp uses a single global step size",
+      "It is scaled down, since g is divided by a large sqrt(v)",
+      "It becomes exactly zero until the recent gradients shrink again"
+    ],
+    "answer_index": 2,
+    "explanation": "The step is g/(sqrt(v)+epsilon). A history of large gradients makes sqrt(v) large, shrinking the step. Conversely, a history of tiny gradients makes sqrt(v) tiny, scaling the step up."
+  },
+  {
+    "id": "03.2-012",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "In RMSProp's steady state, where the gradient is roughly constant at g, what is the ratio g/sqrt(v) approximately, and what does the step size then depend on?",
+    "options": [
+      "Approximately g^2; the step then grows quadratically with the gradient magnitude",
+      "Approximately 0; the step vanishes once v has fully absorbed the constant gradient",
+      "Approximately 1/g; larger gradients then give smaller steps than smaller gradients",
+      "About plus or minus 1; the step depends on sign and consistency, not magnitude"
+    ],
+    "answer_index": 3,
+    "explanation": "With a constant gradient, v converges to g^2, so sqrt(v) is about |g| and g/sqrt(v) is about +/-1. The step is then roughly eta in the gradient's sign direction, independent of how large the gradient is. That is the per-parameter normalization adaptive methods aim for."
+  },
+  {
+    "id": "03.2-013",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "2.1 The mathematics (RMSProp)",
+    "question": "What does RMSProp lack on its own that Adam adds back?",
+    "options": [
+      "Momentum's smoothing of the gradient direction",
+      "Per-parameter adaptive scaling of each step",
+      "A global learning rate that scales every update",
+      "Elementwise operations that keep the step O(P)"
+    ],
+    "answer_index": 0,
+    "explanation": "RMSProp is the adaptive-scaling half of Adam: it normalizes step magnitudes but steps along the raw gradient direction. Adam adds a momentum-like EMA of the gradient in the numerator to smooth the direction."
+  },
+  {
+    "id": "03.2-014",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.1 The two moments",
+    "question": "What are the two exponential moving averages Adam keeps per parameter?",
+    "options": [
+      "The parameter value and its squared value, used to normalize the weights",
+      "The first moment m (EMA of g) and second moment v (EMA of g^2)",
+      "The loss and its gradient, averaged over the recent minibatches",
+      "The gradient and the learning rate, both smoothed per parameter"
+    ],
+    "answer_index": 1,
+    "explanation": "Adam updates m <- beta1*m + (1-beta1)*g, the smoothed direction like momentum, and v <- beta2*v + (1-beta2)*g^2, the magnitude estimate like RMSProp. Both are per-parameter tensors."
+  },
+  {
+    "id": "03.2-015",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.1 The two moments",
+    "question": "In Adam, how does the first moment m relate to momentum's velocity?",
+    "options": [
+      "It is unrelated; m tracks the squared gradient while v tracks the direction",
+      "It is identical to momentum's velocity, an unscaled running sum of past gradients",
+      "It is momentum's velocity with the (1 - beta1) factor: an EMA of g",
+      "It is momentum's velocity divided by the learning rate so eta can be tuned separately"
+    ],
+    "answer_index": 2,
+    "explanation": "m is an EMA of the gradient, the same idea as momentum's velocity, but with g weighted by (1 - beta1) so m is a true average rather than a growing sum. It represents the smoothed update direction."
+  },
+  {
+    "id": "03.2-016",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.1 The two moments",
+    "question": "What are Adam's standard decay rates beta1 and beta2, and what do they imply about memory?",
+    "options": [
+      "beta1 = 0.999 and beta2 = 0.9: long direction memory, short magnitude memory",
+      "beta1 = beta2 = 0.5: equally short memories for both direction and magnitude",
+      "beta1 = 0.1 and beta2 = 0.01: almost no memory, so each step uses the raw gradient",
+      "beta1 = 0.9 and beta2 = 0.999: short direction memory, long magnitude memory"
+    ],
+    "answer_index": 3,
+    "explanation": "The standard values are beta1 = 0.9 for the gradient EMA and beta2 = 0.999 for the squared-gradient EMA. A higher beta averages over more steps, so the magnitude estimate reaches much further back than the direction estimate."
+  },
+  {
+    "id": "03.2-017",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.1 The two moments",
+    "question": "How are Adam's moment estimates m and v initialized?",
+    "options": [
+      "Both to zero",
+      "m to zero and v to one",
+      "Both to the first gradient",
+      "Both to random small values"
+    ],
+    "answer_index": 0,
+    "explanation": "Both moments start at zero. Because an EMA starting from zero underestimates the true average until it fills up, this initialization creates the startup bias that bias correction removes."
+  },
+  {
+    "id": "03.2-018",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.2 Bias correction",
+    "question": "Why are Adam's moment estimates biased toward zero early in training?",
+    "options": [
+      "Because the gradients are always near zero at the start of training",
+      "Because they start at zero and the EMA has not had time to fill up",
+      "Because epsilon dominates the denominator during the early steps of training",
+      "Because the learning rate is exactly zero at step one, so nothing accumulates"
+    ],
+    "answer_index": 1,
+    "explanation": "An EMA initialized to zero gives most of its weight to that initial zero for the first steps. After one step, m = (1 - beta1)*g = 0.1*g, only a tenth of the gradient purely because it started from nothing. This is a startup bias, not a property of the gradients."
+  },
+  {
+    "id": "03.2-019",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.2 Bias correction",
+    "question": "With beta1 = 0.9 and m initialized to zero, what is m after the first Adam step with gradient g?",
+    "options": [
+      "m = g",
+      "m = 0.9*g",
+      "m = 0.1*g",
+      "m = 0.01*g"
+    ],
+    "answer_index": 2,
+    "explanation": "m <- 0.9*0 + 0.1*g = 0.1*g. Only a tenth of the gradient appears, purely because the EMA started at zero. Without correction, Adam would take tiny, wrong steps in the first iterations."
+  },
+  {
+    "id": "03.2-020",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.2 Bias correction",
+    "question": "What are Adam's bias-corrected moments at step t?",
+    "options": [
+      "m_hat = m*(1 - beta1^t), v_hat = v*(1 - beta2^t)",
+      "m_hat = m/beta1^t, v_hat = v/beta2^t",
+      "m_hat = m - beta1^t, v_hat = v - beta2^t",
+      "m_hat = m/(1 - beta1^t), v_hat = v/(1 - beta2^t)"
+    ],
+    "answer_index": 3,
+    "explanation": "Dividing by 1 - beta^t undoes the shrinkage from zero initialization. At t = 1 with beta1 = 0.9, 1 - 0.9 = 0.1, so m_hat = 10*m, exactly cancelling the 0.1 factor. Multiplying would make the bias worse."
+  },
+  {
+    "id": "03.2-021",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.2 Bias correction",
+    "question": "What happens to Adam's bias-correction factors 1/(1 - beta^t) as the step number t grows?",
+    "options": [
+      "They approach 1, since beta^t goes to 0 once the averages warm up",
+      "They grow without bound, so late steps must be clipped to stay stable",
+      "They approach 0, gradually turning the update off as training goes on",
+      "They oscillate between 0.1 and 10 with a period set by the ratio of beta1 to beta2"
+    ],
+    "answer_index": 0,
+    "explanation": "Since beta < 1, beta^t shrinks toward zero, so 1 - beta^t approaches 1 and the correction disappears. Correction matters only early, while the EMAs are still filling up."
+  },
+  {
+    "id": "03.2-022",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.2 Bias correction",
+    "question": "In Adam's bias correction, what value does the step counter t start from?",
+    "options": [
+      "0",
+      "1",
+      "10",
+      "The number of warmup steps"
+    ],
+    "answer_index": 1,
+    "explanation": "t starts at 1 for the first step. At t = 1, 1 - beta1^1 = 0.1, which exactly cancels the factor 0.1 in m after its first update. Starting at 0 would divide by 1 - beta^0 = 0."
+  },
+  {
+    "id": "03.2-023",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.3 The Adam update",
+    "question": "What is the full Adam parameter update?",
+    "options": [
+      "theta <- theta - eta*m/(v + epsilon), using the raw moments",
+      "theta <- theta - eta*(m_hat + sqrt(v_hat)) for every parameter",
+      "theta <- theta - eta*m_hat/(sqrt(v_hat) + epsilon)",
+      "theta <- theta - eta*g*sqrt(v_hat)/(m_hat + epsilon) elementwise"
+    ],
+    "answer_index": 2,
+    "explanation": "Adam divides the bias-corrected first moment by the square root of the bias-corrected second moment plus epsilon, and steps by eta times that ratio. The numerator is momentum's smoothed direction, the denominator RMSProp's per-parameter scale."
+  },
+  {
+    "id": "03.2-024",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.3 The Adam update",
+    "question": "In the Adam update, which component plays the role of momentum and which plays the role of RMSProp?",
+    "options": [
+      "epsilon plays the momentum role and eta plays the RMSProp per-parameter scale",
+      "The denominator sqrt(v_hat) is the momentum; the numerator m_hat is the RMSProp scale",
+      "Both terms are RMSProp scales; Adam has no momentum component at all",
+      "The numerator m_hat is the momentum; the denominator sqrt(v_hat) is the RMSProp scale"
+    ],
+    "answer_index": 3,
+    "explanation": "Adam is momentum in the numerator and RMSProp in the denominator, both bias-corrected. m_hat gives the smoothed direction, sqrt(v_hat) normalizes each parameter's step by its RMS gradient magnitude."
+  },
+  {
+    "id": "03.2-025",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "On Adam's very first step (t = 1), what are m_hat and sqrt(v_hat) in terms of the gradient g?",
+    "options": [
+      "m_hat = g and sqrt(v_hat) = |g| exactly",
+      "m_hat = 0.1*g and sqrt(v_hat) = 0.001*|g|",
+      "m_hat = g^2 and sqrt(v_hat) = g",
+      "m_hat = 0 and sqrt(v_hat) = epsilon"
+    ],
+    "answer_index": 0,
+    "explanation": "At t = 1, m = (1-beta1)*g and dividing by (1-beta1) gives m_hat = g. Likewise v = (1-beta2)*g^2 so v_hat = g^2 and sqrt(v_hat) = |g|. Bias correction fully undoes the zero initialization after one step."
+  },
+  {
+    "id": "03.2-026",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "How far does Adam move each parameter on its very first step, ignoring epsilon?",
+    "options": [
+      "By eta times the gradient, exactly as plain SGD would on its first step",
+      "By almost exactly eta along -sign(g), whatever the gradient magnitude",
+      "By zero, since both moment estimates start at zero and cancel each other",
+      "By eta divided by the gradient magnitude, so small gradients take huge steps"
+    ],
+    "answer_index": 1,
+    "explanation": "At t = 1, m_hat/sqrt(v_hat) = g/|g| = sign(g), so the step is eta*sign(g). A gradient of 0.0001 moves a parameter as far as a gradient of 50. This is adaptive normalization at its most extreme."
+  },
+  {
+    "id": "03.2-027",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "Running torch.optim.Adam for one step on theta = 1.0 with gradient 0.5, lr = 0.1 and standard betas, what does it produce, and how does it compare to the hand calculation?",
+    "options": [
+      "About 0.95, half the hand-computed step because PyTorch omits bias correction",
+      "About 0.5, because the first step equals the gradient regardless of the learning rate",
+      "About 0.9000000358, matching the hand result 0.900000002 to ~1e-7",
+      "Exactly 1.0, because PyTorch skips the first step while the moments initialize"
+    ],
+    "answer_index": 2,
+    "explanation": "The hand computation gives theta = 1 - 0.1*0.5/(0.5 + 1e-8), about 0.900000002. torch.optim.Adam prints 0.9000000357627869, which agrees to float32 precision (about 1e-7). The first-step move is eta = 0.1, not proportional to the gradient."
+  },
+  {
+    "id": "03.2-028",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "Does the Adam algorithm itself contain a learning-rate warmup?",
+    "options": [
+      "Yes, the bias correction ramps the effective step up from zero, acting as a built-in warmup",
+      "Yes, epsilon starts large and ramps down over the first steps so early updates stay small",
+      "Yes, beta2 gradually increases from 0 to 0.999 over the first few thousand steps",
+      "No; warmup is a separate technique that changes the eta passed in"
+    ],
+    "answer_index": 3,
+    "explanation": "The whole Adam algorithm is the moments, bias correction and update; there is no warmup inside it. Warmup is applied outside by feeding Adam a small eta that grows over the first few hundred or thousand steps. Bias correction fixes the zero-init bias but makes the first step full size, which is the opposite of warming up."
+  },
+  {
+    "id": "03.2-029",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "Why can Adam's first few steps be harmful for a large model?",
+    "options": [
+      "Every parameter moves a full eta from a v built on one noisy minibatch, when gradients are noisiest",
+      "The moments start at zero, so the model does not move at all for the first several hundred steps",
+      "The gradients are clipped to exactly zero during the first steps while the moments initialize",
+      "Bias correction makes the first steps far smaller than later ones, wasting the start of training"
+    ],
+    "answer_index": 0,
+    "explanation": "At t = 1 each parameter moves by about eta regardless of its gradient size, and the scaling comes from v_hat estimated from a single noisy batch, so it is basically a guess. Combined with random weights and very noisy early gradients, these big same-sized steps can push the model into a bad region or spike the loss."
+  },
+  {
+    "id": "03.2-030",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "3.4 One full Adam step, by hand",
+    "question": "How does learning-rate warmup address Adam's risky first steps?",
+    "options": [
+      "It replaces Adam's update rule with plain SGD for the first steps, then switches over",
+      "It starts eta tiny and ramps it up, so v_hat becomes trustworthy before steps grow",
+      "It disables bias correction during the first steps so the moment estimates stay small",
+      "It increases epsilon for the first steps so the denominator dominates and damps updates"
+    ],
+    "answer_index": 1,
+    "explanation": "Warmup keeps Adam's code unchanged and only varies the eta passed in: tiny at first, ramping up over the first few hundred or thousand steps. By the time steps are large, the second-moment estimate is averaged over many batches and reliable."
+  },
+  {
+    "id": "03.2-031",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.1 What weight decay is for",
+    "question": "What is weight decay for?",
+    "options": [
+      "To speed up convergence by increasing the effective step size on large parameters",
+      "To normalize the gradients across layers so every layer learns at the same rate",
+      "To pull every parameter gently toward zero, discouraging large weights that overfit",
+      "To reset parameters that stop changing back to their initial values so they can relearn"
+    ],
+    "answer_index": 2,
+    "explanation": "Weight decay is a regularizer: every step it shrinks parameters slightly toward zero. Large weights tend to overfit, so discouraging them improves generalization. It is not a step-size or normalization technique."
+  },
+  {
+    "id": "03.2-032",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.1 What weight decay is for",
+    "question": "Are classic L2 regularization and decoupled weight decay equivalent when used with Adam?",
+    "options": [
+      "Yes; they produce identical updates for every optimizer, including Adam",
+      "Yes, but only when the learning rate is held constant throughout training",
+      "No, and they are equivalent only for RMSProp, never for momentum SGD or Adam",
+      "No; with Adam they differ, which is why AdamW exists"
+    ],
+    "answer_index": 3,
+    "explanation": "With Adam the two implementations diverge because Adam rescales the gradient by sqrt(v_hat). Folding decay into the gradient passes it through that rescaling, while decoupled decay does not. This subtlety cost the field several years and motivated AdamW."
+  },
+  {
+    "id": "03.2-033",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.2 Classic L2 (weight decay in the gradient)",
+    "question": "How does classic L2 regularization implement weight decay?",
+    "options": [
+      "It adds (lambda/2)*||theta||^2 to the loss, so lambda*theta joins the gradient",
+      "It multiplies the parameters by (1 - lambda) after each optimizer step, outside the gradient",
+      "It subtracts lambda from the learning rate each step, so later updates shrink steadily",
+      "It divides the gradient by lambda*theta, so large weights receive proportionally smaller updates"
+    ],
+    "answer_index": 0,
+    "explanation": "Classic L2 adds a squared-norm penalty to the loss. Its gradient lambda*theta joins the ordinary gradient before the optimizer sees it, and Adam then runs on g'. Multiplying the parameters directly is the decoupled (AdamW) approach."
+  },
+  {
+    "id": "03.2-034",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.2 Classic L2 (weight decay in the gradient)",
+    "question": "Why is classic L2 regularization problematic when combined with Adam?",
+    "options": [
+      "Because an L2 penalty has no gradient, so Adam cannot see it at all",
+      "Because lambda*theta is divided by sqrt(v_hat), coupling decay to gradient size",
+      "Because Adam ignores any extra term that is added to the raw gradient",
+      "Because the L2 term makes the loss non-differentiable at theta = 0 for Adam"
+    ],
+    "answer_index": 1,
+    "explanation": "Adam divides the whole gradient, including lambda*theta, by sqrt(v_hat), and the decay term also inflates v_hat. Parameters with large gradients get their decay divided down, so the amount of regularization depends on gradient magnitude rather than being uniform."
+  },
+  {
+    "id": "03.2-035",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.2 Classic L2 (weight decay in the gradient)",
+    "question": "Under classic L2 regularization with Adam, which parameters end up receiving the least decay?",
+    "options": [
+      "Parameters with the smallest gradients, whose sqrt(v_hat) amplifies the decay term",
+      "Parameters closest to zero, since lambda*theta is already tiny for them",
+      "Parameters with large gradients (large sqrt(v_hat)), which most need it",
+      "All parameters receive exactly the same decay, independent of their gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "A large sqrt(v_hat) divides down the decay term along with the gradient. So parameters with large gradients, which are those that most need regularizing, receive the least effective decay. That coupling is a bug, not a feature."
+  },
+  {
+    "id": "03.2-036",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.3 Decoupled weight decay (AdamW)",
+    "question": "What is the AdamW weight-decay update?",
+    "options": [
+      "theta <- theta - eta*(g + lambda*theta)/(sqrt(v_hat) + epsilon), all in one step",
+      "theta <- theta + eta*lambda*theta, then the Adam step on g + lambda*theta",
+      "theta <- theta/(1 + lambda), skipping the Adam step whenever decay is applied",
+      "theta <- theta*(1 - eta*lambda), then the ordinary Adam step on pure g"
+    ],
+    "answer_index": 3,
+    "explanation": "AdamW (Loshchilov & Hutter, 2019) applies decay directly to the parameter, outside the Adam machinery, then runs Adam on the unmodified gradient. The first option is classic L2 folded into Adam, which AdamW was designed to replace."
+  },
+  {
+    "id": "03.2-037",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.3 Decoupled weight decay (AdamW)",
+    "question": "In AdamW, what does decoupled weight decay do to each parameter per step?",
+    "options": [
+      "Shrinks every parameter by the same fraction eta*lambda, leaving g and moments alone",
+      "Shrinks each parameter by an amount proportional to its current gradient magnitude",
+      "Adds lambda*theta to the first moment only, leaving the second moment unchanged",
+      "Sets parameters below a threshold exactly to zero, producing a sparse weight matrix"
+    ],
+    "answer_index": 0,
+    "explanation": "Decoupled decay multiplies each parameter by (1 - eta*lambda), a uniform fractional shrink. Because it never enters g, m or v, every parameter receives exactly the intended regularization regardless of its gradient size."
+  },
+  {
+    "id": "03.2-038",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.3 Decoupled weight decay (AdamW)",
+    "question": "Who introduced AdamW and in what year?",
+    "options": [
+      "Kingma & Ba, 2015",
+      "Loshchilov & Hutter, 2019",
+      "Hinton & Tieleman, 2012",
+      "Vaswani et al., 2017"
+    ],
+    "answer_index": 1,
+    "explanation": "AdamW, Adam with decoupled weight decay, is from Loshchilov & Hutter (2019). Kingma & Ba introduced the original Adam, and Vaswani et al. introduced the Transformer."
+  },
+  {
+    "id": "03.2-039",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.3 Decoupled weight decay (AdamW)",
+    "question": "What is a typical value for AdamW's weight-decay coefficient lambda in LLM training?",
+    "options": [
+      "1e-8",
+      "0.999",
+      "0.1",
+      "10"
+    ],
+    "answer_index": 2,
+    "explanation": "lambda is typically 0.1. With a learning rate eta, each step shrinks parameters by the fraction eta*lambda. 0.999 is beta2 and 1e-8 is epsilon."
+  },
+  {
+    "id": "03.2-040",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.3 Decoupled weight decay (AdamW)",
+    "question": "In AdamW, what are the moment estimates m and v computed from?",
+    "options": [
+      "From g + lambda*theta, as in classic L2",
+      "From the parameters theta, not the gradient",
+      "From the decay term lambda*theta alone",
+      "From the pure gradient g alone"
+    ],
+    "answer_index": 3,
+    "explanation": "In AdamW the EMAs are computed from g alone; weight decay never enters them. That is what makes the decay decoupled and keeps Adam's per-parameter normalization from distorting it."
+  },
+  {
+    "id": "03.2-041",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.4 Numeric contrast on one step",
+    "question": "For one step from theta = 1.0 with g = 0.5, eta = 0.1, lambda = 0.1 at t = 1, where do AdamW and Adam-with-classic-L2 land?",
+    "options": [
+      "AdamW at about 0.890, classic L2 at about 0.900",
+      "Both at about 0.890, since the decay is identical",
+      "AdamW at about 0.900, classic L2 at about 0.890",
+      "Both at about 0.900, since the decay is negligible"
+    ],
+    "answer_index": 0,
+    "explanation": "AdamW first shrinks theta to 0.99, then the Adam step subtracts about 0.1, giving 0.890. Classic L2 runs Adam on g' = 0.6, but at t = 1 the step is eta*0.6/0.6 = 0.1, giving 0.900. The decay vanished in Adam's normalization."
+  },
+  {
+    "id": "03.2-042",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.4 Numeric contrast on one step",
+    "question": "In the one-step comparison, why did classic L2 decay have almost no effect on the Adam update?",
+    "options": [
+      "Because lambda was set to zero for the comparison, so no decay was ever added",
+      "Because sqrt(v_hat) grew with the numerator and cancelled the added lambda*theta",
+      "Because the combined gradient g + lambda*theta was clipped to the same norm as g",
+      "Because PyTorch ignores weight decay on the first step while the moments warm up"
+    ],
+    "answer_index": 1,
+    "explanation": "Adding lambda*theta raised the gradient from 0.5 to 0.6, but sqrt(v_hat) also became 0.6, so the ratio stayed 1 and the step stayed eta. The decay was swallowed by Adam's normalization. AdamW applies its 1% shrink outside that ratio."
+  },
+  {
+    "id": "03.2-043",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "4.4 Numeric contrast on one step",
+    "question": "What does torch.optim.AdamW(lr=0.1, betas=(0.9, 0.999), eps=1e-8, weight_decay=0.1) give after one step on w = 1.0 with gradient 0.5?",
+    "options": [
+      "About 0.900, identical to Adam without any decay",
+      "About 0.99, the decay alone with no Adam step",
+      "About 0.890, matching the hand-computed result",
+      "About 0.80, double the Adam step because of decay"
+    ],
+    "answer_index": 2,
+    "explanation": "PyTorch prints about 0.89000004529953, matching the hand computation 0.890000002: shrink by (1 - 0.1*0.1) to 0.99, then subtract the Adam step of about 0.1."
+  },
+  {
+    "id": "03.2-044",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "In what order does the from-scratch AdamW (matching torch.optim.AdamW) apply its operations each step?",
+    "options": [
+      "The Adam step first, then weight decay applied to the stored gradient",
+      "Bias-correct the stored buffers, then decay, then update the moments",
+      "Update the moments from g + lambda*theta, then take the parameter step",
+      "Decoupled decay on the parameter first, then the Adam step on pure g"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.optim.AdamW shrinks the parameter by (1 - lr*weight_decay) first, then updates m and v from the pure gradient and applies the bias-corrected step. Matching this order is what lets the from-scratch version match PyTorch to 1e-5."
+  },
+  {
+    "id": "03.2-045",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "How does the from-scratch AdamW apply bias correction?",
+    "options": [
+      "In the step: lr/bias_correction1 and sqrt(v)/sqrt(bias_correction2) + eps; m, v stay raw",
+      "By overwriting m and v with their bias-corrected values at the end of every step",
+      "By dividing the incoming gradient by bias_correction1 before it is folded into m",
+      "By multiplying the learning rate by bias_correction2 and leaving the denominator untouched"
+    ],
+    "answer_index": 0,
+    "explanation": "Folding the corrections into step_size and denom gives exactly eta*m_hat/(sqrt(v_hat)+eps) while leaving m and v biased. The stored buffers must stay biased to keep accumulating correctly; overwriting them would compound the correction."
+  },
+  {
+    "id": "03.2-046",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "Why must Adam's stored buffers m and v stay uncorrected (biased) rather than being overwritten with m_hat and v_hat?",
+    "options": [
+      "Because the corrected values need float64 storage and would double the optimizer memory",
+      "Because the EMA must keep accumulating the biased quantity, or corrections compound",
+      "Because PyTorch forbids in-place writes to optimizer state between consecutive steps",
+      "Because the corrected values are always zero after the first step and carry no information"
+    ],
+    "answer_index": 1,
+    "explanation": "The bias-correction formula assumes m and v are the raw zero-initialized EMAs. If the buffer holds m_hat, the next EMA update mixes in a corrected value and the next correction is applied on top, distorting the step. Apply the correction only when computing the step."
+  },
+  {
+    "id": "03.2-047",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "What does v.addcmul_(g, g, value=c) compute?",
+    "options": [
+      "v = c*g + g, returning a new tensor and leaving v unchanged",
+      "v = v*c*g, computed in place with no temporary allocation",
+      "v += c*g*g in one fused in-place pass with no temporary",
+      "v = sqrt(v) + c*g, writing the result back into v in place"
+    ],
+    "answer_index": 2,
+    "explanation": "addcmul_ is a fused in-place multiply-add: it adds value times the elementwise product of its two tensor arguments to v. Called with g, g it adds c*g^2, which is the second-moment update (after scaling v by beta2)."
+  },
+  {
+    "id": "03.2-048",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "What does p.addcdiv_(m, denom, value=-step_size) compute in the from-scratch AdamW?",
+    "options": [
+      "p = m/denom, overwriting the parameter with the ratio",
+      "p += step_size*denom/m, in one fused in-place pass",
+      "p -= step_size*m*denom, in one fused in-place pass",
+      "p -= step_size*m/denom, in one fused in-place pass"
+    ],
+    "answer_index": 3,
+    "explanation": "addcdiv_ is a fused in-place divide-add: p += value*(m/denom). With value = -step_size this is the Adam parameter update theta -= (lr/bc1)*m/(sqrt(v)/sqrt(bc2) + eps)."
+  },
+  {
+    "id": "03.2-049",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "In the from-scratch AdamW, how is decoupled weight decay applied to parameter p?",
+    "options": [
+      "p.mul_(1.0 - self.lr * self.weight_decay), without touching g",
+      "g.add_(p, alpha=self.weight_decay) before the moments are updated",
+      "m.add_(p, alpha=self.weight_decay) after the first moment is updated",
+      "p.sub_(self.weight_decay) once per step, before the Adam update"
+    ],
+    "answer_index": 0,
+    "explanation": "The parameter is scaled in place by (1 - lr*weight_decay), which is theta <- theta*(1 - eta*lambda). Adding p to g would be classic L2; adding it to m would also couple decay to the Adam machinery."
+  },
+  {
+    "id": "03.2-050",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "5. The from-scratch AdamW",
+    "question": "How is the from-scratch AdamW verified against PyTorch?",
+    "options": [
+      "By comparing only the final loss after training to the PyTorch run's final loss",
+      "By a test that it matches torch.optim.AdamW to 1e-5 over five toy steps",
+      "By checking that every weight decays to exactly zero after enough training steps",
+      "By a visual comparison of the two loss curves plotted on the same axes"
+    ],
+    "answer_index": 1,
+    "explanation": "The test test_adamw_matches_torch_over_5_steps runs both optimizers on a toy linear-regression problem and checks they agree to 1e-5 at each of five steps. Step-by-step agreement verifies the operation order and bias-correction handling."
+  },
+  {
+    "id": "03.2-051",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "6. Tensor shapes, dtype, device, and cost",
+    "question": "For a parameter tensor p, what are the shapes, dtype and device of AdamW's state m and v, and of the step counter t?",
+    "options": [
+      "m and v are scalars per tensor; t has the same shape as p",
+      "m matches p; v is a flat float64 vector on the CPU to save GPU memory",
+      "m and v match p's shape, dtype and device; t is one shared int",
+      "m and v are per-layer scalars; t is a float32 tensor on the GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "AdamW is elementwise: m and v are full parameter-sized tensors matching p. The step counter t is one Python int shared across parameters, and the bias-correction factors computed from it are scalars."
+  },
+  {
+    "id": "03.2-052",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "6. Tensor shapes, dtype, device, and cost",
+    "question": "For a model with P parameters in float32 trained with AdamW, how many bytes are needed for parameters, gradients and optimizer state, before activations?",
+    "options": [
+      "4P bytes",
+      "8P bytes",
+      "12P bytes",
+      "16P bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "Parameters take 4P bytes, gradients 4P, and the two optimizer buffers m and v another 8P, totalling 16P bytes. Activations come on top of that."
+  },
+  {
+    "id": "03.2-053",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "6. Tensor shapes, dtype, device, and cost",
+    "question": "What do ZeRO and FSDP shard across GPUs to address Adam's memory cost?",
+    "options": [
+      "The optimizer state (m and v, 2x the parameters), too large for one device",
+      "The learning-rate schedule, so each GPU follows its own warmup and decay",
+      "The training dataset only, with every GPU holding a full copy of the model",
+      "The loss function's computation graph, split layer by layer across GPUs"
+    ],
+    "answer_index": 0,
+    "explanation": "Adam's two parameter-sized buffers are a large, fixed memory cost. ZeRO and FSDP (Module 9) split this optimizer state, along with params and grads, across devices because for large models it cannot fit on one GPU."
+  },
+  {
+    "id": "03.2-054",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "6. Tensor shapes, dtype, device, and cost",
+    "question": "How do the optimizer-state memory costs of plain SGD, momentum-SGD and Adam/AdamW compare?",
+    "options": [
+      "All three store two parameter-sized buffers, so their optimizer memory is equal",
+      "Plain SGD stores none, momentum-SGD one, Adam/AdamW two buffers",
+      "Plain SGD stores one, momentum-SGD two, and Adam/AdamW four parameter-sized buffers",
+      "Adam stores none because it uses the gradient directly, while momentum-SGD stores one"
+    ],
+    "answer_index": 1,
+    "explanation": "Plain SGD keeps no state beyond params and grads. Momentum adds a velocity buffer. Adam and AdamW keep both m and v. Adam's adaptivity is paid for in memory."
+  },
+  {
+    "id": "03.2-055",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "6. Tensor shapes, dtype, device, and cost",
+    "question": "What limits the speed of an AdamW optimizer step?",
+    "options": [
+      "Large matrix multiplications over the parameter tensors and their moments",
+      "The number of distinct parameter tensors, not their total size",
+      "Memory bandwidth: O(P) elementwise work streaming params, grads, m, v",
+      "The cost of computing the Hessian diagonal that rescales each step"
+    ],
+    "answer_index": 2,
+    "explanation": "An AdamW step is O(P) elementwise arithmetic, negligible compared with forward and backward. It is memory-bandwidth-bound because it reads and writes params, grads, m and v once each with little computation per byte."
+  },
+  {
+    "id": "03.2-056",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Exercise",
+    "question": "Ignoring epsilon, why does Adam's first step have magnitude exactly eta for any nonzero gradient g?",
+    "options": [
+      "Because the learning rate is normalized by the global gradient norm before the first step",
+      "Because Adam clips the first update to a maximum of eta to protect random initial weights",
+      "Because epsilon dominates the denominator at t = 1 and fixes the step size to eta",
+      "Because at t = 1 m_hat = g and sqrt(v_hat) = |g|, so the step is eta*sign(g)"
+    ],
+    "answer_index": 3,
+    "explanation": "At t = 1, m = (1-beta1)g gives m_hat = g, and v = (1-beta2)g^2 gives v_hat = g^2. The ratio is g/|g| = sign(g), so the step has magnitude eta whatever the gradient's size. No clipping or gradient-norm normalization is involved."
+  },
+  {
+    "id": "03.2-057",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Exercise",
+    "question": "Which separate technique, not part of Adam, addresses the problem that Adam's earliest steps are full-size and based on an unreliable second-moment estimate?",
+    "options": [
+      "Learning-rate warmup: start eta small and ramp it up",
+      "Gradient checkpointing of the first few transformer layers",
+      "Raising beta2 to 0.9999 for the opening steps",
+      "Removing bias correction so early steps shrink"
+    ],
+    "answer_index": 0,
+    "explanation": "Warmup feeds Adam a small learning rate that rises over the first steps, so the large fixed-size steps only happen once v_hat is a trustworthy average. Adam's rule is unchanged; only eta varies. Gradient checkpointing saves activation memory and is unrelated."
+  },
+  {
+    "id": "03.2-058",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Which parameters are usually excluded from weight decay in practice?",
+    "options": [
+      "The attention query, key and value weight matrices",
+      "Biases, LayerNorm gains and embeddings",
+      "The MLP up- and down-projection weight matrices",
+      "The attention and MLP output projection matrices"
+    ],
+    "answer_index": 1,
+    "explanation": "Practice is to decay weight matrices but not biases, LayerNorm gains or embeddings. Decaying a 1-D gain toward zero just fights the normalization. Frameworks split parameters into two groups for this."
+  },
+  {
+    "id": "03.2-059",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to apply weight decay to a LayerNorm gain?",
+    "options": [
+      "Because LayerNorm gains receive no gradient, so decay would be the only update",
+      "Because decaying the gain makes the loss non-differentiable at zero",
+      "Because decaying a 1-D gain toward zero just fights the normalization",
+      "Because LayerNorm gains are stored in integer format and cannot shrink"
+    ],
+    "answer_index": 2,
+    "explanation": "A LayerNorm gain sets the scale of normalized activations; pulling it toward zero works against the normalization's purpose rather than regularizing meaningful weights. That is why gains, biases and embeddings are typically put in a no-decay parameter group."
+  },
+  {
+    "id": "03.2-060",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What does passing weight_decay to torch.optim.Adam (rather than AdamW) give you?",
+    "options": [
+      "Exactly AdamW's decoupled decay, applied to the parameters",
+      "No decay at all; torch.optim.Adam ignores that argument",
+      "Decay applied only to biases, leaving weight matrices alone",
+      "Classic coupled L2, with lambda*theta folded into g"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.optim.Adam's weight_decay adds lambda*theta to the gradient, the coupled version whose decay is distorted by Adam's normalization. Only torch.optim.AdamW applies decoupled decay. Calling the former 'AdamW' is a common mistake."
+  },
+  {
+    "id": "03.2-061",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Check yourself",
+    "question": "What does the denominator sqrt(v_hat) + epsilon accomplish in the Adam update?",
+    "options": [
+      "A per-parameter step size, dividing by its RMS gradient; epsilon avoids division by zero",
+      "It applies weight decay to each parameter in proportion to its squared gradient magnitude",
+      "It smooths the gradient direction across steps, filling the role that momentum plays in SGD",
+      "It bias-corrects the first moment so early updates are not shrunk toward zero"
+    ],
+    "answer_index": 0,
+    "explanation": "sqrt(v_hat) estimates each parameter's RMS gradient, so dividing by it scales large-gradient parameters' steps down and small-gradient ones up. Smoothing the direction is the job of m_hat in the numerator. epsilon only guards against tiny denominators."
+  },
+  {
+    "id": "03.2-062",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why is the second-moment underestimate especially damaging if Adam's bias correction is omitted?",
+    "options": [
+      "Because beta2 = 0.999 is so close to 1 that v warms up very slowly",
+      "Because v is initialized to one instead of zero, so it starts far too large",
+      "Because v is only updated every 1000 steps rather than on every single step",
+      "Because v is computed from the parameters rather than the gradient"
+    ],
+    "answer_index": 0,
+    "explanation": "With beta2 = 0.999, after t steps v carries only a fraction 1 - 0.999^t of the true mean square, which stays small for hundreds of steps. Without correction, Adam's denominator is badly wrong for many iterations, producing distorted steps."
+  },
+  {
+    "id": "03.2-063",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A model has 1e9 parameters trained in float32 with AdamW. How much memory do the AdamW optimizer states alone occupy?",
+    "options": [
+      "4 GB",
+      "8 GB",
+      "16 GB",
+      "2 GB"
+    ],
+    "answer_index": 1,
+    "explanation": "AdamW stores m and v: 2 x 1e9 x 4 bytes = 8e9 bytes = 8 GB. That is on top of 4 GB of parameters and 4 GB of gradients; 16 GB is the total of all three."
+  },
+  {
+    "id": "03.2-064",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Check yourself",
+    "question": "On the first Adam step, with eta = 3e-4, how far does a parameter with gradient g = 100 move?",
+    "options": [
+      "About 3e-2, proportional to the gradient of 100",
+      "About 3, eta times g scaled by the bias correction",
+      "About 3e-4, in the -sign(g) direction",
+      "Zero, because both moments start at zero"
+    ],
+    "answer_index": 2,
+    "explanation": "At t = 1 the ratio m_hat/sqrt(v_hat) = g/|g| = 1, so the step magnitude is eta = 3e-4 regardless of how large the gradient is. Nothing about the first step is proportional to the size of g."
+  },
+  {
+    "id": "03.2-065",
+    "chapter": "03.2",
+    "chapter_name": "RMSProp, Adam, AdamW, weight decay",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-02.md",
+    "section": "Next",
+    "question": "Besides AdamW, which three schedule-and-stability techniques are used on essentially every production LLM training run?",
+    "options": [
+      "Dropout on every layer, batch normalization, and early stopping on validation loss",
+      "Label smoothing, mixup of training examples, and heavy data augmentation",
+      "Gradient checkpointing, mixed precision training, and tensor parallelism",
+      "Learning-rate warmup, cosine learning-rate decay, and global-norm clipping"
+    ],
+    "answer_index": 3,
+    "explanation": "Real runs ramp eta up over the first few thousand steps (warmup), decay it along a cosine curve, and clip the global gradient norm to survive the occasional huge minibatch gradient. These are the topics of 03.3."
+  }
+]

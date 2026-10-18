@@ -1,0 +1,992 @@
+[
+  {
+    "id": "F.2-001",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Frontier update callout",
+    "question": "What is the status of GVPO as a replacement for GRPO, as of September 2026?",
+    "options": [
+      "Validated at scale and adopted as the default RL objective in several frontier labs",
+      "Directional, not validated: one paper line and no known frontier-lab adoption",
+      "Required by the MLPerf post-training benchmark as the reference RL objective",
+      "Deprecated after follow-up work showed it diverges on long reasoning traces"
+    ],
+    "answer_index": 1,
+    "explanation": "GVPO is described as directional, not validated: a single paper line with no known frontier-lab adoption. It is worth studying to understand the design space, not to swap into a production pipeline. MLPerf uses GRPO."
+  },
+  {
+    "id": "F.2-002",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which earlier ideas do the GRPO fixes (Dr. GRPO, DAPO, GVPO) reuse, combined differently?",
+    "options": [
+      "Byte-level BPE merges and rotary positional encodings",
+      "LoRA adapters and input-output embedding weight tying",
+      "MinHash deduplication and benchmark decontamination",
+      "PPO clipping and DPO's closed-form optimum"
+    ],
+    "answer_index": 3,
+    "explanation": "The fixes reuse ideas already covered: PPO-style clipping (DAPO's decoupled clip) and DPO's closed form for KL-constrained reward maximization (GVPO). Tokenizer, LoRA and data tooling are unrelated."
+  },
+  {
+    "id": "F.2-003",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is the minimum of llmre's gvpo_loss, as a policy?",
+    "options": [
+      "pi* equal to pi_ref, regardless of reward",
+      "pi* proportional to pi_ref * exp(R/beta)",
+      "pi* putting all mass on the highest-reward sample",
+      "pi* proportional to exp(-R * beta)"
+    ],
+    "answer_index": 1,
+    "explanation": "gvpo_loss is minimized exactly at pi* proportional to pi_ref(y|x) exp(R(x,y)/beta), the closed-form solution of KL-constrained reward maximization. It neither ignores reward nor collapses to argmax unless beta goes to 0."
+  },
+  {
+    "id": "F.2-004",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "What is the GRPO per-sample objective?",
+    "options": [
+      "min(r_i A_i, clip(r_i, 1-eps, 1+eps) A_i), r_i the policy/old-policy ratio, A_i the standardized group reward",
+      "max(r_i A_i, clip(r_i, 1-eps, 1+eps) A_i), with r_i the policy/old-policy ratio and A_i the raw reward R_i itself",
+      "log r_i - beta * A_i, with r_i the policy/reference ratio and A_i the token count of the completion",
+      "r_i * A_i with no clipping at all, where A_i comes from a learned critic's value estimate per sample"
+    ],
+    "answer_index": 0,
+    "explanation": "GRPO takes the PPO clipped surrogate min(r_i A_i, clip(r_i, 1-eps, 1+eps) A_i), with r_i = pi_theta(y_i|x)/pi_old(y_i|x) and A_i = (R_i - mean R)/std(R). Taking the max would remove the pessimistic bound, and there is no critic."
+  },
+  {
+    "id": "F.2-005",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "Why is GRPO's importance ratio r_i a source of instability on long completions?",
+    "options": [
+      "r_i is always exactly 1 for long completions, so the update degenerates to plain REINFORCE on reward",
+      "r_i ignores the current policy and depends only on the reward, so it swings whenever rewards change",
+      "r_i is bounded between 0 and 1 by construction, so long completions get vanishing gradient weight",
+      "log r_i is a sum over hundreds of tokens, so small per-token drift compounds and r_i is unbounded"
+    ],
+    "answer_index": 3,
+    "explanation": "The sequence ratio is a product of per-token ratios, so its log is a sum; small drifts add up over long sequences and r_i can grow without bound. It is not bounded in [0,1] and does depend on the policy."
+  },
+  {
+    "id": "F.2-006",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "What does clipping in GRPO not fix about the importance ratio?",
+    "options": [
+      "It forces the ratio to a constant 1 outside the clip range, which biases the gradient toward the old policy",
+      "It makes long completions cheaper to generate but does nothing about the ratio's effect on the update",
+      "It caps the objective, not the variance, and clipped samples give zero gradient (wasted compute)",
+      "It removes all variance from the gradient, but only for samples whose ratio stays inside the range"
+    ],
+    "answer_index": 2,
+    "explanation": "Clipping bounds the surrogate objective, not the variance of the ratio, and clipped samples give no gradient, so their generation compute is wasted. It does not change generation cost or force the ratio to 1."
+  },
+  {
+    "id": "F.2-007",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "What bias does dividing by std(R) in GRPO's advantage introduce?",
+    "options": [
+      "It up-weights low-variance groups, i.e. nearly-all-right or nearly-all-wrong groups",
+      "It removes all differences in difficulty between prompts, so hard prompts count equally",
+      "It down-weights groups with low reward variance, so near-unanimous groups barely count",
+      "It biases training toward shorter completions, since short answers have lower variance"
+    ],
+    "answer_index": 0,
+    "explanation": "Dividing by a small std inflates advantages, so low-variance groups (almost all correct or almost all wrong) get extra weight. That is one of the normalization biases Dr. GRPO removes. Length bias comes from the separate 1/|y_i| normalization."
+  },
+  {
+    "id": "F.2-008",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "What does per-sequence length normalization 1/|y_i| in GRPO change?",
+    "options": [
+      "How much long versus short answers are penalized",
+      "The effective value of the KL coefficient beta in the loss",
+      "The size of the vocabulary seen by the loss",
+      "How many samples are drawn in each group"
+    ],
+    "answer_index": 0,
+    "explanation": "Normalizing each sequence's loss by its length changes the per-token weight, so long and short answers are penalized differently. Dr. GRPO argues this biases training, e.g. toward long wrong answers."
+  },
+  {
+    "id": "F.2-009",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "1. Where GRPO gets unstable",
+    "question": "Why do zero-signal groups shrink GRPO's effective batch?",
+    "options": [
+      "All-correct or all-wrong groups have A = 0 for every sample, so no gradient",
+      "They make the importance ratio infinite, so the loss has to mask those samples",
+      "They are counted twice in the loss, so the batch is renormalized to compensate",
+      "They are rejected by the verifier before training, so they are never generated"
+    ],
+    "answer_index": 0,
+    "explanation": "When all rewards in a group are equal, every advantage is zero, so those samples cost compute but give no gradient, reducing the effective batch. DAPO's dynamic sampling targets exactly this."
+  },
+  {
+    "id": "F.2-010",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "What does Dr. GRPO change relative to GRPO?",
+    "options": [
+      "Removes the 1/|y_i| length normalization and the std division",
+      "Adds a learned critic to replace the group-mean reward baseline",
+      "Replaces the clipped ratio with a closed-form weight per sample",
+      "Adds overlong-response reward shaping and a decoupled clip range"
+    ],
+    "answer_index": 0,
+    "explanation": "Dr. GRPO (Liu et al. 2025, arXiv 2503.20783) removes length normalization and std normalization, arguing both bias training, e.g. toward long wrong answers. The closed-form weight is GVPO; overlong shaping is DAPO."
+  },
+  {
+    "id": "F.2-011",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "Which of these is one of DAPO's changes to GRPO?",
+    "options": [
+      "Clip-higher: a decoupled, larger upper epsilon for the clip",
+      "Dropping the policy gradient in favor of a supervised loss",
+      "Replacing the verifier with a learned reward model",
+      "Removing the group and using a single sample per prompt instead"
+    ],
+    "answer_index": 0,
+    "explanation": "DAPO (Yu et al. 2025, arXiv 2503.14476) uses decoupled clip ('clip-higher'), dynamic sampling, token-level loss averaging and overlong-response reward shaping. It keeps groups and verifiable rewards."
+  },
+  {
+    "id": "F.2-012",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "What is DAPO's dynamic sampling?",
+    "options": [
+      "Changing the group size every step based on how many groups had any reward signal",
+      "Sampling a random temperature for each completion to diversify the group's outputs",
+      "Dropping all-0 and all-1 groups and refilling the batch with groups that carry signal",
+      "Resampling the reference model each epoch from a recent checkpoint of the policy"
+    ],
+    "answer_index": 2,
+    "explanation": "Dynamic sampling removes unanimous groups (all wrong or all right), which have zero advantage, and refills the batch so every group contributes gradient. It is not about temperature, group size or the reference."
+  },
+  {
+    "id": "F.2-013",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "Which DAPO change addresses how the loss is averaged?",
+    "options": [
+      "Prompt-level reward clipping",
+      "Sequence-level std normalization",
+      "Token-level loss averaging",
+      "Group-level weight tying"
+    ],
+    "answer_index": 2,
+    "explanation": "DAPO averages the loss at the token level rather than per sequence, changing how long completions contribute. Its other tricks are clip-higher, dynamic sampling and overlong reward shaping."
+  },
+  {
+    "id": "F.2-014",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "What is the status of DAPO according to the GRPO fixes comparison?",
+    "options": [
+      "Withdrawn after publication over evaluation errors",
+      "Publicly documented and used in open RL stacks",
+      "Directional and unvalidated, with no known adoption",
+      "Proprietary to a single frontier lab and undisclosed"
+    ],
+    "answer_index": 1,
+    "explanation": "DAPO is publicly documented and used in open RL stacks. Dr. GRPO is publicly documented and widely discussed. GVPO is the directional one with no known frontier adoption."
+  },
+  {
+    "id": "F.2-015",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "How does GVPO differ from GRPO in what it replaces?",
+    "options": [
+      "It replaces the reference policy with the old policy, so the KL term anchors on the last sampling step",
+      "It replaces group sampling with chosen/rejected preference pairs, so each prompt needs only two samples",
+      "It replaces ratio + clip with a weight from the closed-form KL-constrained optimum; no importance sampling",
+      "It replaces the verifier with a learned reward model, so rewards become continuous instead of binary"
+    ],
+    "answer_index": 2,
+    "explanation": "GVPO (Zhang et al. 2025, arXiv 2504.19599) drops the importance ratio and clipping and weights each sample with a term derived from the KL-constrained closed form. It keeps groups and verifiable rewards and anchors on the reference, not the old policy."
+  },
+  {
+    "id": "F.2-016",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "What is the key distinction between Dr. GRPO/DAPO and GVPO?",
+    "options": [
+      "Dr. GRPO and DAPO patch GRPO, while GVPO changes the objective",
+      "Dr. GRPO and DAPO change the objective, while GVPO only patches normalization",
+      "All three are identical up to hyperparameters",
+      "GVPO is a pretraining method, the others are RL methods"
+    ],
+    "answer_index": 0,
+    "explanation": "Dr. GRPO and DAPO keep the GRPO objective and fix specific weaknesses. GVPO replaces the objective itself with a centered regression onto the closed-form optimum, which is why it is worth understanding even before adopting it."
+  },
+  {
+    "id": "F.2-017",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "2. The fixes, side by side",
+    "question": "What does the GVPO++ paper extend GVPO to?",
+    "options": [
+      "Multimodal pretraining",
+      "Speculative decoding",
+      "Tokenizer merge training",
+      "On-policy distillation"
+    ],
+    "answer_index": 3,
+    "explanation": "GVPO++ (arXiv 2609.21432) presents on-policy distillation as a natural extension: replace the verifier reward with the teacher's log-probability of the student's sample. It is not about tokenizers, multimodal pretraining or decoding."
+  },
+  {
+    "id": "F.2-018",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.1 Intuition",
+    "question": "What is the closed-form solution to 'maximize reward while staying close to a reference policy in KL'?",
+    "options": [
+      "pi*(y|x) = (1/Z(x)) (pi_ref(y|x) + beta R(x,y))",
+      "pi*(y|x) = (1/Z(x)) pi_ref(y|x)^beta R(x,y)",
+      "pi*(y|x) = (1/Z(x)) pi_ref(y|x) exp(R(x,y)/beta)",
+      "pi*(y|x) = softmax(R(x,y)/beta), with no reference"
+    ],
+    "answer_index": 2,
+    "explanation": "The KL-constrained optimum reweights the reference by exp(R/beta) and normalizes by the partition function Z(x). DPO is built on it, and GVPO uses it on GRPO groups. Additive or reference-free forms are not the solution."
+  },
+  {
+    "id": "F.2-019",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.1 Intuition",
+    "question": "How does GVPO's use of the KL-constrained closed form differ from DPO's?",
+    "options": [
+      "DPO uses it on preference pairs; GVPO uses it on a GRPO group of sampled completions",
+      "Both use it only on single completions, so Z(x) is estimated separately for each sample",
+      "GVPO does not use the closed form at all; it keeps GRPO's ratio and only changes the KL",
+      "DPO uses it on groups of completions; GVPO uses it on chosen/rejected preference pairs"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO applies the closed form to a chosen/rejected pair, where Z(x) cancels in the difference. GVPO applies it to a whole group of completions for a prompt, where Z(x) cancels after subtracting the group mean."
+  },
+  {
+    "id": "F.2-020",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.1 Intuition",
+    "question": "What is the obstacle to using the KL-constrained closed form directly, and how does GVPO get around it?",
+    "options": [
+      "pi_ref is unknown, so GVPO replaces it with the uniform distribution over the completions in each group",
+      "Z(x) is intractable, but it is shared by all completions of a prompt, so subtracting the group mean cancels it",
+      "beta cannot be chosen in advance, so GVPO learns it from data jointly with the policy parameters",
+      "R is non-differentiable, so GVPO approximates the verifier with a neural network trained alongside the policy"
+    ],
+    "answer_index": 1,
+    "explanation": "The partition function Z(x) sums over all possible completions and is intractable. Because it is shared by all completions of the same prompt, comparing within a group by centering removes it. That is the whole trick."
+  },
+  {
+    "id": "F.2-021",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "In GVPO, what is the implicit reward R_theta(x, y) of the current policy?",
+    "options": [
+      "beta * log pi_theta(y|x) alone",
+      "beta * log(pi_theta(y|x) / pi_ref(y|x))",
+      "R(x, y) - beta * log Z(x), computed directly",
+      "beta * log(pi_theta(y|x) / pi_old(y|x))"
+    ],
+    "answer_index": 1,
+    "explanation": "The implicit reward is beta times the log-ratio of the policy to the reference, the same DPO quantity. At the optimum it equals R(x,y) - beta log Z(x). The ratio to pi_old is GRPO's importance ratio, which GVPO drops."
+  },
+  {
+    "id": "F.2-022",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "In GVPO notation, what role does beta > 0 play?",
+    "options": [
+      "The clipping epsilon that bounds how far the ratio can move per step",
+      "The learning rate of the optimizer applied to the policy parameters",
+      "The KL strength controlling how far the policy may move from the reference",
+      "The group size G, i.e. the number of completions sampled per prompt"
+    ],
+    "answer_index": 2,
+    "explanation": "beta is the KL-constraint strength: small beta lets the policy move far from pi_ref, large beta keeps it close. It is not the LR, group size or clip parameter (GVPO has no clip)."
+  },
+  {
+    "id": "F.2-023",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "At the GVPO optimum, how is the implicit reward related to the actual reward?",
+    "options": [
+      "R_theta(x, y) = R(x, y) exactly, for every y",
+      "R_theta(x, y) = beta R(x, y) - log Z(x)",
+      "R_theta(x, y) = 0 for all y at the optimum",
+      "R_theta(x, y) = R(x, y) - beta log Z(x)"
+    ],
+    "answer_index": 3,
+    "explanation": "Plugging pi* into the implicit-reward definition gives R(x,y) - beta log Z(x). The offset is the same for every completion of a prompt, which is why centering over the group removes it."
+  },
+  {
+    "id": "F.2-024",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "What does the GVPO loss minimize?",
+    "options": [
+      "Half the summed squared mismatch between group-centered implicit reward and group-centered actual reward",
+      "The cross-entropy between the policy's sequence probabilities and the verifier's binary correctness labels",
+      "The KL divergence between the current policy and the old sampling policy, with no reward term at all",
+      "The negative clipped surrogate of the standardized advantage, summed over every completion in the group"
+    ],
+    "answer_index": 0,
+    "explanation": "L_GVPO = 1/2 sum_x sum_i [(R_theta(x,y_i) - mean R_theta) - (R(x,y_i) - mean R)]^2. It is a centered regression of implicit reward onto actual reward. There is no clipped surrogate."
+  },
+  {
+    "id": "F.2-025",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "How should the bracket in GVPO's gradient, (R_i - mean R) - beta(l_i - mean l), be read?",
+    "options": [
+      "As the importance ratio between the new and old policy, clipped to a fixed trust region",
+      "As the standardized advantage divided by the group's reward standard deviation, per sample",
+      "As a per-token entropy bonus that keeps the policy from collapsing onto one answer too early",
+      "As a weight on each sample's log-prob gradient: centered reward minus how far the policy moved"
+    ],
+    "answer_index": 3,
+    "explanation": "Each sample's grad log pi is weighted by its centered reward minus beta times its centered log-ratio to the reference. Once the policy has moved enough toward a good sample, the weight reaches zero. It is not a ratio or entropy term."
+  },
+  {
+    "id": "F.2-026",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "In GVPO's gradient, what does l_i denote?",
+    "options": [
+      "log(pi_theta(y_i|x) / pi_ref(y_i|x))",
+      "log(pi_theta(y_i|x) / pi_old(y_i|x))",
+      "The length |y_i| of completion y_i in tokens",
+      "The reward R_i of completion y_i"
+    ],
+    "answer_index": 0,
+    "explanation": "l_i is the log-ratio of the current policy to the reference for sample i; beta * l_i is the implicit reward. It is not the old-policy ratio or the completion length."
+  },
+  {
+    "id": "F.2-027",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "What property of GVPO's gradient weights makes Z(x) drop out?",
+    "options": [
+      "The weights are all positive within a group",
+      "The weights sum to zero within each group",
+      "The weights are clipped to [1-eps, 1+eps]",
+      "The weights all equal one over the group size"
+    ],
+    "answer_index": 1,
+    "explanation": "Because both reward and log-ratio are centered, the weights sum to zero within each group, so any constant shared across the group, like beta log Z(x), contributes nothing. The paper also proves a unique optimum at pi*."
+  },
+  {
+    "id": "F.2-028",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "How do GRPO and GVPO weight each sample's log-prob gradient?",
+    "options": [
+      "Both by r_i A_i with clipping, but GVPO uses a larger upper epsilon and no KL term",
+      "GRPO by r_i A_i (ratio times standardized reward); GVPO by centered reward minus beta times centered log-ratio",
+      "Both by the raw reward R_i, with GVPO adding a reference KL penalty after the group mean is removed",
+      "GRPO by centered reward only, with no ratio; GVPO by the importance ratio only, with no reward centering"
+    ],
+    "answer_index": 1,
+    "explanation": "GRPO uses the ratio times standardized advantage, clipped. GVPO uses (R_i - mean R) - beta(l_i - mean l): no ratio and no clip. The second term acts as a built-in brake."
+  },
+  {
+    "id": "F.2-029",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "Why does the second term in GVPO's weight act as a 'built-in brake'?",
+    "options": [
+      "It clips the importance ratio at 1+eps, so a good sample can only be up-weighted a little per step",
+      "It reduces the effective learning rate over time, so later updates are smaller regardless of the samples",
+      "It stops training after a fixed number of steps, once the policy has drifted a set KL from the reference",
+      "Once the policy has moved enough toward a good sample, the centered log-ratio cancels its centered reward"
+    ],
+    "answer_index": 3,
+    "explanation": "As the policy raises a good sample's probability relative to the reference, beta times its centered log-ratio grows until it equals the centered reward, at which point the weight is zero. That stops further movement without explicit clipping."
+  },
+  {
+    "id": "F.2-030",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.2 Mathematics",
+    "question": "What does the GVPO paper prove about its objective?",
+    "options": [
+      "It is equivalent to the PPO clipped objective with eps set to beta",
+      "It has a unique optimum at pi* proportional to pi_ref exp(R/beta)",
+      "It has many optima, one per random seed, all with equal expected reward",
+      "It converges to the old sampling policy pi_old as training proceeds"
+    ],
+    "answer_index": 1,
+    "explanation": "The paper proves the GVPO objective has a unique optimum at the KL-constrained closed-form policy. It is not equivalent to PPO's clipped objective and does not converge to pi_old."
+  },
+  {
+    "id": "F.2-031",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.3 Numerical example by hand",
+    "question": "In GVPO with k = 2, beta = 1, rewards [1, 0] and pi_theta = pi_ref, what are the gradient weights at the start?",
+    "options": [
+      "-0.5 on the rewarded sample and +0.5 on the other",
+      "0 on both, since the policy equals the reference",
+      "+0.5 on the rewarded sample and -0.5 on the other",
+      "+1 on the rewarded sample and 0 on the other"
+    ],
+    "answer_index": 2,
+    "explanation": "Centered rewards are [0.5, -0.5] and centered implicit rewards are [0, 0] at the reference, so the weights are 0.5 - 0 and -0.5 - 0. The policy raises log pi of the rewarded sample and lowers the other. The starting loss is 0.25."
+  },
+  {
+    "id": "F.2-032",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.3 Numerical example by hand",
+    "question": "In GVPO with two samples, rewards [1, 0] and beta = 1, where does training stop?",
+    "options": [
+      "When both samples have equal probability under the policy, so neither one is preferred over the other",
+      "When the rewarded sample has probability 1, so the policy has become deterministic on this prompt",
+      "When the policy exactly equals the reference again, after an initial overshoot toward the reward",
+      "When l_1 - l_2 = (R_1 - R_2)/beta = 1, i.e. the probability ratio is e times the reference's"
+    ],
+    "answer_index": 3,
+    "explanation": "It stops when the centered implicit reward equals the centered reward, i.e. l_1 - l_2 = 1, so pi(y_1)/pi(y_2) = e * pi_ref(y_1)/pi_ref(y_2), exactly the ratio pi* prescribes. It does not go to a deterministic policy."
+  },
+  {
+    "id": "F.2-033",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.3 Numerical example by hand",
+    "question": "In GVPO, how does a small beta (e.g. 0.1) change the target policy compared with beta = 1, for rewards [1, 0]?",
+    "options": [
+      "The loss becomes undefined for beta < 1, since the target log-ratio diverges",
+      "The target ratio becomes e^0.1, about 1.105, so the policy barely moves at all",
+      "The target ratio becomes e^10 (about 22026), so the policy moves much further",
+      "The target ratio is unchanged, because beta cancels when the group is centered"
+    ],
+    "answer_index": 2,
+    "explanation": "The target log-ratio difference is (R_1 - R_2)/beta, so beta = 0.1 gives 10 and a ratio of e^10, about 22026. Small beta weakens the KL constraint. It does not cancel and is defined for any beta > 0."
+  },
+  {
+    "id": "F.2-034",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Exercise",
+    "question": "With beta = 0.5, three samples with rewards [1, 1, 0] and a uniform reference, what probabilities does GVPO's optimum assign?",
+    "options": [
+      "About [0.4, 0.4, 0.2]",
+      "About [0.333, 0.333, 0.333]",
+      "About [0.5, 0.5, 0.0]",
+      "About [0.468, 0.468, 0.063]"
+    ],
+    "answer_index": 3,
+    "explanation": "pi* is proportional to pi_ref exp(R/beta) = e^2, e^2, e^0. With e^2 about 7.389, the total is 15.778, giving about [0.468, 0.468, 0.063]. Check: log(0.468/0.063) is about 2 = (1-0)/0.5. It is never exactly 0 for the zero-reward sample."
+  },
+  {
+    "id": "F.2-035",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.4 Shapes, dtype, device",
+    "question": "What is the shape of the logprobs tensor passed to llmre's gvpo_loss?",
+    "options": [
+      "(P, G, T): per-token log-probs for each completion",
+      "(P, G): prompts by group size, each a summed log-prob",
+      "(G,): one log-prob per group, averaged over prompts",
+      "(P, V): log-probs over the vocabulary for each prompt"
+    ],
+    "answer_index": 1,
+    "explanation": "logprobs is (P, G) with P prompts and G completions per prompt, each a sum of token log-probs, requiring grad. Per-token tensors would be (P, G, T), which is a common mistake since the derivation is over whole completions."
+  },
+  {
+    "id": "F.2-036",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.4 Shapes, dtype, device",
+    "question": "Which input to llmre's gvpo_loss comes from a frozen forward pass with no gradient?",
+    "options": [
+      "rewards (P, G)",
+      "ref_logprobs (P, G)",
+      "beta (a scalar float)",
+      "logprobs (P, G)"
+    ],
+    "answer_index": 1,
+    "explanation": "ref_logprobs comes from the frozen reference model forward, with no grad. logprobs comes from the policy and requires grad. rewards are 0/1 verifier outputs, and beta is a scalar hyperparameter."
+  },
+  {
+    "id": "F.2-037",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.4 Shapes, dtype, device",
+    "question": "In llmre's gvpo_loss, what does reduction='none' return?",
+    "options": [
+      "A scalar mean over all prompts",
+      "A per-token loss of shape (P, G, T)",
+      "A per-prompt loss of shape (P,)",
+      "A per-sample loss of shape (P, G)"
+    ],
+    "answer_index": 2,
+    "explanation": "With reduction='none', gvpo_loss returns the per-prompt loss of shape (P,), since the squared mismatch is summed over the group dimension. 'mean' reduces to a scalar."
+  },
+  {
+    "id": "F.2-038",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.5 From-scratch implementation",
+    "question": "In llmre's gvpo_loss, what is the first computed quantity?",
+    "options": [
+      "advantages = (rewards - mean) / std, shape (P, G)",
+      "implicit = beta * (logprobs - ref_logprobs), shape (P, G)",
+      "kl = logprobs.exp() * (logprobs - ref_logprobs), shape (P,)",
+      "ratio = exp(logprobs - old_logprobs), shape (P, G)"
+    ],
+    "answer_index": 1,
+    "explanation": "gvpo_loss starts from the implicit reward beta * (logprobs - ref_logprobs). It then centers this and the rewards over dim=1 and sums half the squared difference over the group. There is no old-policy ratio or std standardization."
+  },
+  {
+    "id": "F.2-039",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.5 From-scratch implementation",
+    "question": "In llmre's gvpo_loss, over which dimension are the implicit reward and rewards centered?",
+    "options": [
+      "Over all elements of the batch at once, with keepdim=False",
+      "dim=0, the prompt dimension, with keepdim=True",
+      "Over the token dimension, before summing each sequence",
+      "dim=1, the group dimension, with keepdim=True"
+    ],
+    "answer_index": 3,
+    "explanation": "Centering is per prompt, over the G completions (dim=1), so that each prompt's Z(x) cancels. Centering over the batch would mix prompts with different Z(x), breaking the cancellation."
+  },
+  {
+    "id": "F.2-040",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.5 From-scratch implementation",
+    "question": "In llmre's gvpo_loss, what is the GVPO loss when logprobs equals ref_logprobs, with two samples, rewards [1, 0] and beta = 1?",
+    "options": [
+      "0.25",
+      "0.125",
+      "0.0",
+      "1.0"
+    ],
+    "answer_index": 0,
+    "explanation": "At the reference the centered implicit reward is [0, 0] while centered reward is [0.5, -0.5], so the loss is 0.5 * (0.25 + 0.25) = 0.25. The loss is 0 only at the optimum."
+  },
+  {
+    "id": "F.2-041",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.5 From-scratch implementation",
+    "question": "How can you construct the GVPO optimum in code to verify gvpo_loss gives zero?",
+    "options": [
+      "ref - R * beta, subtracted elementwise without any normalization",
+      "torch.log(R + ref.exp()), elementwise, then normalized by the sum",
+      "torch.log_softmax(ref + R / beta, dim=1), i.e. pi_ref * exp(R/beta) / Z",
+      "torch.softmax(R / beta, dim=0), ignoring the reference entirely"
+    ],
+    "answer_index": 2,
+    "explanation": "log_softmax over the group of log pi_ref + R/beta gives the normalized log of pi_ref exp(R/beta), exactly pi*. Passing it as logprobs yields loss 0 up to float error. The other forms are not the optimum."
+  },
+  {
+    "id": "F.2-042",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.5 From-scratch implementation",
+    "question": "Besides convergence to the optimum, what invariance does code/tests/test_frontier_updates.py check for GVPO?",
+    "options": [
+      "Changing beta while keeping the same rewards leaves the loss unchanged",
+      "Adding any per-prompt constant to the rewards leaves the loss unchanged",
+      "Multiplying all rewards by any positive constant leaves the loss unchanged",
+      "Swapping logprobs and ref_logprobs in the call leaves the loss unchanged"
+    ],
+    "answer_index": 1,
+    "explanation": "Because rewards are centered within each group, adding a constant per prompt cancels. The test also runs gradient descent from uniform and checks convergence to softmax(log pi_ref + R/beta). Scaling rewards or changing beta does change the loss."
+  },
+  {
+    "id": "F.2-043",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.6 Cost and what real frameworks would do",
+    "question": "How does GVPO's compute cost compare with GRPO with a KL term?",
+    "options": [
+      "Twice as many forward passes, because centering needs a second pass over each group",
+      "It requires generating twice as many samples per prompt to estimate the group mean",
+      "Same passes: policy log-probs with grad plus a frozen reference forward; loss is O(PG)",
+      "It needs a learned critic forward pass in addition to the policy and the reference"
+    ],
+    "answer_index": 2,
+    "explanation": "GVPO uses the same passes as GRPO-with-KL: policy log-probs (with grad) and a frozen reference forward. The loss is O(PG) elementwise operations. No critic or extra sampling is needed."
+  },
+  {
+    "id": "F.2-044",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.6 Cost and what real frameworks would do",
+    "question": "What memory does GVPO avoid compared with GRPO?",
+    "options": [
+      "Storing old-policy log-probs for importance ratios",
+      "Storing the policy's gradients between optimizer steps",
+      "Storing the frozen reference model's weights in memory",
+      "Storing the verifier rewards for every sampled group"
+    ],
+    "answer_index": 0,
+    "explanation": "GVPO has no ratio, so there are no old-policy log-probs to keep; the reference forward replaces them. The reference model is still in memory, as in GRPO-with-KL."
+  },
+  {
+    "id": "F.2-045",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "3.6 Cost and what real frameworks would do",
+    "question": "What guarantee does GVPO not provide by itself, because it has no ratio?",
+    "options": [
+      "A unique optimum of the objective at the closed-form KL policy",
+      "Compatibility with binary 0/1 verifier rewards on each sample",
+      "The 'safe to reuse this batch for several steps' guarantee of clipping",
+      "Cancellation of the partition function Z(x) within each prompt's group"
+    ],
+    "answer_index": 2,
+    "explanation": "Clipping in PPO/GRPO limits how far reuse of a batch can push the policy. GVPO lacks that, so its behavior with batch reuse or async staleness is an open practical question (marked as inference). It does have a unique optimum, Z cancellation, and works with binary rewards."
+  },
+  {
+    "id": "F.2-046",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "4. On-policy distillation (why the paper mentions it)",
+    "question": "How does GVPO become on-policy distillation?",
+    "options": [
+      "Replace the reference policy with the teacher and set beta = 0, so the student copies the teacher's distribution",
+      "Train the student on teacher-generated samples with cross-entropy, using the GVPO group as the minibatch",
+      "Replace the verifier reward with the teacher's log-prob of the student's own sample: R = log pi_teacher(y|x)",
+      "Replace each group with a single teacher completion and regress the student's log-prob onto the teacher's"
+    ],
+    "answer_index": 2,
+    "explanation": "Using R = log pi_teacher(y|x) on samples the student itself generated, the same centered-MSE loss pushes the student toward the teacher on its own samples. Same code, different reward. Training on teacher samples is off-policy distillation."
+  },
+  {
+    "id": "F.2-047",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Common mistakes",
+    "question": "Why is treating GVPO as a drop-in replacement for production GRPO a mistake?",
+    "options": [
+      "It is mathematically equivalent to GRPO, so swapping it in gains nothing in practice",
+      "It requires human preference pairs that typical GRPO pipelines do not collect",
+      "It is unvalidated at frontier scale; run it only as an ablation against a GRPO baseline",
+      "It cannot be implemented efficiently in PyTorch without custom fused CUDA kernels"
+    ],
+    "answer_index": 2,
+    "explanation": "GVPO has no validation at frontier scale, so the safe use is an ablation compared to a GRPO baseline on the same seeds. It is not equivalent to GRPO, is implementable (llmre/rl/gvpo.py), and uses group rewards, not pairs."
+  },
+  {
+    "id": "F.2-048",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if you forget to center both terms in the GVPO loss?",
+    "options": [
+      "Nothing; centering only improves numerical stability",
+      "The loss becomes identical to DPO",
+      "The gradients become exactly zero",
+      "Z(x) no longer cancels, so the loss is wrong"
+    ],
+    "answer_index": 3,
+    "explanation": "Centering both the implicit reward and the reward is what removes the shared beta log Z(x) offset. Without it, the regression target includes an unknown constant and the loss no longer has pi* as its minimum."
+  },
+  {
+    "id": "F.2-049",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Common mistakes",
+    "question": "Why should GVPO's logprobs be per-sequence sums rather than per-token log-probs?",
+    "options": [
+      "Per-token log-probs would require a learned critic to assign credit to each token",
+      "The derivation is over whole completions y, so it needs log pi(y|x) of the full sequence",
+      "Per-sequence sums are cheaper to store in bf16 and avoid overflow in the exponent",
+      "Per-token log-probs are not differentiable once they are gathered from the logits"
+    ],
+    "answer_index": 1,
+    "explanation": "The closed-form optimum and implicit reward are defined for whole completions, so logprobs must be the summed token log-probs per completion, shape (P, G). Per-token values are differentiable but do not match the derivation."
+  },
+  {
+    "id": "F.2-050",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Common mistakes",
+    "question": "In GVPO, what is the anchor policy, and what is a common confusion?",
+    "options": [
+      "The anchor is the teacher model in all cases, and it is often confused with pi_ref",
+      "The anchor is pi_old, the last sampling policy, and it is often confused with pi_ref",
+      "There is no anchor; GVPO is unconstrained, though it is often assumed to use a KL term",
+      "The anchor is pi_ref from the KL constraint, not pi_old, the last step's sampling policy"
+    ],
+    "answer_index": 3,
+    "explanation": "GVPO anchors on the reference policy of the KL constraint. Confusing it with pi_old (used by GRPO's importance ratio) is a listed mistake. The teacher only appears in the on-policy distillation variant."
+  },
+  {
+    "id": "F.2-051",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Debugging exercise",
+    "question": "A GVPO run's loss goes to about 0 in 50 steps, but held-out pass@1 does not change, and 95% of groups have all-zero rewards. What happened?",
+    "options": [
+      "Unanimous groups have zero centered reward, so the loss is minimized by staying at the reference; little signal",
+      "The learning rate was too high, so the policy diverged and the loss collapsed to a degenerate near-zero value early",
+      "beta was too small, so the policy moved too far from the reference and overfit the few rewarded groups",
+      "The reference model was accidentally updated along with the policy, so the implicit reward stayed at zero"
+    ],
+    "answer_index": 0,
+    "explanation": "With equal rewards, centered reward is 0, so the loss only asks the centered implicit reward to be 0 too: stay at the reference. With 95% such groups, barely moving minimizes the loss. Same root cause as GRPO's zero-advantage groups."
+  },
+  {
+    "id": "F.2-052",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Debugging exercise",
+    "question": "How do you fix a GVPO or GRPO run where most groups have all-equal rewards?",
+    "options": [
+      "Remove the centering so that zero-reward groups still contribute a nonzero gradient",
+      "Lower beta to zero so the reference is ignored and every sample is pushed toward reward",
+      "Fix task difficulty or use DAPO-style dynamic sampling that drops unanimous groups",
+      "Increase the clip epsilon so that more samples in each group fall inside the trust region"
+    ],
+    "answer_index": 2,
+    "explanation": "The problem is a lack of mixed groups. Make tasks the right difficulty or drop unanimous groups and refill (dynamic sampling). Removing centering breaks Z cancellation; GVPO has no clip; beta = 0 removes the KL constraint."
+  },
+  {
+    "id": "F.2-053",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Research connection / what to read",
+    "question": "Which section of the GVPO paper should be read first?",
+    "options": [
+      "The hyperparameter tables, to set up an exact replication first",
+      "Section 3: the derivation and the 'weights sum to zero, so Z cancels' argument",
+      "The related-work section only, to place GVPO among the GRPO variants",
+      "The convergence-rate appendices, which prove the unique optimum in detail"
+    ],
+    "answer_index": 1,
+    "explanation": "Read GVPO section 3 for the derivation and the zero-sum-weights argument, then skim GVPO++ for the distillation extension. The convergence-rate appendices are recommended to skip on a first pass."
+  },
+  {
+    "id": "F.2-054",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Code this after reading",
+    "question": "What exercise is suggested after reading about GVPO?",
+    "options": [
+      "Swap gvpo_loss into the toy RLVR loop for the GRPO objective; plot correct-rate vs step for both on the same seeds",
+      "Use gvpo_loss to pretrain the course GPT from scratch, comparing its validation loss with standard cross-entropy",
+      "Replace the tokenizer's BPE merges with GVPO-trained merges and measure the effect on compression ratio",
+      "Train a reward model with gvpo_loss on preference pairs and compare its accuracy with a Bradley-Terry model"
+    ],
+    "answer_index": 0,
+    "explanation": "The toy RLVR loop already has (P, G) log-probs of sampled answers, so gvpo_loss can replace the GRPO objective. Comparing correct-rate curves on the same seeds is a proper one-variable ablation."
+  },
+  {
+    "id": "F.2-055",
+    "chapter": "F.2",
+    "chapter_name": "GRPO fixes: Dr. GRPO, DAPO, GVPO",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-02.md",
+    "section": "Check yourself",
+    "question": "What does GRPO have that GVPO drops, and why does dropping it matter?",
+    "options": [
+      "The verifier reward; it is easy to hack, so GVPO swaps in the reference log-prob as reward",
+      "The group baseline; it adds bias, so GVPO weights each sample by its raw uncentered reward",
+      "The ratio pi_theta/pi_old and its clip; the ratio is unbounded and its variance compounds",
+      "The reference policy; it uses too much memory, so GVPO anchors on the old policy instead"
+    ],
+    "answer_index": 2,
+    "explanation": "GVPO removes the ratio and clip, eliminating an instability source whose variance grows with sequence length. It keeps the group, the verifier reward and a reference policy."
+  }
+]

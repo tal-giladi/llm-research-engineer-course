@@ -1,0 +1,956 @@
+[
+  {
+    "id": "06.2-001",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is 'the loss at step 0 is near ln(V)' the first sanity check of an LLM training run?",
+    "options": [
+      "If step 0 is far from ln(V), the model or data pipeline is broken before any training",
+      "Because ln(V) is the target loss the model must reach before training is allowed to stop",
+      "Because the optimizer needs the step-0 loss to set its initial learning rate and warmup length",
+      "Because ln(V) measures how many tokens the model has already memorized at initialization"
+    ],
+    "answer_index": 0,
+    "explanation": "An untrained model predicts nearly uniformly, giving loss about ln V. A very different value at step 0 signals exploding logits or a data leak immediately, which is the cheapest smoke test available. It is a starting point, not a training target."
+  },
+  {
+    "id": "06.2-002",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is knowing a model's parameter count 'cold' useful to an ML engineer?",
+    "options": [
+      "It determines the vocabulary size the tokenizer must be trained to use",
+      "It fixes the peak learning rate the optimizer must use for the run",
+      "It determines the number of attention heads each block is required to have",
+      "It lets you predict memory, FLOPs and cost without running anything"
+    ],
+    "answer_index": 3,
+    "explanation": "Parameter count drives weight, gradient and optimizer-state memory and the FLOPs per token, so you can estimate hardware and cost on paper. It does not by itself fix the vocabulary, learning rate, or head count."
+  },
+  {
+    "id": "06.2-003",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "1. Initialization: why the starting weights matter",
+    "question": "What is the goal of a weight initialization scheme for a deep network like GPT-2?",
+    "options": [
+      "That the untrained network already outputs the most frequent token at every position",
+      "That every weight starts at exactly zero, so training begins from a perfectly neutral point",
+      "That a fresh network passes a roughly unit-scale signal through every layer, at any depth",
+      "That all activations equal exactly 1 at every layer, so LayerNorm has nothing left to do"
+    ],
+    "answer_index": 2,
+    "explanation": "Too-large weights make activations and gradients explode through depth; too-small makes the signal vanish. A good init keeps the scale roughly constant. All-zero weights would make units identical and break learning."
+  },
+  {
+    "id": "06.2-004",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "1. Initialization: why the starting weights matter",
+    "question": "How does GPT-2 initialize every nn.Linear and nn.Embedding weight and every bias?",
+    "options": [
+      "Weights uniform in [-1, 1]; biases all set to 1 so units start active",
+      "Weights from a normal distribution with mean 0 and std 0.02; biases to 0",
+      "Weights from a normal with std 1/sqrt(C); biases from the same normal",
+      "Weights set to the identity matrix; biases set to the constant 0.02"
+    ],
+    "answer_index": 1,
+    "explanation": "GPT-2's scheme is N(0, 0.02^2) for every linear and embedding weight and zeros for every bias. 1/sqrt(C) is the more 'principled' alternative it does not use."
+  },
+  {
+    "id": "06.2-005",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "1. Initialization: why the starting weights matter",
+    "question": "What does self.apply(self._init_weights) do in a PyTorch nn.Module?",
+    "options": [
+      "Calls _init_weights only on the top-level module, not on any of its children",
+      "Recursively visits every sub-module and calls _init_weights on each",
+      "Applies _init_weights to the gradients after every backward pass during training",
+      "Registers _init_weights as a forward hook that runs on each call"
+    ],
+    "answer_index": 1,
+    "explanation": "Module.apply walks the module tree and runs the function on every sub-module (and the module itself), so one rule reaches all 100+ weight tensors. It runs once when called; it is not a hook or a gradient transform."
+  },
+  {
+    "id": "06.2-006",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "1. Initialization: why the starting weights matter",
+    "question": "In GPT-2's _init_weights, how are nn.Linear and nn.Embedding modules treated differently?",
+    "options": [
+      "Both get N(0, 0.02^2) weights; only Linear may have a bias, which is zeroed",
+      "Linear weights are zeroed, while Embedding weights get N(0, 0.02^2) and no bias",
+      "Embedding weights are zeroed, while Linear weights get N(0, 0.02^2) and zero bias",
+      "Both get N(0, 1) weights, and both have their biases initialized to the constant 0.02"
+    ],
+    "answer_index": 0,
+    "explanation": "Both kinds of weight use std 0.02. The only difference is that a Linear may have a bias, which is set to zero when it exists; an Embedding has no bias."
+  },
+  {
+    "id": "06.2-007",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "1. Initialization: why the starting weights matter",
+    "question": "Why does GPT-2 use std 0.02 for its weights rather than the more principled 1/sqrt(C) (about 0.036 for C = 768)?",
+    "options": [
+      "0.02 is exactly 1/sqrt(C) for C = 768, so the two choices give the very same initialization",
+      "1/sqrt(C) would cause a division by zero for the embeddings, whose width is not defined",
+      "0.02 is derived from the vocabulary size as 1/ln(V), which is the principled choice for LMs",
+      "0.02 is what GPT-2 shipped: small enough to keep early activations calm, and it trained well"
+    ],
+    "answer_index": 3,
+    "explanation": "1/sqrt(768) is about 0.036, not 0.02. GPT-2's 0.02 is an empirical choice that keeps early activations small and trains well; the course reproduces it rather than re-deriving it."
+  },
+  {
+    "id": "06.2-008",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The problem",
+    "question": "In GPT-2's residual stream, each block does x = x + sublayer(ln(x)). If each of L additions adds independent variance v, what is Var(x_L) roughly?",
+    "options": [
+      "Var(x_0) * v^L, growing exponentially with depth",
+      "Var(x_0), staying constant because LayerNorm resets it each block",
+      "Var(x_0) + L * v, growing linearly with depth",
+      "Var(x_0) / L, shrinking with depth as adds average"
+    ],
+    "answer_index": 2,
+    "explanation": "Variances of independent terms add, so every residual add contributes v and the total grows linearly with the number of adds. The LayerNorms sit on the branches in a pre-norm block, not on the stream, so they do not reset its variance."
+  },
+  {
+    "id": "06.2-009",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The problem",
+    "question": "Why is a residual stream whose variance grows with depth a problem in GPT-2?",
+    "options": [
+      "The stream becomes exactly zero after enough blocks, so gradients can no longer flow",
+      "The causal attention mask becomes non-causal once the stream's variance is large enough",
+      "The stream grows far larger than it started, destabilizing the norms and the logits",
+      "The embedding tables must grow in width to match the residual stream's larger scale"
+    ],
+    "answer_index": 2,
+    "explanation": "By layer 12, or 96 in a big model, the stream is much larger than at the input, which upsets the norms and makes the logits large and erratic. The causal mask and embedding tables are unaffected."
+  },
+  {
+    "id": "06.2-010",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "Which weights does GPT-2's scaled residual init shrink?",
+    "options": [
+      "Only the QKV projection attn.c_attn in every block of the stack",
+      "Only the residual-writing projections attn.c_proj and mlp.c_proj",
+      "Only the token and position embedding tables wte and wpe at the input",
+      "Every weight in the model, uniformly, by the same depth-scaled factor"
+    ],
+    "answer_index": 1,
+    "explanation": "The two projections whose outputs are added into the residual stream are attn.c_proj and mlp.c_proj. Shrinking just these controls how much variance each add injects, while the rest stay at std 0.02."
+  },
+  {
+    "id": "06.2-011",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "What standard deviation does GPT-2's scaled residual init use for c_proj weights?",
+    "options": [
+      "0.02 / sqrt(2 * n_layer)",
+      "0.02 / n_layer",
+      "0.02 * sqrt(2 * n_layer)",
+      "0.02 / sqrt(n_layer * n_head)"
+    ],
+    "answer_index": 0,
+    "explanation": "std(c_proj) = 0.02 / sqrt(2 n_layer). Dividing the std by sqrt(N) divides the variance each add contributes by N, and N = 2 n_layer is the number of residual adds. Dividing by n_layer would over-shrink the variance by n_layer squared."
+  },
+  {
+    "id": "06.2-012",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "In GPT-2's scaled residual init std = 0.02 / sqrt(2 n_layer), what does the factor 2 count?",
+    "options": [
+      "The two LayerNorms in each block, ln_1 and ln_2, one per sub-layer",
+      "The two embedding tables wte and wpe that feed the residual stream",
+      "The forward and the backward passes, which each traverse every block",
+      "The two residual adds per block: attention's and the MLP's"
+    ],
+    "answer_index": 3,
+    "explanation": "Each block writes into the stream twice, once after attention and once after the MLP, so a model with n_layer blocks has 2 n_layer residual additions in total."
+  },
+  {
+    "id": "06.2-013",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "Why does dividing a projection's init std by sqrt(N) divide the variance it contributes by N?",
+    "options": [
+      "Because a sublayer's output variance scales with the cube of its weight std, not the square",
+      "Because LayerNorm divides each sublayer's output by N before it reaches the residual add",
+      "Because the residual add averages N copies of the sublayer output instead of summing them",
+      "Variance is std squared, and a sublayer's output variance scales with its weight variance"
+    ],
+    "answer_index": 3,
+    "explanation": "(std / sqrt(N))^2 = std^2 / N. A sublayer's output is a sum of weight-times-input terms, so its variance is proportional to the weight variance, and the contribution falls by N."
+  },
+  {
+    "id": "06.2-014",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "What does choosing N = 2 n_layer in the scaled residual init achieve for the residual stream's variance?",
+    "options": [
+      "The stream's variance becomes exactly zero after the last block",
+      "The stream's variance grows exactly as fast as with the normal init, but more smoothly",
+      "The accumulated growth cancels, so the stream stays O(1) regardless of depth",
+      "The stream's variance doubles with every block, which ln_f then undoes"
+    ],
+    "answer_index": 2,
+    "explanation": "There are N adds each contributing v/N, so the total added variance is N * v/N = v, independent of depth. The stream stays bounded whether the model has 12 or 96 layers."
+  },
+  {
+    "id": "06.2-015",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "In code, how does GPT-2 select the weights for the scaled residual init?",
+    "options": [
+      "It loops over modules() and re-initializes every nn.LayerNorm gain it finds in the stack",
+      "It loops over named_parameters() and resets every name ending in 'c_proj.weight'",
+      "It re-initializes the last block only, which it identifies by index -1 in transformer.h",
+      "It re-initializes every parameter whose name contains 'attn', in each of the blocks"
+    ],
+    "answer_index": 1,
+    "explanation": "Matching name.endswith('c_proj.weight') catches both attn.c_proj.weight and mlp.c_proj.weight in every block, and nn.init.normal_ resets them with std 0.02/sqrt(2 n_layer). Matching 'attn' would miss the MLP projection and wrongly include c_attn."
+  },
+  {
+    "id": "06.2-016",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — The fix",
+    "question": "For GPT-2 small (n_layer = 12), what is the scaled residual init factor and the resulting c_proj std?",
+    "options": [
+      "1/sqrt(24), about 0.204, giving std about 0.00408",
+      "1/12, about 0.083, giving a std of about 0.00167",
+      "1/sqrt(12), about 0.289, giving std about 0.00577",
+      "1/24, about 0.042, giving a std of about 0.00083"
+    ],
+    "answer_index": 0,
+    "explanation": "2 n_layer = 24, and 1/sqrt(24) is about 0.204, so std is 0.02 x 0.204, about 0.00408 — roughly five times smaller than every other weight. Using sqrt(12) forgets the two adds per block."
+  },
+  {
+    "id": "06.2-017",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — Worked example with tiny numbers",
+    "question": "In a toy model with n_layer = 2 and per-add variance v = 1 under normal init, how many residual adds are there and what does each contribute with the scaled init?",
+    "options": [
+      "4 adds, each contributing 0.25",
+      "2 adds, each contributing 0.5 of v",
+      "4 adds, each contributing 0.5",
+      "2 adds, each contributing 0.25 of v"
+    ],
+    "answer_index": 0,
+    "explanation": "Each layer has an attention add and an MLP add, so N = 2 x 2 = 4. The scaled init divides the per-add variance by N, giving 1/4 = 0.25 each."
+  },
+  {
+    "id": "06.2-018",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — Worked example with tiny numbers",
+    "question": "With scaled residual init, Var(x_L) is about 1 + N * (1/N) = 2 for a stream starting at variance 1. What does 'stays O(1) regardless of depth' mean here?",
+    "options": [
+      "The final variance stays exactly equal to the starting variance of 1 at every depth",
+      "The final variance is always exactly 0 after the last block, whatever the depth",
+      "The final variance decreases toward 1 as more layers are added on top of the stack",
+      "The final variance no longer depends on the number of layers, not that it stays at 1"
+    ],
+    "answer_index": 3,
+    "explanation": "With the fix, a 2-, 12- or 96-layer model all end near 2 because N * (1/N) = 1 regardless of N. The value is not exactly the starting one; it is simply independent of depth. Without the fix it would be 5, 25 and 193."
+  },
+  {
+    "id": "06.2-019",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — Worked example with tiny numbers",
+    "question": "Starting at variance 1 with each add contributing 1 under normal init, what is the residual stream's variance after a 96-layer model without the scaled init?",
+    "options": [
+      "About 97",
+      "About 2",
+      "About 193",
+      "About 9217"
+    ],
+    "answer_index": 2,
+    "explanation": "96 layers have N = 192 adds, so the variance is 1 + 192 x 1 = 193. With the scaled init it would be about 2. 97 would count only one add per layer."
+  },
+  {
+    "id": "06.2-020",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "2. Scaled residual init — Worked example with tiny numbers",
+    "question": "Why does the scaled residual init mean you do not have to re-tune anything when going from 12 to 96 layers?",
+    "options": [
+      "Because deeper models automatically use a proportionally smaller learning rate schedule",
+      "More adds each contribute proportionally less, so init variance is depth-independent",
+      "Because deeper models have proportionally larger embedding tables to absorb the variance",
+      "Because ln_f rescales each block's output individually before it joins the stream"
+    ],
+    "answer_index": 1,
+    "explanation": "The per-add variance scales as 1/N while the number of adds scales as N, so the products cancel. A 12-layer and a 96-layer model both start out well-behaved without further adjustment."
+  },
+  {
+    "id": "06.2-021",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Embeddings",
+    "question": "In GPT-2's parameter count, why is the token-embedding table wte counted only once?",
+    "options": [
+      "Because embeddings are not trainable and are excluded from the count",
+      "It is tied into lm_head, so the embedding and the head are one tensor",
+      "Because the LM head reuses wpe instead of wte, so wte appears only once",
+      "Because wte is stored in half precision and so counts as half its size"
+    ],
+    "answer_index": 1,
+    "explanation": "Weight tying makes wte and lm_head one Parameter. Counting it once is correct; counting it twice would add about 38.6M phantom parameters for GPT-2 small."
+  },
+  {
+    "id": "06.2-022",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Embeddings",
+    "question": "What is the closed-form parameter count of GPT-2's embeddings, with C = n_embd and V = vocab_size?",
+    "options": [
+      "C * (V + block_size)",
+      "C * V * block_size",
+      "2 * C * V + block_size",
+      "C^2 * (V + block_size)"
+    ],
+    "answer_index": 0,
+    "explanation": "wte is V x C and wpe is block_size x C, so together C (V + block_size). The head adds nothing because it is tied to wte."
+  },
+  {
+    "id": "06.2-023",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — One block",
+    "question": "What are the four weight matrices in a GPT-2 block and their parameter counts?",
+    "options": [
+      "attn.c_attn C^2, attn.c_proj 3C^2, mlp.c_fc 4C^2, mlp.c_proj 4C^2 each",
+      "attn.c_attn 3C^2, attn.c_proj C^2, mlp.c_fc 2C^2, mlp.c_proj 2C^2",
+      "attn.c_attn 4C^2, attn.c_proj 4C^2, mlp.c_fc 3C^2, mlp.c_proj 1C^2 each",
+      "attn.c_attn 3C^2, attn.c_proj C^2, mlp.c_fc 4C^2, mlp.c_proj 4C^2"
+    ],
+    "answer_index": 3,
+    "explanation": "c_attn maps C to 3C for Q, K and V (3C^2); c_proj maps C to C (C^2); the MLP expands C to 4C (4C^2) and contracts 4C to C (4C^2). The total is 12C^2."
+  },
+  {
+    "id": "06.2-024",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — One block",
+    "question": "What do a GPT-2 block's weight matrices sum to?",
+    "options": [
+      "4C^2",
+      "8C^2",
+      "12C^2",
+      "16C^2 + 4C"
+    ],
+    "answer_index": 2,
+    "explanation": "3C^2 + C^2 + 4C^2 + 4C^2 = 12C^2, the familiar per-block estimate. 4C^2 is just the attention part, and 8C^2 just the MLP part."
+  },
+  {
+    "id": "06.2-025",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — One block",
+    "question": "With bias=True, how many bias parameters do the four linear layers of a GPT-2 block contribute?",
+    "options": [
+      "4C: one C-sized bias for each of the four layers",
+      "12C: a 3C-sized bias for each of the four layers",
+      "9C: 3C for c_attn, C, 4C for c_fc, and C",
+      "8C: 3C, C, 3C and C, matching the 3C hidden width"
+    ],
+    "answer_index": 2,
+    "explanation": "Each bias has the length of its layer's output: 3C, C, 4C and C, which sum to 9C. The MLP contraction outputs C, so its bias is C, not 4C."
+  },
+  {
+    "id": "06.2-026",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — One block",
+    "question": "How many parameters do the two LayerNorms in a GPT-2 block contribute?",
+    "options": [
+      "2C: each has a single C-sized scale and no shift at all",
+      "4C: each has a C-sized weight and a C-sized bias",
+      "2C^2: each has a C x C matrix that mixes the channels",
+      "0: LayerNorm has no learnable parameters, only statistics"
+    ],
+    "answer_index": 1,
+    "explanation": "A LayerNorm with bias has a gain vector and a bias vector of length C. Two of them give 2C + 2C = 4C."
+  },
+  {
+    "id": "06.2-027",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — One block",
+    "question": "What is the exact parameter count of one GPT-2 block with bias=True?",
+    "options": [
+      "12C^2 + 13C",
+      "12C^2 + 9C",
+      "12C^2 + 4C",
+      "13C^2 + 12C"
+    ],
+    "answer_index": 0,
+    "explanation": "Weights give 12C^2, linear biases 9C, and the two LayerNorms 4C, so 12C^2 + 13C. Leaving out the norms gives 12C^2 + 9C."
+  },
+  {
+    "id": "06.2-028",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Final norm and total",
+    "question": "What is the closed-form total parameter count of GPT-2 with tied embeddings and bias=True?",
+    "options": [
+      "2CV + C * block_size + L(12C^2 + 13C) + 2C",
+      "C(V + block_size) + L(12C^2) + CV",
+      "C(V + block_size) * L + 12C^2 + 13C",
+      "C(V + block_size) + L(12C^2 + 13C) + 2C"
+    ],
+    "answer_index": 3,
+    "explanation": "Embeddings C(V + block_size), L blocks of 12C^2 + 13C each, and ln_f's 2C (weight and bias). The tied head adds nothing; adding a second CV would double-count it."
+  },
+  {
+    "id": "06.2-029",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Final norm and total",
+    "question": "What does GPT-2's final LayerNorm ln_f add to the parameter count, and what does the LM head add?",
+    "options": [
+      "ln_f adds 2C; the head adds another V * C table",
+      "ln_f adds nothing; the head adds a V-sized bias only",
+      "ln_f adds C^2 as a full matrix; the head adds nothing new",
+      "ln_f adds 2C; the tied head adds nothing new"
+    ],
+    "answer_index": 3,
+    "explanation": "ln_f has a C-sized weight and a C-sized bias. The head's (V, C) weight is the same tensor as wte, already counted with the embeddings, and it has no bias."
+  },
+  {
+    "id": "06.2-030",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Plug in GPT-2 small",
+    "question": "What is GPT-2 small's exact parameter count with C = 768, V = 50257, block_size = 1024, L = 12?",
+    "options": [
+      "163,037,184",
+      "123,653,376",
+      "124,439,808",
+      "85,054,464"
+    ],
+    "answer_index": 2,
+    "explanation": "39,383,808 (embeddings) + 85,054,464 (12 blocks) + 1,536 (ln_f) = 124,439,808, the 'GPT-2 124M'. 85M is just the blocks, 123.65M is the non-embedding count, and about 163M would come from counting the tied table twice."
+  },
+  {
+    "id": "06.2-031",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Plug in GPT-2 small",
+    "question": "In GPT-2 small's 124M parameters, roughly how large are the block stack, the token table and the position table?",
+    "options": [
+      "Blocks about 39M, wte about 85M, wpe about 0.8M",
+      "Blocks about 85M, wte about 38.6M, wpe about 0.8M",
+      "Blocks about 85M, wte about 0.8M, wpe about 38.6M",
+      "Blocks about 62M, wte about 38.6M, wpe about 23.6M"
+    ],
+    "answer_index": 1,
+    "explanation": "The 12 blocks are 12 x 7,087,872 = 85,054,464. wte is 50257 x 768 = 38,597,376 and wpe is 1024 x 768 = 786,432. The model is dominated by the blocks; the position table is tiny."
+  },
+  {
+    "id": "06.2-032",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Plug in GPT-2 small",
+    "question": "What is the parameter count of a single GPT-2 small block (C = 768, with biases and LayerNorms)?",
+    "options": [
+      "7,087,872",
+      "7,077,888",
+      "589,824",
+      "85,054,464"
+    ],
+    "answer_index": 0,
+    "explanation": "12 x 768^2 = 7,077,888 plus 13 x 768 = 9,984 gives 7,087,872. 7,077,888 is the weight-matrix part only, and 85M is all 12 blocks."
+  },
+  {
+    "id": "06.2-033",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Verify in PyTorch",
+    "question": "Why does sum(p.numel() for p in model.parameters()) count GPT-2's tied wte/lm_head table only once?",
+    "options": [
+      "parameters() de-duplicates shared tensors, yielding each Parameter once",
+      "Because lm_head is registered as a buffer rather than as an nn.Parameter",
+      "Because numel() returns half the true size for any tensor that is tied",
+      "Because wte is excluded from parameters() whenever weight tying is enabled"
+    ],
+    "answer_index": 0,
+    "explanation": "parameters() yields each unique Parameter object a single time, so the tied table is counted once and the total is 124M, not about 163M. Both names still refer to a real, trainable parameter."
+  },
+  {
+    "id": "06.2-034",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Verify in PyTorch",
+    "question": "What is nanoGPT's 'non-embedding' parameter count for GPT-2 small, and what does it subtract?",
+    "options": [
+      "85,054,464: it subtracts both wte and wpe tables",
+      "85,842,432: it subtracts only the token table wte",
+      "124,438,272: it subtracts only ln_f's 1,536 parameters",
+      "123,653,376: it subtracts only wpe (786,432)"
+    ],
+    "answer_index": 3,
+    "explanation": "nanoGPT's non-embedding count removes wpe on the grounds that it is not part of the core transformer, giving 124,439,808 - 786,432 = 123,653,376. It keeps wte because, through tying, that table is also the output head that produces logits."
+  },
+  {
+    "id": "06.2-035",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "3. Counting the parameters — Verify in PyTorch",
+    "question": "Why does nanoGPT's non-embedding parameter count not subtract the token table wte?",
+    "options": [
+      "Because wte is too small relative to the blocks to matter in the total",
+      "Because wte is frozen during training and so its values never change at all",
+      "Because of tying, wte is also the output head that produces the logits",
+      "Because wte is already counted inside the transformer blocks' own weights"
+    ],
+    "answer_index": 2,
+    "explanation": "The tied table does double duty as the LM head, so it is part of the computation that produces predictions. Only wpe, a pure input-side table, is removed."
+  },
+  {
+    "id": "06.2-036",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Why",
+    "question": "Why is an untrained GPT's predicted next-token distribution nearly uniform?",
+    "options": [
+      "Because the LM head is initialized to exactly the identity matrix, so all logits match",
+      "At init its logits are tiny and nearly equal, so softmax gives each token about 1/V",
+      "Because the untrained model always outputs the most frequent token with probability 1/V",
+      "Because dropout zeroes every logit at initialization, so all tokens tie at zero"
+    ],
+    "answer_index": 1,
+    "explanation": "With small random weights, the logits are close to zero and nearly equal, so softmax spreads probability evenly. That is why the loss is about -log(1/V) = log V."
+  },
+  {
+    "id": "06.2-037",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Why",
+    "question": "What loss does the cross-entropy formula give for an untrained model with predicted probability q(t) about 1/V for the true token t?",
+    "options": [
+      "1/V, the probability itself",
+      "-log(1/V) = log V",
+      "1 - 1/V, the error rate",
+      "V log V, summed over V"
+    ],
+    "answer_index": 1,
+    "explanation": "Cross-entropy for one position is -log q(t). Plugging in q(t) = 1/V gives log V; for GPT-2, ln 50257 is about 10.82."
+  },
+  {
+    "id": "06.2-038",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Why",
+    "question": "At step 0 a GPT-2 run (V = 50257) reports a loss of 30. What does that suggest?",
+    "options": [
+      "The logits are exploding, from a bad init or a bug",
+      "The data pipeline is leaking targets into the inputs",
+      "The model is correctly initialized and learning quickly",
+      "The vocabulary is much smaller than expected"
+    ],
+    "answer_index": 0,
+    "explanation": "A correct untrained model reports about 10.8. A loss far above that means logits are large and confidently wrong, pointing to init or code bugs. A suspiciously low loss is what points to a data leak."
+  },
+  {
+    "id": "06.2-039",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Why",
+    "question": "At step 0 a GPT-2 run (V = 50257) reports a loss of 2.3. What is the most likely explanation?",
+    "options": [
+      "The logits are exploding because the init std is too large for the model's depth",
+      "The model is correctly initialized, and 2.3 is the expected step-0 value for GPT-2",
+      "The learning rate is too high, so the first update overshoots straight to a low loss",
+      "A data leak: targets are visible in the inputs, or inputs and targets are misaligned"
+    ],
+    "answer_index": 3,
+    "explanation": "An untrained model cannot genuinely predict text, so it should score about ln V = 10.8. A loss of 2.3 before learning means the model can already 'see' the answer, almost always a leak or misalignment. Exploding logits would raise the loss, not lower it."
+  },
+  {
+    "id": "06.2-040",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Why",
+    "question": "Why is the step-0 loss described as the cheapest, most reliable smoke test in LLM training?",
+    "options": [
+      "It requires training to convergence, but it is cheap because it runs on a CPU only",
+      "It measures the final model quality directly, without needing any evaluation set",
+      "It needs one forward pass, and its expected value, about ln V, is known in advance",
+      "It verifies that the optimizer state is correctly sharded across all of the GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "One forward pass on random weights gives a number you can compare to ln V before spending any compute on training. Big deviations reveal init bugs or data leaks immediately."
+  },
+  {
+    "id": "06.2-041",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Verify on a small vocab",
+    "question": "In the small-vocabulary check (V = 65, two layers, C = 64), what init loss is measured versus the theoretical ln(65)?",
+    "options": [
+      "About 10.82 measured versus 4.17 theoretical",
+      "About 4.17 measured versus 4.17 theoretical, exactly equal",
+      "About 4.23 measured versus 4.17 theoretical",
+      "About 1.10 measured versus 4.17 theoretical, far below"
+    ],
+    "answer_index": 2,
+    "explanation": "The tiny model reports 4.2278 against ln 65 = 4.1744, slightly high because the logits are not exactly zero at init, but clearly about ln V. 10.82 is the GPT-2 vocabulary's value."
+  },
+  {
+    "id": "06.2-042",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Verify on a small vocab",
+    "question": "Why is the init-loss check verified on a tiny model with V = 65 rather than GPT-2's V = 50257?",
+    "options": [
+      "Because ln V is undefined for vocabularies larger than 1000 tokens in floating point",
+      "Numbers that large are hard to eyeball; a tiny character vocabulary is quick and readable",
+      "Because a 50257-token model cannot be initialized on a CPU without running out of memory",
+      "Because the uniform-prediction argument only holds for character-level vocabularies"
+    ],
+    "answer_index": 1,
+    "explanation": "The ln V argument holds for any vocabulary; the small model just makes the numbers easy to compare by eye and runs instantly. GPT-2's vocabulary works fine but produces a less legible check."
+  },
+  {
+    "id": "06.2-043",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Verify on a small vocab",
+    "question": "What tolerance does the unit test for the GPT init loss use when comparing to ln V?",
+    "options": [
+      "0.5",
+      "0.0001",
+      "0.05",
+      "5.0"
+    ],
+    "answer_index": 0,
+    "explanation": "The test in code/tests/test_gpt.py asserts the init loss is within 0.5 of ln V. Init gives slightly non-uniform logits and a small batch adds noise, so a three-decimal tolerance would be wrong."
+  },
+  {
+    "id": "06.2-044",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "4. The loss of an untrained model is ln(V) — Verify on a small vocab",
+    "question": "Why should you not expect an untrained GPT's init loss to equal ln V to three decimals?",
+    "options": [
+      "Because cross-entropy is computed in half precision at init, which rounds the result",
+      "Because the loss includes a weight-decay penalty at step 0 that shifts it upward",
+      "Because the first position of each sequence is always ignored by the loss at init",
+      "Random init gives slightly non-uniform logits, and a small batch adds sampling noise"
+    ],
+    "answer_index": 3,
+    "explanation": "The logits are tiny but not exactly zero, and the targets are a finite random sample. 'Within a few tenths of ln V' is the right expectation; being off by a whole point or more is what signals a bug."
+  },
+  {
+    "id": "06.2-045",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "5. Under the hood: init cost, and a small-config check",
+    "question": "How expensive is GPT-2's initialization itself?",
+    "options": [
+      "Expensive: it requires a full forward pass over the training set first",
+      "Expensive: it takes about as long as one full epoch of training does",
+      "Cheap only on a GPU; on a CPU it takes hours for a model of 124M",
+      "Cheap: filling about 124M floats from a normal RNG takes milliseconds"
+    ],
+    "answer_index": 3,
+    "explanation": "Initialization just samples random numbers into existing tensors, which is fast on any device. No data or forward passes are involved."
+  },
+  {
+    "id": "06.2-046",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "5. Under the hood: init cost, and a small-config check",
+    "question": "In GPT-2's init code, why does the order of self.apply(self._init_weights) and the scaled-residual loop matter?",
+    "options": [
+      "The loop must run first, otherwise apply would raise an error on the already-scaled c_proj",
+      "The order does not matter, because both steps set the same std for every c_proj weight",
+      "apply runs first and sets c_proj to 0.02; the loop then overwrites it with the smaller std",
+      "apply runs last so that every bias, including c_proj's, is zeroed after the scaling loop"
+    ],
+    "answer_index": 2,
+    "explanation": "If the scaled-residual loop ran first, apply would then reset c_proj back to 0.02, undoing the fix. Running apply first and the loop second leaves c_proj at 0.02/sqrt(2 n_layer)."
+  },
+  {
+    "id": "06.2-047",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "5. Under the hood: init cost, and a small-config check",
+    "question": "Because GPT-2's wte and lm_head are tied, what happens when _init_weights is applied?",
+    "options": [
+      "The shared tensor is skipped entirely and keeps PyTorch's default uniform initialization",
+      "The shared tensor is initialized twice, harmlessly, since both rules use std 0.02",
+      "The shared tensor is initialized once, as a Linear, and its nonexistent bias is zeroed",
+      "The two initializations are averaged, giving the shared tensor an effective std of 0.01"
+    ],
+    "answer_index": 1,
+    "explanation": "apply visits both the Embedding and the Linear module, and both branches draw N(0, 0.02^2) into the same tensor; the second draw simply overwrites the first. It matters only when reasoning about RNG consumption and determinism."
+  },
+  {
+    "id": "06.2-048",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "5. Under the hood: init cost, and a small-config check",
+    "question": "For the small test config V = 100, block_size = 16, L = 3, C = 32, what does the GPT-2 parameter formula give?",
+    "options": [
+      "41,888",
+      "38,112",
+      "45,600",
+      "41,824"
+    ],
+    "answer_index": 0,
+    "explanation": "32 x (100 + 16) = 3712; each block is 12 x 32^2 + 13 x 32 = 12704, times 3 = 38112; plus ln_f's 64. Total 3712 + 38112 + 64 = 41,888, which GPT(cfg).num_params() returns."
+  },
+  {
+    "id": "06.2-049",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Exercise",
+    "question": "You build a 48-layer GPT (C = 768) but leave every c_proj at std 0.02 instead of the scaled residual init. What happens at initialization?",
+    "options": [
+      "Each of the 96 adds injects similar variance, so the stream grows with depth and step-0 loss sits well above ln V",
+      "Nothing changes, because ln_f fully normalizes the stream, so the step-0 loss is still about ln V and training is stable",
+      "The stream shrinks toward zero through the 96 adds, so the logits vanish and the step-0 loss lands far below ln V",
+      "The model refuses to build, because the init code asserts that the configured depth matches the c_proj std"
+    ],
+    "answer_index": 0,
+    "explanation": "Without the 1/sqrt(2L) shrink, the variance grows like 96 per-add contributions. ln_f normalizes the magnitude but the relative contributions of layers are skewed and the logits are large and erratic, so the step-0 loss is often 15 to 30 instead of about 10.8, and training is unstable or diverges early."
+  },
+  {
+    "id": "06.2-050",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Exercise",
+    "question": "Under the scaled residual init, why do the L layers' residual adds sum to O(1) variance, while without it they grow like L?",
+    "options": [
+      "With the shrink, each add contributes exactly zero variance; without it each add contributes exactly 1",
+      "With the shrink, the number of residual adds falls to one per model; without it there are 2L of them",
+      "With the shrink, the adds have negative variance that cancels the positive ones from the earlier layers",
+      "With the shrink, each add's variance scales as (0.02/sqrt(2L))^2, i.e. 1/L; without it, a fixed 0.02^2"
+    ],
+    "answer_index": 3,
+    "explanation": "Per-add variance scales with the squared std, which the shrink makes proportional to 1/L, so 2L adds total a depth-independent amount. A fixed std of 0.02 gives a fixed per-add variance, and 2L of them grow linearly."
+  },
+  {
+    "id": "06.2-051",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For a 24-layer GPT-2 model, what is the scaled residual init factor and the resulting c_proj std?",
+    "options": [
+      "1/sqrt(24), about 0.204, giving std about 0.00408",
+      "1/48, about 0.021, giving a std of about 0.00042",
+      "1/sqrt(48), about 0.144, giving std about 0.00289",
+      "1/sqrt(12), about 0.289, giving std about 0.00577"
+    ],
+    "answer_index": 2,
+    "explanation": "2 n_layer = 48, and 1/sqrt(48) is about 0.144, so the std is 0.02 x 0.144, about 0.00289. 1/sqrt(24) is the factor for the 12-layer GPT-2 small."
+  },
+  {
+    "id": "06.2-052",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For C = 1600 (GPT-2 XL's width), roughly how many parameters does one block have, ignoring the linear-in-C terms?",
+    "options": [
+      "About 2.56M (1600^2 only)",
+      "About 30.7M (12 x 1600^2)",
+      "About 19.2M (12 x 1600 x 1000)",
+      "About 7.1M, the same as GPT-2 small"
+    ],
+    "answer_index": 1,
+    "explanation": "12 C^2 = 12 x 2,560,000 = 30,720,000. Block size grows with the square of the width, so going from 768 to 1600 multiplies it by more than four."
+  },
+  {
+    "id": "06.2-053",
+    "chapter": "06.2",
+    "chapter_name": "Init, forward pass, parameter count",
+    "module": "6",
+    "module_name": "GPT-2 from scratch",
+    "source": "lessons/module-06/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why does sum(p.numel()) give about 124M for GPT-2 small and not about 163M, despite having both wte and lm_head?",
+    "options": [
+      "Because lm_head's weight is stored transposed and is therefore never counted",
+      "Tying makes them one Parameter, and parameters() yields each unique one once",
+      "Because wpe and wte are merged into a single table at model construction time",
+      "Because the LM head is created lazily on the first forward pass, after counting"
+    ],
+    "answer_index": 1,
+    "explanation": "Both attributes point to the same tensor, and parameters() de-duplicates, so the 38.6M table counts once. Counting it twice would give about 124M + 38.6M, roughly 163M."
+  }
+]

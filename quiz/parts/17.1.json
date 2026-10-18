@@ -1,0 +1,938 @@
+[
+  {
+    "id": "17.1-001",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Prerequisites / why it matters",
+    "question": "Modern reasoning models such as the DeepSeek-R1 pipeline are described as stacking three ideas: chain-of-thought, self-consistency and STaR. Which role does each play?",
+    "options": [
+      "CoT is the training loop, self-consistency is the behaviour, STaR is the cheap inference-time trick",
+      "CoT is the behaviour, self-consistency the inference-time payoff, STaR the first self-training loop",
+      "CoT is the reward model, self-consistency is the optimizer, STaR is the decoding strategy at test time",
+      "CoT is the inference trick, self-consistency is the training loop, STaR is the learned reward model"
+    ],
+    "answer_index": 1,
+    "explanation": "Chain-of-thought is the behaviour (writing intermediate steps). Self-consistency is the cheapest way to cash that behaviour in at inference, by majority-voting many sampled chains. STaR is the first 'let the model teach itself to reason' training loop, which RL later generalises. Swapping the roles confuses a prompting behaviour with a training procedure."
+  },
+  {
+    "id": "17.1-002",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "A small language model forced to answer 'What is 17 x 23?' in a single token usually guesses wrong, but gets it right far more often when allowed to show its work. What changed between the two cases?",
+    "options": [
+      "The weights were briefly fine-tuned on worked arithmetic examples before answering",
+      "A larger vocabulary was used, so multi-digit numbers became single tokens",
+      "Only the output: the model was allowed to write intermediate steps first",
+      "The sampling temperature was raised so the model explored more candidate answers"
+    ],
+    "answer_index": 2,
+    "explanation": "Nothing about the weights changed. The only difference is that the model emits intermediate steps (17x20=340, 17x3=51, 340+51=391) before the final number. That string of intermediate steps is a chain of thought; it is a change to what the model outputs, not to its parameters or decoding temperature."
+  },
+  {
+    "id": "17.1-003",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "What did Wei et al. (2022) show about chain-of-thought prompting?",
+    "options": [
+      "Few-shot exemplars with reasoning make a large model reason first, greatly improving reasoning, no training",
+      "Fine-tuning a model on human-written reasoning chains improves arithmetic but clearly hurts commonsense reasoning",
+      "Chain-of-thought helps only small models, because large models already reason internally before they answer",
+      "Reasoning chains must come from a separate verifier model to improve accuracy over answering directly"
+    ],
+    "answer_index": 0,
+    "explanation": "Wei et al. (2022) found that few-shot exemplars that include their reasoning make a large model continue in the same 'reason, then answer' style, dramatically improving arithmetic, commonsense and symbolic reasoning. Crucially this needs no training at all: it is purely a change in the prompt."
+  },
+  {
+    "id": "17.1-004",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "Why does emitting chain-of-thought tokens give a Transformer more 'thinking' capacity for a hard problem?",
+    "options": [
+      "Each CoT token adds another layer to the stack used when computing the next token, deepening the model",
+      "CoT tokens are processed with a larger hidden dimension than answer tokens, giving them extra capacity",
+      "CoT tokens let the model skip the attention computation for the answer, freeing compute for reasoning",
+      "Compute per token is fixed, so each extra token is another full forward pass whose output feeds the next"
+    ],
+    "answer_index": 3,
+    "explanation": "A Transformer has no loops: each token gets one forward pass through the same number of layers. A problem that needs more sequential computation than one token's worth can get it by writing more tokens, since each CoT token is another full forward pass conditioned on the previous ones. A 50-token chain buys roughly 50x the sequential compute of a blurt-it-out answer; the layer count itself never changes."
+  },
+  {
+    "id": "17.1-005",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "Roughly how much sequential compute does a 50-token chain of thought buy compared with answering in one token?",
+    "options": [
+      "About the same, because the answer token dominates the cost",
+      "Roughly 50x, since each of the 50 tokens is another full forward pass",
+      "Roughly 2500x (50^2), because attention cost is quadratic in length",
+      "Roughly 2x, because only the last token's forward pass feeds the answer"
+    ],
+    "answer_index": 1,
+    "explanation": "Each emitted token costs one full forward pass, and each pass feeds the next, so 50 tokens give roughly 50x the sequential computation of a single-token answer. The scratchpad itself is the extra thinking. Attention cost grows with context, but the point here is the number of sequential forward passes, which is linear in tokens."
+  },
+  {
+    "id": "17.1-006",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "How does chain-of-thought 'decomposition' make a problem easier?",
+    "options": [
+      "It splits the batch of sub-steps across multiple GPUs so each is solved in parallel",
+      "It removes the need to condition on the original question once the first step is written",
+      "Each step conditions on steps already written, turning one hard p(a | x) into easy ones",
+      "It lets the model answer independent sub-questions in parallel and average their results"
+    ],
+    "answer_index": 2,
+    "explanation": "Each reasoning step is generated conditioned on the steps already on the page. Once '17x20=340' and '17x3=51' are written, '340+51' is an easy sub-problem. So CoT turns one hard conditional p(a | x) into a sequence of easy conditioned sub-steps; it is sequential, not parallel."
+  },
+  {
+    "id": "17.1-007",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "1. Intuition: make the model think out loud",
+    "question": "Is chain-of-thought a training change or a prompting change?",
+    "options": [
+      "A training change: the model must first be fine-tuned on human-written reasoning chains",
+      "A decoding change: it requires beam search over many candidate chains to find the answer",
+      "An architecture change: it adds a separate scratchpad memory module next to attention",
+      "A prompting change: the model is simply allowed to write steps before the answer"
+    ],
+    "answer_index": 3,
+    "explanation": "Chain-of-thought means letting the model write intermediate steps before the final answer. It is a prompting change, not a training change, and works by buying more sequential compute and decomposing the problem into easier conditioned sub-steps. Training on chains (as STaR does) is a separate, later idea."
+  },
+  {
+    "id": "17.1-008",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "2. Mathematics: CoT as marginalising over reasoning paths",
+    "question": "In the CoT formulation with question x, answer a and reasoning chain z, which equation gives the probability of the answer?",
+    "options": [
+      "p(a | x) = sum over z of p(a | x, z) p(z | x)",
+      "p(a | x) = max over z of p(z | x, a) p(a | x)",
+      "p(a | x) = product over z of p(a | z) p(z | x)",
+      "p(a | x) = sum over z of p(z | x) / p(a | x, z)"
+    ],
+    "answer_index": 0,
+    "explanation": "The answer's probability marginalises over all reasoning chains: p(a | x) = sum_z p(a | x, z) p(z | x). It is an average of 'answer given this reasoning' weighted by 'how likely this reasoning is'. A max would correspond to taking only the single best chain, and a product has no probabilistic meaning here."
+  },
+  {
+    "id": "17.1-009",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "2. Mathematics: CoT as marginalising over reasoning paths",
+    "question": "In p(a | x) = sum_z p(a | x, z) p(z | x), what does the term p(z | x) represent?",
+    "options": [
+      "How likely the answer a is once the chain z has been written",
+      "How likely the model is to write chain z given question x",
+      "How likely the question x is, given that chain z was written",
+      "The prior probability of answer a before reading the question"
+    ],
+    "answer_index": 1,
+    "explanation": "p(z | x) is how likely the model is to produce reasoning chain z given question x. The other factor, p(a | x, z), is how likely it is to state answer a once that chain is on the page. Their product, summed over all chains, gives the answer probability."
+  },
+  {
+    "id": "17.1-010",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "2. Mathematics: CoT as marginalising over reasoning paths",
+    "question": "Why can the sum over reasoning chains in p(a | x) = sum_z p(a | x, z) p(z | x) not be computed exactly?",
+    "options": [
+      "Because p(a | x, z) is not differentiable with respect to the chain tokens",
+      "Because the model cannot assign probabilities to whole multi-token chains",
+      "Because there are exponentially many possible token sequences z to sum over",
+      "Because the answer a is unknown at inference, so the sum has no target"
+    ],
+    "answer_index": 2,
+    "explanation": "The sum runs over every possible reasoning chain, and the number of token sequences grows exponentially with length, so enumeration is impossible. In practice we approximate it, either with one high-probability chain (greedy CoT) or with many sampled chains that vote (self-consistency)."
+  },
+  {
+    "id": "17.1-011",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "2. Mathematics: CoT as marginalising over reasoning paths",
+    "question": "How does greedy CoT approximate the sum p(a | x) = sum_z p(a | x, z) p(z | x)?",
+    "options": [
+      "It samples many chains at high temperature and averages the numeric answers that they reach",
+      "It enumerates every chain up to a fixed length and keeps the one with the highest score",
+      "It trains a reward model to score each chain and keeps only the top-ranked one",
+      "It decodes one high-probability chain (temperature near 0): a single sample from the sum"
+    ],
+    "answer_index": 3,
+    "explanation": "Greedy CoT decodes one high-probability chain z-hat at temperature near 0 and reads off p(a | x, z-hat). That is a single sample from the sum. Self-consistency instead draws many chains and votes, giving a Monte-Carlo estimate of which answer the sum concentrates on."
+  },
+  {
+    "id": "17.1-012",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "2. Mathematics: CoT as marginalising over reasoning paths",
+    "question": "In the marginalisation view of chain-of-thought, what is self-consistency?",
+    "options": [
+      "A Monte-Carlo estimate: draw many chains, extract each answer, and vote",
+      "An exact computation of the sum over chains using dynamic programming",
+      "A way to pick the single most probable chain using wide beam search",
+      "A training method that makes p(z | x) uniform across all possible chains"
+    ],
+    "answer_index": 0,
+    "explanation": "Self-consistency draws many chains z_1..z_N, extracts each one's answer and lets them vote. This is a Monte-Carlo estimate of which answer a carries the most mass in sum_z p(a | x, z) p(z | x). Beam search would approximate the single best chain instead, which is closer to greedy CoT."
+  },
+  {
+    "id": "17.1-013",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "3. Building a CoT prompt in code",
+    "question": "What does the cot_prompt helper in llmre.reasoning.cot produce?",
+    "options": [
+      "A batch of tokenized tensors with attention masks, ready to move onto the GPU",
+      "A few-shot prompt: 'question, reasoning, #### answer' exemplars, then the new question",
+      "A single chain-of-thought completion sampled from the model for the new question",
+      "A list of reward scores, one for each reasoning step in the exemplar completions"
+    ],
+    "answer_index": 1,
+    "explanation": "cot_prompt assembles a few-shot prompt string: each exemplar is 'Q: ... A: <reasoning> #### <answer>', then the new question followed by an open 'A:' so the model continues in the same style. The llmre.reasoning.cot helpers touch only Python strings, so there is no GPU or model involved."
+  },
+  {
+    "id": "17.1-014",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "3. Building a CoT prompt in code",
+    "question": "Which resources do the helpers in llmre.reasoning.cot (cot_prompt, extract_answer, self_consistency) require?",
+    "options": [
+      "A GPU with at least 16 GB of memory to hold sampled completions",
+      "A loaded language model and its tokenizer for parsing the answers",
+      "Only Python strings: they are dependency-free, with no GPU or model",
+      "A trained reward model that verifies each extracted answer is correct"
+    ],
+    "answer_index": 2,
+    "explanation": "The three helpers are dependency-free and operate only on Python strings: building a prompt, parsing an answer and tallying votes. The model sampling happens elsewhere; these helpers turn text into answers and answers into a vote."
+  },
+  {
+    "id": "17.1-015",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "3. Building a CoT prompt in code",
+    "question": "In a few-shot CoT prompt, what do the worked exemplars mainly teach the model?",
+    "options": [
+      "The correct answer to the new question, copied over from a similar exemplar",
+      "New arithmetic facts, absorbed through in-context updates to the weights",
+      "Which tokens to avoid at high temperature so chains stay on track",
+      "The format: show steps, then end with a '#### <answer>' line"
+    ],
+    "answer_index": 3,
+    "explanation": "The exemplars teach the format: reasoning steps followed by '#### <answer>'. Primed by them, the model produces its own steps and its own '####' line for the new question. In-context examples do not update weights and do not contain the new question's answer."
+  },
+  {
+    "id": "17.1-016",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "3. Building a CoT prompt in code",
+    "question": "Where does the '####' answer marker used in CoT prompts come from, and is it required?",
+    "options": [
+      "It is the GSM8K convention; any consistent marker, like 'The answer is 391.', works",
+      "It is a special token in the GPT-2 vocabulary and must be reproduced exactly as written",
+      "It is required by the KaTeX renderer to separate the math from the surrounding text",
+      "It is a PyTorch convention marking the end of a sequence, so generation stops there"
+    ],
+    "answer_index": 0,
+    "explanation": "'####' is the GSM8K dataset's convention for the final answer line. Nothing is special about it; you could equally end each exemplar with 'The answer is 391.' as long as the parser looks for the same marker."
+  },
+  {
+    "id": "17.1-017",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4. Self-consistency: sample many chains, take the majority",
+    "question": "What asymmetry does self-consistency (Wang et al. 2022) exploit?",
+    "options": [
+      "Correct chains are almost always shorter than wrong ones, so the shortest chains win",
+      "Wrong paths are many but scatter across answers, while correct paths converge on one",
+      "Wrong chains have lower token log-probabilities, so they can be down-weighted in the vote",
+      "Correct answers appear earlier in the chain than wrong ones, so early stopping helps"
+    ],
+    "answer_index": 1,
+    "explanation": "There are many ways to reason wrongly, and wrong paths scatter across different answers, while correct paths tend to land on the same answer. So the majority answer over several sampled chains is usually correct even when any single chain is unreliable. It is about agreement between final answers, not chain length or log-probability."
+  },
+  {
+    "id": "17.1-018",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4. Self-consistency: sample many chains, take the majority",
+    "question": "Why is a single greedy chain of thought considered unreliable?",
+    "options": [
+      "Greedy decoding cannot produce multi-digit numbers reliably, so arithmetic fails",
+      "Greedy decoding always produces the shortest chain, skipping the needed steps",
+      "It is one draw from a noisy process, so one wrong turn makes the answer wrong",
+      "Greedy decoding ignores the few-shot exemplars and drops the answer format"
+    ],
+    "answer_index": 2,
+    "explanation": "A single chain is one draw from a noisy generation process. If the model takes one wrong turn anywhere, the final answer is wrong and there is no second opinion. Self-consistency addresses this by sampling several chains and voting."
+  },
+  {
+    "id": "17.1-019",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4. Self-consistency: sample many chains, take the majority",
+    "question": "What is the correct order of the self-consistency recipe?",
+    "options": [
+      "Sample N completions at temperature 0, extract their answers, and keep the longest chain",
+      "Extract the answer, build a prompt from it, sample once, and verify with a reward model",
+      "Build N different prompts, decode one completion each greedily, and average the numbers",
+      "Build one CoT prompt, sample N at non-zero temperature, extract answers, take the mode"
+    ],
+    "answer_index": 3,
+    "explanation": "Self-consistency builds one CoT prompt, samples N completions at a non-zero temperature so the chains differ, extracts the final answer from each, and returns the majority answer. Temperature 0 would produce N identical chains, and averaging numbers is not the same as voting."
+  },
+  {
+    "id": "17.1-020",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4. Self-consistency: sample many chains, take the majority",
+    "question": "In self-consistency, why must the N completions be sampled at a non-zero temperature?",
+    "options": [
+      "So the chains differ; at temperature 0 all N chains are identical and the vote is moot",
+      "Because temperature 0 is not supported by most sampling code and raises an error",
+      "So the answers become longer and more detailed, which makes each chain more accurate",
+      "Because non-zero temperature guarantees that each sampled chain reaches a correct answer"
+    ],
+    "answer_index": 0,
+    "explanation": "At temperature 0 decoding is (near) deterministic, so all N chains are copies of one and the vote equals a single greedy answer. A non-zero temperature yields diverse reasoning paths; correct ones converge while wrong ones scatter, which is what the majority vote relies on."
+  },
+  {
+    "id": "17.1-021",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.1 Extracting each answer",
+    "question": "Why does extract_answer take the LAST marker match in a completion rather than the first?",
+    "options": [
+      "Because the first match always comes from the few-shot exemplars copied into the prompt",
+      "A chain mentions numbers and may revise itself; only the last marker is the stated answer",
+      "Because Python's regex engine only returns the last match unless re.findall is used",
+      "Because the last match always has the highest token probability within the completion"
+    ],
+    "answer_index": 1,
+    "explanation": "A chain of thought mentions numbers along the way and can second-guess itself ('First I get 12, but rechecking #### 18'). Only the last marker is the final committed answer, so extract_answer keeps it. Taking the first match would return an abandoned intermediate guess."
+  },
+  {
+    "id": "17.1-022",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.1 Extracting each answer",
+    "question": "What does extract_answer return for the completion 'First I get 12, but rechecking #### 18'?",
+    "options": [
+      "\"12\"",
+      "\"12, 18\"",
+      "\"18\"",
+      "None"
+    ],
+    "answer_index": 2,
+    "explanation": "extract_answer takes the last marker match, so it returns \"18\", the final committed answer, not the abandoned 12. This is exactly why 'last match' is used: chains revise themselves and only the final marker counts."
+  },
+  {
+    "id": "17.1-023",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.1 Extracting each answer",
+    "question": "What does extract_answer return when a completion contains no answer marker at all?",
+    "options": [
+      "An empty string \"\"",
+      "The last number in the text",
+      "It raises a ValueError",
+      "None"
+    ],
+    "answer_index": 3,
+    "explanation": "When no marker is found, extract_answer returns None. That None then needs handling downstream: a chain that produced no answer should be dropped before voting rather than counted as a real answer."
+  },
+  {
+    "id": "17.1-024",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.2 The vote, worked by hand",
+    "question": "Five sampled chains for one problem produce answers [18, 18, 12, 18, 26]. What does majority-vote self-consistency return and why does it illustrate the method's core idea?",
+    "options": [
+      "18 with 3 votes: the two wrong chains disagreed, while the three correct ones agreed",
+      "12, because it is the median of the answers that differ from the most common one",
+      "26, because the last sampled chain has seen the most reasoning and is most refined",
+      "18.4, the mean of all five answers, which rounds to the correct answer of 18"
+    ],
+    "answer_index": 0,
+    "explanation": "18 appears three times and 12 and 26 once each, so the majority is 18 with 3 votes. The two chains that went astray disagreed with each other, while the correct ones agreed, which is exactly the asymmetry self-consistency banks on. Voting is over discrete answers, not an average."
+  },
+  {
+    "id": "17.1-025",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.2 The vote, worked by hand",
+    "question": "In a case where five sampled chains give [18, 18, 12, 18, 26] and the correct answer is 18, when could plain greedy CoT be wrong while self-consistency is right?",
+    "options": [
+      "Never, because greedy decoding always lands on the majority answer",
+      "If the single greedy chain happened to be the one that produced 12",
+      "Only if greedy decoding is run with a temperature above 1",
+      "Only if all five sampled chains disagree with each other"
+    ],
+    "answer_index": 1,
+    "explanation": "Greedy decoding returns one chain. If that chain were the one reaching 12, greedy CoT would be wrong, while the vote over five chains still returns 18. Greedy does not see the other chains at all, so it cannot pick the majority."
+  },
+  {
+    "id": "17.1-026",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.2 The vote, worked by hand",
+    "question": "What does self_consistency([\"18\", \"18\", \"12\", \"18\", \"26\"]) return?",
+    "options": [
+      "'18'",
+      "('18', 0.6)",
+      "('18', 3)",
+      "[('18', 3), ('12', 1), ('26', 1)]"
+    ],
+    "answer_index": 2,
+    "explanation": "The helper returns a tuple (answer, count) for the top answer: ('18', 3). It does not return a fraction or the full tally, just the winning answer and its vote count."
+  },
+  {
+    "id": "17.1-027",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.2 The vote, worked by hand",
+    "question": "How is the self_consistency helper implemented?",
+    "options": [
+      "It sorts the answers lexicographically and returns the median answer together with its position",
+      "It requires numeric answers and returns their statistical mode as a float",
+      "It calls the model again as a judge to decide which of the answers is best",
+      "It tallies any hashable answers with a Counter and returns the top answer and count"
+    ],
+    "answer_index": 3,
+    "explanation": "self_consistency accepts any iterable of hashable answers, such as the strings extract_answer returns, counts them with collections.Counter, and returns (top answer, vote count). It does not need numbers and does not call any model."
+  },
+  {
+    "id": "17.1-028",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.3 Ties are broken deterministically",
+    "question": "Why does self_consistency break ties by first appearance in the input rather than by dictionary iteration order?",
+    "options": [
+      "So the same input always gives the same output; dict/hash order could vary across runs",
+      "Because first-appearing answers are statistically more likely to be correct in the vote",
+      "Because collections.Counter cannot store two keys that share the same top count",
+      "To favour the answer produced by the first, greedy chain at the head of the list"
+    ],
+    "answer_index": 0,
+    "explanation": "If ties were resolved by hash or dictionary iteration order, the winner could vary across runs, a reproducibility bug. Breaking ties by first appearance in the input makes the result deterministic. It is a reproducibility choice, not a claim that earlier answers are more likely correct."
+  },
+  {
+    "id": "17.1-029",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.3 Ties are broken deterministically",
+    "question": "What does self_consistency([\"12\", \"18\", \"12\", \"18\"]) return?",
+    "options": [
+      "('18', 2)",
+      "('12', 2)",
+      "('12', 1)",
+      "None, because there is a tie"
+    ],
+    "answer_index": 1,
+    "explanation": "12 and 18 each have count 2, so it is a tie. The tie-break is first appearance in the input, and \"12\" appears first, so the result is ('12', 2). Reordering to [\"18\", \"12\", \"18\", \"12\"] would flip it to ('18', 2) deterministically."
+  },
+  {
+    "id": "17.1-030",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.3 Ties are broken deterministically",
+    "question": "When two answers tie in self_consistency, what determines whether the winner changes?",
+    "options": [
+      "The Python hash seed of the process",
+      "The numeric value of the answers",
+      "The order of answers in the input list",
+      "Random sampling with a fixed seed"
+    ],
+    "answer_index": 2,
+    "explanation": "The winner flips only with input order, never with hash order. Among answers sharing the top count, the earliest-appearing one wins, so the same input list always gives the same output."
+  },
+  {
+    "id": "17.1-031",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.4 Under the hood — cost",
+    "question": "What is the inference cost of a 40-sample self-consistency run compared with one greedy chain?",
+    "options": [
+      "About the same, since only the final vote is extra work",
+      "About 2x, since the 40 samples are generated in parallel",
+      "About log(40)x, since the shared prompt is cached",
+      "About 40x, since N samples cost N full generations"
+    ],
+    "answer_index": 3,
+    "explanation": "Self-consistency is a straight compute-for-accuracy trade: N samples cost N full generations, so 40 samples cost about 40x one greedy chain. Running them in parallel changes latency, not total compute."
+  },
+  {
+    "id": "17.1-032",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.4 Under the hood — cost",
+    "question": "How does self-consistency accuracy typically scale with the number of samples N, and how is N chosen in practice?",
+    "options": [
+      "It rises quickly at first and then flattens, so N is set where it bends, often 5 to 40",
+      "It rises linearly forever, so N is simply set as high as the inference budget allows",
+      "It stays flat until about 100 samples, then jumps sharply, so N should start at 100",
+      "It decreases beyond 3 samples, because extra noisy chains outvote the good ones"
+    ],
+    "answer_index": 0,
+    "explanation": "Accuracy improves fast with the first few samples and then shows diminishing returns. Practitioners pick N where the curve bends, often somewhere between 5 and 40. Beyond that, each extra sample costs a full generation for little gain."
+  },
+  {
+    "id": "17.1-033",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.4 Under the hood — cost",
+    "question": "Self-consistency is described as a first taste of 'test-time scaling'. What does that term mean?",
+    "options": [
+      "Scaling the model's parameter count after deployment as traffic grows",
+      "Spending more compute at inference for a better answer, with no retraining",
+      "Training briefly on the test set at evaluation time to improve accuracy",
+      "Increasing the batch size at inference to improve tokens-per-second throughput"
+    ],
+    "answer_index": 1,
+    "explanation": "Test-time scaling means spending more inference compute to get better answers without changing the weights. Self-consistency does it with many short chains; R1-style long-CoT models push the same lever with one very long chain instead."
+  },
+  {
+    "id": "17.1-034",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "4.4 Under the hood — cost",
+    "question": "How do R1-style long-CoT models use the test-time scaling lever differently from self-consistency?",
+    "options": [
+      "They briefly retrain the model on every incoming query before they answer it",
+      "They use temperature 0 with beam search across many rephrased prompts",
+      "They spend inference compute on one very long chain instead of many short ones",
+      "They avoid chain-of-thought entirely and answer in a single token, but run larger models"
+    ],
+    "answer_index": 2,
+    "explanation": "Both spend more inference compute for accuracy. Self-consistency samples many short chains and votes; R1-style models instead produce one very long chain of thought. Neither retrains at query time."
+  },
+  {
+    "id": "17.1-035",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5. STaR: bootstrap reasoning into the weights",
+    "question": "What question does STaR (Self-Taught Reasoner, Zelikman et al. 2022) ask that self-consistency does not?",
+    "options": [
+      "How to verify each reasoning step with a separately learned process reward model",
+      "How to sample more diverse chains at inference time so the vote is more reliable",
+      "How to compress long chains of thought into fewer tokens at inference time",
+      "Whether training on its own correct reasoning makes one cheap chain reliable"
+    ],
+    "answer_index": 3,
+    "explanation": "Self-consistency pays extra compute every time you answer. STaR instead asks whether the model can be fine-tuned on its own correct reasoning so that one cheap chain is reliable. It turns CoT from a prompting trick into a self-improvement loop, the conceptual ancestor of RL reasoning pipelines."
+  },
+  {
+    "id": "17.1-036",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5. STaR: bootstrap reasoning into the weights",
+    "question": "What data gap does STaR solve?",
+    "options": [
+      "GSM8K-style data has final answers but no gold chains, so STaR generates and filters its own",
+      "Datasets have human-written reasoning chains but no final answers to check those chains against",
+      "There are too few math questions available, so STaR synthesizes brand-new problems for training",
+      "Human-labelled step rewards are too noisy, so STaR replaces them with a learned process reward model"
+    ],
+    "answer_index": 0,
+    "explanation": "We have questions with known final answers but not gold reasoning chains to train on. STaR has the model generate chains and keeps only those whose answers are correct, creating its own training data without human-written rationales."
+  },
+  {
+    "id": "17.1-037",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.1 The loop",
+    "question": "What is the correct order of the STaR loop?",
+    "options": [
+      "Fine-tune on the dataset, generate rationales, repeat, then filter the final model",
+      "Generate rationales, keep those reaching the correct answer, fine-tune on them, repeat",
+      "Filter questions by difficulty, generate answers, train a reward model, then repeat",
+      "Generate rationales, fine-tune on all of them, filter the resulting model, and repeat"
+    ],
+    "answer_index": 1,
+    "explanation": "STaR: (1) generate a chain and answer per question with few-shot CoT, (2) keep a chain only if its extracted answer matches the known answer, (3) supervised fine-tune on the kept (question, chain, answer) triples, (4) repeat with the improved model. Fine-tuning on unfiltered chains would teach the model its own mistakes."
+  },
+  {
+    "id": "17.1-038",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.1 The loop",
+    "question": "In STaR's filtering step, what serves as the cheap proxy that a reasoning chain was probably sound?",
+    "options": [
+      "A human rating of each reasoning step in the chain",
+      "The chain's length relative to the dataset's average",
+      "The extracted final answer matching the known answer",
+      "The model's own log-probability of the generated chain"
+    ],
+    "answer_index": 2,
+    "explanation": "A right final answer is a cheap, automatic proxy that the reasoning was probably sound; no human had to label the steps. It is imperfect (a chain can be right by luck), but at scale chains with correct answers contain valid reasoning much more often."
+  },
+  {
+    "id": "17.1-039",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.1 The loop",
+    "question": "What kind of training does STaR use on the kept (question, chain, answer) triples?",
+    "options": [
+      "Reinforcement learning with a learned value function as a baseline",
+      "Contrastive learning that pushes kept chains away from wrong chains",
+      "Pre-training from scratch on the kept chains mixed with web text",
+      "Supervised fine-tuning, imitating its own successful reasoning"
+    ],
+    "answer_index": 3,
+    "explanation": "STaR supervised fine-tunes the model on the filtered triples, so it learns to imitate its own successful reasoning. The next round's model then generates better chains and solves problems it previously missed."
+  },
+  {
+    "id": "17.1-040",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.2 Rationalization: the fix for problems it always misses",
+    "question": "What problem does STaR's rationalization step solve?",
+    "options": [
+      "Problems it never solves produce no correct chains, so they never enter training",
+      "The model's chains become too long after several rounds and exceed the context",
+      "Correct chains for easy problems are duplicated too often in the training set",
+      "The model forgets the few-shot format after fine-tuning and stops writing '####'"
+    ],
+    "answer_index": 0,
+    "explanation": "Without intervention, a problem the model always misses contributes no training data and never improves. Rationalization fixes this hard tail by producing a chain for those problems with help, so they can enter the fine-tuning set."
+  },
+  {
+    "id": "17.1-041",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.2 Rationalization: the fix for problems it always misses",
+    "question": "How does STaR's rationalization work?",
+    "options": [
+      "It raises the sampling temperature until some chain for the problem happens to be correct",
+      "It gives the model the correct answer as a hint and asks for a chain that arrives there",
+      "It asks a human annotator to write a gold chain for every problem the model missed",
+      "It removes the missed problems from the dataset so they no longer drag down accuracy"
+    ],
+    "answer_index": 1,
+    "explanation": "For a missed problem, the model is shown the correct answer as a hint and asked to generate a reasoning chain reaching it. Such chains are far more likely to be valid; after fine-tuning on them the model can often reach the answer unaided next round, with the hint removed."
+  },
+  {
+    "id": "17.1-042",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.3 Why this is the seed of RL",
+    "question": "Viewed as a reward loop, what does STaR's 'filter by correctness' step correspond to?",
+    "options": [
+      "A learned process reward model scoring each step",
+      "A KL penalty that keeps the policy near the reference",
+      "A binary verifiable reward: 1 if right, else 0",
+      "A value-function baseline subtracted from returns"
+    ],
+    "answer_index": 2,
+    "explanation": "Filtering by correctness is exactly a binary verifiable reward (1 if right, 0 otherwise). The fine-tune step then up-weights high-reward trajectories, a crude policy-improvement step."
+  },
+  {
+    "id": "17.1-043",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "5.3 Why this is the seed of RL",
+    "question": "STaR is called 'essentially the simplest possible policy-gradient method'. What turns it into GRPO?",
+    "options": [
+      "Adding a human preference dataset and a Bradley-Terry reward model to rank the kept chains",
+      "Replacing the correctness filter with a length penalty that rewards shorter reasoning chains",
+      "Removing fine-tuning entirely and relying on self-consistency voting at inference instead",
+      "Replacing offline keep-the-winners SFT with an on-policy RL update and a group baseline"
+    ],
+    "answer_index": 3,
+    "explanation": "STaR keeps the winners and imitates them as offline SFT rounds. Replace that with an on-policy RL update and a group-relative baseline and you get GRPO, the engine of DeepSeek-R1. A Bradley-Terry reward model belongs to preference learning, not this lineage."
+  },
+  {
+    "id": "17.1-044",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Research connection",
+    "question": "Which three papers found the ideas of chain-of-thought, self-consistency and STaR?",
+    "options": [
+      "Wei et al. 2022 (CoT), Wang et al. 2022 (self-consistency), Zelikman et al. 2022 (STaR)",
+      "Vaswani et al. 2017 (CoT), Radford et al. 2019 (self-consistency), Brown et al. 2020 (STaR)",
+      "Ouyang et al. 2022 (CoT), Rafailov et al. 2023 (self-consistency), Shao et al. 2024 (STaR)",
+      "Lightman et al. 2023 (CoT), DeepSeek-AI 2025 (self-consistency), Hinton et al. 2015 (STaR)"
+    ],
+    "answer_index": 0,
+    "explanation": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models is Wei et al. 2022; Self-Consistency Improves Chain of Thought Reasoning is Wang et al. 2022; STaR: Bootstrapping Reasoning With Reasoning is Zelikman et al. 2022. The other sets are Transformer/GPT papers, RLHF/DPO/GRPO papers, or later reasoning and distillation works."
+  },
+  {
+    "id": "17.1-045",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if self-consistency is run at temperature 0?",
+    "options": [
+      "The answers become random noise because the softmax is degenerate",
+      "Every chain is identical, so the vote is N copies of one answer",
+      "The model stops emitting the '####' marker, so nothing is extracted",
+      "The vote always returns None because every extracted answer ties"
+    ],
+    "answer_index": 1,
+    "explanation": "Zero temperature makes decoding (near) deterministic, so all N chains are the same and the majority vote equals one greedy answer at N times the cost. Self-consistency needs non-zero temperature so chains genuinely differ."
+  },
+  {
+    "id": "17.1-046",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is fine-tuning STaR on unfiltered chains a mistake?",
+    "options": [
+      "It makes each training round far too slow, since there are many more chains to fit",
+      "It removes the few-shot format, so later rounds can no longer extract answers",
+      "It teaches the model its own mistakes; the correctness filter is the supervision",
+      "It causes the model to stop using chain-of-thought and answer in a single token"
+    ],
+    "answer_index": 2,
+    "explanation": "Without the correctness filter, wrong chains are imitated alongside right ones, so the model learns its own errors. The filter is not optional: it is the only supervision signal in the loop."
+  },
+  {
+    "id": "17.1-047",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What happens to a STaR loop that omits rationalization?",
+    "options": [
+      "It diverges, because the rewards on unsolved problems become negative",
+      "It needs human-written reasoning chains for every problem before the first round",
+      "It can only train on problems with numeric answers, not symbolic ones",
+      "It only reinforces problems it already solves; the hard tail never improves"
+    ],
+    "answer_index": 3,
+    "explanation": "Without rationalization, problems the model always misses produce no correct chains and never enter training. The loop just reinforces what it already solves, leaving the hard tail stuck."
+  },
+  {
+    "id": "17.1-048",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Exercise",
+    "question": "What does self_consistency([\"42\", None, \"42\", \"7\"]) return, and what is the recommended practice?",
+    "options": [
+      "('42', 2); but filter out None before voting, so answerless chains cannot split the vote",
+      "It raises a TypeError, because None is not hashable and Counter rejects it as a key",
+      "(None, 1); None is always ranked first, so it wins any tie against the real answers",
+      "('42', 2); and counting None is harmless in all cases, so no filtering is ever needed"
+    ],
+    "answer_index": 0,
+    "explanation": "None is hashable, so Counter counts it and the call returns ('42', 2). But a chain that failed to produce an answer should be dropped before voting, e.g. answers = [a for a in raw if a is not None]. With [\"42\", None, None, \"7\"] the unfiltered vote would tie None with real answers and could return None."
+  },
+  {
+    "id": "17.1-049",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Exercise",
+    "question": "For the unfiltered input [\"42\", None, None, \"7\"], why could self_consistency return None?",
+    "options": [
+      "Because None is treated as a wildcard that matches and absorbs every other answer",
+      "Because None appears twice, more than any real answer, so it has the top count",
+      "Because Counter always sorts None first when it ranks the most common answers",
+      "Because extract_answer converted the \"7\" to None before the vote was taken"
+    ],
+    "answer_index": 1,
+    "explanation": "In [\"42\", None, None, \"7\"], None appears twice and each real answer once, so None has the top count and wins the vote. This shows why unparseable chains (None) must be filtered out before voting rather than counted as an answer."
+  },
+  {
+    "id": "17.1-050",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Trace self_consistency([\"A\", \"B\", \"A\", \"B\", \"C\"]). What is returned?",
+    "options": [
+      "('B', 2)",
+      "('C', 1)",
+      "('A', 2)",
+      "('A', 3)"
+    ],
+    "answer_index": 2,
+    "explanation": "A and B each appear twice and C once, so A and B tie on 2. The tie-break is first appearance in the input; A appears before B, so the result is ('A', 2). It is reproducible because ties are resolved by input order, not hash order."
+  },
+  {
+    "id": "17.1-051",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why is a correct final answer an imperfect but useful filter for STaR's generated chains?",
+    "options": [
+      "It is perfect: a correct final answer guarantees that every step in the chain is valid",
+      "It is useless: correct final answers are uncorrelated with valid reasoning at any scale",
+      "It is only useful when a human double-checks every step of the chains that pass it",
+      "Chains can be right by luck, but at scale right answers usually mean valid reasoning"
+    ],
+    "answer_index": 3,
+    "explanation": "Final-answer correctness is a cheap automatic proxy. It is not perfect, since flawed logic can stumble onto the right answer, but on average chains with correct answers contain valid reasoning far more often, so fine-tuning on the filtered set improves reasoning. This is a binary verifiable reward."
+  },
+  {
+    "id": "17.1-052",
+    "chapter": "17.1",
+    "chapter_name": "CoT, self-consistency, STaR",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-01.md",
+    "section": "Next",
+    "question": "What limitation of 'the final answer is correct' as a reward motivates process reward models?",
+    "options": [
+      "It says nothing about where in a long chain the reasoning went wrong",
+      "It is too expensive to compute, because each chain must be re-executed",
+      "It requires human labelling of every final answer before it can be used",
+      "It only works when chains are decoded greedily at temperature 0"
+    ],
+    "answer_index": 0,
+    "explanation": "An outcome reward is blunt: a wrong final answer does not tell you which step failed. Process rewards sharpen the signal from the whole outcome down to individual steps. Checking a final answer is cheap and automatic, so cost is not the issue."
+  }
+]

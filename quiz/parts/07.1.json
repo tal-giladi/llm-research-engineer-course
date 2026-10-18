@@ -1,0 +1,1082 @@
+[
+  {
+    "id": "07.1-001",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "In the course's from-scratch GPT, what does calling forward(idx, targets) return?",
+    "options": [
+      "Only the logits; the loss must always be computed by a separate function",
+      "The loss together with every parameter's gradient, already computed",
+      "A tuple (logits, loss): the per-position vocabulary scores and the scalar loss",
+      "The logits, the loss, and a copy of the parameters after one update"
+    ],
+    "answer_index": 2,
+    "explanation": "The assembled GPT's forward takes token ids and optional targets and returns (logits, loss). The training loop ignores the logits and keeps the scalar loss to call backward() on. Gradients are not produced by forward; they come later from loss.backward(), and parameters only change in optimizer.step()."
+  },
+  {
+    "id": "07.1-002",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which sequence lists the core operations of one canonical GPT training step in the order the course's loop runs them?",
+    "options": [
+      "get_batch, backward, model(x, y), zero_grad, clip, step, set lr",
+      "zero_grad, get_batch, step, model(x, y), backward, clip, set lr",
+      "set lr, get_batch, model(x, y), zero_grad, backward, clip, step",
+      "get_batch, model(x, y), step, backward, clip, zero_grad, set lr"
+    ],
+    "answer_index": 2,
+    "explanation": "The loop computes the learning rate for the step, draws a batch, runs the forward pass to get the loss, clears old gradients, backpropagates, clips the gradient norm, then lets the optimizer update the parameters. Backward must follow the forward that built the graph, and clipping must sit between backward and step. Any order that steps before backward or clips after step trains wrongly."
+  },
+  {
+    "id": "07.1-003",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "When a small GPT is trained to overfit a short repeated token sequence as a sanity check, what loss curve indicates the training code works?",
+    "options": [
+      "Loss starts near ln(vocab_size) and falls toward zero",
+      "Loss starts near zero and rises toward ln(vocab_size)",
+      "Loss starts near 1/vocab_size and stays flat throughout",
+      "Loss starts near vocab_size and halves at every step"
+    ],
+    "answer_index": 0,
+    "explanation": "An untrained model predicts roughly uniformly, so its first loss is about ln(V). A working training setup can memorize a tiny repeated pattern, so the loss should drop toward zero. A curve that does not fall from ln(V) toward zero on such a trivial dataset signals a bug."
+  },
+  {
+    "id": "07.1-004",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How do data work, scale, parallelism, fine-tuning and RLHF relate to the canonical next-token training loop?",
+    "options": [
+      "They are variations on, or wrappers around, that same short loop",
+      "Each one replaces the loop with an entirely different algorithm",
+      "They avoid backpropagation and update weights by other means",
+      "They only apply to inference and never touch the training loop"
+    ],
+    "answer_index": 0,
+    "explanation": "The canonical loop is pretraining, and nearly everything else in the field is built on or around it: more data, bigger models, more workers, different data (fine-tuning) or different losses (RLHF). None of these throw away the get-batch, forward, backward, step structure. That is why owning this loop demystifies training a language model."
+  },
+  {
+    "id": "07.1-005",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "In a neural-network training step, what is the 'loss'?",
+    "options": [
+      "A per-parameter tensor giving how far each weight should move this step",
+      "The learning rate the schedule assigns to this step, read before backward",
+      "A single number measuring how wrong the predictions were versus the targets",
+      "The fraction of target tokens the model predicted exactly right in the batch"
+    ],
+    "answer_index": 2,
+    "explanation": "The forward pass runs the model on the inputs and compares its predictions with the answers, collapsing the result into one scalar: the loss. Per-parameter change information is the gradient, which backward() computes from that scalar. Accuracy is a different metric; training minimizes the loss."
+  },
+  {
+    "id": "07.1-006",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "What does loss.backward() put into each parameter's .grad?",
+    "options": [
+      "The parameter's new value, computed ahead of the optimizer's update",
+      "The parameter's value from the previous step, saved for momentum",
+      "How the loss would change if that parameter were nudged slightly",
+      "A random perturbation the optimizer uses to explore the loss surface"
+    ],
+    "answer_index": 2,
+    "explanation": "backward() runs backpropagation through the graph built by the forward pass and fills every parameter's .grad with the derivative of the loss with respect to that parameter. It does not change the parameters; the optimizer does that in step(). The gradient says which direction is downhill for each weight."
+  },
+  {
+    "id": "07.1-007",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "Why does the training loop clip gradients before the optimizer step?",
+    "options": [
+      "So that the gradients are cleared to zero before the next backward pass runs",
+      "So that a single freak batch with a huge gradient cannot blow up the weights",
+      "So that the learning rate follows the warmup schedule during the first steps",
+      "So that the loss is normalized by batch size and sequence length before step"
+    ],
+    "answer_index": 1,
+    "explanation": "Clipping rescales the gradient if its norm is too large, acting as a guard-rail against occasional outlier batches. Clearing gradients is zero_grad's job, and the learning rate comes from the schedule. Without clipping, one bad batch can produce an update large enough to wreck the model."
+  },
+  {
+    "id": "07.1-008",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "In the 'step' part of the training loop, what happens?",
+    "options": [
+      "The model generates text from the current weights so the loss can be measured on fresh samples",
+      "The gradients are averaged over the last few steps and stored so the next backward can reuse them",
+      "The optimizer moves each parameter slightly downhill, and the schedule sets the next learning rate",
+      "The batch is shifted left by one token to build the next batch's targets, and the data pointer advances"
+    ],
+    "answer_index": 2,
+    "explanation": "The optimizer (AdamW here) reads the gradients and updates each parameter in the direction that reduces the loss, by an amount controlled by the learning rate from the schedule. The loop then repeats thousands to millions of times. Gradients are not stored across steps; they are cleared each step."
+  },
+  {
+    "id": "07.1-009",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "For language-model pretraining, what is the target y for an input sequence x?",
+    "options": [
+      "A human-written label describing the topic or genre of the whole sequence",
+      "The same sequence in reverse order, so the model learns bidirectional context",
+      "The same sequence shifted by one position, so each target is the next token",
+      "A copy of x in which a random 15% of the tokens are replaced by a mask token"
+    ],
+    "answer_index": 2,
+    "explanation": "In next-token prediction the answer at every position is simply the following token, so y is x shifted by one. No human labels are needed. Masked-token objectives belong to other model families, not the GPT loop."
+  },
+  {
+    "id": "07.1-010",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "Why is the data for language-model pretraining described as 'free', and why does that matter?",
+    "options": [
+      "Public text datasets are licensed at no cost, so data budgets never constrain how large a run can be",
+      "Text is its own supervision, since targets are just the next tokens; that is what lets LMs scale",
+      "The model generates its own training text as it learns, so no external corpus is needed after step 0",
+      "Only a few hand-labelled examples are needed because the model generalizes from them to the rest"
+    ],
+    "answer_index": 1,
+    "explanation": "Since the target is the next token of the same text, every piece of raw text supplies its own labels. That removes the human-labelling bottleneck and lets training use enormous corpora, which is the root of why language models scale. It does not mean the model invents its own data."
+  },
+  {
+    "id": "07.1-011",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "1. Intuition: the same six steps, forever",
+    "question": "In the canonical loop as the code runs it, when is the step's learning rate computed and written into the optimizer?",
+    "options": [
+      "After optimizer.step(), so the new value takes effect on the following step",
+      "Only once before training starts, then held constant for the entire run",
+      "Inside loss.backward(), alongside the gradient computation for each layer",
+      "At the start of the step, before the forward pass and the optimizer step"
+    ],
+    "answer_index": 3,
+    "explanation": "The loop begins each iteration with lr = schedule(step) and writes it into the optimizer, so the update at step k uses the learning rate for step k. Setting it after step() causes an off-by-one where every step uses the previous step's rate. The rate changes every step under the cosine-warmup schedule."
+  },
+  {
+    "id": "07.1-012",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "2. Mathematics: what one step minimizes",
+    "question": "In the pretraining loss L(theta) = (1/(B T)) * sum over b and t of -log p(y_{b,t} | x_{b,1..t}), what does the 1/(B T) factor do?",
+    "options": [
+      "It makes the loss the mean cross-entropy over all B times T token positions",
+      "It converts natural logs to base-2 logs so the loss is reported in bits per token",
+      "It scales the loss by the learning rate before backpropagation begins",
+      "It normalizes the softmax so each position's probabilities sum to one"
+    ],
+    "answer_index": 0,
+    "explanation": "There are B sequences of T positions, each contributing one negative log-probability of the true next token. Dividing the sum by B*T gives the average per-token cross-entropy. The softmax handles normalization of probabilities; the learning rate is applied by the optimizer, not the loss."
+  },
+  {
+    "id": "07.1-013",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "2. Mathematics: what one step minimizes",
+    "question": "In the next-token loss, the model's prediction for target y_{b,t} = x_{b,t+1} is conditioned on which tokens?",
+    "options": [
+      "The tokens x_{b,1} through x_{b,t}, the prefix up to and including position t",
+      "All tokens of sequence b, including those after position t, read in both directions",
+      "Only the single token x_{b,t} at the current position, with no earlier context",
+      "The tokens at position t from every sequence in the batch, pooled across b"
+    ],
+    "answer_index": 0,
+    "explanation": "A causal language model predicts token t+1 from the prefix x_1..x_t only. Seeing future tokens would leak the answer. Sequences in a batch are independent; one sequence never conditions on another."
+  },
+  {
+    "id": "07.1-014",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "2. Mathematics: what one step minimizes",
+    "question": "In the pretraining loss, what is p_theta(.)?",
+    "options": [
+      "The fraction of the training corpus in which each vocabulary token appears at least once",
+      "The per-parameter learning rate that AdamW assigns from its second-moment estimate",
+      "A fixed uniform distribution over the vocabulary, used as the baseline at initialization",
+      "The softmax over the model's logits, giving a probability for each vocabulary token"
+    ],
+    "answer_index": 3,
+    "explanation": "The model outputs logits, one score per vocabulary token per position, and a softmax turns them into a probability distribution. The loss takes minus the log of the probability assigned to the true next token. Token frequencies and learning rates are unrelated to this definition."
+  },
+  {
+    "id": "07.1-015",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "2. Mathematics: what one step minimizes",
+    "question": "In the update theta <- theta - eta_step * AdamW(grad L), where does eta_step come from in the course's loop?",
+    "options": [
+      "From the pre-clip gradient norm that clip_grad_norm_ returns on that step",
+      "From the cosine-warmup schedule, computed as cosine_warmup_lr(step, ...)",
+      "From AdamW's second-moment buffer v, kept separately for each parameter",
+      "From the step-0 loss divided by ln(vocab_size), fixed for the whole run"
+    ],
+    "answer_index": 1,
+    "explanation": "Each symbol maps to code you built: the loss is model.forward, the gradient is loss.backward, the update rule is AdamW.step, and eta_step is cosine_warmup_lr(step, ...). The schedule warms up then decays the learning rate as a function of the step number. The gradient norm is only used for clipping."
+  },
+  {
+    "id": "07.1-016",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "The one number to anchor on: the untrained loss",
+    "question": "Why should a freshly initialized language model report a loss of about ln(V) at step 0, where V is the vocabulary size?",
+    "options": [
+      "Random weights give a roughly uniform prediction, assigning about 1/V to the correct token",
+      "Random weights always predict the most frequent token with probability one at every position",
+      "The loss function adds ln(V) as a regularization penalty that is removed after warmup ends",
+      "The optimizer has not stepped yet, so the loss is undefined and is reported as ln(V) by default"
+    ],
+    "answer_index": 0,
+    "explanation": "With random weights the output distribution over the V tokens is close to uniform, so the true token gets probability about 1/V. The cross-entropy is then -log(1/V) = log V. It is a consequence of near-uniform predictions, not an added penalty."
+  },
+  {
+    "id": "07.1-017",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "The one number to anchor on: the untrained loss",
+    "question": "Your step-0 loss is wildly different from ln(vocab_size). What should you conclude and do?",
+    "options": [
+      "The learning rate is too low; raise it and the loss will move toward ln(V) within a few steps",
+      "Something is broken, e.g. bad init, wrong vocab size or a label bug; stop and fix it first",
+      "Nothing; the step-0 loss is essentially random and carries no diagnostic information at all",
+      "The model is already partly trained from the init; reduce the number of planned training steps"
+    ],
+    "answer_index": 1,
+    "explanation": "A random-init model should sit near ln(V). A large departure points to a bug like a broken initialization, a mismatched vocabulary size or misaligned labels. The learning rate cannot affect the step-0 loss because no update has happened yet."
+  },
+  {
+    "id": "07.1-018",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "The one number to anchor on: the untrained loss",
+    "question": "For GPT-2, with a vocabulary of V = 50257 tokens, roughly what step-0 loss should an untrained model report?",
+    "options": [
+      "About 50257, the vocabulary size itself",
+      "About 3.0, the loss of a well-trained run",
+      "About 10.82, which is ln(50257)",
+      "About 0.00002, which is 1/50257"
+    ],
+    "answer_index": 2,
+    "explanation": "The step-0 loss is ln(V); ln(50257) is about 10.82. A good GPT-2-small run trains down to about 3.0. 1/V is the per-token probability, not the loss, which is its negative log."
+  },
+  {
+    "id": "07.1-019",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "The one number to anchor on: the untrained loss",
+    "question": "Why is checking the step-0 loss against ln(V) recommended on every training run?",
+    "options": [
+      "It is required to calibrate the peak value of the learning-rate schedule before warmup starts",
+      "It determines how many warmup steps the schedule needs, since higher ln(V) needs longer warmup",
+      "It is the cheapest reliable bug-catcher: one line, run before any GPU-hours are wasted",
+      "It is the only way to measure the model's final accuracy without running a separate eval set"
+    ],
+    "answer_index": 2,
+    "explanation": "The expected value is known in advance, so comparing the first loss to ln(V) catches init, vocabulary and label bugs immediately and for free. It does not set any hyperparameters. Skipping it can mean discovering the bug only after an expensive run."
+  },
+  {
+    "id": "07.1-020",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "3. Numerical example: the loop by hand for one step",
+    "question": "A fresh model with V = 16 reports a step-0 loss of 2.8103, slightly above ln(16) = 2.7726. Why the small excess?",
+    "options": [
+      "The optimizer has already taken one step before the loss is reported",
+      "Gradient clipping added a small penalty to the loss",
+      "The random initialization's predictions are not perfectly uniform",
+      "The vocabulary size was off by one token"
+    ],
+    "answer_index": 2,
+    "explanation": "ln(V) assumes an exactly uniform prediction; a real random init is only approximately uniform, so the loss lands slightly above ln(V). The loss is computed before any update. A small excess like this is healthy; a wild difference would indicate a bug."
+  },
+  {
+    "id": "07.1-021",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "3. Numerical example: the loop by hand for one step",
+    "question": "A small GPT trained on a short 16-token pattern repeated many times drives its loss to nearly zero. What does this show?",
+    "options": [
+      "The model has learned general language from the pattern and is ready to be deployed on new text",
+      "The loss function is broken, because a correctly computed cross-entropy can never approach zero",
+      "The model has memorized the pattern, which is exactly what this overfit sanity check should show",
+      "The learning rate is far too high and training has diverged, which collapses the loss toward zero"
+    ],
+    "answer_index": 2,
+    "explanation": "On a trivially repetitive dataset the next token is fully predictable, so a working setup memorizes it and the loss approaches zero. That is the intended outcome of overfitting a tiny dataset. It says nothing about general language ability, and divergence would show the loss rising, not falling."
+  },
+  {
+    "id": "07.1-022",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "3. Numerical example: the loop by hand for one step",
+    "question": "What is the second-cheapest training bug-catcher after the step-0 loss check?",
+    "options": [
+      "Running the full-scale job for one day and inspecting the final loss against the published value",
+      "Checking the model can overfit a few examples; if it cannot, the training code is broken",
+      "Comparing the model's parameter count with the published model card before launching the run",
+      "Checking that validation loss is already lower than training loss at step 0, before any updates"
+    ],
+    "answer_index": 1,
+    "explanation": "A correct training setup can always memorize a tiny dataset. If the loss will not go near zero on a handful of examples, something in the model or loop is wrong, and there is no point launching a big run. Running the full job first wastes compute on a known-broken pipeline."
+  },
+  {
+    "id": "07.1-023",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "3. Numerical example: the loop by hand for one step",
+    "question": "While overfitting a tiny repeated sequence, the loss briefly bumps up at a few steps after reaching near zero. What explains the bumps, and what settles them?",
+    "options": [
+      "The data loader occasionally repeats a batch; switching to a fresh random seed settles it",
+      "The optimizer briefly overshoots near zero loss; the cosine decay of the learning rate settles it",
+      "The gradients overflow in float32 near zero loss; switching the model to float64 settles it",
+      "The model forgets the pattern between steps as capacity runs out; adding more layers settles it"
+    ],
+    "answer_index": 1,
+    "explanation": "Near a minimum, a step size that was fine earlier can overshoot, producing small loss bumps. As the cosine schedule lowers the learning rate, steps shrink and the bumps fade. These bumps are normal optimizer dynamics, not overflow or capacity problems."
+  },
+  {
+    "id": "07.1-024",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "In one training step with batch size B and context length T, what are the shape and dtype of the input x returned by get_batch?",
+    "options": [
+      "(B, T), int64 token ids",
+      "(B, T, V), float32 scores",
+      "(B, T, C), float32 embeddings",
+      "(T, B), float16 token ids"
+    ],
+    "answer_index": 0,
+    "explanation": "The data loader returns integer token ids arranged as B sequences of T tokens, shape (B, T), dtype int64. Embedding to width C happens inside the model, and (B, T, V) is the shape of the logits the model outputs."
+  },
+  {
+    "id": "07.1-025",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "What is the shape and dtype of the logits that model(x, y) returns for a (B, T) batch with vocabulary V?",
+    "options": [
+      "(B, V), float32: one score per vocabulary token per sequence",
+      "(B, T), int64: the predicted token id at each position",
+      "(V,), float32: one score per vocabulary token for the whole batch",
+      "(B, T, V), float32: one score per vocabulary token per position"
+    ],
+    "answer_index": 3,
+    "explanation": "The model produces a full distribution's worth of scores at every position of every sequence, giving (B, T, V) floats. The argmax of those scores would be (B, T) ids, but the model returns the raw scores. Every position gets its own prediction, so the sequence and position dimensions are kept."
+  },
+  {
+    "id": "07.1-026",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "What is the shape of the loss tensor returned by the training forward pass?",
+    "options": [
+      "Shape (B,), one mean loss per sequence in the batch",
+      "A scalar with shape (), the mean cross-entropy",
+      "Shape (B, T), one loss per token position",
+      "Shape (V,), one loss per vocabulary token"
+    ],
+    "answer_index": 1,
+    "explanation": "The forward pass averages the per-token cross-entropies into a single scalar of shape (). backward() is called on that scalar. Per-sequence or per-token losses exist internally but are reduced by the mean."
+  },
+  {
+    "id": "07.1-027",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "After loss.backward(), how does each parameter's .grad tensor relate to the parameter itself?",
+    "options": [
+      "It is always a scalar holding the parameter's total gradient",
+      "It has identical shape, dtype and device to the parameter",
+      "It has the same shape but is always stored on the CPU",
+      "It has the shape of the logits, (B, T, V), for every parameter"
+    ],
+    "answer_index": 1,
+    "explanation": "Backprop writes a gradient tensor into every leaf parameter, matching it element for element: same shape, same dtype, same device. That lets the optimizer read .grad and update the parameter in place. Gradients stay on the parameter's device."
+  },
+  {
+    "id": "07.1-028",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "What changes in the model between one training step and the next?",
+    "options": [
+      "The number of layers grows as the loss decreases",
+      "The vocabulary size shrinks to the tokens seen so far",
+      "The parameter shapes are resized to match the next batch",
+      "Only the values of the parameters; no tensor shapes change"
+    ],
+    "answer_index": 3,
+    "explanation": "The optimizer writes updated values into the existing parameters in place. Architecture, vocabulary and all parameter shapes are fixed throughout the run. Batches of the same (B, T) flow through the same fixed shapes every step."
+  },
+  {
+    "id": "07.1-029",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "4. Tensor shapes: what flows through one step",
+    "question": "In the training batch, how is the target tensor y related to the input tensor x?",
+    "options": [
+      "y is x with a random 15% of its tokens replaced by a special mask token",
+      "y is x reversed along the time dimension, so y[:, t] is x[:, T-1-t]",
+      "y is x shifted left by one position, so y[:, t] is the token after x[:, t]",
+      "y is identical to x, and the model learns to copy x[:, t] to position t"
+    ],
+    "answer_index": 2,
+    "explanation": "For next-token prediction, y at position t is the token at position t+1 in the original stream, i.e. x shifted left by one. In get_batch this is y = stream[i+1 : i+1+T] versus x = stream[i : i+T]. Copying x itself would be trivial and teach nothing about prediction."
+  },
+  {
+    "id": "07.1-030",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "In a from-scratch get_batch, random start indices are drawn with torch.randint(0, stream.numel() - T - 1, (b,)). Why subtract T + 1 rather than just T?",
+    "options": [
+      "Because the last token of every stream is reserved for an end-of-text marker that is never sampled",
+      "Because torch.randint includes its upper bound, so one extra must be subtracted to stay in range",
+      "Because each batch must skip one token so that it does not overlap with the previous batch",
+      "Because the target window y extends one token past x, and it must still fit inside the stream"
+    ],
+    "answer_index": 3,
+    "explanation": "x takes stream[i : i+T] and y takes stream[i+1 : i+1+T], so the last index y touches is i+T. The start index must leave room for that extra token. Without the extra -1, a start near the end would produce a short or out-of-range target window."
+  },
+  {
+    "id": "07.1-031",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "In the course's train() function, what happens first when cfg.seed is not None?",
+    "options": [
+      "The model's weights are re-initialized from zero so every seeded run starts identically",
+      "The learning rate for the first step is set to cfg.seed and then handed to the schedule",
+      "torch.manual_seed(cfg.seed) is called so the run's random choices are reproducible",
+      "A checkpoint named after the seed is loaded from disk so the run resumes where it stopped"
+    ],
+    "answer_index": 2,
+    "explanation": "Seeding PyTorch's RNG makes initialization-dependent choices, batch sampling and dropout reproducible across runs. The seed has nothing to do with the learning rate or checkpoints. Reproducibility is covered in depth in 07.3."
+  },
+  {
+    "id": "07.1-032",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "The course's train() builds the optimizer from [p for p in model.parameters() if p.requires_grad]. What does that filter do?",
+    "options": [
+      "It hands the optimizer only trainable parameters, skipping frozen ones",
+      "It removes parameters whose gradients were zero on the last step",
+      "It keeps only the embedding parameters, which are updated most",
+      "It drops parameters that are stored on the CPU rather than GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "requires_grad marks a tensor as trainable; frozen parameters have it set to False and receive no gradient. Passing only trainable parameters keeps the optimizer from allocating state for, or touching, tensors that should not change. It is a static property, not based on last step's gradient values."
+  },
+  {
+    "id": "07.1-033",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "In the cosine-warmup learning-rate schedule used by the training loop, what is the purpose of the warmup phase?",
+    "options": [
+      "To hold the learning rate at its peak for the final steps of training",
+      "To lower the learning rate gradually so late steps fine-tune",
+      "To set the learning rate to zero until the loss reaches ln(V)",
+      "To ramp the learning rate up so the first, noisiest steps do not lurch"
+    ],
+    "answer_index": 3,
+    "explanation": "Early in training the gradients are noisy and the optimizer state is cold, so large steps can destabilize the model. Warmup starts small and ramps up to the peak. Gently lowering the rate for late steps is the cosine decay phase, not warmup."
+  },
+  {
+    "id": "07.1-034",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "In the cosine-warmup learning-rate schedule, what is the purpose of the cosine decay phase?",
+    "options": [
+      "To ease the learning rate down so late steps fine-tune",
+      "To ramp the learning rate up so the first steps do not lurch",
+      "To make the learning rate oscillate and escape local minima",
+      "To keep the learning rate constant once warmup finishes"
+    ],
+    "answer_index": 0,
+    "explanation": "After warmup the cosine curve smoothly lowers the learning rate toward a floor (min_lr), so later updates are smaller and refine rather than disrupt what has been learned. Ramping up is the warmup phase. A cosine decay is monotonic, not an oscillating restart schedule."
+  },
+  {
+    "id": "07.1-035",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "Why must the training loop call optimizer.zero_grad() every optimizer step?",
+    "options": [
+      "Because backward() raises an error if a parameter's .grad already holds a value from before",
+      "Because zero_grad() also resets AdamW's moment buffers m and v, which must restart each step",
+      "Because backward() adds into .grad; without clearing, this step's gradient adds onto last step's",
+      "Because the current learning rate is stored inside .grad and must be reset before the next step"
+    ],
+    "answer_index": 2,
+    "explanation": "PyTorch's backward adds into existing .grad tensors rather than overwriting them. If you do not clear them, gradients from earlier steps pile up into the current update, which is wrong. zero_grad does not touch the optimizer's moment state, and backward does not error on a non-empty .grad."
+  },
+  {
+    "id": "07.1-036",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "The fact that backward() adds into .grad rather than overwriting it is exploited for which technique?",
+    "options": [
+      "Gradient clipping by global norm",
+      "Gradient accumulation across micro-batches",
+      "Cosine-warmup learning-rate scheduling",
+      "Weight tying between embedding and head"
+    ],
+    "answer_index": 1,
+    "explanation": "Because gradients accumulate, you can run several micro-batch backward passes and let their gradients sum before one optimizer step, emulating a larger batch. That is gradient accumulation (07.2). The same behavior that makes forgetting zero_grad a bug becomes a feature when done deliberately."
+  },
+  {
+    "id": "07.1-037",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "In the course loop, the line _, loss = model(x, y) discards the first return value. What is discarded and why?",
+    "options": [
+      "The gradients, because the optimizer recomputes them itself inside optimizer.step()",
+      "The targets, because they were already consumed when get_batch built the batch",
+      "The logits, because the training step only needs the scalar loss for backward",
+      "The learning rate, because it is set separately from the schedule at the step start"
+    ],
+    "answer_index": 2,
+    "explanation": "model(x, y) returns (logits, loss). Training only needs the scalar loss to backpropagate, so the logits are ignored. Gradients are not returned by forward at all; they come from loss.backward()."
+  },
+  {
+    "id": "07.1-038",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "What does clip_grad_norm_(params, grad_clip) do in the course's training loop?",
+    "options": [
+      "Sets every gradient element larger than grad_clip to exactly grad_clip, returning how many were clipped",
+      "Zeroes the gradients of any parameter whose own norm exceeds grad_clip, returning the remaining norm",
+      "Divides the learning rate by the gradient norm whenever that norm exceeds grad_clip for the step",
+      "Rescales the whole gradient so its global L2 norm is at most grad_clip, returning the pre-clip norm"
+    ],
+    "answer_index": 3,
+    "explanation": "Global-norm clipping computes the L2 norm across all parameters' gradients and, if it exceeds the threshold, scales every gradient by the same factor. That preserves the direction while capping the size. It returns the norm measured before clipping, which is useful for logging. Element-wise clamping is a different method."
+  },
+  {
+    "id": "07.1-039",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "What does AdamW's optimizer.step() do in the course training loop?",
+    "options": [
+      "Reads each .grad, updates the moment estimates, and nudges every parameter",
+      "Runs the forward pass again and computes a fresh loss on the same batch",
+      "Clears every .grad and resets the moment estimates to zero for the next step",
+      "Computes the gradients by backpropagating from the loss through every layer"
+    ],
+    "answer_index": 0,
+    "explanation": "step() consumes the gradients that backward produced, updates AdamW's running first and second moment estimates, and applies the update to each parameter. Forward and backward happen before step, and clearing gradients is zero_grad's job. The moment estimates persist across steps."
+  },
+  {
+    "id": "07.1-040",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "5. From-scratch PyTorch: a fully runnable overfit",
+    "question": "Why are ordering bugs in the training loop (for example clipping after optimizer.step()) described as the worst kind of bug?",
+    "options": [
+      "PyTorch raises an exception whose traceback is very hard to read",
+      "The model still trains, just wrongly, so the failure is silent",
+      "The program crashes immediately and loses all unsaved progress",
+      "The loss becomes NaN at step 0 and the run cannot be recovered"
+    ],
+    "answer_index": 1,
+    "explanation": "zero_grad must come before backward (or right after step), and clip must come after backward but before step. If you get the order wrong the code still runs and the loss may still fall, so nothing alerts you. Bugs that crash are easy; silent ones corrupt results unnoticed."
+  },
+  {
+    "id": "07.1-041",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In the training loop, why must clip_grad_norm_ run after backward() but before optimizer.step()?",
+    "options": [
+      "Clipping must see the updated parameters, which only exist once optimizer.step() has run",
+      "Clipping resets the gradients to zero, so it must run before the next backward refills them",
+      "Clipping changes the loss value itself, so it has to run before backward reads that loss",
+      "Gradients exist only after backward, and step consumes them, so clipping must sit between"
+    ],
+    "answer_index": 3,
+    "explanation": "Clipping rescales .grad tensors, which backward computes. The optimizer reads .grad inside step(), so if clipping runs after step it clips nothing that matters. The sandwich is backward, clip, step. Clipping touches gradients, not parameters or the loss."
+  },
+  {
+    "id": "07.1-042",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "Why does the forward pass hold onto the activations of every layer?",
+    "options": [
+      "Because the optimizer reads them to update its moment buffers",
+      "Because the next batch reuses them as a cache to save compute",
+      "Because the backward pass needs them to compute gradients",
+      "Because they are written to the checkpoint at every step"
+    ],
+    "answer_index": 2,
+    "explanation": "Backprop computes each layer's gradients from that layer's saved inputs/activations, so they must be kept until backward runs. This is why activation memory grows with batch size. The optimizer uses gradients, not activations, and batches do not share activations."
+  },
+  {
+    "id": "07.1-043",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "For a GPT-2 batch of shape (B, T), which single tensor is typically the largest, and why?",
+    "options": [
+      "The token-id input, shape (B, T), because it is stored as int64",
+      "The scalar loss, because it accumulates every token's error",
+      "The logits, shape (B, T, V), because V = 50257 dwarfs the hidden width",
+      "The position embedding table, because it covers the whole context"
+    ],
+    "answer_index": 2,
+    "explanation": "The logits carry one score per vocabulary token at every position. With V = 50257, far larger than the model width, this tensor dwarfs the activations inside the transformer stack. Token ids are small integer tensors and the loss is a single number."
+  },
+  {
+    "id": "07.1-044",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "What usually limits how large a training batch fits in GPU memory?",
+    "options": [
+      "Parameter memory, since the weights are copied once per example in the batch",
+      "Activation memory, which grows with the batch, rather than parameter memory",
+      "The token-id tensors, which are stored as int64 and dominate memory per example",
+      "The learning-rate schedule, which keeps a separate value stored for each example"
+    ],
+    "answer_index": 1,
+    "explanation": "Parameters are a fixed size regardless of batch, but the activations saved for backward scale with B and T, with the (B, T, V) logits a big contributor. So activations, not weights, usually cap the batch. Token ids are tiny by comparison."
+  },
+  {
+    "id": "07.1-045",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "Roughly how does the arithmetic of the backward pass compare with the forward pass, and what rule does that lead to?",
+    "options": [
+      "Backward is about half of forward, because it reuses cached activations, giving the 3N FLOPs per token rule",
+      "Backward equals forward exactly, because it runs the same layers in reverse, giving the 4N FLOPs per token rule",
+      "Backward is negligible next to forward, because it only multiplies by the loss, giving the 2N FLOPs per token rule",
+      "Backward is about twice forward, since it computes gradients for both activations and weights: the 6N rule"
+    ],
+    "answer_index": 3,
+    "explanation": "Backward computes gradients with respect to both the layer inputs and the weights, roughly doubling the forward's work. With forward at about 2N FLOPs per token for N parameters, forward plus backward is about 6N. This rule is used for throughput and MFU accounting in 07.4."
+  },
+  {
+    "id": "07.1-046",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "AdamW's optimizer.step() touches every parameter three times. What does that imply about memory?",
+    "options": [
+      "Adam's optimizer state is one third of the model's size, shared across the passes",
+      "Adam's optimizer state, the m and v buffers, is twice the size of the model",
+      "Adam keeps three copies of the gradient, so gradient memory triples per step",
+      "Adam needs no extra memory, because it updates every parameter fully in place"
+    ],
+    "answer_index": 1,
+    "explanation": "For each parameter AdamW reads and writes the parameter itself plus two moment buffers, m and v, each the same size as the parameter. So the optimizer state alone is 2x the model size, a fact that shapes memory planning for every large run."
+  },
+  {
+    "id": "07.1-047",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "6. Under the hood: what each step actually costs",
+    "question": "Why is calling loss.item() every step a concern on a GPU?",
+    "options": [
+      "It detaches the loss from the autograd graph, so backward() no longer works",
+      "It converts the model's parameters to float64 on the host, doubling memory",
+      "It resets the accumulated gradients to zero, silently undoing the backward pass",
+      "It forces a GPU-to-CPU sync to read the scalar back to Python, stalling the GPU"
+    ],
+    "answer_index": 3,
+    "explanation": "item() copies a scalar from the device to Python, which forces the CPU to wait for all queued GPU work to finish. Doing that every step throttles throughput. For study it is fine; real runs log it every N steps. It does not affect gradients or parameter dtypes."
+  },
+  {
+    "id": "07.1-048",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Exercise",
+    "question": "A training loop calls loss.backward() twice on the same batch without zero_grad() in between. What ends up in each .grad?",
+    "options": [
+      "Twice the true gradient, 2 times grad L, because backward adds into .grad",
+      "The true gradient, because the second backward overwrites the first",
+      "Zero, because the two backward calls cancel each other out",
+      "The square of the true gradient, because the calls multiply"
+    ],
+    "answer_index": 0,
+    "explanation": "backward() accumulates: each call adds its gradient into .grad. Two calls on the same batch therefore leave 2 times the gradient. There is no overwriting or cancellation; that additive behavior is exactly why zero_grad is needed."
+  },
+  {
+    "id": "07.1-049",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Exercise",
+    "question": "If the gradient fed to AdamW is accidentally doubled, why does the parameter step not simply double?",
+    "options": [
+      "AdamW clips every gradient to unit norm before updating, so a doubled gradient is clipped back",
+      "AdamW ignores the gradient's magnitude entirely and steps using only the sign of each element",
+      "AdamW halves its learning rate whenever the gradient norm grows, cancelling out the doubling",
+      "AdamW is partly scale-invariant: it divides by sqrt(v), and v scales with the gradient squared"
+    ],
+    "answer_index": 3,
+    "explanation": "Adam's update is roughly m / sqrt(v); if gradients double, m doubles and sqrt(v) roughly doubles, so the ratio is largely unchanged. The run is still subtly wrong because the moment dynamics and bias correction are computed from mis-scaled gradients. AdamW is not sign-based and does not automatically adjust its learning rate."
+  },
+  {
+    "id": "07.1-050",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Exercise",
+    "question": "Why does a training run with a doubled-gradient bug still show a plausible falling loss curve?",
+    "options": [
+      "The gradient direction is unchanged, so the steps are still mostly downhill",
+      "The optimizer automatically detects the doubling and divides it back out each step",
+      "The loss is computed before backward runs, so a gradient bug cannot affect it",
+      "Gradient clipping always rescales the doubled gradient back to the exact correct one"
+    ],
+    "answer_index": 0,
+    "explanation": "Both backward calls point the same way, so the update direction is still downhill and the loss keeps falling. Only the scale and dynamics are off. That plausibility is why this bug class is dangerous: nothing obviously breaks."
+  },
+  {
+    "id": "07.1-051",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Exercise",
+    "question": "What is the correct pattern for backward() and zero_grad() calls in a loop that may accumulate gradients?",
+    "options": [
+      "One zero_grad() per accumulation micro-step, and backward() exactly once after all the micro-steps finish",
+      "Two backward() calls per accumulation micro-step, and zero_grad() immediately after every single backward",
+      "One backward() per optimizer step on the summed loss, and zero_grad() only once at the very start of training",
+      "One backward() per accumulation micro-step, and one zero_grad() per optimizer step, before the micro-steps"
+    ],
+    "answer_index": 3,
+    "explanation": "Each micro-batch contributes its gradient via one backward call, and gradients should accumulate across those micro-steps. Clearing once before the accumulation loop, per optimizer step, gives the right sum. Zeroing inside the micro-loop discards earlier micro-batches; never zeroing mixes steps."
+  },
+  {
+    "id": "07.1-052",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What symptom typically appears when a training loop forgets zero_grad() entirely?",
+    "options": [
+      "A loss that stays exactly at ln(V), because the accumulated gradients cancel and no update happens",
+      "A loss that drops to zero in the very first step and then stays there for the rest of the run",
+      "No visible symptom at all, because the optimizer clears the gradients itself inside step()",
+      "NaNs or a loss that explodes after a few steps, as gradients from every past step pile up"
+    ],
+    "answer_index": 3,
+    "explanation": "Without zeroing, each step's .grad holds the sum of all previous gradients, so the effective update grows and the loss diverges or thrashes, often to NaN. Updates still happen, so the loss does not freeze at ln(V). The optimizer's step does not clear gradients."
+  },
+  {
+    "id": "07.1-053",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if a training loop sets the learning rate after optimizer.step() instead of before?",
+    "options": [
+      "The learning rate is ignored entirely and AdamW falls back to its default value of 1e-3 for every step",
+      "Step k uses step k-1's LR: warmup is off by one and the first step runs at the peak or floor LR",
+      "The gradients get scaled by the new learning rate twice, so each update is effectively squared",
+      "The schedule runs backwards, decaying the learning rate during warmup and raising it afterwards"
+    ],
+    "answer_index": 1,
+    "explanation": "If the rate is assigned after stepping, each update uses the value meant for the previous step, and the very first update uses whatever the optimizer was constructed with (the peak or floor), not the warmup start. Set the learning rate before step() so step k uses the rate for step k."
+  },
+  {
+    "id": "07.1-054",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A fresh model with a 1000-token vocabulary reports a first loss of 6.9. Is that expected?",
+    "options": [
+      "No, because a fresh model should report a loss near 1/1000 = 0.001",
+      "Yes, because ln(1000) is about 6.91, the uniform-prediction baseline",
+      "No, because 6.9 is far above the loss of a well-trained small model",
+      "No, because a fresh model should report a loss near the vocab size, 1000"
+    ],
+    "answer_index": 1,
+    "explanation": "A random-init model predicts roughly uniformly, so the step-0 loss is about ln(V). ln(1000) = 6.9078, so 6.9 is exactly the healthy signal. 1/V is a probability, not a loss, and an untrained model is not supposed to match the much lower loss of a trained one."
+  },
+  {
+    "id": "07.1-055",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A model cannot drive the loss near zero on a tiny repeated dataset. What should you NOT do next?",
+    "options": [
+      "Inspect the label alignment between x and y in get_batch",
+      "Check the step-0 loss against ln(vocab_size) on a fresh model",
+      "Launch a large, expensive run to see whether it works at scale",
+      "Re-read the order of zero_grad, backward, clip and step in the loop"
+    ],
+    "answer_index": 2,
+    "explanation": "Failure to overfit a handful of examples means the code or model is broken. Scaling up only multiplies whatever bug exists and burns compute. Debugging labels, the step-0 loss and loop order are exactly the right next steps."
+  },
+  {
+    "id": "07.1-056",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In a loop with grad_accum_steps = G, why does the backward call use (loss / G).backward()?",
+    "options": [
+      "So that summing the G micro-batch gradients equals one full-batch gradient",
+      "So that the logged loss comes out G times larger and is easier to read in logs",
+      "So that the learning rate is automatically multiplied by G inside AdamW",
+      "So that only the last micro-batch's gradient ends up contributing to .grad"
+    ],
+    "answer_index": 0,
+    "explanation": "Gradients accumulate across the G backward calls. Dividing each micro-batch loss by G makes the accumulated sum equal the gradient of the full-batch mean loss. The logging uses loss.item() / G for the same reason. With G = 1 both reduce to the plain loss."
+  },
+  {
+    "id": "07.1-057",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Hardware track — the tiny overfit",
+    "question": "What hardware does the tiny 26k-parameter overfit example need?",
+    "options": [
+      "One modern data-center GPU for about an hour, roughly one GPU-hour",
+      "Any laptop CPU, about 1 to 2 seconds for 200 steps, with zero GPU-hours",
+      "Eight GPUs in data parallel for a few minutes, about half a GPU-hour",
+      "A GPU with at least 24 GB of memory to hold the logits, for ten minutes"
+    ],
+    "answer_index": 1,
+    "explanation": "The tiny model has about 26k parameters and uses a few MB of memory, so 200 steps take a second or two on any CPU. No GPU is needed. The heavy hardware numbers apply to real pretraining, not this sanity check."
+  },
+  {
+    "id": "07.1-058",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Hardware track — the tiny overfit",
+    "question": "For GPT-2 small (124M parameters), what loss trajectory should a good pretraining run show?",
+    "options": [
+      "From about 3.0 at step 0 down to about 0.0",
+      "From about 10.82 at step 0 down to about 3.0",
+      "From about 2.77 at step 0 down to about 1.0",
+      "From about 50257 at step 0 down to about 10.82"
+    ],
+    "answer_index": 1,
+    "explanation": "GPT-2's vocabulary of 50257 gives a step-0 loss of ln(50257) = 10.82. A good run of GPT-2 small reaches about 3.0. Real language is not memorizable like a toy pattern, so the loss does not approach zero."
+  },
+  {
+    "id": "07.1-059",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Hardware track — the tiny overfit",
+    "question": "Between a tiny CPU overfit run and a frontier pretraining run on thousands of GPUs, what changes in the training loop?",
+    "options": [
+      "The frontier run replaces backward() with a different, cheaper gradient algorithm",
+      "The frontier run skips gradient clipping, because its far larger batches never spike",
+      "The frontier run computes the loss only on every hundredth token to save compute",
+      "The loop is identical; only the model size, token count and number of workers change"
+    ],
+    "answer_index": 3,
+    "explanation": "The same get-batch, forward, backward, clip, step loop trains both. Scaling up changes how big the model is, how many tokens it sees and how many workers run it in parallel. The algorithmic core is unchanged."
+  },
+  {
+    "id": "07.1-060",
+    "chapter": "07.1",
+    "chapter_name": "The training loop: batching & loss",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-01.md",
+    "section": "Next",
+    "question": "Why do real pretraining runs need gradient accumulation on top of the basic training loop?",
+    "options": [
+      "They need to avoid computing gradients for most parameters, so only a subset updates per step",
+      "They need to update the weights several times per batch so each batch is used more fully",
+      "They need an effective batch of hundreds of thousands of tokens per step, more than fits in memory",
+      "They need to store every past gradient on disk so later analysis can replay the run exactly"
+    ],
+    "answer_index": 2,
+    "explanation": "Large runs want huge batches per optimizer step for stable, low-noise gradients, but one device cannot hold the activations for that many tokens. Gradient accumulation sums gradients over several small micro-batches before one step. It neither skips parameters nor stores old gradients."
+  }
+]

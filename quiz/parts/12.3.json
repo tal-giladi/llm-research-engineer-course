@@ -1,0 +1,776 @@
+[
+  {
+    "id": "12.3-001",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which current models use grouped-query attention (GQA)?",
+    "options": [
+      "Llama 2-70B, Llama 3, Mistral and most current models",
+      "Only GPT-2 and the original 2017 encoder-decoder Transformer",
+      "Only encoder-only models such as BERT and RoBERTa variants",
+      "Only models trained and served without any KV cache at all"
+    ],
+    "answer_index": 0,
+    "explanation": "GQA is the attention variant in Llama 2-70B, Llama 3, Mistral and most current models. GPT-2 and the original Transformer use standard multi-head attention. GQA's benefit specifically concerns the KV cache used in decoder inference."
+  },
+  {
+    "id": "12.3-002",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What kind of win does GQA deliver?",
+    "options": [
+      "A large training-speed win, paid for with a significant drop in quality on long-context benchmarks",
+      "A reduction in attention FLOPs by a factor of n_h, because fewer heads compute scores at every layer",
+      "A quality improvement over MHA, bought with a higher KV-cache memory cost at long context lengths",
+      "A pure inference win: a smaller KV cache allows longer contexts and larger batches at little quality cost"
+    ],
+    "answer_index": 3,
+    "explanation": "GQA shrinks the KV cache, which lets you serve longer contexts and larger batches on the same GPU, with almost no quality loss. Training speed and attention FLOPs are roughly unchanged. It approximates MHA quality rather than exceeding it."
+  },
+  {
+    "id": "12.3-003",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "1. Intuition: the KV cache is the bottleneck at inference",
+    "question": "Why does an autoregressive decoder keep a KV cache during generation?",
+    "options": [
+      "To store the query vectors of all past tokens so they can be reused at each step",
+      "To store the softmax attention weights of previous steps so they need not be renormalized",
+      "To avoid recomputing the keys and values of all previous tokens at every step",
+      "To store the gradients of past positions for use in the next training step"
+    ],
+    "answer_index": 2,
+    "explanation": "To generate token t+1, attention needs K and V for every previous token. Recomputing them each step would be quadratic and wasteful, so each token's K and V are computed once and cached. Queries are computed fresh for the current token and are not cached."
+  },
+  {
+    "id": "12.3-004",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "1. Intuition: the KV cache is the bottleneck at inference",
+    "question": "In standard multi-head attention, why does the KV cache become a major problem for long contexts and big models?",
+    "options": [
+      "It stores the full T x T attention matrix for every layer and every head, which grows quadratically with context",
+      "It stores K and V for all n_h heads and grows with sequence length, often exceeding the model weights in memory",
+      "It stores the token embeddings for the whole vocabulary at every layer, which soon dwarfs the model weights",
+      "It must be recomputed from scratch at every decode step, so its cost grows with each new token"
+    ],
+    "answer_index": 1,
+    "explanation": "The cache grows linearly with the sequence and, in MHA, stores keys and values for all n_h heads in every layer. For long sequences it can exceed the memory of the weights themselves and becomes the dominant GPU memory consumer at inference. It stores K and V, not attention matrices."
+  },
+  {
+    "id": "12.3-005",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "1. Intuition: the KV cache is the bottleneck at inference",
+    "question": "Besides memory capacity, why does KV-cache size matter at every decode step?",
+    "options": [
+      "It must be written to disk after each step so generation can resume after a crash",
+      "It must be read from memory every step, so its size caps context length and batch size",
+      "It is re-projected through W_K and W_V at each step, which costs a full matmul per layer",
+      "It is sorted by attention score before each softmax, an O(T log T) operation per step"
+    ],
+    "answer_index": 1,
+    "explanation": "Every decode step reads the whole cache from memory to compute attention for the new token. So the cache's size affects memory bandwidth per step as well as capacity. Both directly cap how long a context and how large a batch you can serve."
+  },
+  {
+    "id": "12.3-006",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "1. Intuition: the KV cache is the bottleneck at inference",
+    "question": "Which asymmetry between query heads and key/value heads do MQA and GQA exploit?",
+    "options": [
+      "Query heads give expressive power while KV heads set the cache size, so keep many query heads and few KV heads",
+      "KV heads give the expressive power while query heads set the cache size, so keep many KV heads and few query heads",
+      "Query heads are cached across decode steps, while KV heads are recomputed for each new token from scratch",
+      "Query heads hold far more parameters than KV heads, so cutting KV heads saves weight memory but no cache"
+    ],
+    "answer_index": 0,
+    "explanation": "Each query head asks a different question, which is where attention's expressiveness comes from. The KV cache stores one K and V per KV head, so the number of KV heads sets cache size. MQA and GQA keep n_h query heads but use fewer KV heads."
+  },
+  {
+    "id": "12.3-007",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "1. Intuition: the KV cache is the bottleneck at inference",
+    "question": "By what factor does using g KV heads instead of n_h shrink the KV cache?",
+    "options": [
+      "g / n_h",
+      "n_h * g",
+      "sqrt(n_h / g)",
+      "n_h / g"
+    ],
+    "answer_index": 3,
+    "explanation": "The cache size is proportional to the number of KV heads. Going from n_h to g heads shrinks it by n_h / g, e.g. 64 / 8 = 8 times. This comes with little quality loss for reasonable g."
+  },
+  {
+    "id": "12.3-008",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "In standard multi-head attention (MHA), how many key/value heads are there relative to query heads?",
+    "options": [
+      "g = 1: all query heads share one KV head",
+      "g = n_h / 2: adjacent pairs of query heads share a KV head",
+      "g = n_h: every query head has its own K and V head",
+      "g = 2 n_h: each query head has two KV heads"
+    ],
+    "answer_index": 2,
+    "explanation": "MHA ties the counts: n_h query heads and n_h KV heads. That gives maximum quality and maximum cache. MQA uses g = 1, and GQA uses an intermediate g."
+  },
+  {
+    "id": "12.3-009",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "What is Multi-Query Attention (MQA, Shazeer 2019)?",
+    "options": [
+      "Each query head gets multiple KV heads of its own, which improves quality at a higher cache cost",
+      "Queries are shared across all heads while K and V stay per-head, shrinking the query projection n_h times",
+      "All query heads share a single K/V head (g = 1), shrinking the cache n_h times",
+      "Attention computed over multiple queries at once during training, which is then cached for inference"
+    ],
+    "answer_index": 2,
+    "explanation": "MQA sets g = 1, so every query head attends using the same single K and V head. The cache shrinks by a factor of n_h. A small quality drop and some training instability were reported."
+  },
+  {
+    "id": "12.3-010",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "What downsides were reported for MQA?",
+    "options": [
+      "A much larger KV cache than MHA, since every query head keeps its own copy",
+      "A small quality drop and some training instability",
+      "A large increase in attention FLOPs from repeating K and V across heads",
+      "An inability to use a causal mask, which restricts it to encoder models"
+    ],
+    "answer_index": 1,
+    "explanation": "MQA shrinks the cache maximally but was reported to lose a little quality and to show some training instability. GQA was introduced as a middle ground that recovers almost all of MHA's quality. MQA's cache is the smallest, not the largest."
+  },
+  {
+    "id": "12.3-011",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "What is Grouped-Query Attention (GQA, Ainslie et al. 2023)?",
+    "options": [
+      "Query heads split into g groups of n_h/g, each group sharing one K/V head, with 1 < g < n_h and g dividing n_h",
+      "Each query head is split into g smaller sub-heads, and every sub-head gets its own separate K and V projections",
+      "Keys are grouped by sequence position into g buckets, and each query head attends only to its own bucket",
+      "The model's layers are split into g groups, and all layers in a group share a single set of K/V projections"
+    ],
+    "answer_index": 0,
+    "explanation": "GQA uses g KV heads, with g dividing n_h, and assigns each KV head to a contiguous group of n_h/g query heads. It interpolates between MHA (g = n_h) and MQA (g = 1). It recovers almost all of MHA's quality at a fraction of the cache."
+  },
+  {
+    "id": "12.3-012",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "How many KV heads do Llama 2-70B and Llama 3 use with GQA?",
+    "options": [
+      "1",
+      "64",
+      "32",
+      "8"
+    ],
+    "answer_index": 3,
+    "explanation": "Llama 2-70B and Llama 3 use g = 8 KV heads. With 64 query heads in Llama-2-70B that means groups of 8 query heads share each KV head, cutting the cache 8 times. g = 1 would be MQA and g = 64 would be MHA."
+  },
+  {
+    "id": "12.3-013",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "2. The three variants",
+    "question": "How does GQA keep the per-head attention math unchanged while using fewer KV heads?",
+    "options": [
+      "It averages the n_h query heads down to g heads before attention, so each group has one query",
+      "It concatenates the g KV heads along d_h, giving every query head a single wider key and value tensor",
+      "It runs g separate softmaxes, one per KV head, and sums their outputs across all query heads",
+      "It computes g KV heads and repeats each one across the n_h/g query heads in its group"
+    ],
+    "answer_index": 3,
+    "explanation": "GQA projects only g KV heads, then repeats each across its group so K and V again have n_h heads. After that, attention is computed exactly as in MHA. Query heads are not averaged; all n_h queries remain."
+  },
+  {
+    "id": "12.3-014",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "3. Mathematics: the KV-cache size",
+    "question": "What is the formula for KV-cache bytes?",
+    "options": [
+      "n_layer * n_h * d_h * T * b * B",
+      "2 * n_layer * n_h * g * d_h * T * B",
+      "2 * n_layer * g * d_h * T * b * B",
+      "2 * n_layer * d_h * T^2 * b * B"
+    ],
+    "answer_index": 2,
+    "explanation": "The factor 2 is for keys and values; then per layer, per KV head g, per head dimension d_h, per cached position T, with b bytes per number and batch size B. Only g appears, not n_h. The cache is linear in T, not quadratic."
+  },
+  {
+    "id": "12.3-015",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "3. Mathematics: the KV-cache size",
+    "question": "In the KV-cache size formula, what does the leading factor of 2 represent?",
+    "options": [
+      "Two bytes per fp16 number in the cache",
+      "One copy for keys and one for values",
+      "Two directions of attention, left and right",
+      "The forward and the backward passes"
+    ],
+    "answer_index": 1,
+    "explanation": "The cache stores both K and V for every position, so the count is doubled. The bytes per number is a separate factor b, which is also 2 for fp16/bf16. There is no backward pass at inference."
+  },
+  {
+    "id": "12.3-016",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "3. Mathematics: the KV-cache size",
+    "question": "Why does reducing KV heads cut the KV cache linearly?",
+    "options": [
+      "Only the number of KV heads g appears in the cache-size formula, not the number of query heads n_h",
+      "Because the cache stores one query vector per KV head, so fewer KV heads means fewer stored queries",
+      "Because the number of transformer layers is reduced proportionally whenever g is made smaller",
+      "Because d_h grows as g shrinks, which keeps the total cache constant only when n_h equals g"
+    ],
+    "answer_index": 0,
+    "explanation": "The cache size is proportional to g. Fewer KV heads means proportionally fewer cached K and V vectors, so the ratio of MHA to g-head cache is exactly n_h / g. n_layer and d_h are unchanged."
+  },
+  {
+    "id": "12.3-017",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "4. Numerical example: Llama-2-70B-shaped model",
+    "question": "For a Llama-2-70B-shaped model (80 layers, 64 query heads, d_h = 128, T = 4096, fp16, batch 1), what are the KV-cache sizes for MHA, GQA with g = 8, and MQA?",
+    "options": [
+      "About 10.74 GB, 1.34 GB and 0.17 GB",
+      "About 140.0 GB, 17.5 GB and 2.19 GB",
+      "About 1.34 GB, 10.74 GB and 0.17 GB",
+      "About 10.74 GB, 5.37 GB and 1.34 GB"
+    ],
+    "answer_index": 0,
+    "explanation": "MHA: 2 x 80 x 64 x 128 x 4096 x 2 bytes = 10.737 GB. GQA with g = 8 is 8 times smaller (1.342 GB), and MQA is 64 times smaller (0.168 GB). 140 GB is roughly the fp16 weight size, not the cache."
+  },
+  {
+    "id": "12.3-018",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "4. Numerical example: Llama-2-70B-shaped model",
+    "question": "Why are 70B models served with GQA rather than MHA?",
+    "options": [
+      "MHA cannot run on GPUs at all at 70B scale, because its fused attention kernel needs more than 80 GB",
+      "GQA has more query heads than MHA at the same model width, which improves quality enough to justify the switch",
+      "GQA removes the need to store the 70B weights in fp16, so the whole model fits on one GPU in int4",
+      "MHA's ~10.7 GB cache at 4K context is a big slice of an 80 GB GPU before batching, on top of ~140 GB of weights"
+    ],
+    "answer_index": 3,
+    "explanation": "At 4K context and batch 1, MHA's cache is already 10.7 GB, before batching or counting the ~140 GB of fp16 weights. Dropping to g = 8 frees about 9.4 GB, which can be spent on larger batches or longer contexts. GQA keeps the same number of query heads."
+  },
+  {
+    "id": "12.3-019",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "4. Numerical example: Llama-2-70B-shaped model",
+    "question": "Why does Llama use g = 8 rather than MQA's g = 1, even though MQA shrinks the cache more?",
+    "options": [
+      "MQA does not work together with RoPE, because the shared key head cannot be rotated per query head",
+      "MQA's cache is actually larger than GQA's, because its single KV head uses a wider head dimension",
+      "g = 8 is the quality/memory sweet spot, recovering nearly MHA quality while still cutting the cache 8 times",
+      "g must equal the number of GPUs used for tensor parallelism, and Llama 2-70B is served on 8 GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "MQA squeezes hardest (0.17 GB) but loses some quality and can be unstable. GQA with g = 8 keeps quality near MHA while still saving most of the memory. That trade-off is why Llama chose g = 8."
+  },
+  {
+    "id": "12.3-020",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "5. Tensor shapes: project small, repeat, attend",
+    "question": "In GQA, what are the shapes of Q and of K/V after projection and head split, for input (B, T, C)?",
+    "options": [
+      "Q is (B, g, T, d_h); K and V are (B, n_h, T, d_h)",
+      "Q is (B, n_h, T, d_h); K and V are (B, g, T, d_h)",
+      "Q, K and V are all (B, n_h, T, d_h)",
+      "Q is (B, n_h, T, d_h); K and V are (B, T, g) per position"
+    ],
+    "answer_index": 1,
+    "explanation": "Q is projected to n_h d_h and split into n_h heads. K and V are projected only to g d_h and split into g heads. This is the only shape change from MHA before the repeat step."
+  },
+  {
+    "id": "12.3-021",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "5. Tensor shapes: project small, repeat, attend",
+    "question": "In GQA, what does repeat_interleave(n_h/g) on the head axis do to K and V of shape (B, g, T, d_h)?",
+    "options": [
+      "Tiles the whole block of g heads n_h/g times in order [0..g-1, 0..g-1, ...], giving (B, n_h, T, d_h)",
+      "Copies KV head j to query heads j*n_h/g through j*n_h/g + n_h/g - 1, giving (B, n_h, T, d_h)",
+      "Averages the g KV heads into one shared head and broadcasts it, giving (B, 1, T, d_h) for all queries",
+      "Repeats each head along the time axis instead of the head axis, giving (B, g, n_h T, d_h) for the scores"
+    ],
+    "answer_index": 1,
+    "explanation": "repeat_interleave places n_h/g consecutive copies of each KV head, so each contiguous group of query heads sees its own shared KV head. The result matches Q's head count. Tiling the whole block instead would interleave the groups incorrectly."
+  },
+  {
+    "id": "12.3-022",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "5. Tensor shapes: project small, repeat, attend",
+    "question": "After K and V are repeated to n_h heads in GQA, how does the rest of attention differ from MHA?",
+    "options": [
+      "It does not: scores QK^T, causal mask, softmax, weighted V, head merge and output projection are identical",
+      "The softmax is taken over the KV-head axis instead of the key positions, so the groups compete for attention",
+      "The causal mask is removed, because repeated K and V already prevent tokens from attending to the future",
+      "The output projection maps g d_h back to C instead of n_h d_h, so the merged heads are smaller than in MHA"
+    ],
+    "answer_index": 0,
+    "explanation": "Once K and V have n_h heads, the per-head attention computation is exactly the same as in MHA. The output projection still maps C to C because the merged head output has n_h d_h = C channels. Only the KV projection sizes differ."
+  },
+  {
+    "id": "12.3-023",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "5. Tensor shapes: project small, repeat, attend",
+    "question": "How do GQA's K and V projection weights compare in size with MHA's?",
+    "options": [
+      "They are larger, C x 2 n_h d_h, because each group stores its keys and values twice",
+      "They are identical, C x n_h d_h, since GQA only changes how heads are cached",
+      "They are removed entirely and K and V are reused from the W_Q projection output",
+      "They are C x g d_h instead of C x n_h d_h, so GQA has slightly fewer parameters"
+    ],
+    "answer_index": 3,
+    "explanation": "K and V project to only g heads, so W_K and W_V shrink from C x n_h d_h to C x g d_h. This gives GQA slightly fewer parameters than MHA. W_Q and the output projection are unchanged."
+  },
+  {
+    "id": "12.3-024",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "In the from-scratch GroupedQueryAttention, what is n_rep?",
+    "options": [
+      "n_kv_head // n_head, the number of KV heads that serve each individual query head",
+      "n_embd // n_head, the per-head dimension that each query and KV head projects to",
+      "n_head // n_kv_head, the number of query heads sharing each KV head",
+      "The number of times the whole attention computation is repeated within each layer"
+    ],
+    "answer_index": 2,
+    "explanation": "n_rep = n_head // n_kv_head is the group size: how many query heads use each KV head. It is the repeat factor for repeat_interleave. The per-head dimension d_h is n_embd // n_head."
+  },
+  {
+    "id": "12.3-025",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "What does the assert n_head % n_kv_head == 0 in GroupedQueryAttention guarantee?",
+    "options": [
+      "The head dimension is even, so RoPE can rotate pairs of channels within each head",
+      "The embedding dimension divides the vocabulary size, so the output projection is square",
+      "The query heads split into equal groups, one per KV head",
+      "The causal mask is square, so every query position has a matching set of key positions"
+    ],
+    "answer_index": 2,
+    "explanation": "GQA requires g to divide n_h so every KV head serves the same number of query heads. Without that, repeat_interleave could not produce exactly n_h heads. RoPE's evenness requirement concerns d_h, not this assert."
+  },
+  {
+    "id": "12.3-026",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "In GroupedQueryAttention, what happens when n_kv_head equals n_head?",
+    "options": [
+      "It becomes MQA, because every query head now shares exactly one KV head across the layer",
+      "n_rep = 1, the repeat is skipped, and it computes the same function as standard causal attention",
+      "It raises an error, because the divisibility assert requires every group to hold more than one head",
+      "It doubles the number of KV heads, because each query head then gets one K head and one V head"
+    ],
+    "answer_index": 1,
+    "explanation": "With g = n_h each query head has its own KV head, so n_rep = 1 and no repeat is needed. The module then computes exactly what CausalSelfAttention computes. The only difference is that Q/K/V come from three separate Linear layers instead of one fused c_attn."
+  },
+  {
+    "id": "12.3-027",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "In GroupedQueryAttention, what happens when n_kv_head = 1?",
+    "options": [
+      "All query heads share the single KV head, which is MQA",
+      "It reduces to standard MHA, since each query head keeps its own K and V",
+      "It fails the divisibility assert, since n_head % 1 is undefined",
+      "Each query head gets n_head KV heads, so the cache grows n_head times"
+    ],
+    "answer_index": 0,
+    "explanation": "With one KV head, n_rep = n_head and repeat_interleave copies that single head to every query head. That is exactly Multi-Query Attention. 1 divides any n_head, so the assert passes."
+  },
+  {
+    "id": "12.3-028",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "Where is RoPE applied in the from-scratch GroupedQueryAttention module?",
+    "options": [
+      "Always, on the input x before the Q, K and V projections are applied",
+      "On V only, after the repeat step has expanded it to all query heads",
+      "On the output of c_proj, after the heads have been merged back to C",
+      "Optionally, by passing freqs_cis to rotate Q and K"
+    ],
+    "answer_index": 3,
+    "explanation": "The GQA module is RoPE-optional: passing freqs_cis rotates Q and K. RoPE always acts on queries and keys, not on V or the input. Without freqs_cis no rotation is applied."
+  },
+  {
+    "id": "12.3-029",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "6. From-scratch PyTorch",
+    "question": "In GroupedQueryAttention, how is the causal mask built?",
+    "options": [
+      "torch.tril of a T x T tensor of ones with diagonal=0, multiplied elementwise into the softmax output",
+      "A random dropout mask over the T x T scores, resampled at every forward pass during training",
+      "A g x g mask over KV heads, so each group of query heads sees only its own shared KV head",
+      "torch.triu of a T x T tensor filled with -inf, with diagonal=1, so future positions are masked"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.triu(torch.full((T, T), -inf), diagonal=1) puts -inf strictly above the diagonal. Adding it to the scores blocks attention to future positions after the softmax. The mask is over positions, not heads."
+  },
+  {
+    "id": "12.3-030",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "7. Under the hood: verify the cache numbers, and the MHA-equivalence",
+    "question": "How is it verified that GQA with g = n_h equals standard MHA?",
+    "options": [
+      "By comparing training loss curves of both modules over 1000 steps and checking they overlap within noise",
+      "By checking that both modules have the same parameter count and the same fused c_attn weight shapes per layer",
+      "A test copies MHA's fused c_attn weights into GQA's q/k/v projections; outputs match to 1e-10 in float64",
+      "By comparing their KV-cache sizes during generation and confirming both store n_h heads per layer"
+    ],
+    "answer_index": 2,
+    "explanation": "test_gqa_equals_mha_when_kv_heads_full splits the fused c_attn weights into q_proj, k_proj and v_proj and asserts the outputs agree to 1e-10 in float64. This proves exact functional equivalence, not just similar behaviour. Parameter counts alone would not prove the outputs match."
+  },
+  {
+    "id": "12.3-031",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "7. Under the hood: verify the cache numbers, and the MHA-equivalence",
+    "question": "Why does GQA barely help memory or speed during training?",
+    "options": [
+      "Because training automatically switches GQA to MQA, which has the same cost as MHA without a cache",
+      "The repeat materializes all n_h KV heads anyway, and training runs all positions in parallel with no cache",
+      "Because gradients cannot flow through repeat_interleave, so the K and V projections end up trained exactly like MHA",
+      "Because GQA doubles the backward-pass FLOPs to recover the gradient of the repeated K and V heads"
+    ],
+    "answer_index": 1,
+    "explanation": "During training there is no KV cache: all positions are computed in parallel and the repeated K and V are full width. So throughput and memory are roughly unchanged. Gradients flow through repeat_interleave normally."
+  },
+  {
+    "id": "12.3-032",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "7. Under the hood: verify the cache numbers, and the MHA-equivalence",
+    "question": "Why is GQA described as an inference optimization even though it is chosen at architecture-design time?",
+    "options": [
+      "Its savings show up only in autoregressive decoding, where the cache holds g heads and the repeat is on the fly",
+      "Because it can be switched on and off after training at no cost, like a decoding flag in the model serving stack",
+      "Because it only changes the tokenizer and the cache format, leaving the trained weights untouched",
+      "Because it is applied only to the final transformer layer, whose KV cache dominates total serving memory"
+    ],
+    "answer_index": 0,
+    "explanation": "The architecture must be designed with g KV heads, but the payoff (smaller cache, less memory bandwidth per decode step) occurs only at serving time. Training sees essentially no benefit. Converting after training requires mean-pooling and uptraining, so it is not free."
+  },
+  {
+    "id": "12.3-033",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "7. Under the hood: verify the cache numbers, and the MHA-equivalence",
+    "question": "What is the standard recipe (Ainslie et al.) for converting an MHA checkpoint to GQA?",
+    "options": [
+      "Mean-pool the KV projection weights within each group into g shared heads, then uptrain on a small compute fraction",
+      "Delete all but g of the KV heads, keep the remaining projection weights unchanged, and continue serving right away",
+      "Retrain the whole model from scratch with g KV heads, because MHA weights cannot be mapped onto shared heads",
+      "Average the query heads into g groups and keep all n_h KV heads, then fine-tune briefly on the original data"
+    ],
+    "answer_index": 0,
+    "explanation": "You cannot just drop KV heads, which throws away learned information. The recipe mean-pools KV projection weights within each group, then fine-tunes (uptrains) briefly to recover quality. Full retraining is unnecessary, and query heads are kept intact."
+  },
+  {
+    "id": "12.3-034",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "8. Cost summary",
+    "question": "How does attention compute (scores and softmax) compare across MHA, GQA and MQA?",
+    "options": [
+      "GQA and MQA reduce it by a factor of n_h/g, since fewer heads compute their scores",
+      "MQA needs n_h times more compute, since one KV head serves every query head",
+      "GQA doubles it, because the repeat step adds a second pass over the scores",
+      "It is essentially unchanged, since all three still run n_h query-head attentions"
+    ],
+    "answer_index": 3,
+    "explanation": "All three keep n_h query heads, each doing a full attention, so the score and softmax compute is essentially the same. The differences are in memory: KV-cache bytes, KV-projection parameters and memory bandwidth per decode step."
+  },
+  {
+    "id": "12.3-035",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "8. Cost summary",
+    "question": "How does quality compare across MHA, GQA and MQA?",
+    "options": [
+      "MQA is best, GQA is in the middle, and MHA is worst, because fewer KV heads regularize",
+      "All three are identical in quality, since attention compute is the same for each",
+      "MHA is best, GQA is approximately equal to MHA, and MQA is slightly below",
+      "GQA is best, while MHA and MQA are roughly equal, since g balances the two extremes"
+    ],
+    "answer_index": 2,
+    "explanation": "MHA has the most KV capacity and the best quality. GQA recovers almost all of it at a fraction of the cache. MQA, with one shared KV head, is slightly below."
+  },
+  {
+    "id": "12.3-036",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is forgetting to repeat K and V in GQA a bug?",
+    "options": [
+      "It only causes a slightly larger KV cache, since the unrepeated heads are then stored separately in every layer",
+      "Without the repeat, shapes fail to broadcast for QK^T or broadcast wrongly, so heads see the wrong KV head",
+      "It makes the causal mask invalid, because the mask was built for n_h heads instead of only g heads",
+      "It silently converts the model into MHA, since every query head then gets its own K and V projection"
+    ],
+    "answer_index": 1,
+    "explanation": "K and V have g heads while Q has n_h. Without repeating, QK^T either fails on shape mismatch or silently broadcasts incorrectly. Each group's query heads must be paired with their shared KV head."
+  },
+  {
+    "id": "12.3-037",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to expect GQA to speed up training?",
+    "options": [
+      "GQA actually makes training much slower, because the repeat doubles memory traffic",
+      "GQA's benefit is the inference KV cache; training throughput is roughly unchanged",
+      "GQA cannot be trained from scratch at all, only converted from an MHA checkpoint",
+      "GQA requires training in float64 for the repeated heads to stay numerically stable"
+    ],
+    "answer_index": 1,
+    "explanation": "The savings come from caching only g KV heads during decoding. Training has no cache and processes all positions in parallel with full-width repeated K and V, so throughput is roughly unchanged. GQA trains normally."
+  },
+  {
+    "id": "12.3-038",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Exercise",
+    "question": "A model has n_h = 32 query heads and uses GQA with g = 4. How many query heads share each KV head, and how much smaller is its KV cache than MHA's?",
+    "options": [
+      "8 query heads per KV head; the cache is 8 times smaller",
+      "4 query heads per KV head; the cache is 4 times smaller",
+      "8 query heads per KV head; the cache is 4 times smaller",
+      "128 query heads per KV head; the cache is 32 times smaller"
+    ],
+    "answer_index": 0,
+    "explanation": "Group size is n_h / g = 32 / 4 = 8. The cache scales with g, so it is n_h / g = 8 times smaller than MHA. Making it MQA would require g = 1."
+  },
+  {
+    "id": "12.3-039",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "A GQA implementation with KV heads [A, B] and n_rep = 2 uses k.repeat(1, 2, 1, 1) instead of k.repeat_interleave(2, dim=1). What goes wrong?",
+    "options": [
+      "It produces a shape error and crashes immediately, because repeat and repeat_interleave need different ranks",
+      "It produces [A, A, B, B], which is the correct grouping for n_rep = 2, so there is no bug here at all",
+      "It averages A and B into a single head and then copies that head to every one of the four query heads",
+      "It produces [A, B, A, B] instead of [A, A, B, B], silently pairing query heads with the wrong KV head"
+    ],
+    "answer_index": 3,
+    "explanation": "repeat_interleave gives [A, A, B, B], so heads 0 and 1 share A and heads 2 and 3 share B, the contiguous groups. repeat tiles the block to [A, B, A, B], so heads 0 and 2 share A. Shapes still match, so it runs, but the grouping is scrambled relative to how the weights were trained."
+  },
+  {
+    "id": "12.3-040",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Research connection",
+    "question": "Which paper introduced GQA and the mean-pool-and-uptrain conversion recipe?",
+    "options": [
+      "Fast Transformer Decoding: One Write-Head is All You Need (Shazeer 2019)",
+      "Llama 2: Open Foundation and Fine-Tuned Chat Models (Touvron et al. 2023)",
+      "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints (2023)",
+      "DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model (DeepSeek-AI 2024)"
+    ],
+    "answer_index": 2,
+    "explanation": "Ainslie et al. 2023 introduced GQA and the conversion recipe. Shazeer's 2019 Fast Transformer Decoding introduced MQA. Llama 2 adopted GQA for its 70B model but did not introduce it, and DeepSeek-V2 introduced a different approach (MLA)."
+  },
+  {
+    "id": "12.3-041",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Research connection",
+    "question": "What is the next step in the KV-cache-reduction line after GQA, used by DeepSeek-V3?",
+    "options": [
+      "Removing attention entirely in favor of gated MLPs that need no per-token cache",
+      "Doubling the number of KV heads while halving the head dimension in every layer",
+      "Multi-head Latent Attention (MLA), which compresses the KV cache differently",
+      "Storing the KV cache in int1, so each cached element takes a single bit of memory"
+    ],
+    "answer_index": 2,
+    "explanation": "DeepSeek-V3 uses Multi-head Latent Attention, which compresses the KV cache in a different way than sharing heads. It continues the same goal of reducing cache memory. The other options are not what DeepSeek-V3 does."
+  },
+  {
+    "id": "12.3-042",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does the number of KV heads, not query heads, determine the KV-cache size?",
+    "options": [
+      "Because query heads are discarded after training, so only KV heads remain at inference time",
+      "The cache stores one K and one V per KV head per past position; queries are computed fresh, not cached",
+      "Because each query head stores its own private copy of the shared cache, multiplied by the size of its group",
+      "Because the cache stores only the queries of past tokens, and their number is set by the KV heads"
+    ],
+    "answer_index": 1,
+    "explanation": "Past tokens' keys and values are needed at every future step, so they are cached, one per KV head. The query is only needed for the token being generated, so it is computed and used immediately. That is why cache size is proportional to g and independent of n_h."
+  },
+  {
+    "id": "12.3-043",
+    "chapter": "12.3",
+    "chapter_name": "MQA / GQA",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Which values of g make GQA reduce to MHA and to MQA?",
+    "options": [
+      "g = n_h gives MHA, and g = 1 gives MQA",
+      "g = 1 gives MHA, and g = n_h gives MQA",
+      "g = n_h / 2 gives MHA, and g = 2 gives MQA",
+      "g = 0 gives MQA, and g = n_h gives MHA"
+    ],
+    "answer_index": 0,
+    "explanation": "With g = n_h every query head has its own KV head (n_rep = 1, no sharing), which is MHA. With g = 1 all query heads share a single KV head, which is MQA. g = 0 would have no keys or values at all."
+  }
+]

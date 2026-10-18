@@ -1,0 +1,920 @@
+[
+  {
+    "id": "12.4-001",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In a Mixture of Experts (MoE) transformer layer, which component of a dense transformer block does the set of experts replace?",
+    "options": [
+      "The multi-head self-attention sublayer that mixes information across tokens",
+      "The token embedding table at the input of the network",
+      "The dense feed-forward network (FFN/MLP) of the block",
+      "The final LayerNorm and the unembedding projection to the vocabulary"
+    ],
+    "answer_index": 2,
+    "explanation": "An MoE layer replaces the single dense feed-forward network of a transformer block with N expert FFNs plus a router. Attention is left unchanged. Each expert is itself a small FFN (for example a SwiGLU), which is why the dense FFN is the natural thing to swap out."
+  },
+  {
+    "id": "12.4-002",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "DeepSeek-V3 is described as having 671B parameters but activating only about 37B per token. What does this illustrate about Mixture of Experts models?",
+    "options": [
+      "MoE gives a very large total parameter count at the inference cost of a much smaller model",
+      "MoE compresses all 671B parameters into a 37B low-rank form when the model is loaded",
+      "Only 37B parameters are ever trained; the remaining experts are frozen after initialization",
+      "The 37B are the attention weights, while the other 634B are embedding tables looked up per token"
+    ],
+    "answer_index": 0,
+    "explanation": "All 671B parameters are stored and trained, but each token is routed through only a small subset of experts totalling about 37B parameters. That is how frontier models get huge capacity at manageable per-token compute. Nothing is compressed or frozen; the experts just sit idle for tokens that are not routed to them."
+  },
+  {
+    "id": "12.4-003",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "In a dense transformer, why do the parameter count and per-token FLOPs of the feed-forward network rise together?",
+    "options": [
+      "Because the FFN's FLOPs depend only on sequence length, which grows with model size",
+      "Because each token uses a different random subset of FFN weights, sized to the layer width",
+      "Because larger FFNs require proportionally more attention heads to feed them inputs",
+      "Every token flows through the same FFN, so a bigger FFN costs more for every token"
+    ],
+    "answer_index": 3,
+    "explanation": "In a dense model each token passes through the one shared FFN, so every extra FFN parameter is used, and paid for in FLOPs, by every token. MoE breaks this coupling by letting each token use only some experts. The distractor about random subsets describes neither dense FFNs nor MoE."
+  },
+  {
+    "id": "12.4-004",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "In a Mixture of Experts layer, what does the router (gating network) do for each token?",
+    "options": [
+      "Averages the outputs of all N experts with equal weights so every expert sees each token",
+      "Scores every expert and selects the top-k experts that will process that token",
+      "Assigns tokens to experts in round-robin order so each expert gets an equal share",
+      "Picks which attention heads the token should attend with in the following layer"
+    ],
+    "answer_index": 1,
+    "explanation": "The router is a small learned network that produces a score for every expert; the top-k scoring experts are the only ones evaluated for that token, and their outputs are blended with gate weights. Running all experts equally would remove the compute saving, and round-robin assignment would not be learned."
+  },
+  {
+    "id": "12.4-005",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "With a Mixture of Experts layer of N experts and top-k routing, how do total parameters and per-token FLOPs scale?",
+    "options": [
+      "Both total parameters and per-token FLOPs scale linearly with N, as in a wider dense FFN",
+      "Total parameters scale with N, while per-token FLOPs stay close to k dense FFN passes",
+      "Total parameters stay constant while per-token FLOPs drop by a factor of N/k",
+      "Total parameters scale with k and per-token FLOPs scale with N, since every expert is scored and run"
+    ],
+    "answer_index": 1,
+    "explanation": "All N experts are stored, so parameters grow with N, but each token only touches k of them, so per-token compute is roughly k FFN passes regardless of N. This is the whole point of MoE: capacity grows without proportional compute. The tempting 'both scale with N' answer describes a dense model made N times wider."
+  },
+  {
+    "id": "12.4-006",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "What is meant by 'sparse activation' in a Mixture of Experts model?",
+    "options": [
+      "Most weights inside each expert are exactly zero after magnitude pruning during training",
+      "Activations are stored in a sparse tensor format such as CSR to save GPU memory",
+      "Only a sparse random subset of the tokens in each batch is processed at every layer",
+      "For any given token, most of the network's expert parameters are idle and not computed"
+    ],
+    "answer_index": 3,
+    "explanation": "Sparse activation means each token activates only its top-k experts, so most experts do no work for that token. It is not weight pruning or a sparse storage format; the experts themselves are ordinary dense FFNs. Every token is still processed, just by a few experts."
+  },
+  {
+    "id": "12.4-007",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "What is the intuitive reason a Mixture of Experts can outperform a dense FFN of similar per-token compute?",
+    "options": [
+      "Experts can specialize (code, prose, arithmetic) and the router sends each token to the most useful ones",
+      "Each expert sees every token in the batch, so each one is effectively trained on k times more data overall",
+      "Experts share all their weights through tying, which acts as a strong regularizer during training",
+      "The router replaces the attention sublayer, so the saved compute can be spent on a larger FFN"
+    ],
+    "answer_index": 0,
+    "explanation": "A dense FFN must be a jack-of-all-trades, while separate experts can specialize on different kinds of tokens, and the learned router directs each token to the specialists most useful for it. Experts do not see every token and do not share weights, which is exactly what makes them specialists."
+  },
+  {
+    "id": "12.4-008",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "1. Intuition: more parameters, same compute per token",
+    "question": "Mixture of Experts is described as trading memory for capacity. What exactly is traded?",
+    "options": [
+      "Less memory is used per expert in exchange for slower inference, since experts are paged in on demand",
+      "Activation memory is traded for fewer parameters, because each expert recomputes its inputs",
+      "More stored parameters (memory) buy more capacity without proportionally more per-token compute",
+      "Optimizer state is discarded for routed experts in exchange for being able to store more of them"
+    ],
+    "answer_index": 2,
+    "explanation": "MoE must hold all N experts' parameters in memory, but each token only computes through k of them. So the cost moves from FLOPs to memory: you pay in stored parameters and get more capacity (knowledge the model can hold) at roughly constant compute per token."
+  },
+  {
+    "id": "12.4-009",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "2. Mathematics: routing",
+    "question": "In MoE routing $\\mathbf{p} = \\operatorname{softmax}(W_r\\mathbf{x})$, what are the shape of the router weight $W_r$ and the meaning of $p_i$, for token vector $\\mathbf{x}\\in\\mathbb{R}^C$ and N experts?",
+    "options": [
+      "$W_r\\in\\mathbb{R}^{C\\times C}$; $p_i$ is the output activation of expert $i$ at channel $i$",
+      "$W_r\\in\\mathbb{R}^{N\\times N}$; $p_i$ is the load on expert $i$ in the batch",
+      "$W_r\\in\\mathbb{R}^{N\\times C}$; $p_i$ is the router's affinity (probability) for expert $i$",
+      "$W_r\\in\\mathbb{R}^{C\\times N}$ applied after the experts; $p_i$ is expert $i$'s training loss"
+    ],
+    "answer_index": 2,
+    "explanation": "The router maps a C-dimensional token vector to N scores, so $W_r$ is $N\\times C$, and the softmax turns those scores into a probability vector over experts. $p_i$ is how strongly the router favours expert $i$ for this token. The router runs before the experts, not after, and it does not measure batch load."
+  },
+  {
+    "id": "12.4-010",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "2. Mathematics: routing",
+    "question": "After selecting the top-k experts $\\mathcal{T}$ in an MoE layer, how are the gate weights $g_i$ computed?",
+    "options": [
+      "$g_i = p_i / \\sum_{j\\in\\mathcal{T}} p_j$, renormalizing the kept probabilities to sum to 1",
+      "$g_i = p_i$, using the raw softmax probabilities unchanged so the kept gates sum to 1",
+      "$g_i = 1/k$ for every selected expert, ignoring the router's probabilities entirely",
+      "$g_i = \\operatorname{softmax}(p)_i$ applied a second time over all N experts, then masked to the top-k"
+    ],
+    "answer_index": 0,
+    "explanation": "The top-k probabilities are divided by their own sum so the k gates form a proper weighted average. Raw $p_i$ would sum to less than 1, shrinking the output, and uniform $1/k$ would throw away the router's confidence information."
+  },
+  {
+    "id": "12.4-011",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "2. Mathematics: routing",
+    "question": "What is the output of an MoE layer for a token with selected expert set $\\mathcal{T}$ and gates $g_i$?",
+    "options": [
+      "$\\mathbf{y} = \\sum_{i=1}^{N} p_i\\,E_i(\\mathbf{x})$, a probability-weighted sum over all N experts",
+      "$\\mathbf{y} = \\max_{i\\in\\mathcal{T}} E_i(\\mathbf{x})$, the elementwise maximum over the selected experts",
+      "$\\mathbf{y} = E_{\\text{argmax}}(\\mathbf{x}) \\cdot \\sum_i g_i$, the top expert scaled by the total kept gate",
+      "$\\mathbf{y} = \\sum_{i\\in\\mathcal{T}} g_i\\,E_i(\\mathbf{x})$, a gate-weighted sum over the selected experts"
+    ],
+    "answer_index": 3,
+    "explanation": "Only the experts in $\\mathcal{T}$ are evaluated and their outputs are blended with the renormalized gates. Summing over all N experts would require running every expert, which destroys the compute saving that defines MoE."
+  },
+  {
+    "id": "12.4-012",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "2. Mathematics: routing",
+    "question": "Where does the compute saving of a Mixture of Experts layer come from?",
+    "options": [
+      "The router matmul replaces the FFN matmul, which is the expensive part of each block",
+      "Experts not in the token's top-k set are never evaluated for that token",
+      "Experts are evaluated at lower precision (FP8) than a dense FFN would be",
+      "Each expert is evaluated on only half its input dimensions, chosen by the router"
+    ],
+    "answer_index": 1,
+    "explanation": "The saving is simply that unselected experts do no work for a given token. The router is a tiny extra matmul, not a replacement for the FFN, and experts run at normal precision on the full input."
+  },
+  {
+    "id": "12.4-013",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "2. Mathematics: routing",
+    "question": "How many experts does each token use in Switch Transformers versus Mixtral and DeepSeek?",
+    "options": [
+      "Switch uses top-2 blended by gates; Mixtral and DeepSeek use top-1 to cut communication",
+      "Switch uses top-1 (one expert); Mixtral and DeepSeek use top-2, blended by their gates",
+      "All three use top-8 routing, with gates renormalized over the eight selected experts",
+      "Switch evaluates all experts with soft gates; Mixtral and DeepSeek use hard top-1 selection"
+    ],
+    "answer_index": 1,
+    "explanation": "Switch Transformers introduced k = 1 routing, so each token hits exactly one expert. Mixtral and DeepSeek use k = 2 in this description, with the two expert outputs blended by their renormalized gates."
+  },
+  {
+    "id": "12.4-014",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "What is 'router collapse' in Mixture of Experts training?",
+    "options": [
+      "The router's softmax outputs become exactly uniform, so every token is routed to a random expert",
+      "All experts converge to identical weights, so the router's choice no longer matters for the layer output",
+      "The router logits overflow in low precision and become NaN, which then spreads to every expert",
+      "A rich-get-richer loop where a few experts get most tokens and the rest are never selected or trained"
+    ],
+    "answer_index": 3,
+    "explanation": "Experts chosen slightly more often early get more gradient, improve faster, and get chosen even more. The endpoint is a handful of overworked experts and many dead ones. Uniform routing is the opposite of collapse, and identical experts is a different (redundancy) problem."
+  },
+  {
+    "id": "12.4-015",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "Besides wasting parameters, why is router collapse especially harmful when experts are sharded across devices (expert parallelism)?",
+    "options": [
+      "One GPU holding the popular experts is swamped while the others sit idle",
+      "It causes the gradient all-reduce across the data-parallel ranks to deadlock",
+      "It forces every GPU to hold a full replica of every expert's weights",
+      "It doubles the size of the KV cache on the device that hosts the router"
+    ],
+    "answer_index": 0,
+    "explanation": "With expert parallelism each GPU holds a subset of experts, so if tokens pile onto a few experts, the device holding them does most of the work while others idle. That load imbalance wrecks throughput. It does not change the KV cache or force replication."
+  },
+  {
+    "id": "12.4-016",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "In the Switch Transformers auxiliary load-balance loss $\\mathcal{L}_{\\text{aux}} = N\\sum_i f_i P_i$, what are $f_i$ and $P_i$?",
+    "options": [
+      "$f_i$ is the mean router probability for expert $i$ (soft); $P_i$ is the fraction of tokens routed to it (hard)",
+      "$f_i$ is expert $i$'s share of layer FLOPs; $P_i$ is its share of the layer's parameter count",
+      "$f_i$ is the fraction of tokens routed to expert $i$ (hard); $P_i$ is its mean router probability (soft)",
+      "$f_i$ is expert $i$'s per-token loss; $P_i$ is the norm of its gradient averaged over the batch"
+    ],
+    "answer_index": 2,
+    "explanation": "$f_i$ counts how many tokens actually went to expert $i$ (a non-differentiable fraction from the top-k choice), and $P_i$ averages the router's softmax probability for expert $i$ over the batch (differentiable). Swapping them is the tempting mistake; the hard count is $f$ and the soft average is $P$."
+  },
+  {
+    "id": "12.4-017",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "What are the minimum and maximum values of the aux loss $\\mathcal{L}_{\\text{aux}} = N\\sum_i f_i P_i$ and when do they occur?",
+    "options": [
+      "Minimum 0 when routing is perfectly uniform; maximum 1 when everything goes to one expert",
+      "Minimum N when routing is perfectly uniform; maximum N squared when all tokens hit one expert",
+      "Minimum 1 when routing is perfectly uniform; maximum N when everything goes to one expert",
+      "Minimum 1 when everything goes to one expert; maximum N when routing is perfectly uniform"
+    ],
+    "answer_index": 2,
+    "explanation": "With $f_i = P_i = 1/N$, $N\\cdot N\\cdot(1/N)(1/N) = 1$. With all mass on one expert, $N\\cdot 1\\cdot 1 = N$. The N prefactor is what normalizes the balanced value to exactly 1 rather than 1/N or 0."
+  },
+  {
+    "id": "12.4-018",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "In the auxiliary load-balance loss, through which quantity do gradients flow to the router?",
+    "options": [
+      "Through $P_i$, the mean router probability, which is differentiable",
+      "Through $f_i$, the hard per-expert token count taken from the top-k indices",
+      "Through the top-k index selection, using a straight-through estimator",
+      "Through the expert outputs $E_i(\\mathbf{x})$ only, never through the router"
+    ],
+    "answer_index": 0,
+    "explanation": "$f_i$ comes from a discrete top-k choice and has no useful gradient, so it is treated as a constant. $P_i$ is a mean of softmax probabilities, so its gradient nudges the router to raise probability on under-used experts. The top-k selection itself is not backpropagated through."
+  },
+  {
+    "id": "12.4-019",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "How is the auxiliary load-balance loss combined with the language-modeling loss during MoE training?",
+    "options": [
+      "The aux loss replaces the LM loss for the first epoch, then training switches back to LM only",
+      "Total loss is $\\mathcal{L}_{\\text{LM}} \\cdot \\mathcal{L}_{\\text{aux}}$, so imbalance scales the LM gradient",
+      "The aux loss is computed only at evaluation time and used to pick which experts to keep",
+      "Total loss is $\\mathcal{L}_{\\text{LM}} + \\alpha\\,\\mathcal{L}_{\\text{aux}}$ with a small $\\alpha$"
+    ],
+    "answer_index": 3,
+    "explanation": "The aux loss is added to the LM loss with a small weight $\\alpha$ so it encourages balance without dominating the main objective. It is a training regularizer, not an evaluation-time tool or a multiplicative factor."
+  },
+  {
+    "id": "12.4-020",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3. The load-balancing problem",
+    "question": "Intuitively, what does the aux loss $N\\sum_i f_i P_i$ penalize?",
+    "options": [
+      "Experts whose outputs have large norms, since those dominate the gate-weighted sum of experts",
+      "Putting many tokens (high f_i) on experts the router is already confident about (high P_i)",
+      "Tokens whose router probabilities are close to uniform, pushing the router to be confident",
+      "Experts that receive no tokens at all, by adding a large constant penalty for each dead expert"
+    ],
+    "answer_index": 1,
+    "explanation": "Each term multiplies how loaded an expert is by how much probability the router gives it, so the sum is large exactly when the favoured experts are also overloaded. Minimizing it lowers probability on overloaded experts and raises it on under-used ones. It does not look at output norms."
+  },
+  {
+    "id": "12.4-021",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3.1 DeepSeek-V3's aux-loss-free balancing (PUBLICLY DOCUMENTED)",
+    "question": "Why did DeepSeek-V3 look for an alternative to the auxiliary load-balance loss?",
+    "options": [
+      "The aux loss cannot be computed with top-2 routing, only with Switch-style top-1 routing",
+      "The aux loss gradient competes with the language-modeling loss and can slightly hurt quality",
+      "The aux loss requires a full extra forward pass through all experts at every training step",
+      "The aux loss drives every expert toward identical weights, which removes their specialization"
+    ],
+    "answer_index": 1,
+    "explanation": "The aux loss adds a gradient term that pulls on the router in a direction other than lowering LM loss, which can cost a little quality. DeepSeek-V3's aux-loss-free method balances load without adding any loss gradient."
+  },
+  {
+    "id": "12.4-022",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3.1 DeepSeek-V3's aux-loss-free balancing (PUBLICLY DOCUMENTED)",
+    "question": "How does DeepSeek-V3's auxiliary-loss-free load balancing work?",
+    "options": [
+      "A per-expert bias is added to the gate weights that blend expert outputs, and it is learned by gradient descent",
+      "Tokens routed to an overloaded expert are randomly reassigned to an underloaded one after top-k selection",
+      "The number of experts is increased during training whenever one expert's load exceeds a fixed threshold",
+      "A per-expert bias, used only in top-k selection, is lowered for overloaded and raised for underloaded experts"
+    ],
+    "answer_index": 3,
+    "explanation": "A bias $b_i$ shifts which experts win top-k selection but is not used in the gate weights, and it is updated by a simple rule after each step rather than by a loss gradient. Because balance comes from the selection bias, it does not pull on the LM objective. Adding the bias to the gates would change the outputs, which the method avoids."
+  },
+  {
+    "id": "12.4-023",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3.1 DeepSeek-V3's aux-loss-free balancing (PUBLICLY DOCUMENTED)",
+    "question": "In DeepSeek-V3's aux-loss-free balancing, is the per-expert bias used in the gate weights that blend expert outputs?",
+    "options": [
+      "No; it affects only which experts are selected, not the gate weights",
+      "Yes; it is added to both the selection scores and the blending gates",
+      "Yes; it replaces the softmax gates entirely once training has warmed up",
+      "No; it is added to the expert outputs after they have been blended"
+    ],
+    "answer_index": 0,
+    "explanation": "The bias only shifts the top-k selection scores. The gates that weight the chosen experts' outputs still come from the unbiased router scores, so the bias changes routing without distorting the output mixture."
+  },
+  {
+    "id": "12.4-024",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "3.1 DeepSeek-V3's aux-loss-free balancing (PUBLICLY DOCUMENTED)",
+    "question": "Which load-balancing method is implemented in the course's llmre.model.moe code, and how is DeepSeek-V3's bias trick classified?",
+    "options": [
+      "The DeepSeek-V3 bias trick is implemented; the Switch aux loss is labelled INFERENCE/SPECULATION",
+      "Neither is implemented; both are described only as REASONABLE INDUSTRY PRACTICE without published details",
+      "The Switch-style aux loss is implemented; the bias trick is PUBLICLY DOCUMENTED in the DeepSeek-V3 report",
+      "Both are implemented and combined in the default config, with the bias trick switched on after warmup"
+    ],
+    "answer_index": 2,
+    "explanation": "The course code uses the classic auxiliary loss, while the aux-loss-free bias balancing is documented in the DeepSeek-V3 technical report and labelled PUBLICLY DOCUMENTED. It is described, not implemented, in the codebase."
+  },
+  {
+    "id": "12.4-025",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "4. Shared experts (DeepSeekMoE)",
+    "question": "What are 'shared experts' in DeepSeekMoE?",
+    "options": [
+      "Experts whose weights are tied and shared across all layers of the network in order to save memory",
+      "Routed experts that two different tokens are allowed to use at the same time in one batch",
+      "One or more FFNs that are always active for every token in addition to the routed top-k experts",
+      "Experts shared between the encoder and the decoder stacks so both learn the same features"
+    ],
+    "answer_index": 2,
+    "explanation": "Shared experts bypass the router and process every token, while the routed experts handle the top-k selection on top. They are not cross-layer weight sharing; the 'shared' refers to being used by all tokens."
+  },
+  {
+    "id": "12.4-026",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "4. Shared experts (DeepSeekMoE)",
+    "question": "What is the motivation for adding always-on shared experts in DeepSeekMoE?",
+    "options": [
+      "They capture common knowledge (syntax, frequent patterns) so routed experts need not relearn it and can specialize",
+      "They guarantee each token uses exactly one routed expert, which removes the need to renormalize the top-k gate weights",
+      "They reduce memory by replacing half of the routed experts with a single larger always-on network",
+      "They remove the need for any load balancing, because every token already has a guaranteed expert to use"
+    ],
+    "answer_index": 0,
+    "explanation": "Knowledge common to nearly all tokens would otherwise be duplicated in many routed experts, wasting capacity. Dedicating shared experts to that common case frees routed experts to specialize. Load balancing is still needed for the routed experts."
+  },
+  {
+    "id": "12.4-027",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "4. Shared experts (DeepSeekMoE)",
+    "question": "With shared experts, what is the MoE output for a token?",
+    "options": [
+      "$\\mathbf{y} = \\sum_s E^{\\text{shared}}_s(\\mathbf{x}) \\cdot \\sum_{i\\in\\mathcal{T}} g_i E_i(\\mathbf{x})$",
+      "$\\mathbf{y} = \\sum_{i\\in\\mathcal{T}} g_i E_i(\\mathbf{x})$, with shared experts used only in the router",
+      "$\\mathbf{y} = \\tfrac12\\sum_s E^{\\text{shared}}_s(\\mathbf{x})$ only, routed experts used for training",
+      "$\\mathbf{y} = \\sum_s E^{\\text{shared}}_s(\\mathbf{x}) + \\sum_{i\\in\\mathcal{T}} g_i E_i(\\mathbf{x})$"
+    ],
+    "answer_index": 3,
+    "explanation": "The always-on shared expert outputs (ungated) are added to the gate-weighted sum of the routed top-k experts. It is a sum, not a product, and the shared experts contribute directly to the output, not to routing."
+  },
+  {
+    "id": "12.4-028",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "4. Shared experts (DeepSeekMoE)",
+    "question": "What are 'fine-grained' experts in DeepSeekMoE and what do they buy?",
+    "options": [
+      "Experts that each operate on a separate slice of channels of the hidden vector, like a grouped convolution",
+      "Many small experts instead of a few large ones, giving the router more combinations at the same parameter count",
+      "Experts trained at higher numerical precision than the rest of the model so they can capture finer detail",
+      "A few very large experts that each cover one whole domain, such as source code, mathematics or natural-language prose"
+    ],
+    "answer_index": 1,
+    "explanation": "Splitting capacity into many smaller experts lets the router combine them in many more ways for the same total parameters, enabling finer specialization. It is not per-channel processing or a precision change."
+  },
+  {
+    "id": "12.4-029",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "5. Numerical example: routing one token",
+    "question": "In an MoE layer with N = 4 and k = 2, a token's softmax router probabilities are (0.6381, 0.2347, 0.0954, 0.0318). What happens to experts 2 and 3 for this token?",
+    "options": [
+      "They run with gates 0.0954 and 0.0318, so their contribution to the output is small but nonzero",
+      "They are never evaluated; only experts 0 and 1 run, with gates about 0.73 and 0.27",
+      "They run on the token, but their outputs are discarded before the gate-weighted sum is taken",
+      "They receive the token on the next step instead, once experts 0 and 1 have been freed up"
+    ],
+    "answer_index": 1,
+    "explanation": "Top-2 selects experts 0 and 1; renormalizing 0.6381 and 0.2347 by their sum 0.8728 gives gates 0.7311 and 0.2689. Experts 2 and 3 are skipped entirely, which is where the compute saving comes from; running them and discarding the output would waste that saving."
+  },
+  {
+    "id": "12.4-030",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "How does the from-scratch MoE forward reshape tensors before routing?",
+    "options": [
+      "It routes each sequence as a whole, producing (B, N) probabilities so all tokens of one sequence share the same experts",
+      "It transposes to (C, B, T) so that each channel of the hidden vector independently picks its own expert",
+      "It keeps (B, T, C) and computes (B, T, N, C) outputs for all experts, then masks the unselected ones",
+      "It flattens (B, T, C) to (BT, C), routes to (BT, N) probabilities, then reshapes the output back to (B, T, C)"
+    ],
+    "answer_index": 3,
+    "explanation": "Routing is per token, so the batch and time axes are merged into one list of N_tok tokens; the router produces one N-way probability vector per token. After dispatch and combination the output is viewed back to (B, T, C). Computing all experts' outputs for every token would defeat the sparsity."
+  },
+  {
+    "id": "12.4-031",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the from-scratch MoE, what architecture is each expert?",
+    "options": [
+      "A SwiGLU feed-forward block from lesson 12.2",
+      "A single linear layer with no activation function",
+      "A single self-attention head with its own projections",
+      "A GELU two-layer MLP whose weights are shared with the router"
+    ],
+    "answer_index": 0,
+    "explanation": "Each expert in llmre.model.moe is a SwiGLU module, the same gated FFN used in modern dense LLaMA-style blocks. The router is a separate bias-free linear layer mapping dim to n_experts."
+  },
+  {
+    "id": "12.4-032",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the MoE route() method, what does probs.topk(self.top_k, dim=-1) return and what is done next?",
+    "options": [
+      "The k smallest probabilities and their indices per token, which are then masked out of the softmax output entirely",
+      "A one-hot mask over all N experts per token, which is then passed through a second softmax to form gates",
+      "The k largest probabilities and their expert indices per token; the kept gates are then divided by their sum",
+      "The k tokens most strongly assigned to each expert, so that each expert processes exactly k tokens per batch"
+    ],
+    "answer_index": 2,
+    "explanation": "topk along the expert dimension returns, for each token, the k highest probabilities (gates) and the indices of those experts, each of shape (N_tok, k). The gates are then renormalized by their row sum. It selects experts per token, not tokens per expert."
+  },
+  {
+    "id": "12.4-033",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the from-scratch MoE forward, how is each expert's work restricted to its own tokens?",
+    "options": [
+      "Every expert runs on all tokens, and its output is multiplied by a zero gate wherever it was not selected",
+      "Tokens are sorted by expert index and padded to equal length so all experts run as one batched matmul",
+      "A boolean mask of tokens that chose the expert gathers a sub-batch; the expert runs once and gated results are added back",
+      "Each token is processed in its own Python loop iteration, calling only the experts it selected, one after another in order"
+    ],
+    "answer_index": 2,
+    "explanation": "For each expert e, sel = (topk_idx == e) marks which tokens chose it, token_mask = sel.any(-1) selects them, the expert runs once on x_flat[token_mask], and the gate-weighted result is scattered into out. An expert with no tokens is skipped. Running every expert on all tokens would give the same output but no compute saving."
+  },
+  {
+    "id": "12.4-034",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the from-scratch MoE, how is the gate weight for expert e extracted for each token?",
+    "options": [
+      "(topk_gate * sel).sum(dim=-1), which picks the gate in whichever top-k slot held expert e",
+      "probs[:, e], the router probability for expert e before the top-k gates are renormalized",
+      "topk_gate[:, 0] for every expert, since the first slot always holds the largest gate value",
+      "sel.float().mean(dim=-1), the fraction of top-k slots in which expert e was selected"
+    ],
+    "answer_index": 0,
+    "explanation": "sel is a (N_tok, k) boolean telling which of a token's k slots chose expert e; multiplying by the renormalized gates and summing over k yields that expert's gate (zero if not chosen). Using probs[:, e] would skip the renormalization."
+  },
+  {
+    "id": "12.4-035",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "How are shared experts applied in the from-scratch MoE forward?",
+    "options": [
+      "Shared experts are added to the router's candidate list and compete with routed experts for top-k slots",
+      "Shared experts run only on the tokens that no routed expert selected, as a fallback path",
+      "Shared experts' outputs are averaged together and then multiplied by the routed experts' gates",
+      "Each shared expert is run on all tokens and its output is added to the routed output without a gate"
+    ],
+    "answer_index": 3,
+    "explanation": "The code loops over self.shared and does out = out + sh(x_flat): every token goes through every shared expert, ungated. That matches the always-on term of the DeepSeekMoE output formula."
+  },
+  {
+    "id": "12.4-036",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the MoE aux loss code, why is f detached in aux = n_experts * torch.sum(f.detach() * P)?",
+    "options": [
+      "Detaching f only saves activation memory; it leaves the gradient with respect to the router weights unchanged",
+      "f is a hard token-count fraction; detaching it makes gradients flow only through the soft mean probability P",
+      "Detaching f stops the expert FFN weights from being updated by the load-balancing term at all",
+      "f must be detached because it is computed on the CPU, while P lives on the GPU with the router"
+    ],
+    "answer_index": 1,
+    "explanation": "f is computed from one-hot top-k assignments, which carry no meaningful gradient; treating it as a constant means the loss's gradient comes from P, matching the derivation where the router is nudged through $P_i$. It is not a memory trick, and the expert weights are trained by the LM loss regardless."
+  },
+  {
+    "id": "12.4-037",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "6. Tensor shapes & from-scratch PyTorch",
+    "question": "In the MoE aux loss code, how is the per-expert token fraction f computed?",
+    "options": [
+      "Take the softmax router probabilities and average them over all tokens in the batch, separately for each expert",
+      "One-hot encode topk_idx, sum over the k slots to get a (N_tok, N) assignment matrix, then average over tokens",
+      "Count the number of nonzero expert outputs per token and divide that count by the hidden size C",
+      "Divide each expert's parameter count by the total parameter count summed across all N experts"
+    ],
+    "answer_index": 1,
+    "explanation": "F.one_hot(topk_idx, n_experts) has shape (N_tok, k, N); summing over k gives which experts each token used, and the mean over tokens gives the fraction of routed assignments per expert. The mean of probabilities is P, the other factor."
+  },
+  {
+    "id": "12.4-038",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "7. Under the hood: verify the routing and the aux loss",
+    "question": "In an MoE with N experts and top-k routing, what is the per-token compute cost?",
+    "options": [
+      "About N dense-FFN passes, since the router must evaluate every expert",
+      "About N/k dense-FFN passes, split evenly across the selected experts",
+      "About one dense-FFN pass regardless of k, because the gates sum to 1",
+      "About k dense-FFN passes plus a tiny router matmul, independent of N"
+    ],
+    "answer_index": 3,
+    "explanation": "Each token runs through its k chosen experts, so cost is roughly k FFN passes, and adding more experts does not raise it. The router's C-by-N matmul is negligible. Using k = 2 costs about twice a single FFN, not one."
+  },
+  {
+    "id": "12.4-039",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "7. Under the hood: verify the routing and the aux loss",
+    "question": "What are the real engineering costs of Mixture of Experts at scale, beyond FLOPs?",
+    "options": [
+      "Memory for all experts, all-to-all traffic to ship tokens to experts on other devices, and load imbalance",
+      "Extra attention computation for every expert, because each expert needs its own attention sublayer and KV cache",
+      "A KV cache that grows linearly with the number of experts, since each expert caches keys and values",
+      "Recomputing the router once per expert in the backward pass, which doubles the cost of every layer"
+    ],
+    "answer_index": 0,
+    "explanation": "All N experts must be stored, typically sharded across GPUs with expert parallelism, so tokens are sent via all-to-all to wherever their chosen experts live. That communication plus imbalance from uneven routing are the real costs, which is why load balancing matters so much. Experts do not add attention or KV cache."
+  },
+  {
+    "id": "12.4-040",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "7. Under the hood: verify the routing and the aux loss",
+    "question": "In expert parallelism for Mixture of Experts, how do tokens reach their chosen experts?",
+    "options": [
+      "Every GPU holds a full copy of all experts, so tokens never move and only gradients are all-reduced",
+      "Expert weights are streamed from CPU memory to each GPU on demand whenever a token in the local batch selects them",
+      "Each GPU holds a subset of experts, and an all-to-all exchange ships tokens to the devices holding their experts",
+      "Tokens are broadcast to every GPU, and each GPU runs all its experts and keeps the selected outputs"
+    ],
+    "answer_index": 2,
+    "explanation": "Expert parallelism shards experts across devices, so routing requires an all-to-all where each device sends tokens to the device of each chosen expert and receives results back. Replicating all experts everywhere would remove the memory benefit of sharding."
+  },
+  {
+    "id": "12.4-041",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "7. Under the hood: verify the routing and the aux loss",
+    "question": "What is the 'capacity factor' in production MoE training, and what happens to overflow tokens?",
+    "options": [
+      "A minimum number of tokens each expert must receive per batch; shortfalls are padded with zero vectors",
+      "A multiplier on each expert's hidden size that grows during training as more tokens are routed to it",
+      "A cap on tokens each expert accepts per batch; overflow tokens are dropped and pass only through the residual",
+      "A cap on experts per token; whenever the router picks more experts than the cap allows, the extras are averaged"
+    ],
+    "answer_index": 2,
+    "explanation": "Production kernels give each expert a fixed buffer per batch. If the router sends more tokens than that, the excess skip the expert and only the residual connection carries them forward. Good balancing keeps drops rare; a collapsed router drops heavily."
+  },
+  {
+    "id": "12.4-042",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "7. Under the hood: verify the routing and the aux loss",
+    "question": "Does the course's teaching MoE implementation enforce an expert capacity limit?",
+    "options": [
+      "No; it runs every routed token, which is fine on CPU but differs from how production kernels behave",
+      "Yes; tokens above a capacity factor of 1.25 are dropped and pass through only the residual connection",
+      "Yes; overflow tokens are rerouted to their next-best expert, as production MoE kernels do",
+      "No; instead it runs every expert on every token and zeroes out the unselected outputs"
+    ],
+    "answer_index": 0,
+    "explanation": "The teaching code has no capacity cap, so no token is dropped. Production kernels use fixed per-expert capacity and drop overflow. It still runs only the routed experts per token, not all experts."
+  },
+  {
+    "id": "12.4-043",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Which is a correct statement about gradients in MoE training?",
+    "options": [
+      "Gradients should flow through both f_i and the top-k selection, using a straight-through estimator",
+      "Only f_i should carry gradient, since P_i is a probability and must be detached to keep it properly normalized",
+      "The router receives no gradient at all and stays fixed at its initialization throughout training",
+      "Detach the hard count f_i; gradients flow through P_i, and the top-k selection itself is not backpropagated"
+    ],
+    "answer_index": 3,
+    "explanation": "f_i is a discrete count and is detached; P_i is the differentiable route by which the aux loss trains the router. The top-k choice is not differentiated. The router also learns from the LM loss through the gate weights."
+  },
+  {
+    "id": "12.4-044",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if an MoE implementation forgets to renormalize the top-k gate weights?",
+    "options": [
+      "The router selects the wrong experts, because the top-k operation is then applied to unnormalized logits",
+      "The kept probabilities sum to less than 1, so the output is not a proper weighted average of the experts",
+      "Load balancing becomes impossible, since the aux loss needs top-k gates that sum to exactly 1 for every token",
+      "The aux loss becomes negative, which pushes the router toward collapse instead of balance"
+    ],
+    "answer_index": 1,
+    "explanation": "Selecting k of N experts leaves probabilities that sum to less than 1, which scales the output down. Renormalizing makes the gates sum to 1. Selection itself is unaffected; only the blending is wrong."
+  },
+  {
+    "id": "12.4-045",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Why should MoE models report both total parameters and active parameters?",
+    "options": [
+      "Total counts the parameters used in training, while active counts only those tied to the tokenizer vocabulary",
+      "Total measures memory to store all experts; active measures per-token compute; in MoE they differ greatly",
+      "The two are always equal in MoE, but reporting both is a convention inherited from dense model papers",
+      "Active parameters measure the memory to store the model, while total parameters measure per-token compute"
+    ],
+    "answer_index": 1,
+    "explanation": "For DeepSeek-V3, 671B total sets the memory footprint, while about 37B active per token sets the compute cost. Confusing them misjudges either cost. The tempting reversed option swaps which number governs memory and which governs compute."
+  },
+  {
+    "id": "12.4-046",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Exercise",
+    "question": "A dense FFN with P parameters is replaced by an MoE of 8 experts, each the same size as the dense FFN, with top-2 routing (ignore the router). What are total parameters, active parameters per token, and their ratio?",
+    "options": [
+      "8P total, about 8P active, a 1x ratio",
+      "2P total, about P active, giving a 2x ratio",
+      "8P total, about P active, an 8x ratio",
+      "8P total, about 2P active, a 4x ratio"
+    ],
+    "answer_index": 3,
+    "explanation": "Eight experts of size P store 8P parameters; each token runs its top-2, so about 2P are active; 8P / 2P = 4. You get 8 times the FFN capacity at about twice the per-token FFN compute. The 8x option would only hold for top-1."
+  },
+  {
+    "id": "12.4-047",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "An MoE model's expert 3 processes about 90% of tokens after a few hundred steps, yet LM loss keeps falling. What was most likely forgotten?",
+    "options": [
+      "The auxiliary load-balance loss (or an equivalent balancing mechanism), causing router collapse",
+      "The renormalization of the top-k gates, so the kept gate weights no longer sum to 1",
+      "The causal attention mask, which lets expert 3 see future tokens and so win nearly every routing choice",
+      "Weight decay on the router matrix, which lets one expert's logit grow without any bound"
+    ],
+    "answer_index": 0,
+    "explanation": "Without a balancing term, the rich-get-richer loop concentrates tokens on a few experts: router collapse. The fix is to add the aux loss or DeepSeek-V3's bias update. Unnormalized gates would scale outputs but not cause this concentration."
+  },
+  {
+    "id": "12.4-048",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "Why can the LM loss still go down for a while in an MoE suffering router collapse?",
+    "options": [
+      "A collapsed router produces a lower aux loss, and that drop is added directly into the reported LM loss",
+      "The dead experts keep receiving gradient through their gates, so they still improve slowly",
+      "The one or two overworked experts still learn, so the model behaves like a much smaller dense model",
+      "Router collapse speeds up the attention layers, which lowers loss through faster convergence"
+    ],
+    "answer_index": 2,
+    "explanation": "The few experts that receive tokens keep improving, so the model trains like a small dense model and loss falls. But it never uses the capacity it paid for, and on sharded hardware the load is badly imbalanced. Collapse actually raises the aux loss, toward its maximum N."
+  },
+  {
+    "id": "12.4-049",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Research connection",
+    "question": "Which papers introduced top-1 routing with the aux loss, fine-grained plus shared experts, and aux-loss-free bias balancing, respectively?",
+    "options": [
+      "DeepSeekMoE; Switch Transformers; Mixtral 8x7B",
+      "DeepSeek-V3; DeepSeekMoE; Switch Transformers",
+      "Switch Transformers; DeepSeekMoE; DeepSeek-V3",
+      "Mixtral; DeepSeek-V3; DeepSeekMoE"
+    ],
+    "answer_index": 2,
+    "explanation": "Switch Transformers (Fedus et al. 2021) introduced top-1 routing with the load-balance aux loss; DeepSeekMoE (Dai et al. 2024) added fine-grained and shared experts; DeepSeek-V3 (2024) added aux-loss-free bias balancing and scaled to 671B total / about 37B active. Read in that order, each refines the last."
+  },
+  {
+    "id": "12.4-050",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why is the aux loss $N\\sum_i f_i P_i$ minimal when load is uniform, and how does its gradient fix router collapse?",
+    "options": [
+      "Uniform $f_i = P_i = 1/N$ gives the minimum 1; gradient through $P_i$ moves probability off overloaded experts onto idle ones",
+      "Uniform routing gives the maximum value N, so its gradient pushes the router to concentrate tokens on one expert to lower it",
+      "It is minimal at uniform load because $f_i$ is then zero; the gradient through $f_i$ directly reassigns tokens to experts",
+      "Uniform load sets $P_i = 1$ for all experts; its gradient raises the router softmax temperature until routing is random"
+    ],
+    "answer_index": 0,
+    "explanation": "The sum of products $f_iP_i$ is smallest when both are spread evenly, giving 1. Because the hard counts are detached, the gradient acts on the router probabilities $P_i$, shifting mass toward under-used experts and spreading load. It does not reassign tokens directly or change a temperature."
+  },
+  {
+    "id": "12.4-051",
+    "chapter": "12.4",
+    "chapter_name": "Mixture of Experts (DeepSeek-style)",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-04.md",
+    "section": "Check yourself",
+    "question": "In DeepSeek-V3's '~37B active parameters per token', which parameters are counted as active?",
+    "options": [
+      "All 671B parameters divided by the number of layers, since a token passes through one layer at a time",
+      "Only the router weights in every layer, because those are the only weights that every single token is guaranteed to use",
+      "Only the attention weights in every layer; expert FFN weights are excluded because they are sparse",
+      "The shared experts plus the top-k routed experts a single token actually flows through, which set its compute cost"
+    ],
+    "answer_index": 3,
+    "explanation": "Active parameters are those a single token actually computes with: its always-on shared experts plus its selected top-k routed experts. That sets the per-token compute, while the 671B total sets memory."
+  }
+]

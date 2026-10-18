@@ -1,0 +1,1676 @@
+[
+  {
+    "id": "10.3-001",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How did the Chinchilla result change how labs spend compute?",
+    "options": [
+      "It shifted the default from over-sized models to smaller models trained on far more tokens",
+      "It showed data quality stops mattering once a model sees enough tokens, so labs scraped more raw text",
+      "It shifted the default toward ever-larger models trained on the same ~300B tokens GPT-3 used",
+      "It showed extra compute is best spent on longer context windows rather than parameters or tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "Before Chinchilla the field over-invested in parameters and under-fed them data. Afterwards, 'train a smaller model on far more tokens' became the default for training-compute-optimality."
+  },
+  {
+    "id": "10.3-002",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is the practical payoff of being able to solve the Chinchilla allocation yourself?",
+    "options": [
+      "Predicting the exact downstream benchmark accuracy a model will reach before training it",
+      "Turning a compute (dollar) budget into a concrete model size N* and token count D*",
+      "Choosing the tokenizer vocabulary size that minimises loss for a given dataset size",
+      "Setting the optimizer's betas and peak learning rate from the compute budget alone"
+    ],
+    "answer_index": 1,
+    "explanation": "The analysis maps a budget C to the loss-minimising (N*, D*) under C = 6ND, which is exactly the decision a lab faces before training."
+  },
+  {
+    "id": "10.3-003",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "1. Intuition: one budget, two ways to spend it",
+    "question": "Because C = 6ND, what trade-off does a fixed compute budget impose?",
+    "options": [
+      "The model size is fixed by the budget, and only the batch size can still be traded",
+      "Tokens and parameters can both be raised freely, since 6ND only bounds the step count",
+      "A bigger model must be trained on fewer tokens, or a smaller model on more tokens",
+      "A bigger model must also be trained on proportionally more tokens to stay within budget"
+    ],
+    "answer_index": 2,
+    "explanation": "With C fixed, ND = C/6 is fixed, so every affordable point lies on D = C/(6N). Raising N lowers the affordable D."
+  },
+  {
+    "id": "10.3-004",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "1. Intuition: one budget, two ways to spend it",
+    "question": "What happens when a model is too large for its compute budget?",
+    "options": [
+      "It uses fewer FLOPs per token, so it finishes training early and wastes budget",
+      "It is capacity-starved: it has run out of parameters to absorb the remaining data",
+      "It reaches the irreducible loss E almost immediately and then stops improving",
+      "It is data-starved: it sees too few tokens to learn to use its capacity"
+    ],
+    "answer_index": 3,
+    "explanation": "Under fixed compute, a large N forces a small D. The model never sees enough data to exploit its parameters, so loss is higher than optimal."
+  },
+  {
+    "id": "10.3-005",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "1. Intuition: one budget, two ways to spend it",
+    "question": "What happens when a model is too small for its compute budget?",
+    "options": [
+      "It saturates: extra tokens stop helping because the model has run out of capacity",
+      "It cannot process all the affordable tokens in one epoch, so training diverges and crashes",
+      "It becomes data-starved and overfits, since the small model memorises the token stream",
+      "It trains faster and reaches a lower loss than a larger model on the same compute budget"
+    ],
+    "answer_index": 0,
+    "explanation": "A small model on many tokens is capacity-starved: its finite-model penalty dominates, so additional data yields diminishing improvement."
+  },
+  {
+    "id": "10.3-006",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "1. Intuition: one budget, two ways to spend it",
+    "question": "What was Chinchilla's main contribution regarding the loss surface L(N, D)?",
+    "options": [
+      "Removing the need for the C = 6ND approximation by counting the exact FLOPs of every run",
+      "Proving theoretically that L(N, D) is linear in log N and log D, so no sweep was needed",
+      "Measuring it well enough to locate the optimum and show the field was not operating there",
+      "Showing that L depends only on N once D is large, so data can be ignored when planning runs"
+    ],
+    "answer_index": 2,
+    "explanation": "Chinchilla fitted L(N, D) from many runs and found the compute-optimal point sits at roughly 20 tokens per parameter, far from where GPT-3-era models were."
+  },
+  {
+    "id": "10.3-007",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "1. Intuition: one budget, two ways to spend it",
+    "question": "Compute-optimal training means finding which point?",
+    "options": [
+      "The largest N that fits in GPU memory, then as many tokens as time allows",
+      "The (N*, D*) on the curve C = 6ND with the lowest loss",
+      "The largest D available in the dataset, with N set by the remaining budget",
+      "The point on C = 6ND where N = D, splitting the budget evenly between them"
+    ],
+    "answer_index": 1,
+    "explanation": "A budget is a constraint curve, not a point. Loss varies along it, and compute-optimality picks the lowest-loss split."
+  },
+  {
+    "id": "10.3-008",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "What is the Chinchilla parametric loss formula?",
+    "options": [
+      "L(N, D) = E · A/N^α · B/D^β",
+      "L(N, D) = E + A/N^α + B/D^β",
+      "L(N, D) = (N_c/N)^α · (D_c/D)^β",
+      "L(N, D) = A·N^α + B·D^β − E"
+    ],
+    "answer_index": 1,
+    "explanation": "Loss is an irreducible floor E plus a finite-model penalty A/N^α and a finite-data penalty B/D^β, each vanishing as its resource grows."
+  },
+  {
+    "id": "10.3-009",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "In the Chinchilla loss L(N, D) = E + A/N^α + B/D^β, what is E?",
+    "options": [
+      "The loss of the smallest model in the sweep, used as the reference point",
+      "A learning-rate warmup term that decays to zero once training has finished",
+      "The irreducible loss: the entropy of the text, which no model can beat",
+      "The predicted loss at N = D = 1, where both penalties reach their maximum"
+    ],
+    "answer_index": 2,
+    "explanation": "E is the floor approached as both N and D go to infinity — the entropy of the data. A bare Kaplan power law lacks this term."
+  },
+  {
+    "id": "10.3-010",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "In Chinchilla's L(N, D), what does the term A/N^α represent?",
+    "options": [
+      "The compute cost of the model, which grows with N and is charged against the budget",
+      "The finite-data penalty: extra loss from training on only N tokens, vanishing as N → ∞",
+      "The finite-model penalty: extra loss from having only N parameters, vanishing as N → ∞",
+      "The irreducible loss scaled by N, so that larger models have a proportionally higher floor"
+    ],
+    "answer_index": 2,
+    "explanation": "A/N^α captures the capacity limit. α controls how fast extra parameters reduce it."
+  },
+  {
+    "id": "10.3-011",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "In Chinchilla's L(N, D), what does the term B/D^β represent?",
+    "options": [
+      "The finite-model penalty: extra loss from having only D parameters, which vanishes as D → ∞",
+      "The finite-data penalty: extra loss from training on only D tokens, vanishing as D → ∞",
+      "The batch-size penalty: extra loss from small batches, which shrinks as D grows large",
+      "The loss floor reached once D tokens have been seen, below which no model can go"
+    ],
+    "answer_index": 1,
+    "explanation": "B/D^β captures the data limit. β controls how fast more training tokens reduce it."
+  },
+  {
+    "id": "10.3-012",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "Once Chinchilla's five constants are fitted, what can be predicted?",
+    "options": [
+      "The irreducible loss of other languages and tokenizers too",
+      "Exact downstream benchmark accuracy for any (N, D) pair",
+      "The loss of any (N, D), including combinations never trained",
+      "Only the losses of the runs used for fitting, and nothing beyond them"
+    ],
+    "answer_index": 2,
+    "explanation": "The surface L(N, D) generalises across the (N, D) plane within its validity, letting you evaluate configurations without running them."
+  },
+  {
+    "id": "10.3-013",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "2. Mathematics: the Chinchilla parametric loss",
+    "question": "How does the Chinchilla loss L(N, D) extend Kaplan's laws?",
+    "options": [
+      "It uses only compute C as an input, collapsing N and D into a single variable before fitting",
+      "It replaces Kaplan's power laws with exponentials in N and D that decay to zero",
+      "It fits N and D jointly in one surface with an explicit floor E, rather than separate laws",
+      "It drops the dependence on data, assuming D is always large enough to be ignored"
+    ],
+    "answer_index": 2,
+    "explanation": "Kaplan described L(N) and L(D) separately as pure power laws. Chinchilla's single parametric surface combines both penalties plus an irreducible floor."
+  },
+  {
+    "id": "10.3-014",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3. From training measurements to the compute-optimal allocation",
+    "question": "In the Chinchilla analysis, what are the two separate jobs?",
+    "options": [
+      "Measure the FLOPs of each run, then measure peak memory to choose the largest model",
+      "Pick 20 tokens per parameter first, then fit the five constants so they reproduce it",
+      "Train one large model to convergence, then distil it into a smaller, cheaper model",
+      "Fit a loss predictor's constants from experiments, then use it to plan N and D"
+    ],
+    "answer_index": 3,
+    "explanation": "First, infer E, A, B, α, β from measured losses. Second, minimise the predicted loss under C = 6ND. The constants come from the first job; the derivative is used in the second."
+  },
+  {
+    "id": "10.3-015",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3. From training measurements to the compute-optimal allocation",
+    "question": "Is the ~20 tokens-per-parameter rule an input assumption used to choose the Chinchilla constants?",
+    "options": [
+      "No — it is an industry convention that predates the fit and is unrelated to it",
+      "Yes — it follows directly from the factor 6 in the C = 6ND compute approximation",
+      "Yes — the five constants are tuned during fitting so that they produce exactly 20",
+      "No — it is an approximate result of fitting the constants and then optimising"
+    ],
+    "answer_index": 3,
+    "explanation": "The 20× ratio emerges from fitted constants plugged into the optimisation; it is not inserted anywhere."
+  },
+  {
+    "id": "10.3-016",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.1 What do the experiments actually give us?",
+    "question": "In a Chinchilla-style experiment table, what does D_i mean for run i?",
+    "options": [
+      "Model depth (number of layers)",
+      "Number of documents in the corpus",
+      "Tokens processed during training",
+      "Vocabulary size of the tokenizer"
+    ],
+    "answer_index": 2,
+    "explanation": "D counts training tokens processed, not vocabulary entries or documents."
+  },
+  {
+    "id": "10.3-017",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.1 What do the experiments actually give us?",
+    "question": "What conditions are needed when comparing many (N_i, D_i, L_i) training runs for a scaling fit?",
+    "options": [
+      "Identical D for every run, so only model size varies across them",
+      "A consistent data distribution, tokenizer and loss measurement",
+      "Identical N for every run, so only the token count varies",
+      "A different tokenizer per run, to diversify the measured losses"
+    ],
+    "answer_index": 1,
+    "explanation": "Losses must be comparable across rows. Runs vary N and D, but the data, tokenizer and evaluation must be consistent."
+  },
+  {
+    "id": "10.3-018",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.1 What do the experiments actually give us?",
+    "question": "How many training runs did Chinchilla use, and what did its parametric approach fit?",
+    "options": [
+      "About 40 runs varying only the learning rate; it fitted their loss curves",
+      "Over 400 runs varying both model size and tokens; it fitted their final losses",
+      "Exactly 6 runs of increasing width; it fitted their parameter counts to compute",
+      "One 70B run with checkpoints; it fitted the loss at each intermediate step"
+    ],
+    "answer_index": 1,
+    "explanation": "Hoffmann et al. trained 400+ models across N and D. The parametric approach fitted final losses, using smoothed training loss as an estimate of test loss in an abundant-data setting."
+  },
+  {
+    "id": "10.3-019",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.1 What do the experiments actually give us?",
+    "question": "Why could Chinchilla use smoothed training loss as an estimate of test loss?",
+    "options": [
+      "Because test loss is always lower than training loss, so it gives a conservative bound",
+      "Because it had no held-out set at all, so smoothed training loss was the only signal available",
+      "Because training loss includes the regularisation term, which corrects for overfitting",
+      "Data was not repeated in its abundant-data setting, so training loss tracked held-out loss"
+    ],
+    "answer_index": 3,
+    "explanation": "With abundant data seen once, the model rarely revisits tokens, so training loss approximates generalisation loss."
+  },
+  {
+    "id": "10.3-020",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.1 What do the experiments actually give us?",
+    "question": "Does a scaling experiment directly measure the constant A or the exponent α?",
+    "options": [
+      "No — it measures (N_i, D_i, L_i); A and α are inferred from the pattern across runs",
+      "Yes — α is the slope of each run's own training curve, read off in log-log space",
+      "No — both are fixed in advance by the 6ND formula and the choice of tokenizer",
+      "Yes — each run directly reports its own A and α, which are then averaged across all runs"
+    ],
+    "answer_index": 0,
+    "explanation": "Experiments yield sizes, token counts and losses. The constants are inferred by fitting the parametric form to these observations."
+  },
+  {
+    "id": "10.3-021",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "In Chinchilla notation, what does the hat in L̂(N, D) indicate?",
+    "options": [
+      "Predicted loss, as opposed to measured loss L_i",
+      "Loss averaged over several random seeds for each run",
+      "Normalised loss rescaled to lie between 0 and 1",
+      "Loss measured in bits per token instead of nats"
+    ],
+    "answer_index": 0,
+    "explanation": "L̂ is the model's prediction; L_i are measured values. The parametric form is a modelling assumption to be checked."
+  },
+  {
+    "id": "10.3-022",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "In L̂ = E + A/N^α + B/D^β, what does changing E do?",
+    "options": [
+      "Changes the optimal allocation (N*, D*), shifting compute toward more tokens",
+      "Scales the data penalty B/D^β up or down by the same factor at every D",
+      "Changes how fast the model penalty falls with N, by steepening the exponent",
+      "Raises or lowers the floor approached when both resources become very large"
+    ],
+    "answer_index": 3,
+    "explanation": "E is an additive floor. It shifts all predicted losses equally and does not affect the optimum."
+  },
+  {
+    "id": "10.3-023",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "In L̂ = E + A/N^α + B/D^β, doubling A does what?",
+    "options": [
+      "Doubles the irreducible floor E at every N",
+      "Halves the data penalty B/D^β at every D",
+      "Doubles the model-size penalty at every N",
+      "Doubles α, so the penalty falls twice as fast"
+    ],
+    "answer_index": 2,
+    "explanation": "A multiplies the model penalty, so doubling it doubles A/N^α at every N."
+  },
+  {
+    "id": "10.3-024",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "With α = 0.5 in A/N^α, multiplying N by four does what to the model penalty?",
+    "options": [
+      "Doubles it, since 4^(0.5) = 2 here",
+      "Halves it, since 4^(-0.5) = 1/2",
+      "Quarters it, since 1/4 = 0.25",
+      "Reduces it by exactly 0.5 · A"
+    ],
+    "answer_index": 1,
+    "explanation": "The penalty scales as N^(-α), so a 4× increase multiplies it by 4^(-0.5) = 0.5."
+  },
+  {
+    "id": "10.3-025",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "How do Chinchilla's five fitted constants differ from a language model's weights?",
+    "options": [
+      "They are hyperparameters chosen before training, like the learning rate and batch size",
+      "They are a small subset of the language model's own weights, read out after pretraining ends",
+      "They are learned during pretraining by backprop, alongside the model's own parameters",
+      "They describe the loss predictor and are fitted after training, from the runs' final losses"
+    ],
+    "answer_index": 3,
+    "explanation": "E, A, B, α, β parametrise a predictor of loss across runs. They are separate from the billions of learned weights inside any model."
+  },
+  {
+    "id": "10.3-026",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.2 Why introduce these five constants?",
+    "question": "Why must you use N = 10^9 rather than N = 1 for a 1B model when using published Chinchilla constants?",
+    "options": [
+      "Because the formula only accepts integers, and N = 1 rounds the penalty away",
+      "The constants assume raw counts; changing units changes their meaning",
+      "Because the exponents α and β themselves depend on N's numerical value",
+      "Because plugging in N = 1 makes the model penalty negative and the loss invalid"
+    ],
+    "answer_index": 1,
+    "explanation": "Fitted coefficients A and B are tied to the units of N and D. They expect raw parameter and token counts."
+  },
+  {
+    "id": "10.3-027",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.3 A tiny example: recover every constant by hand",
+    "question": "In a hand fit of Chinchilla's form, why do you compare runs where only N changes and D is fixed?",
+    "options": [
+      "Because E is zero whenever D is held fixed, so the loss is the model penalty alone",
+      "Because the model penalty cancels out, leaving only the data term to be measured",
+      "Because D has no effect on loss in this regime, so it can be held at any value",
+      "E + B/D^β is the same offset in all of them, so subtracting losses cancels it"
+    ],
+    "answer_index": 3,
+    "explanation": "Holding D fixed makes the data penalty and floor a constant offset. Differences in loss then depend only on the model penalty, isolating α and A."
+  },
+  {
+    "id": "10.3-028",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.3 A tiny example: recover every constant by hand",
+    "question": "Toy runs at D = 4 with N = 4, 16, 64 give losses 7, 6, 5.5. Why does this imply α = 0.5?",
+    "options": [
+      "Because 7 − 5.5 = 1.5, which is 0.5 × 3 runs, so α equals the step per run",
+      "Successive decreases halve (1 then 0.5) per ×4 in N, so 4^(-α) = 0.5",
+      "Because every N in the sweep is a perfect square, so the exponent must be 1/2",
+      "Because the losses fall by exactly 0.5 per run, and that step size equals α"
+    ],
+    "answer_index": 1,
+    "explanation": "For a power-law penalty, equal multipliers of N give equal ratios of successive decreases. The decreases 1 and 0.5 have ratio 0.5, so 4^(-α) = 0.5 and α = log 2 / log 4 = 0.5."
+  },
+  {
+    "id": "10.3-029",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.3 A tiny example: recover every constant by hand",
+    "question": "After recovering A, α, B and β in a hand fit, how is E recovered?",
+    "options": [
+      "Take the smallest observed loss in the sweep, since it is closest to the floor",
+      "Substitute one run's measured loss and the other constants, and solve",
+      "Set E equal to A minus B, since the floor is the gap between the two penalties",
+      "Average all observed losses, since the penalties cancel out across the runs"
+    ],
+    "answer_index": 1,
+    "explanation": "E = L_i − A/N_i^α − B/D_i^β for any run. In the toy, 7 = E + 2 + 4 gives E = 1."
+  },
+  {
+    "id": "10.3-030",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.3 A tiny example: recover every constant by hand",
+    "question": "What principle does the hand-fitted toy predictor L̂ = 1 + 4/√N + 8/√D illustrate?",
+    "options": [
+      "Constants come straight from the 6ND formula, with A = 4 and B = 8 set by the FLOP count",
+      "Constants are chosen so the formula reproduces observed resource–loss relationships",
+      "Constants equal the measured losses of the runs, one constant copied from each run",
+      "Constants are chosen arbitrarily first and then verified against one held-out run"
+    ],
+    "answer_index": 1,
+    "explanation": "The toy constants were recovered exactly from noise-free runs, and the formula reproduces every measured loss. That is what fitting means."
+  },
+  {
+    "id": "10.3-031",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "With real, noisy measurements, how are Chinchilla's five constants found?",
+    "options": [
+      "A program adjusts all five together to reduce combined prediction errors across many runs",
+      "By solving five exact equations from five carefully chosen runs, one per constant",
+      "By averaging the losses of all runs, then splitting the result across the five terms",
+      "By reading them off the slope and intercept of a single log-log line drawn through all runs"
+    ],
+    "answer_index": 0,
+    "explanation": "Noisy data cannot satisfy equations exactly, so an optimiser iteratively updates the constants to minimise an error objective across all runs."
+  },
+  {
+    "id": "10.3-032",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "What fitting method did Hoffmann et al. use for the parametric loss?",
+    "options": [
+      "Gradient descent on the model weights, with the constants read off after convergence",
+      "Linear regression in log-log space, one line per resource, with the two lines summed",
+      "Ordinary least squares on raw losses, minimised with Adam from one single random initialisation",
+      "A Huber loss on predicted vs observed log losses, minimised with L-BFGS from many starts"
+    ],
+    "answer_index": 3,
+    "explanation": "The paper compared log losses, used a Huber loss to limit outlier influence, and ran L-BFGS from many initialisations (section 3.3, eq. 3)."
+  },
+  {
+    "id": "10.3-033",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "Why does Chinchilla's paper use a Huber objective in its fit?",
+    "options": [
+      "To make the nonlinear fit linear in logs",
+      "To remove the irreducible loss E from the fit",
+      "To force the exponents α and β to be equal",
+      "To limit the influence of outlier runs"
+    ],
+    "answer_index": 3,
+    "explanation": "Huber loss is quadratic for small errors and linear for large ones, so a few bad runs do not dominate the fit."
+  },
+  {
+    "id": "10.3-034",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "Why can't the Chinchilla form be fitted as one straight log-log line like a Kaplan law?",
+    "options": [
+      "Because Chinchilla's form has no exponents, so there is no slope to read off a log-log plot",
+      "Because there are too many runs, and a single line cannot pass through 400 points",
+      "Because log-log lines cannot have negative slopes, while the loss falls as N grows",
+      "The log of a sum does not split into a sum of logs, so a joint nonlinear fit is needed"
+    ],
+    "answer_index": 3,
+    "explanation": "log(E + A/N^α + B/D^β) is not linear in log N or log D. Only a single-term power law linearises."
+  },
+  {
+    "id": "10.3-035",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "Which constants are used for the revised Chinchilla worked example, and where are they from?",
+    "options": [
+      "A = 406.4, B = 410.7, α = 0.34, β = 0.28, E = 1.69, from Besiroglu et al. (2024)",
+      "A = 482.01, B = 2085.43, α = 0.076, β = 0.095, from Kaplan et al. (2020)",
+      "A = 482.01, B = 2085.43, α = 0.3478, β = 0.3658, E ≈ 1.82, from Besiroglu et al. (2024)",
+      "A = 4, B = 8, α = 0.5, β = 0.5, E = 1, from Hoffmann et al. (2022)"
+    ],
+    "answer_index": 2,
+    "explanation": "Besiroglu et al. refitted data reconstructed from Chinchilla's plots (Table 1). The 406.4/410.7/0.34/0.28/1.69 values are the original paper's constants."
+  },
+  {
+    "id": "10.3-036",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.4 How does fitting work with real, noisy measurements?",
+    "question": "What is the difference between the fitting objective and the planning objective in the Chinchilla analysis?",
+    "options": [
+      "Fitting minimises total compute across runs; planning minimises peak GPU memory per run",
+      "Fitting tunes E, A, B, α, β to cut prediction error; planning tunes N, D to cut predicted loss",
+      "Both minimise the same prediction error over the same five constants, just on new data",
+      "Fitting chooses N and D to reduce loss; planning then re-adjusts the five constants to the budget"
+    ],
+    "answer_index": 1,
+    "explanation": "These are two different optimisations over different variables. Mixing them up conflates learning the predictor with using it."
+  },
+  {
+    "id": "10.3-037",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.5 Turn the compute budget into a trade-off",
+    "question": "Given a compute budget C and C = 6ND, what token count can a model of size N afford?",
+    "options": [
+      "D = C / (6N)",
+      "D = 6C / N",
+      "D = N / (6C)",
+      "D = C · 6N"
+    ],
+    "answer_index": 0,
+    "explanation": "Solving C = 6ND for D gives D = C/(6N). Doubling N halves D."
+  },
+  {
+    "id": "10.3-038",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.5 Turn the compute budget into a trade-off",
+    "question": "With a toy predictor 1 + 4/√N + 8/√D and ND = 256, which split minimises predicted loss: (4, 64), (8, 32) or (16, 16)?",
+    "options": [
+      "(16, 16), because N = D always minimises loss for a fixed product",
+      "All three give the same predicted loss, since ND is the same for each",
+      "(4, 64), because the smallest model leaves the most tokens to learn from",
+      "(8, 32), with predicted loss ≈ 3.83 vs 4.0 for the other two"
+    ],
+    "answer_index": 3,
+    "explanation": "Predicted losses are 4.000, ≈3.828 and 4.000. The middle split balances the penalties. N = D is not generally optimal."
+  },
+  {
+    "id": "10.3-039",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "Substituting D = C/(6N) into the Chinchilla loss gives what function of N?",
+    "options": [
+      "L̂_C(N) = E + (A + B)·N^(-α-β)",
+      "L̂_C(N) = E + A·N^α + B·(C/6)^β · N^(-β)",
+      "L̂_C(N) = E·A·B·(6N/C)^(α+β)",
+      "L̂_C(N) = E + A·N^(-α) + B·(6/C)^β · N^β"
+    ],
+    "answer_index": 3,
+    "explanation": "B/D^β = B·(6N/C)^β = B·(6/C)^β·N^β. So at fixed C the model penalty falls with N and the token penalty rises with N."
+  },
+  {
+    "id": "10.3-040",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "At fixed compute, how do the two Chinchilla penalties move as N increases?",
+    "options": [
+      "The model penalty rises while the token penalty falls, since bigger models learn faster",
+      "Both penalties rise, because a bigger model costs more FLOPs per token it processes",
+      "Both penalties fall, because extra parameters also make each of the training tokens more useful",
+      "The model penalty falls while the token penalty rises, since fewer tokens are affordable"
+    ],
+    "answer_index": 3,
+    "explanation": "Larger N reduces A/N^α but forces smaller D, increasing B/D^β. The optimum balances these opposing effects."
+  },
+  {
+    "id": "10.3-041",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "What is the derivative dL̂_C/dN of E + A·N^(-α) + B·(6/C)^β·N^β?",
+    "options": [
+      "−α·A·N^(-α-1) + β·B·(6/C)^β·N^(β-1)",
+      "−α·A·N^(-α) + β·B·(6/C)^β·N^β",
+      "α·A·N^(-α-1) − β·B·(6/C)^β·N^(β-1)",
+      "E − α·A·N^(-α-1) + β·B·(6/C)^β·N^(β-1)"
+    ],
+    "answer_index": 0,
+    "explanation": "By the power rule, d(kN^p)/dN = k·p·N^(p-1), and E differentiates to zero. The first term is negative, the second positive."
+  },
+  {
+    "id": "10.3-042",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "What does setting the derivative of the Chinchilla fixed-budget loss to zero mean intuitively?",
+    "options": [
+      "The model penalty and the data penalty have both reached zero, leaving only E",
+      "The training loss has stopped changing from one optimisation step to the next",
+      "A small increase in N buys exactly as much capacity benefit as it costs in lost tokens",
+      "The model has already reached the irreducible loss, so extra compute can no longer help it"
+    ],
+    "answer_index": 2,
+    "explanation": "At the optimum the marginal benefit of more parameters equals the marginal cost of fewer tokens, so the derivative is zero."
+  },
+  {
+    "id": "10.3-043",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "What balance condition holds at the Chinchilla compute-optimal point?",
+    "options": [
+      "A/N^α = B/D^β — the raw penalties balance, regardless of exponents",
+      "α·A/N^α = β·B/D^β — the exponent-weighted penalties balance",
+      "α·N = β·D — parameters and tokens scale by the exponent ratio",
+      "N = D — the budget splits evenly between parameters and tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "Multiplying the zero-derivative equation by N gives α·A/N^α = β·B/D^β. The raw penalties are equal only when α = β."
+  },
+  {
+    "id": "10.3-044",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.6 Substitute the constraint, then differentiate",
+    "question": "When are the two Chinchilla penalties A/N^α and B/D^β themselves equal at the optimum?",
+    "options": [
+      "Only when α = β",
+      "Never, for any α, β",
+      "Only when A = B",
+      "Always, by design"
+    ],
+    "answer_index": 0,
+    "explanation": "The balance condition weights each penalty by its exponent. Equal raw penalties follow only if the exponents are equal."
+  },
+  {
+    "id": "10.3-045",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.7 Solve that balance for the best model size and tokens",
+    "question": "What is the closed-form compute-optimal model size N* under C = 6ND?",
+    "options": [
+      "N* = [ (β·B)/(α·A) · (C/6)^α ]^(1/(α+β))",
+      "N* = [ (α·A)/(β·B) · (C/6)^β ]^(1/(α+β))",
+      "N* = (C/6)^(1/2), independent of α, β, A and B",
+      "N* = [ (A/B) · C ]^(α·β/(α+β))"
+    ],
+    "answer_index": 1,
+    "explanation": "Multiply by N^(α+1), isolate N^(α+β), then take the 1/(α+β) power. D* = C/(6N*)."
+  },
+  {
+    "id": "10.3-046",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.7 Solve that balance for the best model size and tokens",
+    "question": "Once N* is known, how is D* obtained?",
+    "options": [
+      "D* = C / (6N*)",
+      "D* = 20·N* exactly",
+      "D* = N*^(β/α)",
+      "D* = C·N*/6"
+    ],
+    "answer_index": 0,
+    "explanation": "D* comes directly from the budget constraint. The 20× ratio is a result, not a definition."
+  },
+  {
+    "id": "10.3-047",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.7 Solve that balance for the best model size and tokens",
+    "question": "Why is the stationary point of the Chinchilla fixed-budget loss a minimum?",
+    "options": [
+      "Because loss is linear in N at fixed budget, so any stationary point must be a minimum",
+      "Model penalty blows up as N → 0 and token penalty as N → ∞; the one root has slope going − to +",
+      "Because E is positive, which makes the second derivative positive at every value of N",
+      "Because the second derivative is always zero there, so the point must be a flat global minimum"
+    ],
+    "answer_index": 1,
+    "explanation": "Both extremes have unbounded loss and there is a single positive solution, so it must be the minimum — of the fitted formula, whose accuracy depends on the fit."
+  },
+  {
+    "id": "10.3-048",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.7 Solve that balance for the best model size and tokens",
+    "question": "What does the derivation of N* establish about real models?",
+    "options": [
+      "That the fit has no uncertainty, since the minimum is derived in closed form",
+      "Only the minimum of the fitted formula; real accuracy still depends on the fit",
+      "The exact optimal model for any dataset, tokenizer or architecture used",
+      "That the 20× ratio holds exactly at every budget, for all model families"
+    ],
+    "answer_index": 1,
+    "explanation": "Calculus finds the optimum of the predictor. Whether that matches real training depends on how good the fitted constants are."
+  },
+  {
+    "id": "10.3-049",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "How do N* and D* scale with compute C in the Chinchilla analysis?",
+    "options": [
+      "N* ∝ C^(α/(α+β)) and D* ∝ C^(β/(α+β))",
+      "N* ∝ C and D* is constant across budgets",
+      "N* ∝ C^α and D* ∝ C^β directly",
+      "N* ∝ C^(β/(α+β)) and D* ∝ C^(α/(α+β))"
+    ],
+    "answer_index": 3,
+    "explanation": "N* has power β/(α+β); since D* = C/(6N*), D*'s power is 1 − β/(α+β) = α/(α+β). Note the crossover: N's exponent uses β."
+  },
+  {
+    "id": "10.3-050",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "What is the difference between α, β and a, b in the Chinchilla analysis?",
+    "options": [
+      "α, β describe how penalties fall; a, b describe how optimal N and D grow with compute",
+      "a and b are fitted separately as two extra constants from the same set of runs",
+      "α, β describe how compute grows with N and D; a, b describe how the loss falls with each of them",
+      "They are the same exponents, just written in different notation in the two papers"
+    ],
+    "answer_index": 0,
+    "explanation": "a = β/(α+β) and b = α/(α+β) are derived from the fitted exponents, not fitted independently."
+  },
+  {
+    "id": "10.3-051",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "Using the revised fit α = 0.3478, β = 0.3658, what are a and b?",
+    "options": [
+      "a ≈ 0.73, b ≈ 0.27",
+      "a ≈ 0.513, b ≈ 0.487",
+      "a ≈ 0.487, b ≈ 0.513",
+      "a = b = 0.36"
+    ],
+    "answer_index": 1,
+    "explanation": "a = 0.3658/0.7136 ≈ 0.513 and b = 0.3478/0.7136 ≈ 0.487 — both near 1/2."
+  },
+  {
+    "id": "10.3-052",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "With a = b = 1/2, what happens when the compute budget is multiplied by four?",
+    "options": [
+      "Model size and training tokens each double",
+      "Tokens quadruple and model size stays fixed",
+      "Both quadruple, each taking the full factor",
+      "Model size quadruples and tokens stay fixed"
+    ],
+    "answer_index": 0,
+    "explanation": "4^(1/2) = 2 for each, and 2 × 2 = 4 matches the 4× compute."
+  },
+  {
+    "id": "10.3-053",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "What a and b did the original Chinchilla parametric approach report?",
+    "options": [
+      "a ≈ 0.46, b ≈ 0.54",
+      "a ≈ 0.9, b ≈ 0.1",
+      "a ≈ 0.513, b ≈ 0.487",
+      "a ≈ 0.73, b ≈ 0.27"
+    ],
+    "answer_index": 0,
+    "explanation": "Hoffmann et al. (eq. 4, Table 2) reported a ≈ 0.46, b ≈ 0.54, different from the revised fit's values but still suggesting roughly equal scaling."
+  },
+  {
+    "id": "10.3-054",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "Why must the Chinchilla scaling exponents a and b sum to one?",
+    "options": [
+      "Because the measured losses were normalised to sum to one",
+      "Because α + β = 1 always holds for any Chinchilla-style fit",
+      "Because the 20× tokens-per-parameter ratio requires it",
+      "Because N*·D* = C/6, so their powers of C must sum to 1"
+    ],
+    "answer_index": 3,
+    "explanation": "The constraint forces a + b = 1. It alone would allow a = 0.9, b = 0.1; it is the measurements that put both near 1/2."
+  },
+  {
+    "id": "10.3-055",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.8 Where does \"scale model and data together\" come from?",
+    "question": "At one fixed budget a bigger model forces fewer tokens, yet across budgets both optimal N* and D* grow. How are these consistent?",
+    "options": [
+      "Only N* grows across budgets; D* stays fixed at every budget, which removes the apparent conflict",
+      "They are contradictory, so one of the two statements must come from a bad fit",
+      "They are different comparisons: a trade-off within one budget vs optima across budgets",
+      "Both N* and D* shrink as budgets grow, because each FLOP buys less loss reduction"
+    ],
+    "answer_index": 2,
+    "explanation": "Within a budget, N and D trade off. Comparing optimal points across larger budgets, both quantities increase. Keep the two comparisons separate."
+  },
+  {
+    "id": "10.3-056",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "Do near-equal scaling exponents a ≈ b determine the tokens-per-parameter ratio?",
+    "options": [
+      "No — only E determines it",
+      "Yes — a = b always implies 20 tokens/param",
+      "No — the coefficients A and B also matter",
+      "Yes — a = b always implies 1 token/param"
+    ],
+    "answer_index": 2,
+    "explanation": "Equal scaling rates fix how N* and D* grow, not their ratio. With α = β = p, D*/N* = (B/A)^(1/p), which depends on A and B."
+  },
+  {
+    "id": "10.3-057",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "For a toy fit with α = β = 0.5, A = 4, B = 8, what is the optimal tokens-per-parameter ratio?",
+    "options": [
+      "4, since (B/A)^(1/p) = 2² = 4",
+      "0.5, since p = 0.5",
+      "20, since equal exponents always give 20",
+      "2, since B/A = 2"
+    ],
+    "answer_index": 0,
+    "explanation": "D*/N* = (8/4)^(1/0.5) = 4, matching the toy optimum (8, 32). Equal scaling does not mean 20×."
+  },
+  {
+    "id": "10.3-058",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "With the revised constants, how does the tokens-per-parameter ratio behave as the budget changes?",
+    "options": [
+      "It is exactly 20 at every budget, because a and b are each one half",
+      "It is undefined, because the revised constants have no closed form",
+      "It doubles with each doubling of compute, since D* grows faster than N*",
+      "It varies slowly with budget, because α and β are close but unequal"
+    ],
+    "answer_index": 3,
+    "explanation": "Since N* and D* grow at slightly different rates (0.513 vs 0.487), D*/N* drifts slowly with C."
+  },
+  {
+    "id": "10.3-059",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "What were the original Chinchilla model's size, tokens and ratio?",
+    "options": [
+      "70B parameters, 1.4T tokens, 20 tokens/param",
+      "7B parameters, 1T tokens, ~143 tokens/param",
+      "280B parameters, 300B tokens, ~1 token/param",
+      "175B parameters, 300B tokens, ~1.7 tokens/param"
+    ],
+    "answer_index": 0,
+    "explanation": "Chinchilla trained 70B parameters on 1.4T tokens: 1400/70 = 20."
+  },
+  {
+    "id": "10.3-060",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "Besides the parametric fit, what other evidence did Chinchilla use for equal scaling?",
+    "options": [
+      "Kaplan's original exponents, refitted on Chinchilla's own runs",
+      "Downstream benchmark accuracy only, across a suite of 50 tasks",
+      "Training-curve minima and fixed-compute (IsoFLOP) loss curves",
+      "A theoretical proof from information theory about data entropy"
+    ],
+    "answer_index": 2,
+    "explanation": "Hoffmann et al. used three approaches (training-curve envelopes, IsoFLOP profiles, and the parametric fit), which converged on roughly equal scaling."
+  },
+  {
+    "id": "10.3-061",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "3.9 Where does the specific ratio of about 20 come from?",
+    "question": "What is the complete chain from experiments to the ~20 tokens-per-parameter headline?",
+    "options": [
+      "Choose 20 tokens/param → fit constants that reproduce it → train one model to confirm",
+      "Train varied (N, D) → measure loss → fit constants → impose C = 6ND → minimise → ratio",
+      "Fit a log-log line of loss against model size → read off 20 as the line's slope",
+      "Measure FLOPs → measure memory → pick the largest model that fits → train it to the budget"
+    ],
+    "answer_index": 1,
+    "explanation": "The ratio is the end product of fitting and constrained optimisation. That explains both how it is obtained and why it is approximate."
+  },
+  {
+    "id": "10.3-062",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "4. Numerical example: allocate a budget of C = 10^21 FLOPs",
+    "question": "Using the revised constants, what is the compute-optimal allocation for C = 10^21 FLOPs?",
+    "options": [
+      "About 2.8B parameters on about 60B tokens (~21.6 tokens/param)",
+      "About 175B parameters on about 1B tokens (~0.006 tokens per param)",
+      "About 10B parameters on about 17B tokens (~1.7 tokens/param)",
+      "About 60B parameters on about 2.8B tokens (~0.05 tokens/param)"
+    ],
+    "answer_index": 0,
+    "explanation": "N* ≈ 2.78×10^9 and D* ≈ 6.0×10^10 give a ratio ≈ 21.6, with predicted loss ≈ 2.31 nats. The 20× rule falls out of the arithmetic."
+  },
+  {
+    "id": "10.3-063",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "4. Numerical example: allocate a budget of C = 10^21 FLOPs",
+    "question": "Applying the revised Chinchilla formula at Gopher's budget (5.76×10^23 FLOPs) gives what?",
+    "options": [
+      "About 175B parameters on 300B tokens — GPT-3's recipe at roughly the same budget",
+      "About 280B parameters on 300B tokens — Gopher's own recipe, confirming it",
+      "About 7B parameters on 14T tokens — a heavily over-trained LLaMA-style recipe",
+      "About 72B parameters on 1.33T tokens — essentially Chinchilla's 70B/1.4T recipe"
+    ],
+    "answer_index": 3,
+    "explanation": "The formula yields N* ≈ 7.2×10^10 and D* ≈ 1.33×10^12, ratio ≈ 18. That matches Chinchilla, four times smaller than 280B Gopher on the same compute, and better."
+  },
+  {
+    "id": "10.3-064",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "4. Numerical example: allocate a budget of C = 10^21 FLOPs",
+    "question": "How did Chinchilla compare to Gopher, trained on the same compute?",
+    "options": [
+      "Four times larger (1.1T vs 280B) on fewer tokens, and worse",
+      "The same size as Gopher, trained on fewer tokens, and equal",
+      "Ten times smaller (28B vs 280B) on more tokens, and worse",
+      "Four times smaller (70B vs 280B) on more tokens, and better"
+    ],
+    "answer_index": 3,
+    "explanation": "Reallocating the same compute toward data — 70B parameters on 1.4T tokens — beat the 280B Gopher."
+  },
+  {
+    "id": "10.3-065",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "5. The code",
+    "question": "In chinchilla_optimal, what role does E play?",
+    "options": [
+      "None — it is an additive constant, accepted only so the signature matches the full loss",
+      "It determines the tokens/param ratio, since a higher floor favours spending more on training data",
+      "It is subtracted from the compute budget before the split between N and D is solved",
+      "It sets the optimal N* directly, with D* then read off from the budget constraint"
+    ],
+    "answer_index": 0,
+    "explanation": "Adding a constant does not change where the minimum is, so E does not enter N* or D*."
+  },
+  {
+    "id": "10.3-066",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "5. The code",
+    "question": "In chinchilla_optimal, what does the variable half_budget hold?",
+    "options": [
+      "N/2, half the parameters",
+      "C/2, half the compute",
+      "C/6, which equals N·D",
+      "6·C, the total FLOPs"
+    ],
+    "answer_index": 2,
+    "explanation": "Despite its name it stores compute_flops / 6.0 = ND, used in (C/6)^β."
+  },
+  {
+    "id": "10.3-067",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "5. The code",
+    "question": "How does test_chinchilla_optimal_matches_grid_minimum verify the closed form?",
+    "options": [
+      "It checks that N* = D* at every budget, as equal exponents a = b would require of the closed form",
+      "It trains a small 70M model on CPU and compares its measured loss with the predicted value",
+      "Compares it with a brute-force grid minimum of L(N, C/6N) and checks Gopher's ~70B/1.4T",
+      "It checks that the function returns E when the budget C tends to infinity, as the floor requires"
+    ],
+    "answer_index": 2,
+    "explanation": "A grid search over N along the constraint must find the same minimum as the analytic formula; the test also reproduces Chinchilla's recipe at Gopher's budget."
+  },
+  {
+    "id": "10.3-068",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "What compute-allocation conclusion did Kaplan et al. (2020) reach?",
+    "options": [
+      "Most extra compute should go to a bigger model, with tokens growing slowly (D ∝ C^~0.27)",
+      "Most extra compute should go to a larger vocabulary, with N and D held roughly fixed",
+      "N and D should scale equally with compute, each growing as roughly C^0.5",
+      "Most extra compute should go to more tokens, with model size growing slowly (N ∝ C^~0.27)"
+    ],
+    "answer_index": 0,
+    "explanation": "Kaplan favoured model size. GPT-3 (175B on ~300B tokens, under 2 tokens/param) followed that guidance."
+  },
+  {
+    "id": "10.3-069",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "What methodological difference is the core reason Chinchilla and Kaplan disagree?",
+    "options": [
+      "Kaplan measured downstream accuracy rather than loss, so its fits tracked a different quantity",
+      "Chinchilla ran its fits in fp64 arithmetic, removing the rounding errors that had biased Kaplan's exponents",
+      "Chinchilla matched the LR schedule to each run's token budget; Kaplan's fixed one hurt data-heavy runs",
+      "Chinchilla used a different tokenizer, which changes the token count D for the same text"
+    ],
+    "answer_index": 2,
+    "explanation": "A fixed schedule mis-measures long runs, making data look less useful. Matching the schedule to the token budget shifted the estimated exponents toward equal scaling."
+  },
+  {
+    "id": "10.3-070",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "Under the Chinchilla view, how should GPT-3 and Gopher be characterised?",
+    "options": [
+      "Too small for their data: they should have been several times larger on the same tokens",
+      "Compute-optimal: their parameter-to-token split already matched the fitted optimum",
+      "Badly undertrained: they should have been several times smaller and fed far more data",
+      "Overtrained: they consumed too many tokens per parameter for their compute budgets"
+    ],
+    "answer_index": 2,
+    "explanation": "At under ~2 tokens/param they were far below ~20×, so for their compute they were oversized and underfed."
+  },
+  {
+    "id": "10.3-071",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "Which Chinchilla conclusion is now the consensus?",
+    "options": [
+      "That the originally tabulated constants are exact to three significant figures",
+      "That Kaplan's allocation is correct once learning-rate schedules are matched",
+      "Its result for training-compute-optimality: scale N and D about equally",
+      "That deployment-optimal models follow the 20× rule exactly, whatever their use"
+    ],
+    "answer_index": 2,
+    "explanation": "Chinchilla's equal-scaling conclusion is consensus for training compute. Serving costs can rationally move you away, and its constants are uncertain."
+  },
+  {
+    "id": "10.3-072",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "What problem did Besiroglu et al. (2024) find with Chinchilla's originally tabulated constants?",
+    "options": [
+      "They omit the irreducible term E, so the predicted loss never levels off at large scale",
+      "They are slightly inconsistent with the paper's own ~20× rule, giving drifting ratios of 30–90×",
+      "They give negative predicted losses for models above 100B parameters and 1T tokens",
+      "They imply Kaplan was right after all, with most extra compute best spent on parameters instead"
+    ],
+    "answer_index": 1,
+    "explanation": "Plugging A = 406.4, B = 410.7, α = 0.34, β = 0.28, E = 1.69 into the boxed formula gives ratios that drift to 30–90×, so the replication's revised constants are used instead."
+  },
+  {
+    "id": "10.3-073",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Kaplan vs Chinchilla, honestly",
+    "question": "Which aspects of the Chinchilla result are robust, and which are not?",
+    "options": [
+      "Nothing is robust: the reanalysis overturned both the 20× rule and the equal-scaling result itself",
+      "The shape — near-equal scaling, ~20×, GPT-3 undertrained — is robust; N*'s third digit is not",
+      "Everything is exact: the reanalysis confirmed the original constants to every digit",
+      "The exact constants are robust; the 20× rule and the equal-scaling shape are not"
+    ],
+    "answer_index": 1,
+    "explanation": "The qualitative conclusion holds across fits, but specific constants carry real uncertainty, so precise N* values should be treated as estimates."
+  },
+  {
+    "id": "10.3-074",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "Why is compute-optimal-to-train not the same as optimal-to-serve?",
+    "options": [
+      "Because serving uses more FLOPs per token than training, roughly 6N versus 2N per token",
+      "A model is trained once but served many times, so a smaller over-trained model can be cheaper",
+      "Because serving costs grow with D, so models trained on many tokens are dearer to run",
+      "Because Chinchilla already optimises serving cost, so training needs its own separate analysis too"
+    ],
+    "answer_index": 1,
+    "explanation": "Chinchilla minimises training loss per training FLOP. Lifetime serving costs scale with N, favouring smaller models trained on more tokens."
+  },
+  {
+    "id": "10.3-075",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "What lifetime total cost model accounts for both training and serving?",
+    "options": [
+      "2ND + 6N·T, where T is the total tokens ever served",
+      "6ND + 6D·T, where T is the number of user requests",
+      "6ND + 2N·T, where T is the lifetime tokens served",
+      "6N(D + T) + E, where E is the fixed serving overhead"
+    ],
+    "answer_index": 2,
+    "explanation": "Training costs 6ND once; each served token costs a ≈2N forward pass, so T tokens cost 2NT."
+  },
+  {
+    "id": "10.3-076",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "Why does the serving cost 2N·T contain N but not D?",
+    "options": [
+      "The training-token count leaves no trace in the finished weights, so it can't affect inference",
+      "Because serving reuses the training data as a cache, so its cost is already counted within 6ND",
+      "Because D is already folded into N once training is done, so it appears through N alone",
+      "Because D is always zero at inference time, so any term multiplied by it vanishes"
+    ],
+    "answer_index": 0,
+    "explanation": "Running a model costs a forward pass proportional to its size, regardless of how long it was trained."
+  },
+  {
+    "id": "10.3-077",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "To reduce lifetime serving cost at fixed quality, what must happen to D?",
+    "options": [
+      "It must shrink in proportion to N, keeping tokens/param fixed at about 20",
+      "It stays fixed, since serving cost depends only on the served tokens T and on N",
+      "It must be zero, since any training tokens add cost serving can't recoup",
+      "It must grow to compensate for a smaller N, pushing tokens/param above 20"
+    ],
+    "answer_index": 3,
+    "explanation": "Reducing N raises A/N^α; to keep loss constant, B/D^β must fall, so D rises. That is over-training."
+  },
+  {
+    "id": "10.3-078",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "Under the training-plus-serving cost model, the 20× rule is the special case of what?",
+    "options": [
+      "N = D, a model with equal tokens and params",
+      "T = ∞, a model that is served forever",
+      "T = 0, a model that is never served",
+      "E = 0, a model with no irreducible loss"
+    ],
+    "answer_index": 2,
+    "explanation": "With no serving, total cost reduces to 6ND and the training-optimal answer applies."
+  },
+  {
+    "id": "10.3-079",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "At fixed quality, how does expected lifetime serving volume T change the best model?",
+    "options": [
+      "Larger T favours a smaller N trained on more tokens (~1,400 tokens/param at T = 10^13)",
+      "Larger T always means exactly 20 tokens/param, since serving never changes the split",
+      "Larger T favours a larger N trained on fewer tokens, so that each served answer is of higher quality",
+      "T has no effect, because serving cost is a constant added after training has ended"
+    ],
+    "answer_index": 0,
+    "explanation": "With the revised constants, best N falls from 2.78B (T = 0) to 0.71B (T = 10^13) while tokens/param rise from ~22 to ~1,400, saving up to 68% total cost."
+  },
+  {
+    "id": "10.3-080",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "Why do production models like LLaMA sit at 100×–1,000×+ tokens per parameter?",
+    "options": [
+      "They are compute-optimal for training plus serving, not training alone",
+      "Because the 6ND approximation does not apply to their architectures",
+      "Their authors were unaware of Chinchilla's compute-optimal analysis",
+      "Their data is low quality, so they need many more tokens to compensate"
+    ],
+    "answer_index": 0,
+    "explanation": "Heavily served models benefit from smaller N; over-training compensates in quality. Sardana et al. (2023) work out this inference-aware analysis."
+  },
+  {
+    "id": "10.3-081",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "6. Callout: compute-optimal to train is not optimal to serve",
+    "question": "What are the two caveats of the inference-aware Chinchilla cost analysis?",
+    "options": [
+      "It counts only FLOPs (memory, latency also favour small N), and extreme rows extrapolate a law fitted near 20×",
+      "It only applies to models above 100B parameters, and it assumes every served request has the same length",
+      "It ignores training cost entirely, and it assumes an unlimited supply of fresh, unrepeated, high-quality data",
+      "It assumes E = 0 and α = β, so the optimum it reports holds only for a perfectly symmetric loss surface"
+    ],
+    "answer_index": 0,
+    "explanation": "Real serving pays memory and latency costs too, and very high tokens/param ratios lie outside the fit's data."
+  },
+  {
+    "id": "10.3-082",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Research connection",
+    "question": "What does the IsoFLOP figure in the Chinchilla paper show?",
+    "options": [
+      "Downstream accuracy vs vocabulary size, at several fixed compute budgets",
+      "Loss vs training step for one model, with a cosine schedule per budget",
+      "Loss vs model size at fixed compute, whose minima trace the optimal frontier",
+      "Achieved FLOP/s vs GPU count, showing where scaling efficiency drops off"
+    ],
+    "answer_index": 2,
+    "explanation": "Each IsoFLOP curve fixes compute and varies N; its minimum is the compute-optimal size. The minima across budgets trace N*(C)."
+  },
+  {
+    "id": "10.3-083",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Research connection",
+    "question": "How should Kaplan (2020) and Chinchilla (2022) be read together?",
+    "options": [
+      "As identical results reached by two different methods",
+      "As proof that scaling laws are invalid beyond small models",
+      "As unrelated papers on different topics with no real overlap",
+      "As a debate refining compute allocation, not a contradiction"
+    ],
+    "answer_index": 3,
+    "explanation": "Both fit power laws to LM loss; differences in methodology (notably LR schedules) changed the allocation conclusion."
+  },
+  {
+    "id": "10.3-084",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Exercise",
+    "question": "A 6B-parameter model with C = 10^19 FLOPs can afford about 2.8×10^8 tokens. What does that imply?",
+    "options": [
+      "It is too small for the budget, so the spare compute should go into more parameters",
+      "It is compute-optimal, since 2.8×10^8 tokens is the most this budget can afford",
+      "It will reach the irreducible loss E quickly, because it has so much spare capacity",
+      "Only ~0.046 tokens/param — far too big for the budget; the optimum is ~262M parameters"
+    ],
+    "answer_index": 3,
+    "explanation": "D = 10^19/(6·6×10^9) ≈ 2.78×10^8 tokens, hundreds of times below optimal. At this budget the optimum is ~262M params on ~6.4B tokens (~24×)."
+  },
+  {
+    "id": "10.3-085",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Exercise",
+    "question": "For C = 10^19 FLOPs with the revised constants, what is the compute-optimal allocation?",
+    "options": [
+      "About 262M parameters on about 6.4B tokens (~24 tokens/param)",
+      "About 2.8B parameters on about 60B tokens (~21 tokens/param)",
+      "About 6B parameters on about 280M tokens (~0.05 tokens/param)",
+      "About 70B parameters on about 1.4T tokens (~20 tokens/param)"
+    ],
+    "answer_index": 0,
+    "explanation": "chinchilla_optimal(1e19, ...) gives N* ≈ 2.62×10^8, D* ≈ 6.36×10^9, ratio ≈ 24 — within the ~20× band."
+  },
+  {
+    "id": "10.3-086",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Does 'compute-optimal' mean training the biggest model you can?",
+    "options": [
+      "No — it means the best split; beyond the optimum a bigger model raises loss for the budget",
+      "No — it means the smallest possible model, trained on every token the budget allows",
+      "Yes — the largest model the budget can run is always optimal, however few tokens it sees",
+      "Yes — as long as the model fits in GPU memory, a larger one always gives lower loss"
+    ],
+    "answer_index": 0,
+    "explanation": "Along a fixed budget, too large a model is data-starved; the loss-minimising point is in between."
+  },
+  {
+    "id": "10.3-087",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is treating 20 tokens/param as an exact law a mistake?",
+    "options": [
+      "Because it only applies to GPT-3-sized models, and smaller models follow a 1× rule",
+      "It is a robust ballpark; the precise ratio drifts with uncertain constants and compute scale",
+      "Because the true ratio is exactly 1 token per parameter once E is fitted correctly",
+      "Because it changes only with the tokenizer, and becomes exact once the vocabulary size is fixed"
+    ],
+    "answer_index": 1,
+    "explanation": "The ratio emerges from fitted constants that carry uncertainty, and with α ≠ β it varies slowly with budget."
+  },
+  {
+    "id": "10.3-088",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Dropping E from the Chinchilla loss changes what?",
+    "options": [
+      "The exponents a and b that govern how N* and D* grow",
+      "The tokens/param ratio at the optimum, raising it",
+      "Only the predicted loss value, not where (N*, D*) sits",
+      "The optimal model size N*, shifting it toward smaller models"
+    ],
+    "answer_index": 2,
+    "explanation": "E is an additive constant, so it shifts all losses equally and cannot move the minimum."
+  },
+  {
+    "id": "10.3-089",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does the constraint C = 6ND turn the minimisation over (N, D) into a one-variable problem?",
+    "options": [
+      "It removes E from the loss, leaving only the two penalties to balance",
+      "It fixes N at C/6, leaving only D free to vary along the budget curve",
+      "It sets N = D, so a single variable describes both resources at once",
+      "It pins D = C/(6N), so loss becomes a function of N alone at fixed C"
+    ],
+    "answer_index": 3,
+    "explanation": "Substituting D removes it, and a single derivative dL/dN = 0 finds the optimum."
+  },
+  {
+    "id": "10.3-090",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Check yourself",
+    "question": "GPT-3 used 175B parameters and ~300B tokens. What does Chinchilla say about it?",
+    "options": [
+      "~170 tokens/param: heavily over-trained; a bigger model on fewer tokens would have won",
+      "~1.7 tokens/param, far below ~20×: badly undertrained; a smaller model on more data wins",
+      "~0.5 tokens/param: far too small for its data; it should have had more parameters",
+      "~20 tokens/param: exactly compute-optimal, matching the Chinchilla allocation rule"
+    ],
+    "answer_index": 1,
+    "explanation": "300/175 ≈ 1.7. For its compute, GPT-3 should have been several times smaller with far more data."
+  },
+  {
+    "id": "10.3-091",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Check yourself",
+    "question": "With a ≈ b ≈ 0.5, doubling the compute budget should grow N* and D* by what factor each?",
+    "options": [
+      "2 each, exactly like C",
+      "1, unchanged",
+      "4 each, like C²",
+      "About 1.41 (√2)"
+    ],
+    "answer_index": 3,
+    "explanation": "N* ∝ C^0.5 and D* ∝ C^0.5, so 2^0.5 ≈ 1.41: a ~1.4× bigger model on ~1.4× more tokens."
+  },
+  {
+    "id": "10.3-092",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Hardware track",
+    "question": "Which part of the Chinchilla workflow is expensive, and which is free?",
+    "options": [
+      "Fitting E, A, B, α, β needs a many-run study; using the fit to pick (N*, D*) is free arithmetic",
+      "Choosing (N*, D*) needs a GPU cluster to search over; fitting the five constants is free arithmetic",
+      "Both require many GPU-days, since each new budget needs a fresh sweep of training runs",
+      "Both are free, since the constants and the optimum follow directly from the 6ND formula"
+    ],
+    "answer_index": 0,
+    "explanation": "The allocation solver runs in milliseconds on a CPU. The costly part is the lab's one-time study of hundreds of training runs."
+  },
+  {
+    "id": "10.3-093",
+    "chapter": "10.3",
+    "chapter_name": "Chinchilla compute-optimality",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-03.md",
+    "section": "Next",
+    "question": "What assumption does the Chinchilla optimum make about data that motivates data engineering?",
+    "options": [
+      "That data is repeated many times, so a modest corpus can supply any number of tokens",
+      "That models need no data beyond their parameter count, since one token per weight suffices",
+      "An abundant, clean token supply — trillions of high-quality tokens must actually exist",
+      "That data quality is irrelevant, so any scraped text counts toward the token budget"
+    ],
+    "answer_index": 2,
+    "explanation": "Compute-optimal D* can be trillions of tokens, which requires turning raw web crawl into clean, deduplicated, uncontaminated text."
+  }
+]

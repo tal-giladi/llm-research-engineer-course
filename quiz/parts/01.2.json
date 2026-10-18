@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "01.2-001",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Does a language model assign a probability to a whole sentence in one shot?",
+    "options": [
+      "Yes; a final pooling layer reads the whole sentence and outputs one calibrated number for its total probability",
+      "No; it predicts token by token, but the product of those predictions only approximates the sentence probability",
+      "No; it predicts token by token, and the chain rule makes the product of those predictions the exact sentence probability",
+      "Yes; it applies Bayes' rule over all candidate sentences at once and normalizes to get the whole sentence's score"
+    ],
+    "answer_index": 2,
+    "explanation": "A language model predicts one token at a time, producing p(x_i | x_<i) at each position. The chain rule of probability guarantees that the product of these per-token conditionals is exactly the joint probability of the sequence, so this is not an approximation."
+  },
+  {
+    "id": "01.2-002",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How is training a language model related to maximum likelihood and to the cross-entropy loss?",
+    "options": [
+      "Training is MLE on the product of next-token probabilities, and the log-likelihood is the direct ancestor of cross-entropy",
+      "Training minimizes the variance of each next-token distribution, a quantity that has no connection to the cross-entropy loss",
+      "Training maximizes the prior p(θ) over parameters, and the cross-entropy loss is simply the resulting posterior written in log space",
+      "Training applies Bayes' rule at every step to update the weights, and cross-entropy replaces the likelihood entirely as the objective"
+    ],
+    "answer_index": 0,
+    "explanation": "Training adjusts parameters to maximize the likelihood of the training text — the product of next-token probabilities, handled as a sum of logs. The cross-entropy loss is, up to a sign and an average, this negative log-likelihood."
+  },
+  {
+    "id": "01.2-003",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "What does the conditional probability p(A | B) mean?",
+    "options": [
+      "The probability that A and B both happen together, measured over all outcomes",
+      "The probability that B happens, given that A is known to have happened",
+      "The probability that A happens in the outcomes where B does not happen",
+      "The probability that A happens, given that B is known to have happened"
+    ],
+    "answer_index": 3,
+    "explanation": "The bar reads 'given': p(A | B) is the probability of A once you know B occurred. Both happening is the joint p(A, B), and p(B | A) conditions in the opposite direction."
+  },
+  {
+    "id": "01.2-004",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "How does conditioning change the probability that the next word is Paris?",
+    "options": [
+      "It stays the same whatever the preceding words are, because the vocabulary is fixed",
+      "It is small in general but becomes large given the preceding words 'The capital of France is'",
+      "It becomes exactly 1 given any preceding words, because the model must commit to one token",
+      "It is large in general but becomes small given the preceding words 'The capital of France is'"
+    ],
+    "answer_index": 1,
+    "explanation": "Knowing B can change the odds of A. Unconditionally, Paris is a rare next word; conditioned on 'The capital of France is', it becomes very likely. This is exactly the kind of conditional a language model predicts."
+  },
+  {
+    "id": "01.2-005",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "What is the definition of conditional probability?",
+    "options": [
+      "p(A | B) = p(A) p(B), valid for any events A and B",
+      "p(A | B) = p(A, B) / p(B), valid when p(B) > 0",
+      "p(A | B) = p(A, B) / p(A), defined whenever p(A) > 0",
+      "p(A | B) = p(A) + p(B) - p(A, B), valid when p(B) > 0"
+    ],
+    "answer_index": 1,
+    "explanation": "The conditional is the joint probability divided by the probability of the conditioning event: p(A | B) = p(A, B) / p(B). Dividing by p(A) would give p(B | A), and p(A)p(B) equals the joint only when A and B are independent."
+  },
+  {
+    "id": "01.2-006",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "Why does the conditional probability formula divide by p(B)?",
+    "options": [
+      "To guarantee p(A | B) is always smaller than p(A), since extra information can only reduce probability",
+      "To convert the joint p(A, B) into the marginal p(A) by summing out the possible values of B",
+      "To make the result independent of B, so that p(A | B) depends only on how often A occurs overall",
+      "Knowing B shrinks the world to outcomes where B holds, so probabilities are renormalized within that world"
+    ],
+    "answer_index": 3,
+    "explanation": "Conditioning on B throws away outcomes where B is false; dividing by p(B) renormalizes the remaining mass so it sums to 1 again. Conditioning can increase or decrease the probability of A, so it is not always smaller."
+  },
+  {
+    "id": "01.2-007",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "Why does the definition p(A | B) = p(A, B) / p(B) require p(B) > 0?",
+    "options": [
+      "You cannot condition on something impossible; dividing by zero is undefined",
+      "Because p(A, B) is always larger than p(B), so a zero denominator flips the sign",
+      "Because conditional probabilities must exceed 1 when p(B) is zero or negative",
+      "Because p(B) must equal p(A) for the formula to apply, and p(A) is always positive"
+    ],
+    "answer_index": 0,
+    "explanation": "If p(B) = 0, B never happens, so 'given B' is meaningless and the formula would divide by zero. The joint can never exceed p(B), and conditional probabilities stay in [0, 1]."
+  },
+  {
+    "id": "01.2-008",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1. Conditional probability: updating on information",
+    "question": "What is the product rule of probability?",
+    "options": [
+      "p(A, B) = p(A) + p(B)",
+      "p(A | B) = p(A) p(B | A)",
+      "p(A, B) = p(A | B) p(B)",
+      "p(A, B) = p(A | B) / p(B)"
+    ],
+    "answer_index": 2,
+    "explanation": "Rearranging the definition of conditional probability gives p(A, B) = p(A | B) p(B): the joint equals the probability of one event times the conditional probability of the other given it. It holds without assuming independence."
+  },
+  {
+    "id": "01.2-009",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1.1 Joint and marginal",
+    "question": "What is a joint probability p(A, B)?",
+    "options": [
+      "The probability of A happening on its own, summed over B",
+      "The probability of A given that B is known to have happened",
+      "The probability that at least one of A or B happens",
+      "The probability that A and B both happen together"
+    ],
+    "answer_index": 3,
+    "explanation": "The joint is the probability that both A and B occur together. The probability of A alone is the marginal p(A), and 'either A or B' is a union, which is different."
+  },
+  {
+    "id": "01.2-010",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1.1 Joint and marginal",
+    "question": "How is the marginal p(A) obtained from the joint distribution of A and B?",
+    "options": [
+      "By multiplying the joint over all values of B: p(A) = product over b of p(A, B = b)",
+      "By dividing the joint by the marginal: p(A) = p(A, B) / p(B) for the observed b",
+      "By summing the joint over all values of B: p(A) = sum over b of p(A, B = b)",
+      "By taking the maximum of the joint over B: p(A) = max over b of p(A, B = b)"
+    ],
+    "answer_index": 2,
+    "explanation": "Marginalization sums the joint over all values of the other variable ('marginalizing out B'). Dividing the joint by p(B) gives a conditional instead."
+  },
+  {
+    "id": "01.2-011",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "1.1 Joint and marginal",
+    "question": "Why does marginalization, p(A) = sum over b of p(A, B = b), recover A's total probability?",
+    "options": [
+      "Because A and B must be independent, so each joint p(A, B = b) factors and the p(B = b) terms cancel",
+      "The events B = b are exhaustive and mutually exclusive, so their joints with A add up to all of A",
+      "Because each term p(A, B = b) equals p(A), and the sum is then divided by the number of values",
+      "Because the sum of the joints over every b is always exactly 1, whatever the event A happens to be"
+    ],
+    "answer_index": 1,
+    "explanation": "Exactly one value of B occurs, so splitting A by B's value partitions A into non-overlapping pieces whose probabilities sum to p(A). No independence is needed, and the sum equals p(A), not necessarily 1."
+  },
+  {
+    "id": "01.2-012",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "What problem does Bayes' rule solve?",
+    "options": [
+      "It flips a conditional: given p(B | A), it computes p(A | B)",
+      "It computes the joint probability of independent events by multiplying them",
+      "It turns a product of probabilities into a sum so that it stays in range",
+      "It computes the variance of a conditional distribution"
+    ],
+    "answer_index": 0,
+    "explanation": "Often you know how probable the evidence is under a hypothesis, p(B | A), but want the reverse, p(A | B). Bayes' rule converts one into the other. Turning products into sums is what logarithms do."
+  },
+  {
+    "id": "01.2-013",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "How is Bayes' rule derived?",
+    "options": [
+      "Take the logarithm of the chain rule, log p(A, B) = log p(A) + log p(B), and exponentiate",
+      "Assume A and B are independent, so p(A | B) = p(A), and multiply both sides by p(B | A)",
+      "Write the product rule both ways, p(A | B)p(B) = p(B | A)p(A), and divide by p(B)",
+      "Sum the joint over all values of A, p(B) = sum over a of p(a, B), and divide by p(A)"
+    ],
+    "answer_index": 2,
+    "explanation": "Since p(A, B) = p(A | B)p(B) = p(B | A)p(A), equating the right-hand sides and dividing by p(B) gives p(A | B) = p(B | A)p(A) / p(B). No independence assumption is used."
+  },
+  {
+    "id": "01.2-014",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "Which formula is Bayes' rule?",
+    "options": [
+      "p(A | B) = p(B | A) p(A) / p(B)",
+      "p(A | B) = p(B | A) p(B) / p(A)",
+      "p(A | B) = p(B | A) p(B) / p(A, B)",
+      "p(A | B) = p(B | A)"
+    ],
+    "answer_index": 0,
+    "explanation": "Bayes' rule multiplies the likelihood p(B | A) by the prior p(A) and divides by the evidence p(B). Swapping the roles of p(A) and p(B) gives the wrong formula, and p(A | B) = p(B | A) holds only in special cases."
+  },
+  {
+    "id": "01.2-015",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "In Bayes' rule p(A | B) = p(B | A)p(A)/p(B), what is p(A) called?",
+    "options": [
+      "The posterior: your updated belief about A after seeing B",
+      "The likelihood: how probable B is if A were true",
+      "The evidence: the normalizing constant",
+      "The prior: what you believed about A before seeing B"
+    ],
+    "answer_index": 3,
+    "explanation": "p(A) is the prior, your belief before the evidence. The posterior is p(A | B), the likelihood is p(B | A), and the evidence p(B) normalizes the result."
+  },
+  {
+    "id": "01.2-016",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "In Bayes' rule, what is p(B | A) called and what does it express?",
+    "options": [
+      "The prior: how probable A is before any evidence B is seen",
+      "The likelihood: how probable the evidence B is if A were true",
+      "The posterior: how probable A is after the evidence B is seen",
+      "The marginal: how probable the evidence B is across all cases"
+    ],
+    "answer_index": 1,
+    "explanation": "p(B | A) is the likelihood — the probability of the observed evidence under the hypothesis A. The prior is p(A), the posterior p(A | B), and the overall probability of B is the evidence."
+  },
+  {
+    "id": "01.2-017",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "In Bayes' rule, what is p(A | B) called?",
+    "options": [
+      "The prior: the belief about A held before seeing any B",
+      "The posterior: the updated belief about A after seeing B",
+      "The likelihood: how probable the evidence B is if A were true",
+      "The evidence: the total probability of B over all hypotheses"
+    ],
+    "answer_index": 1,
+    "explanation": "p(A | B) is the posterior — the belief about A updated by the evidence B. It is what Bayes' rule computes from the prior and the likelihood."
+  },
+  {
+    "id": "01.2-018",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2. Bayes' rule: flipping the condition",
+    "question": "How is the evidence p(B) in Bayes' rule computed for a binary hypothesis A?",
+    "options": [
+      "By using the likelihood alone: p(B) = p(B | A), ignoring the not-A case",
+      "By multiplying: p(B) = p(A | B)p(A), the posterior times the prior",
+      "By complementing: p(B) = 1 - p(A), since A and B partition outcomes",
+      "By marginalizing: p(B) = p(B | A)p(A) + p(B | not A)p(not A)"
+    ],
+    "answer_index": 3,
+    "explanation": "The evidence is the total probability of B, obtained by marginalizing over whether A is true or not. Using only p(B | A) ignores the ways B can arise when A is false, such as false positives."
+  },
+  {
+    "id": "01.2-019",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2.1 Worked example: a medical test",
+    "question": "A disease affects 1% of people. A test is 99% sensitive and has a 5% false-positive rate. Roughly what is the probability of disease given a positive test?",
+    "options": [
+      "About 16.7%",
+      "About 99.0%",
+      "About 95.0%",
+      "About 1.0%"
+    ],
+    "answer_index": 0,
+    "explanation": "The evidence is p(pos) = 0.99·0.01 + 0.05·0.99 = 0.0594, so p(D | pos) = 0.0099 / 0.0594 ≈ 0.167. Despite the 'accurate' test, the tiny prior keeps the posterior around one in six. Reading 99% off the test ignores the prior."
+  },
+  {
+    "id": "01.2-020",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2.1 Worked example: a medical test",
+    "question": "In the rare-disease test example (1% prevalence, 99% sensitivity, 5% false-positive rate), why is the posterior after a positive test so low?",
+    "options": [
+      "The test's 99% sensitivity is too low to be useful, so most sick people still test negative",
+      "Bayes' rule always produces posteriors below 50% whenever the prior is below 50% to begin with",
+      "False positives from the healthy 99% (0.0495) swamp true positives from the sick 1% (0.0099)",
+      "Positive results are discounted toward zero whenever the prior is small, regardless of the test"
+    ],
+    "answer_index": 2,
+    "explanation": "Because the disease is rare, the large healthy population produces more false positives in absolute terms than the small sick population produces true positives. Bayes' rule weighs the likelihood against the prior, so the small prior keeps the posterior low; 99% sensitivity is actually high."
+  },
+  {
+    "id": "01.2-021",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2.1 Worked example: a medical test",
+    "question": "In a test example, what does a sensitivity of 99% mean in conditional-probability notation?",
+    "options": [
+      "p(D | pos) = 0.99",
+      "p(pos | not D) = 0.99",
+      "p(D) = 0.99",
+      "p(pos | D) = 0.99"
+    ],
+    "answer_index": 3,
+    "explanation": "Sensitivity is the probability the test is positive when the disease is present, p(pos | D). It is a likelihood, not the posterior p(D | pos), and it is different from the false-positive rate p(pos | not D)."
+  },
+  {
+    "id": "01.2-022",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2.1 Worked example: a medical test",
+    "question": "In a test example, what does a 5% false-positive rate mean in conditional-probability notation?",
+    "options": [
+      "p(not D | pos) = 0.05",
+      "p(pos | D) = 0.05",
+      "p(pos | not D) = 0.05",
+      "p(pos) = 0.05"
+    ],
+    "answer_index": 2,
+    "explanation": "The false-positive rate is the probability of a positive result when the disease is absent, p(pos | not D). It conditions on the true state, not on the test result."
+  },
+  {
+    "id": "01.2-023",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "2.1 Worked example: a medical test",
+    "question": "What key lesson does Bayes' rule teach about combining a strong likelihood with a strong prior?",
+    "options": [
+      "The likelihood always dominates the prior, so an accurate test settles the question on its own",
+      "Posterior ∝ likelihood × prior, so a strong likelihood does not override a strong prior",
+      "The prior can be ignored whenever the test is accurate, since the evidence term cancels it",
+      "The posterior always equals the prior, because the likelihood and evidence terms cancel out"
+    ],
+    "answer_index": 1,
+    "explanation": "The posterior is proportional to likelihood times prior. A '99% accurate' test does not overcome a very rare disease; both factors matter. Neither factor is ignored, and the posterior moves away from the prior when evidence is informative."
+  },
+  {
+    "id": "01.2-024",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3. The chain rule of probability — this is language modeling",
+    "question": "What is the chain rule of probability for a sequence x_1, ..., x_n?",
+    "options": [
+      "p(x_1, ..., x_n) = product over i of p(x_i | x_1, ..., x_{i-1})",
+      "p(x_1, ..., x_n) = product over i of p(x_i), with no conditioning",
+      "p(x_1, ..., x_n) = sum over i of p(x_i | x_{i-1})",
+      "p(x_1, ..., x_n) = product over i of p(x_i | x_{i+1}, ..., x_n)"
+    ],
+    "answer_index": 0,
+    "explanation": "Applying the product rule repeatedly gives the joint as a product where each factor conditions on everything before it. A product of unconditional marginals assumes independence, and the standard left-to-right form conditions on the past, not the future."
+  },
+  {
+    "id": "01.2-025",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3. The chain rule of probability — this is language modeling",
+    "question": "How is the chain rule of probability obtained?",
+    "options": [
+      "By assuming each variable depends only on the previous one",
+      "By taking logarithms of the joint probability and summing the terms",
+      "By applying the product rule p(A, B) = p(A | B)p(B) repeatedly",
+      "By applying Bayes' rule to each variable in the sequence in turn"
+    ],
+    "answer_index": 2,
+    "explanation": "The chain rule is the product rule extended to many variables: peel off the last variable's conditional, then repeat on the remaining joint. No Markov assumption is made — each factor conditions on the entire prefix."
+  },
+  {
+    "id": "01.2-026",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3. The chain rule of probability — this is language modeling",
+    "question": "In the chain rule, what is the first factor p(x_1 | ∅)?",
+    "options": [
+      "Simply p(x_1), since the condition is empty",
+      "Always 1, since nothing precedes x_1",
+      "Undefined, since there is nothing to condition on",
+      "p(x_1 | x_n), wrapping around to the last element"
+    ],
+    "answer_index": 0,
+    "explanation": "For i = 1 there are no previous elements, so the conditional reduces to the marginal p(x_1). It is not 1 in general — the first token still has a probability."
+  },
+  {
+    "id": "01.2-027",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3. The chain rule of probability — this is language modeling",
+    "question": "Expanding p(x_1, x_2, x_3) with the product rule twice gives which expression?",
+    "options": [
+      "p(x_3 | x_2) p(x_2 | x_1) p(x_1)",
+      "p(x_1) p(x_2) p(x_3)",
+      "p(x_1 | x_2, x_3) p(x_2 | x_3) p(x_3) / p(x_1)",
+      "p(x_3 | x_1, x_2) p(x_2 | x_1) p(x_1)"
+    ],
+    "answer_index": 3,
+    "explanation": "First write p(x_1, x_2, x_3) = p(x_3 | x_1, x_2) p(x_1, x_2), then p(x_1, x_2) = p(x_2 | x_1) p(x_1). Dropping x_1 from the last factor would be a Markov approximation, which the chain rule does not make."
+  },
+  {
+    "id": "01.2-028",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3. The chain rule of probability — this is language modeling",
+    "question": "Is the chain-rule factorization of a sequence's probability an approximation?",
+    "options": [
+      "Yes; it assumes each token depends only on the previous token (a Markov chain)",
+      "No; it is exact, just the definition of conditional probability applied repeatedly",
+      "Yes; it assumes tokens are independent, so the factors are only approximately right",
+      "It is exact only for sequences of length 2 and approximate for anything longer"
+    ],
+    "answer_index": 1,
+    "explanation": "Each step uses the exact product rule, so the factorization holds for any sequence length with no assumptions. Limiting dependence to the previous token would be an n-gram (Markov) approximation, which is a different model."
+  },
+  {
+    "id": "01.2-029",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3.1 The language-modeling factorization",
+    "question": "In the language-modeling factorization p(x_1, ..., x_n) = product over i of p(x_i | x_<i), what does x_<i denote?",
+    "options": [
+      "All tokens after position i: the continuation",
+      "All tokens before position i: the context or prefix",
+      "Only the token immediately before position i: x_{i-1}",
+      "All tokens in the sentence except x_i itself"
+    ],
+    "answer_index": 1,
+    "explanation": "x_<i is shorthand for x_1, ..., x_{i-1}, the context or prefix. It excludes future tokens; conditioning on everything except x_i would include the future."
+  },
+  {
+    "id": "01.2-030",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3.1 The language-modeling factorization",
+    "question": "How does a language model's per-position output relate to the chain-rule factorization of a sentence?",
+    "options": [
+      "The model outputs the joint probability of the whole sentence at each position, refined a little more as it reads each token",
+      "The model outputs p(x_<i | x_i) at each position, the probability of the prefix given the current token",
+      "The model outputs the marginal p(x_i) at each position, which the chain rule then reweights by context",
+      "The categorical the model outputs at position i, after reading x_<i, is exactly the factor p(x_i | x_<i)"
+    ],
+    "answer_index": 3,
+    "explanation": "At position i the model reads the prefix and outputs a categorical over the vocabulary — exactly the conditional factor p(x_i | x_<i). Picking out the entry for the true token at each position and multiplying gives the sentence probability."
+  },
+  {
+    "id": "01.2-031",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3.1 The language-modeling factorization",
+    "question": "Given a language model's next-token distributions for a sentence, how do you get the probability of that sentence?",
+    "options": [
+      "Multiply, over positions, the probability each distribution assigns to the actual next token",
+      "Add up, over positions, every entry of every next-token distribution and normalize by the length",
+      "Take the largest probability in the final distribution, since it already conditions on everything",
+      "Average the distributions across positions and read off the entry for the most likely token"
+    ],
+    "answer_index": 0,
+    "explanation": "By the chain rule, the sentence probability is the product of the conditional probabilities of the actual tokens. Summing all entries would give the number of positions, since each distribution sums to 1. In practice this product is computed as a sum of logs."
+  },
+  {
+    "id": "01.2-032",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3.1 The language-modeling factorization",
+    "question": "Why is 'predict the next token, one at a time' not a heuristic?",
+    "options": [
+      "Because next tokens are independent of previous ones, so predicting them one at a time loses no information at all",
+      "Because the model only needs to be correct on the last token, and earlier predictions are simply discarded once training ends",
+      "The chain rule makes the product of per-token conditionals the full joint distribution, factored into computable pieces",
+      "Because Bayes' rule cancels out the errors made at each step, so the per-token mistakes average away over a sentence"
+    ],
+    "answer_index": 2,
+    "explanation": "The chain rule guarantees that the per-token conditionals together are the exact joint distribution, so next-token prediction loses nothing in principle. It does not rely on independence between tokens."
+  },
+  {
+    "id": "01.2-033",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "3.1 The language-modeling factorization",
+    "question": "For the sentence 'the capital of France is Paris', what distinguishes a good language model in the factor p(Paris | the capital of France is)?",
+    "options": [
+      "A good model makes this factor exactly equal to the marginal p(Paris), since context should not change the answer",
+      "A good model keeps this factor small to avoid overconfidence; a weak model assigns Paris nearly all of the mass",
+      "The factor is the same for every model, since it is fixed by the chain rule rather than by what was learned",
+      "A good model makes this factor large; a model that never saw the fact spreads probability thinly and makes it small"
+    ],
+    "answer_index": 3,
+    "explanation": "The chain rule fixes the structure of the factorization, but each model supplies its own conditional probabilities. A model that knows the fact concentrates probability on Paris; one that does not spreads mass over many tokens."
+  },
+  {
+    "id": "01.2-034",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4. Probability vs likelihood, and maximum likelihood",
+    "question": "What is the difference between probability and likelihood for the number p(data | parameters)?",
+    "options": [
+      "Probability fixes the data and varies the parameters; likelihood fixes the parameters and varies over the possible data",
+      "They are different numbers, computed by different formulas from the data and the parameters respectively",
+      "Probability fixes the parameters and varies the data; likelihood fixes the observed data and varies the parameters",
+      "Probability applies to discrete data and likelihood to continuous data, but both vary the parameters"
+    ],
+    "answer_index": 2,
+    "explanation": "They are the same quantity read in two directions. As a probability, the model is fixed and you ask how probable different data are; as a likelihood, the data are fixed and you ask how well different parameter settings explain them."
+  },
+  {
+    "id": "01.2-035",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4. Probability vs likelihood, and maximum likelihood",
+    "question": "Which view of p(data | θ) does model training use?",
+    "options": [
+      "The probability view: hold θ fixed and generate many synthetic datasets to compare with the text",
+      "The likelihood view: hold the observed training text fixed and search for θ that makes it most probable",
+      "The prior view: choose θ before seeing any data, based on what parameter values are plausible a priori",
+      "The posterior view: compute the full distribution p(θ | data) with Bayes' rule and average over it"
+    ],
+    "answer_index": 1,
+    "explanation": "Training holds the observed training text fixed and searches over parameters, which is the likelihood view. Maximizing the likelihood is maximum likelihood estimation; it does not compute a Bayesian posterior over θ."
+  },
+  {
+    "id": "01.2-036",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4. Probability vs likelihood, and maximum likelihood",
+    "question": "What is maximum likelihood estimation for a language model?",
+    "options": [
+      "θ* = argmax over θ of the product over i of p(x_i | x_<i; θ)",
+      "θ* = argmin over θ of the product over i of p(x_i | x_<i; θ)",
+      "θ* = argmax over θ of the variance of p(x_i | x_<i; θ) over i",
+      "θ* = argmax over θ of the prior p(θ), ignoring the data"
+    ],
+    "answer_index": 0,
+    "explanation": "MLE picks the parameters that make the training data as probable as possible; for a language model that probability factors by the chain rule into next-token probabilities. Maximizing p(θ) alone ignores the data."
+  },
+  {
+    "id": "01.2-037",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "In the MLE objective for a language model, what does θ denote?",
+    "options": [
+      "The best parameter setting found by training, fixed after convergence",
+      "The training data, written as one symbol for the whole token sequence",
+      "All the model's parameters, every weight, bundled into one name",
+      "The learning rate, the step size used to update the model's weights"
+    ],
+    "answer_index": 2,
+    "explanation": "θ names all parameters of the network; a different θ is a different model. The best setting is written θ*, and the training data are the tokens x_i."
+  },
+  {
+    "id": "01.2-038",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "What does θ* ('theta star') denote in θ* = argmax over θ of p(training data | θ)?",
+    "options": [
+      "The best parameter setting, the one that maximizes the likelihood",
+      "The maximum likelihood value itself, the highest probability achieved",
+      "The initial random parameters, the point where gradient descent starts",
+      "The gradient of the likelihood, the direction training moves θ in"
+    ],
+    "answer_index": 0,
+    "explanation": "θ* is the parameter setting that achieves the highest likelihood — the argument of the maximum, not the maximum value. Training searches for it starting from initial parameters."
+  },
+  {
+    "id": "01.2-039",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "In the notation p(x_i | x_<i; θ), what does the semicolon before θ indicate?",
+    "options": [
+      "That θ is a random variable being conditioned on in a Bayesian sense",
+      "That x_i and θ are independent, so θ can be factored out of it",
+      "That the probability is divided by θ, normalizing over parameters",
+      "It says which model computes the probability: 'using model θ'"
+    ],
+    "answer_index": 3,
+    "explanation": "The semicolon simply names the model producing the probability; read ';θ' as 'using model θ'. p(x_i | x_<i; θ) is the probability the model with parameters θ assigns to the true next token after reading the prefix."
+  },
+  {
+    "id": "01.2-040",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "How do you compute the likelihood of a fixed parameter setting θ on a training text?",
+    "options": [
+      "Average the model's probabilities over all vocabulary tokens at each position, then multiply those averages together",
+      "At each position, take the probability the model gives the token that actually came next, and multiply them",
+      "Take the probability of the most likely token at each position and add them across the whole text",
+      "Count how many positions the model predicts correctly by argmax and divide by the length of the text"
+    ],
+    "answer_index": 1,
+    "explanation": "The likelihood of θ is the product over positions of p(true x_i | x_<i; θ) — one number for how probable the model thinks the training text is. Argmax accuracy and averages over the vocabulary are different quantities."
+  },
+  {
+    "id": "01.2-041",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "Why is p(training data | θ) equal to the product over i of p(x_i | x_<i; θ)?",
+    "options": [
+      "Because the training tokens are assumed independent, so the joint is just the product of marginals",
+      "By the chain rule, a sequence's probability is the product of its next-token probabilities",
+      "Because Bayes' rule applied to θ turns the posterior over parameters into a product over tokens",
+      "Because log is monotonically increasing, so the product and the sum of logs pick the same tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "The right-hand side is just the chain-rule expansion of the probability of the whole text under model θ, written in pieces the model can compute. No independence assumption is involved."
+  },
+  {
+    "id": "01.2-042",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.1 Reading the equation piece by piece",
+    "question": "What is the difference between max over θ and argmax over θ of a likelihood?",
+    "options": [
+      "max returns the θ that achieves the peak; argmax returns the likelihood value",
+      "They are identical operators; argmax is simply the older notation for max",
+      "argmax returns the average of all θ values whose likelihood is near the max",
+      "max returns the highest likelihood value; argmax returns the θ that achieves it"
+    ],
+    "answer_index": 3,
+    "explanation": "max gives the best score; argmax gives the argument — the parameter setting — that achieves it. Training wants the model, so MLE uses argmax."
+  },
+  {
+    "id": "01.2-043",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.2 Worked example: comparing two models",
+    "question": "Two models assign the true tokens of 'the cat sat' probabilities 0.2, 0.1, 0.3 (model A) and 0.2, 0.5, 0.6 (model B). Which is the maximum-likelihood choice between them?",
+    "options": [
+      "Model B, with likelihood 0.06 versus 0.006",
+      "Model A, with likelihood 0.006 versus 0.06",
+      "Neither, since both give the first token 0.2",
+      "Model A, because its probabilities are smaller and more cautious"
+    ],
+    "answer_index": 0,
+    "explanation": "Multiplying down each column gives 0.2·0.1·0.3 = 0.006 for A and 0.2·0.5·0.6 = 0.06 for B. The argmax is B — the model less surprised by the text that actually occurred."
+  },
+  {
+    "id": "01.2-044",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.2 Worked example: comparing two models",
+    "question": "Since real models have billions of parameters and infinitely many candidates, how is maximum likelihood carried out in practice?",
+    "options": [
+      "By enumerating every candidate θ in a large table and picking the one with the best likelihood",
+      "By applying Bayes' rule once to compute θ* in closed form from the counts in the training data",
+      "Gradient descent starts from one θ and repeatedly nudges it to raise the (log-)likelihood",
+      "By randomly sampling θ until the likelihood exceeds a threshold chosen from a validation set"
+    ],
+    "answer_index": 2,
+    "explanation": "Candidates cannot be listed, so training uses gradient-based optimization: start from an initial θ and repeatedly step in the direction that increases the log-likelihood. This is equivalent to decreasing the loss."
+  },
+  {
+    "id": "01.2-045",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "4.2 Worked example: comparing two models",
+    "question": "What does maximum likelihood estimation turn 'learn a language model' into?",
+    "options": [
+      "Adjust θ so the model assigns equal probability to every token, maximizing its entropy",
+      "Adjust θ so the model memorizes the vocabulary order and reproduces it token by token",
+      "Adjust θ so the variance of the model's output distribution is as small as possible",
+      "Adjust θ so the model assigns high probability to the text that actually occurred"
+    ],
+    "answer_index": 3,
+    "explanation": "MLE makes the goal concrete: the corpus likelihood is the product of every next-token probability of the true tokens, and training adjusts θ to make it high. A uniform distribution would be a poor, high-loss model."
+  },
+  {
+    "id": "01.2-046",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Why does multiplying many token probabilities cause problems in floating point?",
+    "options": [
+      "The product grows without bound over thousands of tokens and eventually overflows to infinity",
+      "Floating-point multiplication is not commutative, so the product depends on the token order",
+      "Multiplying thousands of sub-1 numbers drives the product toward zero until it underflows to exactly 0",
+      "The product turns negative after many multiplications because of accumulated rounding error"
+    ],
+    "answer_index": 2,
+    "explanation": "Each factor is between 0 and 1, so the product shrinks rapidly; in finite precision it eventually rounds to exactly zero, which is underflow. Overflow would require factors greater than 1."
+  },
+  {
+    "id": "01.2-047",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Once a likelihood product has underflowed to 0, what happens to its logarithm and to training?",
+    "options": [
+      "The log is 0 and training continues normally",
+      "The log is -∞ and every gradient is garbage",
+      "The log becomes positive and the model diverges slowly",
+      "The log is unaffected because log undoes the underflow"
+    ],
+    "answer_index": 1,
+    "explanation": "log(0) = -∞, and once information is lost to rounding, gradients computed from it are meaningless. Taking the log afterward cannot recover the lost value; the log must be applied before multiplying."
+  },
+  {
+    "id": "01.2-048",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Which identity lets us replace a product of probabilities with a sum?",
+    "options": [
+      "log(ab) = log a + log b, so the log of a product is the sum of the logs",
+      "log(a + b) = log a · log b, so the log of a sum is the product of the logs",
+      "exp(ab) = exp a + exp b, so exponentiating turns a product into a sum",
+      "log(ab) = log a · log b, so the log of a product is the product of logs"
+    ],
+    "answer_index": 0,
+    "explanation": "The logarithm turns multiplication into addition: log of the product over i of p_i equals the sum over i of log p_i. The other identities are false."
+  },
+  {
+    "id": "01.2-049",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "What is the log-likelihood of a sequence?",
+    "options": [
+      "The log of the sum over positions of p(x_i | x_<i)",
+      "The product of log p(x_i | x_<i)",
+      "The sum over positions of log p(x_i | x_<i)",
+      "The average of p(x_i | x_<i) without logs"
+    ],
+    "answer_index": 2,
+    "explanation": "The log-likelihood is the log of the chain-rule product, which equals the sum of the per-token log-probabilities. Summing raw probabilities and then taking the log is a different, meaningless quantity."
+  },
+  {
+    "id": "01.2-050",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Why is each term log p(x_i | x_<i) in a log-likelihood at most 0?",
+    "options": [
+      "Because 0 < p <= 1 implies log p <= 0",
+      "Because log of any number is negative",
+      "Because probabilities are always below 0.5",
+      "Because the model subtracts a constant from each log"
+    ],
+    "answer_index": 0,
+    "explanation": "A probability lies in (0, 1], and the log of a number in that range is non-positive, equal to 0 only when p = 1. Log of numbers greater than 1 is positive, so 'log is always negative' is false."
+  },
+  {
+    "id": "01.2-051",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Why does maximizing the log-likelihood give the same θ* as maximizing the likelihood?",
+    "options": [
+      "Because log is linear, so it scales every likelihood by the same factor",
+      "Because the likelihood and log-likelihood are numerically equal",
+      "Because log is its own inverse, so applying it twice returns the likelihood",
+      "Because log is monotonically increasing, it preserves which θ is best"
+    ],
+    "answer_index": 3,
+    "explanation": "A monotonically increasing function preserves ordering, so the θ with the highest likelihood also has the highest log-likelihood. The values differ; only the argmax is preserved."
+  },
+  {
+    "id": "01.2-052",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5. Why we sum log-probabilities instead of multiplying",
+    "question": "Why does the log-likelihood stay in floating-point range for long sequences?",
+    "options": [
+      "Because log values always lie between -1 and 0, so the sum is bounded by the length",
+      "Each log p is a moderate negative number, and summing them stays comfortably representable",
+      "Because the sum of logs is automatically normalized to 1 after each token is added to it",
+      "Because float32 has no lower limit for negative numbers, only for small positive numbers"
+    ],
+    "answer_index": 1,
+    "explanation": "Each log-probability is a moderate negative number, and summing even thousands of them gives a large-magnitude but representable value, such as -1381.55 for twenty factors of 1e-30. Individual log-probabilities can be well below -1."
+  },
+  {
+    "id": "01.2-053",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5.1 Worked example: a tiny product vs its log-sum",
+    "question": "Five token probabilities have product 4.5 × 10^-5 and log-sum about -10.0088. How are these two numbers related?",
+    "options": [
+      "They are unrelated; the log-sum measures the entropy of the distribution, not the product",
+      "They are the same quantity in different spaces: exp(-10.0088) recovers 4.5 × 10^-5",
+      "The log-sum is the product divided by the number of tokens, so it is an average probability",
+      "The product is the square of the log-sum, since both are computed from the same five tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "The log-likelihood is the log of the product, so exponentiating it returns the product. Working in log space changes the representation, not the information."
+  },
+  {
+    "id": "01.2-054",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5.1 Worked example: a tiny product vs its log-sum",
+    "question": "In float32, the product of twenty probabilities of 1e-30 evaluates to exactly 0.0. Why?",
+    "options": [
+      "NumPy has a known bug when multiplying many float32 values, which zeroes out any product of tiny numbers",
+      "Multiplying more than ten numbers in float32 always returns zero because the 23-bit mantissa runs out of precision",
+      "float32 cannot represent 1e-30 itself, so each factor is already stored as zero before multiplying",
+      "The true value 1e-600 is far below the smallest positive float32, about 1.2 × 10^-38, so it rounds to zero"
+    ],
+    "answer_index": 3,
+    "explanation": "float32 can represent 1e-30, but the product 1e-600 is far below its smallest positive value (~1.2e-38), so the result underflows to zero and the information is lost. The corresponding log-sum, 20 × ln(1e-30) ≈ -1381.55, is perfectly representable."
+  },
+  {
+    "id": "01.2-055",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5.1 Worked example: a tiny product vs its log-sum",
+    "question": "What does an underflow example demonstrate about how language-model losses are computed?",
+    "options": [
+      "They are computed as sums of log-probabilities, never as products of raw probabilities",
+      "They are computed as products in float64, whose wider exponent range avoids underflow",
+      "They are computed only on very short sequences, so the product never gets small enough",
+      "They are computed by rescaling probabilities above 1 before multiplying them together"
+    ],
+    "answer_index": 0,
+    "explanation": "Products of raw probabilities underflow and lose all information, while log-sums carry it intact, so every LM loss is a sum of log-probabilities. float64 merely delays underflow; it does not solve it."
+  },
+  {
+    "id": "01.2-056",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5.1 Worked example: a tiny product vs its log-sum",
+    "question": "Roughly what is the smallest positive value float64 can represent, and does float64 save a product of a few hundred probabilities near 10^-2?",
+    "options": [
+      "Around 10^-38; yes, the product remains comfortably representable",
+      "Around 10^-600; yes, the product remains representable",
+      "Around 10^-308; no, a product near 10^-400 still underflows",
+      "Around 10^-308; yes, because float64 never underflows"
+    ],
+    "answer_index": 2,
+    "explanation": "float64 bottoms out near 10^-308 (float32 near 1.2 × 10^-38). A few hundred tokens with probability around 0.01 give about 10^-400, past both limits, so higher precision is not a fix — summing logs is."
+  },
+  {
+    "id": "01.2-057",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "5.1 Worked example: a tiny product vs its log-sum",
+    "question": "Why should log-probabilities be computed with log-softmax rather than log(softmax(x))?",
+    "options": [
+      "log-softmax computes different, more accurate probabilities by construction, since it uses a separate formula",
+      "log(softmax(x)) cannot be differentiated by autograd, because the log and softmax gradients do not compose",
+      "log-softmax avoids the need for logits entirely, so the model can output log-probabilities without any final projection layer",
+      "log(softmax(x)) can take the log of a value that rounded to zero and return -∞; log-softmax is numerically stable"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax can produce a probability that rounds to 0 in finite precision, and log of that is -∞. Log-softmax computes the log-probability directly in a numerically stable way. Mathematically both give the same values; the difference is numerical."
+  },
+  {
+    "id": "01.2-058",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Interpreting a 99%-accurate test's positive result as a 99% chance of disease, while ignoring a 1% prevalence, is an example of which error?",
+    "options": [
+      "Underflow: the 1% prior rounds to zero in floating point",
+      "Logit confusion: reading a raw score as a probability",
+      "The base-rate fallacy: ignoring the prior p(D)",
+      "Causal leakage: conditioning on information from the future"
+    ],
+    "answer_index": 2,
+    "explanation": "Ignoring the prior is the classic base-rate fallacy; Bayes' rule shows the actual posterior is about 16.7%. The other options are different errors from other contexts."
+  },
+  {
+    "id": "01.2-059",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Is p(A | B) equal to p(B | A) in general?",
+    "options": [
+      "Yes; conditioning is symmetric, so swapping the event and the condition leaves it unchanged",
+      "No; they are equal only in special cases, and Bayes' rule relates them through the prior ratio",
+      "Yes, whenever both events have positive probability, since both then equal p(A, B) divided by one",
+      "No; p(A | B) is always larger than p(B | A), because conditioning on B adds information"
+    ],
+    "answer_index": 1,
+    "explanation": "By Bayes' rule, p(A | B) = p(B | A)·p(A)/p(B), so they differ unless p(A) = p(B) (or the conditionals are zero). Neither is always larger; it depends on the priors."
+  },
+  {
+    "id": "01.2-060",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What is wrong with code that computes a sequence probability by looping `prob *= p_i` over a real sequence?",
+    "options": [
+      "It will underflow; accumulate `logprob += log(p_i)` instead",
+      "It overflows to infinity for long sequences; divide by p_i instead",
+      "It is correct but slower than summing logs, so it only costs speed",
+      "It returns a probability greater than 1 once the sequence is long"
+    ],
+    "answer_index": 0,
+    "explanation": "Multiplying many sub-1 probabilities underflows to zero in floating point. Accumulating log-probabilities keeps the computation in range and preserves the information."
+  },
+  {
+    "id": "01.2-061",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "In the chain-rule factorization used by a language model, what must each factor condition on, and why?",
+    "options": [
+      "Both past and future tokens, so the model sees the whole sentence; the causal mask only hides padding positions",
+      "Only the future tokens x_>i, so predictions run right to left; the causal mask enforces this reversed order",
+      "Only the past tokens x_<i; conditioning on future tokens would let the model cheat, which the causal mask prevents",
+      "Nothing at all, since each token is predicted independently and the causal mask just removes positional bias"
+    ],
+    "answer_index": 2,
+    "explanation": "Each factor is p(x_i | x_<i), the token given its past. If the model could see future tokens it would trivially copy the answer; the causal mask in attention enforces conditioning only on the past."
+  },
+  {
+    "id": "01.2-062",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Exercise",
+    "question": "A spam filter has p(free | spam) = 0.6, p(free | ham) = 0.05, and p(spam) = 0.4. What is p(spam | free)?",
+    "options": [
+      "About 0.89",
+      "About 0.60",
+      "About 0.40",
+      "About 0.273"
+    ],
+    "answer_index": 0,
+    "explanation": "The evidence is p(free) = 0.6·0.4 + 0.05·0.6 = 0.27, and the posterior is 0.24 / 0.27 ≈ 0.889. 0.27 is the evidence, not the posterior, and 0.6 is the likelihood."
+  },
+  {
+    "id": "01.2-063",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Exercise",
+    "question": "Why does seeing the word 'free' move the spam probability from 40% to about 89%, while a positive rare-disease test only reaches about 17%?",
+    "options": [
+      "Spam filtering does not use Bayes' rule, so its posterior is not held down by the prior at all",
+      "The word 'free' has a higher false-positive rate than the medical test, which inflates the result",
+      "The spam posterior ignores the prior and reports the likelihood p(free | spam) after rescaling it",
+      "Here the likelihood ratio is strong relative to a moderate prior, while the disease's prior is tiny"
+    ],
+    "answer_index": 3,
+    "explanation": "With a 40% prior and a strong likelihood ratio (0.6 vs 0.05), the evidence shifts the posterior a lot. In the disease case the 1% prior is so small that even a good test leaves the posterior low. Both use Bayes' rule with the prior."
+  },
+  {
+    "id": "01.2-064",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Check yourself",
+    "question": "In a single sentence, why does the chain rule make next-token prediction exact rather than approximate?",
+    "options": [
+      "It assumes tokens are independent of one another, which makes the product of their marginals exactly equal the joint",
+      "It is the definition of conditional probability applied repeatedly, so the product of conditionals equals the exact joint",
+      "It conditions only on the previous token, which captures all the dependence in language, so nothing is lost by factoring",
+      "It relies on the model being trained to convergence, at which point the per-token errors vanish and the product is exact"
+    ],
+    "answer_index": 1,
+    "explanation": "The chain rule, p(x_1,...,x_n) = product of p(x_i | x_<i), is a direct consequence of the definition of conditional probability, so factoring a sentence into next-token steps introduces no approximation. It requires neither independence nor a trained model."
+  },
+  {
+    "id": "01.2-065",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Check yourself",
+    "question": "What are the two reasons for maximizing the sum of log-probabilities instead of the product of probabilities?",
+    "options": [
+      "Log-sums are always larger than products, and taking logs makes the gradients exactly zero at the optimum",
+      "Products underflow while log-sums stay in range, and log is monotonic so the optimal θ is unchanged",
+      "Products are not differentiable, and taking logs removes the need for a model of each conditional",
+      "Log-sums make the loss positive, and taking logs guarantees that the probabilities sum to 1"
+    ],
+    "answer_index": 1,
+    "explanation": "The numerical reason: products of many sub-1 numbers underflow, but their log-sums remain representable. The equivalence reason: log is monotonically increasing, so the same parameters maximize both objectives and nothing is lost."
+  },
+  {
+    "id": "01.2-066",
+    "chapter": "01.2",
+    "chapter_name": "Conditional probability, Bayes, likelihood",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A sequence has 300 tokens each with probability about 0.01. What is its log-likelihood, roughly?",
+    "options": [
+      "About -3, since log(0.01) is -2 in base 10 per sequence",
+      "About -∞, since the product underflows",
+      "About 10^-600",
+      "About -1382, perfectly representable"
+    ],
+    "answer_index": 3,
+    "explanation": "The log-likelihood is 300 × ln(0.01) ≈ 300 × (-4.605) ≈ -1382, easily representable. The raw product, 10^-600, underflows to 0 in float32 and float64, which is why log space is used."
+  }
+]

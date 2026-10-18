@@ -1,0 +1,902 @@
+[
+  {
+    "id": "07.3-001",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which set of state must a checkpoint contain to resume a training run identically?",
+    "options": [
+      "Model state_dict only, since the optimizer state and step can be recomputed from the weights",
+      "Model state_dict and the last batch of training data, so the next batch can be regenerated",
+      "Optimizer state and the step number, since the weights can be re-derived from the moments",
+      "Model state_dict, optimizer state, step, and the torch, NumPy and Python RNG states"
+    ],
+    "answer_index": 3,
+    "explanation": "Exact resumption needs the weights, the optimizer's memory (AdamW's t, m, v), the step that drives the LR schedule, and the RNG states that decide batches and dropout. Plus the config, to know what was being trained. Weights alone suffice only for inference."
+  },
+  {
+    "id": "07.3-002",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why does a resume that silently diverges from the original run cause real harm?",
+    "options": [
+      "It deletes the previous checkpoint from disk, so there is no way back to the last good state",
+      "It always turns the loss into NaN within a few steps, which kills the job outright",
+      "It wastes the compute since the last save and corrupts experiments comparing before and after",
+      "It forces the run to restart from step 0, throwing away every step trained so far"
+    ],
+    "answer_index": 2,
+    "explanation": "A checkpoint you cannot resume exactly from cannot be trusted. The work after resuming is no longer the same run, so comparisons are invalid and the effort since the last save is effectively lost. It does not necessarily produce NaNs or delete files."
+  },
+  {
+    "id": "07.3-003",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Why is reproducibility important for debugging training runs?",
+    "options": [
+      "If you cannot re-run and get the same numbers, you cannot bisect a regression",
+      "Reproducible runs always converge to a lower final loss than non-reproducible ones",
+      "Reproducibility removes the need to hold out a separate validation set",
+      "Reproducible runs use less GPU memory, since kernels never need workspace"
+    ],
+    "answer_index": 0,
+    "explanation": "Debugging a regression means changing one thing at a time and comparing results. If re-runs give different numbers anyway, you cannot tell whether a change caused a difference. Reproducibility does not improve loss or save memory."
+  },
+  {
+    "id": "07.3-004",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "1. Intuition: a resume must restore the whole machine, not just the weights",
+    "question": "A checkpoint containing only model.state_dict() is sufficient for what?",
+    "options": [
+      "Resuming training exactly, but not inference, since buffers are missing",
+      "Inference, such as generating text, but not resuming training",
+      "Both inference and exact training resumption, since it holds every tensor",
+      "Neither, because state_dict stores names and shapes but excludes the weights"
+    ],
+    "answer_index": 1,
+    "explanation": "The state_dict holds the weights and buffers, which is all generation needs. Resuming training additionally needs optimizer state, the step and RNG states. state_dict certainly includes the parameters."
+  },
+  {
+    "id": "07.3-005",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "1. Intuition: a resume must restore the whole machine, not just the weights",
+    "question": "What happens if AdamW's moment estimates m and v are dropped when resuming training?",
+    "options": [
+      "The run continues exactly as before, because the moments are recomputed exactly from the weights",
+      "Adam restarts cold and takes a few hundred wrong steps, seen as a loss bump at each resume",
+      "The optimizer refuses to step until the moments are reloaded from a separate moments file",
+      "The learning rate jumps back to the warmup phase, while the moments are rebuilt from zero"
+    ],
+    "answer_index": 1,
+    "explanation": "m and v are exponential averages of past gradients, the optimizer's memory. Reinitialized to zero, they must re-warm, and the over-large early steps knock the model off course, producing a loss bump. They cannot be derived from weights. The LR jump is caused by losing the step counter instead."
+  },
+  {
+    "id": "07.3-006",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "1. Intuition: a resume must restore the whole machine, not just the weights",
+    "question": "What happens if the step counter is lost when resuming training?",
+    "options": [
+      "AdamW's moments are reset to zero, while the learning rate stays on schedule",
+      "The learning rate jumps back to warmup or to the wrong point on the cosine curve",
+      "The data loader repeats the first batch forever, because the batch index is lost",
+      "The model's weights revert to their initialization, since step 0 reloads the init"
+    ],
+    "answer_index": 1,
+    "explanation": "The LR schedule reads the step number, so a wrong step puts the learning rate at the wrong place, often back in warmup. Moments, data order and weights are separate pieces of state."
+  },
+  {
+    "id": "07.3-007",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "1. Intuition: a resume must restore the whole machine, not just the weights",
+    "question": "What is the consequence of not restoring the RNG states when resuming training?",
+    "options": [
+      "The model cannot be loaded at all, because the stored weights are encrypted with the RNG state",
+      "The optimizer moments are corrupted on reload, and training diverges within a few hundred steps",
+      "The step-0 loss resets to ln(V) and the run must retrain from scratch to recover its progress",
+      "The resumed run sees a different data order and dropout masks: valid, but not the same run"
+    ],
+    "answer_index": 3,
+    "explanation": "RNGs choose which batches the loader samples and which dropout masks fire. Without them the resumed run continues on a different random path, which is legitimate training but breaks exact reproducibility. Weights and moments are unaffected."
+  },
+  {
+    "id": "07.3-008",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Model `state_dict`",
+    "question": "What is a model's state_dict?",
+    "options": [
+      "A list of the gradients computed in the last backward pass, one per layer",
+      "A text file describing the model architecture, its layer sizes and its config",
+      "An ordered dict mapping every parameter and buffer name to its tensor",
+      "A dict of the optimizer's hyperparameters, such as lr, betas and weight decay"
+    ],
+    "answer_index": 2,
+    "explanation": "state_dict maps names like transformer.h.0.mlp.c_fc.weight to tensors, covering parameters and buffers. Gradients and optimizer settings are not part of it, and it holds tensors, not an architecture description."
+  },
+  {
+    "id": "07.3-009",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Model `state_dict`",
+    "question": "Why do the course GPT's state_dict names match OpenAI's released GPT-2 checkpoints?",
+    "options": [
+      "Because PyTorch renames every parameter to the GPT-2 naming convention whenever it saves a model",
+      "Because state_dict uses parameter shapes, not names, as keys, so any layout matches",
+      "Because the GPT groups its modules under 'transformer', giving the same stable names",
+      "Because the checkpoint is converted with a separate name-mapping file every time it loads"
+    ],
+    "answer_index": 2,
+    "explanation": "The module hierarchy determines the names in state_dict. By organizing modules under transformer as GPT-2 does, the keys are stable and line up with OpenAI's weights. PyTorch does not rename anything, and keys are names, not shapes."
+  },
+  {
+    "id": "07.3-010",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Optimizer state",
+    "question": "In AdamW, what does the step counter t drive?",
+    "options": [
+      "The number of micro-batches accumulated before each optimizer step",
+      "The bias correction factor 1 - beta^t applied to the moment estimates",
+      "The decay of the weight-decay coefficient as training goes on",
+      "The random seed used to draw the dropout masks at each step of training"
+    ],
+    "answer_index": 1,
+    "explanation": "AdamW divides its moment estimates by 1 - beta^t to correct their bias toward zero early on. That depends on how many steps the optimizer has taken. It is unrelated to accumulation, weight-decay scheduling or RNG seeds."
+  },
+  {
+    "id": "07.3-011",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Optimizer state",
+    "question": "If AdamW's m and v are reset to zero on resume, why is the first post-resume step over-large?",
+    "options": [
+      "It acts as if t = 1 again: heavy bias correction and a division by a tiny second moment",
+      "The learning rate is automatically multiplied by the number of steps already taken before the save",
+      "The gradient is accumulated from all previous steps at once, because .grad was never cleared",
+      "The weight decay is skipped on the first step, so the parameters grow unchecked for a while"
+    ],
+    "answer_index": 0,
+    "explanation": "With cold moments the bias correction is large and the second-moment estimate is small, together inflating the update. That is why loss spikes right after a resume. The learning rate and gradient accumulation are unaffected."
+  },
+  {
+    "id": "07.3-012",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Optimizer state",
+    "question": "What loss-curve pattern is a dead giveaway that optimizer state was not restored on resume?",
+    "options": [
+      "A spike-and-recovery at every resume point",
+      "A permanently flat loss after the first resume",
+      "A smooth curve with no visible change at resumes",
+      "A loss that drops to zero right after each resume"
+    ],
+    "answer_index": 0,
+    "explanation": "Cold moments make the first post-resume steps too large, the loss jumps, and it recovers as the moments re-warm. Seeing this at each resume points straight to missing optimizer state. A correct restore gives a continuous curve."
+  },
+  {
+    "id": "07.3-013",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Step number",
+    "question": "Why does restoring the wrong step number misalign the entire learning-rate schedule?",
+    "options": [
+      "The step number seeds the RNG that the scheduler uses to choose each step's learning rate",
+      "cosine_warmup_lr is a pure function of step, so a wrong step gives the wrong LR everywhere after",
+      "The step number is used to rescale the gradients, so every later gradient has the wrong size",
+      "AdamW stores its learning rate inside the step counter, so a wrong step overwrites the lr field too"
+    ],
+    "answer_index": 1,
+    "explanation": "The schedule computes the LR from the step alone, so starting from the wrong step shifts every subsequent learning rate. The step number is not an RNG seed or gradient scaler."
+  },
+  {
+    "id": "07.3-014",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "RNG states",
+    "question": "Which three random number generators can drive a PyTorch training run?",
+    "options": [
+      "PyTorch's, CUDA's driver clock and the operating system's /dev/random",
+      "PyTorch's (torch.get_rng_state), NumPy's (np.random) and Python's (random)",
+      "NumPy's, the data loader's file order and the optimizer's internal RNG",
+      "Python's, the tokenizer's merge RNG and AdamW's noise generator"
+    ],
+    "answer_index": 1,
+    "explanation": "Three separate generators can be in play: torch (used by dropout and torch.randint), NumPy and Python's random module. Whichever your loader and model use must be restored. AdamW is deterministic and has no RNG."
+  },
+  {
+    "id": "07.3-015",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "RNG states",
+    "question": "In a PyTorch training run, which operations draw from PyTorch's own RNG?",
+    "options": [
+      "AdamW's moment updates and the bias correction applied at every step",
+      "The cross-entropy loss and the softmax over the vocabulary logits",
+      "Dropout masks and torch.randint calls such as batch sampling",
+      "Gradient clipping and the cosine-warmup learning-rate schedule"
+    ],
+    "answer_index": 2,
+    "explanation": "Dropout and torch.randint (used by get_batch to sample start positions) consume PyTorch's RNG. AdamW, the loss, clipping and the schedule are deterministic functions with no randomness."
+  },
+  {
+    "id": "07.3-016",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "3. Numerical example: the resume that must match",
+    "question": "What is the cleanest test that a checkpoint saves enough state to resume exactly?",
+    "options": [
+      "Run N steps straight vs N-1 steps, save, reload into a fresh model and optimizer, step once, compare parameters",
+      "Load the checkpoint into a fresh model, run one batch, and check that the step-0 loss equals ln(V) exactly",
+      "Save the same checkpoint twice in a row and check that the two files on disk are byte-for-byte identical",
+      "Reload the checkpoint into a fresh model and optimizer and check that inference produces fluent text"
+    ],
+    "answer_index": 0,
+    "explanation": "Comparing a continuous run with a save-reload-continue run directly tests whether anything was lost. If the optimizer state or RNG is missing, the final parameters differ. File equality or inference quality do not test resumability."
+  },
+  {
+    "id": "07.3-017",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "3. Numerical example: the resume that must match",
+    "question": "In the resume-equivalence test, why does deleting the optimizer restore make the resumed parameters drift immediately?",
+    "options": [
+      "The model weights are not loaded at all when the optimizer restore is skipped",
+      "The next step uses wrong moments and bias correction, so its update differs",
+      "The learning rate is set to zero for the rest of the run without the optimizer state",
+      "The data loader picks a different seed when the optimizer state is missing"
+    ],
+    "answer_index": 1,
+    "explanation": "The step after reload must use AdamW's true m, v and t to match. Without them the update is computed from cold moments and differs at once. Weights and RNG are restored separately."
+  },
+  {
+    "id": "07.3-018",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "4. Tensor shapes / what is on disk",
+    "question": "What is a checkpoint in the course's implementation, physically?",
+    "options": [
+      "A folder holding one file per parameter, written in a custom binary format",
+      "A JSON file with every tensor encoded as a base64 string next to its name",
+      "A plain dict of model, optimizer, step, rng and extra entries, given to torch.save",
+      "The model object itself, pickled with all its methods and its training loop"
+    ],
+    "answer_index": 2,
+    "explanation": "save_checkpoint builds a dict holding the model state_dict, optimizer fields, step, RNG states and an extra dict (config, best loss) and hands it to torch.save. It is not a custom file layout or JSON."
+  },
+  {
+    "id": "07.3-019",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "4. Tensor shapes / what is on disk",
+    "question": "In the course's checkpoint, what shapes do the saved AdamW m and v entries have?",
+    "options": [
+      "A single flat vector concatenating the moments of all parameters in order",
+      "One scalar per layer summarizing that layer's moments for the bias correction",
+      "Lists with one tensor per parameter, each shaped like that parameter",
+      "The shape of the logits, (B, T, V), saved from the last training step"
+    ],
+    "answer_index": 2,
+    "explanation": "AdamW keeps a first and second moment buffer for every parameter, element for element, so each saved entry is a tensor with that parameter's shape. They are not flattened or summarized."
+  },
+  {
+    "id": "07.3-020",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "4. Tensor shapes / what is on disk",
+    "question": "Besides t, m and v, what does the course's checkpoint store about the optimizer?",
+    "options": [
+      "The gradients from the last backward pass, needed for the next update",
+      "The history of every past learning rate applied since step 0",
+      "The list of batch indices the data loader has served so far",
+      "Its hyperparameters: lr, betas, eps and weight_decay"
+    ],
+    "answer_index": 3,
+    "explanation": "The optimizer entry also holds lr, betas, eps and weight_decay so that load_checkpoint can restore the optimizer's configuration as well as its state. Gradients are cleared every step and are not saved."
+  },
+  {
+    "id": "07.3-021",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "4. Tensor shapes / what is on disk",
+    "question": "Why are AdamW's moment buffers saved as CPU clones in the checkpoint?",
+    "options": [
+      "So the file is device-independent: a GPU-written checkpoint reloads on a CPU-only box",
+      "So the file is smaller on disk, because torch.save compresses CPU tensors automatically",
+      "So the moments are converted to float64 on the CPU for extra precision when reloaded",
+      "So the checkpoint can be read directly by NumPy on any machine without PyTorch installed"
+    ],
+    "answer_index": 0,
+    "explanation": "Storing CPU copies avoids tying the file to a particular GPU. On load, load_checkpoint moves each buffer back onto the device and dtype of its live parameter. CPU tensors are not compressed or upcast."
+  },
+  {
+    "id": "07.3-022",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "4. Tensor shapes / what is on disk",
+    "question": "When load_checkpoint restores AdamW's moment buffers, where does it put them?",
+    "options": [
+      "Always on the CPU in float32, whatever device the model lives on",
+      "Always on GPU 0 in float16, to save memory on the reloaded run",
+      "On the device and dtype of the matching live parameter",
+      "On whichever device the checkpoint was originally written from"
+    ],
+    "answer_index": 2,
+    "explanation": "Each saved buffer is moved with .to(p.device, p.dtype) to match its parameter, so the optimizer works wherever the model now lives. Forcing a fixed device or the original one would break cross-device resumes."
+  },
+  {
+    "id": "07.3-023",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "Why does the course's save_checkpoint serialize AdamW's fields (t, m, v, lr, ...) directly?",
+    "options": [
+      "Because torch.save cannot handle tensors that are stored inside Python lists",
+      "Because the fields are too large to fit in a standard state_dict structure",
+      "Because PyTorch's own built-in optimizers do not support checkpointing at all",
+      "Because the course AdamW is a plain object, not a torch.optim.Optimizer"
+    ],
+    "answer_index": 3,
+    "explanation": "The from-scratch AdamW does not inherit from torch.optim.Optimizer, so it has no built-in state_dict method; its fields are saved by hand. PyTorch's own optimizers do provide state_dict, and torch.save handles lists of tensors fine."
+  },
+  {
+    "id": "07.3-024",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "Which calls capture the three RNG states in the course's save_checkpoint?",
+    "options": [
+      "torch.manual_seed(), np.random.seed() and random.seed()",
+      "torch.get_rng_state(), np.random.get_state() and random.getstate()",
+      "torch.initial_seed(), np.random.default_rng() and random.random()",
+      "torch.set_rng_state(), np.random.set_state() and random.setstate()"
+    ],
+    "answer_index": 1,
+    "explanation": "The get-state functions return each generator's full current state, which is what must be saved. The seed functions reset generators; the set-state functions are what load_checkpoint uses to restore them."
+  },
+  {
+    "id": "07.3-025",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "Which calls restore the three RNG states in the course's load_checkpoint when restore_rng is True?",
+    "options": [
+      "torch.manual_seed(), np.random.seed() and random.seed()",
+      "torch.set_rng_state(), np.random.set_state() and random.setstate()",
+      "torch.get_rng_state(), np.random.get_state() and random.getstate()",
+      "torch.cuda.manual_seed_all(), np.random.default_rng() and random.shuffle()"
+    ],
+    "answer_index": 1,
+    "explanation": "Restoring needs the set-state counterparts of the saved states, putting each generator back exactly where it was. Re-seeding would restart the stream from the beginning, not continue it. The get-state calls are used when saving."
+  },
+  {
+    "id": "07.3-026",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "What does the course's load_checkpoint return?",
+    "options": [
+      "A new model object rebuilt from the saved configuration and its stored weights",
+      "The saved gradients from the last step, ready for optimizer.step()",
+      "The saved step and the extra dict, so the loop can continue from that step",
+      "A boolean saying whether the load succeeded, plus the checkpoint file's size"
+    ],
+    "answer_index": 2,
+    "explanation": "load_checkpoint loads state into the model and optimizer passed in and returns (step, extra). The caller builds a fresh GPT and AdamW first, then continues the loop from start_step."
+  },
+  {
+    "id": "07.3-027",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "How does resuming a run work with the course's checkpoint functions?",
+    "options": [
+      "Call load_checkpoint with no model, and it returns a model and optimizer ready to train",
+      "Build a fresh GPT and AdamW, load the checkpoint into them, continue from the returned step",
+      "Restart training from step 0 and skip the updates for steps already done before the save",
+      "Copy the checkpoint's weights into the optimizer's moments and restart the LR schedule"
+    ],
+    "answer_index": 1,
+    "explanation": "load_checkpoint fills existing objects: it loads the state_dict into the model and restores the optimizer's fields and RNGs, then returns the step to continue from. It does not construct a model itself."
+  },
+  {
+    "id": "07.3-028",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "Why does the course's load_checkpoint call torch.load with weights_only=False?",
+    "options": [
+      "Because the checkpoint holds NumPy and Python RNG states, arbitrary objects, not just tensors",
+      "Because weights_only=True would silently load every weight in half precision instead of fp32",
+      "Because weights_only=True skips the model's registered buffers, such as the causal mask",
+      "Because weights_only=False makes loading noticeably faster when the target device is a GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "weights_only=True restricts unpickling to tensors and simple types, which would reject the NumPy and Python RNG state objects. It is about what objects may be unpickled, not precision, buffers or speed."
+  },
+  {
+    "id": "07.3-029",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "What is the security risk of torch.load(..., weights_only=False)?",
+    "options": [
+      "It uploads the checkpoint contents to a remote server for verification before loading",
+      "It disables the integrity checksum on the file, so a corrupted file loads without error",
+      "It can execute arbitrary code during unpickling, so only load trusted checkpoints",
+      "It grants the loaded model write access to the file system for the rest of the process"
+    ],
+    "answer_index": 2,
+    "explanation": "Full unpickling can run arbitrary code embedded in the file, so loading untrusted checkpoints this way is dangerous. For inference-only loads of pure-tensor checkpoints, prefer weights_only=True. It involves no network upload."
+  },
+  {
+    "id": "07.3-030",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "5. From-scratch PyTorch: save and load",
+    "question": "For an inference-only load of a pure-tensor checkpoint, which torch.load setting is preferred?",
+    "options": [
+      "weights_only=False",
+      "map_location='cuda' with weights_only=False",
+      "weights_only=True",
+      "restore_rng=True"
+    ],
+    "answer_index": 2,
+    "explanation": "When a file contains only tensors, weights_only=True loads it safely without permitting arbitrary code execution. weights_only=False is only needed when non-tensor Python objects, like RNG states, are stored. restore_rng is a course function argument, not a torch.load option."
+  },
+  {
+    "id": "07.3-031",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "What does a seed_everything(seed) function need to seed for a reproducible PyTorch run?",
+    "options": [
+      "torch.manual_seed only, since it seeds NumPy and Python too",
+      "np.random.seed only, since PyTorch uses NumPy's generator",
+      "random.seed only, since all libraries derive from Python's RNG",
+      "random.seed, np.random.seed and torch.manual_seed"
+    ],
+    "answer_index": 3,
+    "explanation": "PyTorch, NumPy and Python each have their own generator, so all three must be seeded. torch.manual_seed does not seed NumPy or Python, and PyTorch does not use NumPy's RNG."
+  },
+  {
+    "id": "07.3-032",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Which devices does torch.manual_seed(seed) seed?",
+    "options": [
+      "Only the CPU; CUDA devices need a separate call",
+      "The CPU and, if present, all CUDA devices",
+      "Only the current CUDA device",
+      "Only the device that holds the model"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.manual_seed seeds the CPU generator and all CUDA devices' generators. That is why a single call covers initialization, batch sampling and dropout on any device in PyTorch."
+  },
+  {
+    "id": "07.3-033",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "What does seeding all RNGs at the start of a run make deterministic?",
+    "options": [
+      "The floating-point results of every GPU kernel, bit for bit, on any device",
+      "The training results across different GPU models and CUDA versions alike",
+      "The stream of random numbers: initial weights, batch order and dropout masks",
+      "The wall-clock time each step takes, so profiling runs become comparable"
+    ],
+    "answer_index": 2,
+    "explanation": "Seeding fixes the sequence of random numbers, so random choices repeat. It does not by itself make GPU arithmetic bit-identical, nor results consistent across hardware or library versions, and it has nothing to do with timing."
+  },
+  {
+    "id": "07.3-034",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Why can two GPU runs with the same seed still produce slightly different results?",
+    "options": [
+      "torch.manual_seed does not affect CUDA devices, so GPU dropout masks stay unseeded each run",
+      "Some CUDA kernels sum floats in a nondeterministic order, and float addition is not associative",
+      "GPU memory is randomly initialized on each run, and that garbage leaks into the first activations",
+      "The optimizer adds a small random noise term to every update on GPU to help escape saddle points"
+    ],
+    "answer_index": 1,
+    "explanation": "For speed, certain reductions, scatter/gather and some backward kernels accumulate in an order that varies between runs. Since (a+b)+c can differ from a+(b+c) in the last bits, results differ by about 1e-7 and compound. The seed does reach CUDA, and AdamW adds no noise."
+  },
+  {
+    "id": "07.3-035",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Why do tiny floating-point differences between two same-seed GPU runs matter?",
+    "options": [
+      "Differences of about 1e-7 compound over thousands of steps",
+      "They immediately make the loss NaN on the next optimizer step",
+      "They change the model's effective vocabulary size over training",
+      "They cause the saved checkpoint file to become unreadable later"
+    ],
+    "answer_index": 0,
+    "explanation": "Each step's slightly different parameters feed the next step, so tiny discrepancies grow over a long run and the two trajectories drift apart. They do not cause NaNs, vocabulary changes or unreadable files."
+  },
+  {
+    "id": "07.3-036",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "What does torch.use_deterministic_algorithms(True) do?",
+    "options": [
+      "Seeds every RNG, including CUDA's, with a fixed default value before training begins",
+      "Disables the GPU and runs every operation on the CPU, where results are deterministic",
+      "Makes results bit-identical across different GPU models, drivers and CUDA versions",
+      "Forces deterministic kernels, or raises an error if none exists, at some speed cost"
+    ],
+    "answer_index": 3,
+    "explanation": "It makes PyTorch select deterministic implementations and error out when an operation has none, trading some speed for reproducibility. It does not seed RNGs, switch devices, or remove differences across hardware."
+  },
+  {
+    "id": "07.3-037",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Besides torch.use_deterministic_algorithms(True), what settings are often also needed for deterministic GPU training?",
+    "options": [
+      "Setting the batch size to one and disabling the optimizer's fused kernels",
+      "Setting torch.backends.cudnn.benchmark = True and a larger learning rate",
+      "Setting CUBLAS_WORKSPACE_CONFIG and torch.backends.cudnn.deterministic = True",
+      "Setting the model to eval mode during training so dropout never draws randomness"
+    ],
+    "answer_index": 2,
+    "explanation": "cuBLAS and cuDNN have their own nondeterministic paths; CUBLAS_WORKSPACE_CONFIG and cudnn.deterministic = True make them deterministic. cudnn.benchmark = True tends to do the opposite by auto-selecting kernels. Batch size and eval mode are unrelated."
+  },
+  {
+    "id": "07.3-038",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Under what conditions is GPU determinism actually promised?",
+    "options": [
+      "Whenever the same seed is used, on any hardware and any software version",
+      "Only for a fixed environment: same GPU model, CUDA version and data-parallel worker count",
+      "Whenever the same model architecture and the same hyperparameters are used",
+      "Whenever training runs on more than one GPU, since the all-reduce averages away noise"
+    ],
+    "answer_index": 1,
+    "explanation": "Different hardware, library versions or worker counts change reduction order and kernel selection, so results differ even with the same seed and deterministic algorithms. Determinism holds only within a fixed configuration."
+  },
+  {
+    "id": "07.3-039",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Why can the course's checkpoint tests assert exact equality of parameters?",
+    "options": [
+      "On CPU, the same seed gives bit-identical results with no extra flags",
+      "The tests run on GPU with nondeterminism disabled by default",
+      "The tests round all parameters to two decimals before comparing",
+      "The tests compare only the step number, not the parameters"
+    ],
+    "answer_index": 0,
+    "explanation": "CPU execution in this course is deterministic given the seed, so a resumed run matches exactly and the tests can require equality. On GPU you would need deterministic algorithms and a fixed environment."
+  },
+  {
+    "id": "07.3-040",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "6. Determinism: seeding, and why it is not enough",
+    "question": "Regarding reproducibility, how should 'same seed' be understood on GPU?",
+    "options": [
+      "Necessary but not sufficient for identical results",
+      "Sufficient but not necessary for identical results",
+      "Neither necessary nor relevant for identical results",
+      "Both necessary and sufficient for identical results"
+    ],
+    "answer_index": 0,
+    "explanation": "Without the same seed, random choices differ, so it is necessary. But nondeterministic kernels and environment differences can still change results, so it is not sufficient. You also need deterministic algorithms and a fixed setup."
+  },
+  {
+    "id": "07.3-041",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "After every resume, a job's loss jumps by about 0.3 for a few hundred steps and then recovers. The checkpoint saves only model.state_dict() and step, and the load creates a fresh AdamW. What is wrong?",
+    "options": [
+      "The step number is saved incorrectly, so the schedule restarts warmup at each resume",
+      "The model weights are loaded in the wrong order, so layers swap their parameters",
+      "Optimizer state (t, m, v) is not saved, so each resume starts AdamW cold",
+      "The learning rate is too low after resuming, so the loss takes a while to recover"
+    ],
+    "answer_index": 2,
+    "explanation": "A fresh AdamW starts with m = v = 0 and t = 0, producing over-large updates until the moments re-warm: a spike then recovery. The step is saved here, so the schedule is right. The fix is saving and restoring t, m, v and the RNG states."
+  },
+  {
+    "id": "07.3-042",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "When AdamW resumes with a cold second moment v = 0, why are the first updates too large?",
+    "options": [
+      "The numerator m is reset to one, which maximizes the size of every update",
+      "The learning rate is multiplied by the number of steps skipped since the save",
+      "The gradient clipping threshold is reset to infinity, so huge gradients pass through",
+      "The denominator sqrt(v_hat) + eps is tiny, so dividing by it inflates the updates"
+    ],
+    "answer_index": 3,
+    "explanation": "Adam divides the first moment by the square root of the second moment. With v starting at zero, that denominator is small for the first steps and updates are oversized until v re-warms. m also starts at zero, not one."
+  },
+  {
+    "id": "07.3-043",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "When AdamW resumes with t reset to 1, what happens to its bias-correction factors?",
+    "options": [
+      "They become zero, so the optimizer makes no update until t grows back to its saved value",
+      "They become exactly one, so bias correction is disabled and early steps are too small",
+      "1/(1 - beta1^t) and 1/(1 - beta2^t) become large again, further inflating early steps",
+      "They become negative for t = 1, reversing the update direction for the first few steps"
+    ],
+    "answer_index": 2,
+    "explanation": "Bias correction compensates for moments initialized at zero; with small t the factors are large. Resetting t makes them large again even though the run is mature, inflating updates. They are never zero or negative."
+  },
+  {
+    "id": "07.3-044",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "What is the subtler resume bug of not restoring the data-loader RNG, and why is it harmful?",
+    "options": [
+      "The model weights are silently corrupted on reload, and the loss turns NaN a few steps later",
+      "The optimizer moments are reset to zero, producing a large loss spike at every resume point",
+      "It re-samples batches already trained on or skips others: no sharp spike, but not the same run",
+      "The learning rate restarts from warmup, slowing training for the first few thousand steps"
+    ],
+    "answer_index": 2,
+    "explanation": "Without the RNG state the loader follows a different random path, so some data is seen twice and some missed. The loss may not spike, but the run differs from the original, quietly ruining before/after comparisons. Moment resets and LR restarts are different bugs."
+  },
+  {
+    "id": "07.3-045",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "If a GPT with tied embedding and output weights has its head rebuilt after load_state_dict, what must you do?",
+    "options": [
+      "Redo the weight tie, or the tied table is split into two separate tensors",
+      "Nothing, because load_state_dict automatically re-ties any shared weights",
+      "Re-initialize the embedding table so its values match the newly built head",
+      "Delete the head's weights from the checkpoint so only the embedding is loaded"
+    ],
+    "answer_index": 0,
+    "explanation": "Weight tying shares one tensor between the token embedding and the output head. Replacing the head creates a new tensor, so you must re-tie it or the two diverge into separate tables. load_state_dict does not re-establish ties for you."
+  },
+  {
+    "id": "07.3-046",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why is checkpointing too rarely a mistake?",
+    "options": [
+      "Each checkpoint also speeds up training through caching, so saving more often is always better",
+      "Rare checkpoints corrupt the optimizer state, because moments drift too far between two saves",
+      "PyTorch requires a recent checkpoint on disk at every step in order to compute the gradients",
+      "A crash loses everything since the last save, so save often enough that lost work stays cheap"
+    ],
+    "answer_index": 3,
+    "explanation": "The interval trades save cost against the work at risk. Too rare and a failure discards a lot of compute. Checkpoints do not speed up training or affect gradients, and infrequent saving does not corrupt state."
+  },
+  {
+    "id": "07.3-047",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why save the RNG states, given the weights and optimizer state are already saved?",
+    "options": [
+      "The RNG states are needed to decode the model weights stored on disk",
+      "The optimizer reads the RNG states to compute each step's bias correction",
+      "The RNG states store the learning-rate schedule's warmup and decay phases",
+      "The data loader and dropout draw from them, so the resumed run would differ"
+    ],
+    "answer_index": 3,
+    "explanation": "Batch sampling and dropout depend on the RNGs. Without restoring them, the resumed run sees a different batch order and dropout masks: valid training, but not the same run, breaking exact reproducibility. Weights, bias correction and the schedule do not depend on RNG state."
+  },
+  {
+    "id": "07.3-048",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Two identical GPUs with the same seed give results differing in the 7th decimal that grow over training. Is this a bug?",
+    "options": [
+      "Expected, unless deterministic algorithms were forced",
+      "A bug: the same seed must always give identical GPU results",
+      "A bug in the optimizer, which must be replaced",
+      "Expected only if the model uses BatchNorm"
+    ],
+    "answer_index": 0,
+    "explanation": "Nondeterministic CUDA reductions plus non-associative floating-point addition produce tiny differences that compound. torch.use_deterministic_algorithms(True) with cuDNN/cuBLAS settings removes them at a speed cost. It is not specific to BatchNorm."
+  },
+  {
+    "id": "07.3-049",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Hardware track — checkpoint round-trip",
+    "question": "Roughly how large is a full GPT-2-small checkpoint including fp32 optimizer state?",
+    "options": [
+      "About 1.5 GB on disk",
+      "About 15 MB on disk",
+      "About 150 GB on disk",
+      "About 500 KB on disk"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2 small has 124M parameters; in fp32 the weights plus AdamW's two moment buffers come to roughly 1.5 GB, taking a second or two to write. Plan disk space for many such checkpoints."
+  },
+  {
+    "id": "07.3-050",
+    "chapter": "07.3",
+    "chapter_name": "Checkpointing, resuming, seeds, reproducibility",
+    "module": "7",
+    "module_name": "Pretraining infrastructure",
+    "source": "lessons/module-07/lesson-03.md",
+    "section": "Hardware track — checkpoint round-trip",
+    "question": "How does including optimizer state affect checkpoint size compared with weights alone?",
+    "options": [
+      "It adds only a few kilobytes of hyperparameters such as lr, betas and eps",
+      "It halves the file size, because the moments are stored compressed alongside weights",
+      "It adds about twice the weights' size, since m and v are each as large as the weights",
+      "It multiplies the file size by the number of steps, since every past update is stored"
+    ],
+    "answer_index": 2,
+    "explanation": "AdamW keeps two buffers per parameter, so its state is about 2x the weights, which is why a GPT-2-small checkpoint with optimizer state is around 1.5 GB rather than the weights' roughly 0.5 GB. Budget disk for many checkpoints accordingly. It does not grow with the number of steps, since only the current state is saved."
+  }
+]

@@ -1,0 +1,1010 @@
+[
+  {
+    "id": "00.2-001",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "A forward pass through a language model is described as a chain of which basic tensor operations?",
+    "options": [
+      "Sorting, hashing and string concatenation over token IDs, then a final lookup",
+      "Broadcast bias adds, matmuls with weights, reductions, and reshapes/views into heads",
+      "Only matrix multiplications with weights; biases, reductions and reshapes are folded into them",
+      "File reads, 2-D convolutions over the token grid, and random sampling at every layer"
+    ],
+    "answer_index": 1,
+    "explanation": "Adding a bias is a broadcast, multiplying by a weight matrix is @, averaging over a dimension is a reduction, and splitting activations into attention heads is a view. Reading model code means tracking how each of these changes the shape. It is not only matmuls."
+  },
+  {
+    "id": "00.2-002",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which two topics are singled out as causing a large fraction of real PyTorch bugs?",
+    "options": [
+      "Random seeds and file paths",
+      "Python indentation and imports",
+      "Learning-rate schedules and dropout",
+      "Broadcasting and view/copy confusion"
+    ],
+    "answer_index": 3,
+    "explanation": "Broadcasting can silently produce the wrong shape, and view/copy confusion leads to unexpected aliasing or mutations not propagating. Both are made explicit for that reason. The other options are not the stated bug sources."
+  },
+  {
+    "id": "00.2-003",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "1. Elementwise operations",
+    "question": "What does a + 10 do when a = torch.tensor([1., 2., 3., 4.])?",
+    "options": [
+      "Appends 10 to the end, giving tensor([1., 2., 3., 4., 10.]) of length 5",
+      "Adds 10 only to the first element, giving tensor([11., 2., 3., 4.])",
+      "Adds 10 to every element, giving tensor([11., 12., 13., 14.])",
+      "Raises a RuntimeError, because shapes (4,) and () do not match"
+    ],
+    "answer_index": 2,
+    "explanation": "Arithmetic with a scalar applies to every element independently and returns a tensor of the same shape. So a + 10 is [11, 12, 13, 14]. It does not append or raise; a scalar combines with any tensor."
+  },
+  {
+    "id": "00.2-004",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "1. Elementwise operations",
+    "question": "In PyTorch, what does the * operator compute between two tensors?",
+    "options": [
+      "Elementwise (Hadamard) multiplication",
+      "Matrix multiplication, the same as @",
+      "The dot product, returning one scalar",
+      "The outer product, giving an (n, n) result"
+    ],
+    "answer_index": 0,
+    "explanation": "In PyTorch * is always elementwise — the Hadamard product — pairing up corresponding elements. For a = [1, 2, 3, 4], a * a gives [1, 4, 9, 16]. Matrix multiplication is a different operator, @. People from a math background often expect * to be a matmul."
+  },
+  {
+    "id": "00.2-005",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "1. Elementwise operations",
+    "question": "How do * and @ differ in their effect on shape?",
+    "options": [
+      "* follows the inner-dimension matmul rule; @ always keeps the input shape",
+      "* never changes the shape; @ follows the inner-dimension matmul rule",
+      "Both keep the shape of the left operand and broadcast the right one",
+      "Both always reduce to a scalar, summing the products of paired elements"
+    ],
+    "answer_index": 1,
+    "explanation": "Elementwise * returns a tensor of the same (broadcast) shape as its inputs. @ follows the rule (n, k) @ (k, p) -> (n, p), so the shape changes. Keeping them straight avoids models that silently compute the wrong thing."
+  },
+  {
+    "id": "00.2-006",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "2. Reductions: collapsing an axis",
+    "question": "What is a reduction in PyTorch?",
+    "options": [
+      "An operation like sum, mean or max that combines many values into fewer",
+      "An operation that lowers a tensor's dtype precision, e.g. float32 to bfloat16",
+      "An operation that removes duplicate values, like torch.unique on each axis",
+      "An operation that moves a tensor onto a smaller device to free GPU memory"
+    ],
+    "answer_index": 0,
+    "explanation": "A reduction combines many values into fewer, e.g. sum, mean, max. The key question is always which axis you reduce over, because that decides the output shape. It has nothing to do with dtype or device."
+  },
+  {
+    "id": "00.2-007",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "2. Reductions: collapsing an axis",
+    "question": "What does m.sum() return for m = torch.tensor([[1., 2., 3.], [4., 5., 6.]])?",
+    "options": [
+      "tensor([5., 7., 9.]), the column sums",
+      "tensor([6., 15.]), the row sums, one per row",
+      "tensor(21.), a scalar summing all elements",
+      "A (2, 3) tensor of running sums along each row"
+    ],
+    "answer_index": 2,
+    "explanation": "With no dim argument, a reduction collapses everything to a scalar: 1+2+3+4+5+6 = 21. Column sums need dim=0 and row sums need dim=1. Running sums are cumsum, not sum."
+  },
+  {
+    "id": "00.2-008",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "2. Reductions: collapsing an axis",
+    "question": "What is the rule that tells you the output shape of a reduction with dim=k?",
+    "options": [
+      "dim=k keeps only axis k",
+      "dim=k sets axis k to length 2",
+      "dim=k reverses the order of the axes",
+      "dim=k removes axis k from the shape"
+    ],
+    "answer_index": 3,
+    "explanation": "A reduction with dim=k collapses only axis k, and that axis disappears from the shape. For m of shape (2, 3), sum(dim=0) gives (3,) and sum(dim=1) gives (2,). Unless keepdim=True, the axis is removed rather than kept."
+  },
+  {
+    "id": "00.2-009",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "2. Reductions: collapsing an axis",
+    "question": "For m of shape (2, 3) equal to [[1,2,3],[4,5,6]], what does m.sum(dim=0) return?",
+    "options": [
+      "tensor([5., 7., 9.]) of shape (3,), one total per column",
+      "tensor([6., 15.]) of shape (2,), one total per row",
+      "tensor([[5., 7., 9.]]) of shape (1, 3), keeping the summed axis",
+      "tensor(21.), a scalar total over all six elements"
+    ],
+    "answer_index": 0,
+    "explanation": "sum(dim=0) removes axis 0 (the length-2 axis), summing down the rows: [1+4, 2+5, 3+6] = [5, 7, 9], shape (3,). Row totals [6, 15] come from dim=1. A (1, 3) result would require keepdim=True."
+  },
+  {
+    "id": "00.2-010",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "2. Reductions: collapsing an axis",
+    "question": "For m of shape (2, 3) equal to [[1,2,3],[4,5,6]], what does m.sum(dim=1) return?",
+    "options": [
+      "tensor([5., 7., 9.]) of shape (3,), one total per column",
+      "tensor([[6.], [15.]]) of shape (2, 1), keeping the axis",
+      "tensor([6., 15.]) of shape (2,), one total per row",
+      "tensor([21.]), the grand total as a 1-element tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "sum(dim=1) removes axis 1 (the length-3 axis), summing across the columns of each row: [1+2+3, 4+5+6] = [6, 15], shape (2,). The (2, 1) form needs keepdim=True."
+  },
+  {
+    "id": "00.2-011",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "keepdim: hold the collapsed axis open as length 1",
+    "question": "What does keepdim=True do in a reduction?",
+    "options": [
+      "Keeps the original values and skips the reduction entirely for that axis",
+      "Keeps the result on the same device as the input",
+      "Keeps the gradient from flowing through the reduction",
+      "Keeps the reduced axis as length 1 instead of removing it"
+    ],
+    "answer_index": 3,
+    "explanation": "keepdim=True holds the collapsed axis open with length 1, so the result has the same number of axes as the input. m.mean(dim=1, keepdim=True) on a (2, 3) tensor gives shape (2, 1) instead of (2,). It does not affect the device or gradients."
+  },
+  {
+    "id": "00.2-012",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "keepdim: hold the collapsed axis open as length 1",
+    "question": "Why would you use keepdim=True when computing a row mean?",
+    "options": [
+      "So the mean is accumulated in higher precision than the input dtype",
+      "So the result broadcasts cleanly back against the original tensor",
+      "So the original tensor is overwritten in place with its row means",
+      "So the reduction runs as one fused kernel and finishes faster on GPU"
+    ],
+    "answer_index": 1,
+    "explanation": "Keeping the axis as length 1 lets you write m - m.mean(dim=1, keepdim=True) and have the (2, 1) mean stretch across the columns. You will do exactly this in softmax and LayerNorm. It has no effect on precision, mutation or speed."
+  },
+  {
+    "id": "00.2-013",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "keepdim: hold the collapsed axis open as length 1",
+    "question": "For m = [[1,2,3],[4,5,6]], what is m.mean(dim=1, keepdim=True)?",
+    "options": [
+      "tensor([2., 5.]) with shape (2,)",
+      "tensor([[2.], [5.]]) with shape (2, 1)",
+      "tensor([[2.5, 3.5, 4.5]]) with shape (1, 3)",
+      "tensor([[3.5]]) with shape (1, 1)"
+    ],
+    "answer_index": 1,
+    "explanation": "The row means are (1+2+3)/3 = 2 and (4+5+6)/3 = 5. With keepdim=True axis 1 is kept as length 1, giving [[2.], [5.]] of shape (2, 1). Without keepdim it would be shape (2,). Column means would be [2.5, 3.5, 4.5]."
+  },
+  {
+    "id": "00.2-014",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "What is the shape rule for matrix multiplication with @?",
+    "options": [
+      "(n, k) @ (k, p) -> (n, p)",
+      "(n, k) @ (n, k) -> (n, k)",
+      "(n, k) @ (p, k) -> (n, p)",
+      "(n, k) @ (k, p) -> (k, k)"
+    ],
+    "answer_index": 0,
+    "explanation": "The two inner dimensions must match (both k) and they vanish, because they are summed over; the outer dimensions n and p survive. So (n, k) @ (k, p) gives (n, p). Matching outer dims instead of inner ones is a common mistake."
+  },
+  {
+    "id": "00.2-015",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "In A @ B, why must the inner dimensions match?",
+    "options": [
+      "They decide the output dtype through type promotion",
+      "They must match so that the result matrix comes out square",
+      "They are the dimensions summed over in each dot product",
+      "They determine which device the matmul kernel runs on"
+    ],
+    "answer_index": 2,
+    "explanation": "Entry (i, j) of A @ B is the dot product of row i of A with column j of B, which sums over the shared inner dimension k. If A's columns and B's rows differ in length, the dot product is undefined. The outer dims set the result shape; nothing forces it to be square."
+  },
+  {
+    "id": "00.2-016",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "What is entry (i, j) of the matrix product A @ B?",
+    "options": [
+      "The product A[i, j] * B[i, j]",
+      "The dot product of column i of A with row j of B",
+      "The sum of row i of A plus the sum of column j of B",
+      "The dot product of row i of A with column j of B"
+    ],
+    "answer_index": 3,
+    "explanation": "Each output entry is a dot product: row i of the left matrix times column j of the right, summed. For A = [[1,2,3],[4,5,6]] and B's first column [1,5,9], entry (1,1) is 1+10+27 = 38. A[i,j]*B[i,j] is the elementwise product, not matmul."
+  },
+  {
+    "id": "00.2-017",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "What shape results from multiplying a (2, 3) matrix by a (3, 4) matrix with @?",
+    "options": [
+      "(3, 3)",
+      "(2, 4)",
+      "(2, 3)",
+      "(3, 4)"
+    ],
+    "answer_index": 1,
+    "explanation": "Inner dimensions 3 and 3 match and vanish; the outer dimensions 2 and 4 survive, giving (2, 4). Every Linear layer is such a matmul, which is why matmul is the workhorse of neural networks."
+  },
+  {
+    "id": "00.2-018",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "How should you read 'RuntimeError: mat1 and mat2 shapes cannot be multiplied (2x3 and 4x5)'?",
+    "options": [
+      "The inner dims 3 and 4 do not match in a (2,3) @ (4,5) matmul",
+      "The outer dims 2 and 5 do not match, so no (2, 5) result exists",
+      "The two tensors are on different devices, one on CPU and one on GPU",
+      "One tensor is float32 and the other float16, so mat1 and mat2 differ"
+    ],
+    "answer_index": 0,
+    "explanation": "The message reports the two operand shapes; read it as 'I tried (2,3) @ (4,5) and the inner dims 3 and 4 differ'. The fix starts with printing both operands' .shape and lining up the inner two numbers. Outer dims never need to match, and device/dtype problems give different errors."
+  },
+  {
+    "id": "00.2-019",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "3. Matrix multiplication with @",
+    "question": "Why is matrix multiplication called the workhorse of neural networks?",
+    "options": [
+      "It is the only operation that supports gradients",
+      "It is the only operation GPUs can run",
+      "It replaces all elementwise operations",
+      "Every Linear layer is a matrix multiplication"
+    ],
+    "answer_index": 3,
+    "explanation": "Every nn.Linear layer — including attention projections and MLP layers — is a matmul, so most of a model's compute is matmuls. Many other operations support gradients and run on GPUs; matmul simply dominates the work."
+  },
+  {
+    "id": "00.2-020",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "What problem does broadcasting solve?",
+    "options": [
+      "Sending the same tensor to multiple GPUs at once during data parallelism",
+      "Converting tensors between dtypes automatically when they are mixed",
+      "Combining tensors of different shapes without manually copying data",
+      "Printing large tensors compactly by eliding repeated rows"
+    ],
+    "answer_index": 2,
+    "explanation": "You constantly need to combine tensors of different shapes — adding a length-C bias to a whole batch, subtracting a per-row mean. Broadcasting is the set of rules that lets PyTorch do this without loops or explicit copies. It is unrelated to multi-GPU communication or dtype conversion."
+  },
+  {
+    "id": "00.2-021",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "What is the broadcasting rule for deciding whether two shapes are compatible?",
+    "options": [
+      "Align shapes from the left; each pair of axis lengths must be equal or one must be 1",
+      "The total element counts must be equal, whatever the individual axis lengths",
+      "The tensors must have the same number of axes, and then each pair must match",
+      "Align shapes from the right; each axis pair must be equal or one of them must be 1"
+    ],
+    "answer_index": 3,
+    "explanation": "Line the shapes up from the right. For each axis the lengths are compatible if they are equal or if one is 1, in which case the 1 is stretched. If neither is 1 and they differ, it is an error. Missing leading axes are treated as 1, so the ranks need not match."
+  },
+  {
+    "id": "00.2-022",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "In broadcasting, what happens to an axis of length 1 paired with an axis of length 4?",
+    "options": [
+      "It is virtually repeated to length 4",
+      "It causes an error because the lengths differ",
+      "The length-4 axis is truncated to 1",
+      "The two lengths are added to give 5"
+    ],
+    "answer_index": 0,
+    "explanation": "A length-1 axis is stretched (virtually repeated) to match the other length. Only when neither length is 1 and they differ is it an error. Nothing is truncated or added."
+  },
+  {
+    "id": "00.2-023",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "What is the result shape of adding a (3, 1) tensor to a (1, 4) tensor?",
+    "options": [
+      "(3, 1)",
+      "(1, 4)",
+      "(3, 4)",
+      "It raises a shape error"
+    ],
+    "answer_index": 2,
+    "explanation": "Aligning from the right, axis 1 is 1 vs 4 (the 1 stretches to 4) and axis 0 is 3 vs 1 (the 1 stretches to 3), giving (3, 4). Entry (i, j) is left[i] + right[j]; for [10,20,30] and [1,2,3,4] that gives rows 11..14, 21..24, 31..34."
+  },
+  {
+    "id": "00.2-024",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "How does broadcasting avoid using extra memory for the stretched axis?",
+    "options": [
+      "It compresses the repeated values with run-length encoding before the operation",
+      "It gives the length-1 axis stride 0, so stepping along it never moves in memory",
+      "It allocates the expanded tensor in GPU memory, where the extra space is free",
+      "It processes the operation one row at a time in a Python loop, reusing one buffer"
+    ],
+    "answer_index": 1,
+    "explanation": "No data is actually copied: broadcasting pretends a length-1 axis has stride 0, so every step along it reads the same element. That costs no extra memory, which is why adding a bias to a (B, T, C) activation is cheap. No compression or Python loop is involved."
+  },
+  {
+    "id": "00.2-025",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "Why can you add a bias of shape (C,) to activations of shape (B, T, C) with just x + bias?",
+    "options": [
+      "PyTorch reshapes the bias to (B, T, C) by copying it into a full-size tensor first",
+      "Bias tensors are special-cased by nn.Linear, which adds them after the matmul",
+      "The addition only applies to the first batch element, then is repeated per step",
+      "Aligned from the right, (C,) matches the last axis and is stretched across B and T"
+    ],
+    "answer_index": 3,
+    "explanation": "Aligning from the right, the bias's single axis matches C, and the missing leading axes are treated as 1 and stretch across every batch and position. This happens for free via stride-0, not by copying. It is general broadcasting, not a Linear-only special case."
+  },
+  {
+    "id": "00.2-026",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "4. Broadcasting",
+    "question": "How does broadcasting treat axes that one tensor is missing on the left?",
+    "options": [
+      "Missing leading axes cause an error",
+      "Missing axes are filled with zeros",
+      "Missing leading axes are treated as length 1",
+      "Missing axes are added on the right instead"
+    ],
+    "answer_index": 2,
+    "explanation": "When ranks differ, the shorter shape is padded with 1s on the left, then the usual equal-or-1 rule applies. So (3,) behaves like (1, 3) against a (2, 3) tensor. Nothing is filled with zeros."
+  },
+  {
+    "id": "00.2-027",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "5. Views vs copies",
+    "question": "What is the difference between a view and a copy in PyTorch?",
+    "options": [
+      "A view is a read-only snapshot of the data; a copy is a writable duplicate",
+      "A view is a new label on the same buffer; a copy allocates a fresh buffer",
+      "A view lives on the GPU next to the kernels; a copy lives in CPU memory",
+      "A view stores values at lower precision than a copy of the same tensor"
+    ],
+    "answer_index": 1,
+    "explanation": "Some operations return a view — a new (shape, stride) label over the same underlying memory — while others allocate fresh memory, a copy. A mutated view changes the original because they are the same memory. Views are writable and share the parent's device and dtype."
+  },
+  {
+    "id": "00.2-028",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "view and reshape",
+    "question": "After t = torch.arange(6); v = t.view(2, 3); v[0, 0] = 99, what is t?",
+    "options": [
+      "tensor([99, 1, 2, 3, 4, 5]), because v shares storage with t",
+      "tensor([0, 1, 2, 3, 4, 5]), because view made an independent copy of t",
+      "An error, because tensors returned by view are read-only",
+      "tensor([99, 99, 99, 99, 99, 99]), because the write is broadcast"
+    ],
+    "answer_index": 0,
+    "explanation": "view gives a differently-shaped label on the same data without copying, so writing 99 through v changes t's first element. This aliasing is a feature — it makes reshaping free — but looks like spooky action at a distance if unexpected."
+  },
+  {
+    "id": "00.2-029",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "view and reshape",
+    "question": "How does reshape differ from view?",
+    "options": [
+      "reshape returns a view if it can and silently copies if not; view raises instead",
+      "reshape always copies into fresh memory; view never copies and always succeeds",
+      "reshape only works on contiguous tensors, while view works on any layout by copying",
+      "reshape changes the dtype to fit the new shape; view only changes the shape"
+    ],
+    "answer_index": 0,
+    "explanation": "reshape 'always works': it gives a view if the layout allows and otherwise makes a copy, so you no longer know which you got. view 'only works when it can be a genuine view' and raises otherwise — sometimes exactly the guarantee you want. Neither changes dtype."
+  },
+  {
+    "id": "00.2-030",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "view and reshape",
+    "question": "When might you prefer view over reshape?",
+    "options": [
+      "When you want PyTorch to always copy the data into a fresh buffer for safety",
+      "When the tensor is non-contiguous and you want it to work regardless",
+      "When you need the guarantee that the result shares memory with the original",
+      "When you want to change the tensor's dtype at the same time as its shape"
+    ],
+    "answer_index": 2,
+    "explanation": "view either returns a genuine view or raises, so it guarantees aliasing. If you rely on mutations propagating to the parent, reshape could silently return a copy and break that. reshape is the choice when you want it to work regardless of layout."
+  },
+  {
+    "id": "00.2-031",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "permute / transpose: views that reorder axes",
+    "question": "What do transpose(i, j) and permute(...) return?",
+    "options": [
+      "Copies with the data physically reordered",
+      "Contiguous tensors in the new axis order",
+      "In-place modified versions of the input",
+      "Views with new strides; no data is moved"
+    ],
+    "answer_index": 3,
+    "explanation": "transpose swaps two axes and permute reorders all of them; both return views that just produce new strides over the same buffer. Data does not move, which is why the result is typically non-contiguous. They are not in-place."
+  },
+  {
+    "id": "00.2-032",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "permute / transpose: views that reorder axes",
+    "question": "For m = torch.arange(6).view(2, 3) with stride (3, 1), what are the shape and stride of m.transpose(0, 1)?",
+    "options": [
+      "Shape (3, 2), stride (2, 1)",
+      "Shape (3, 2), stride (1, 3)",
+      "Shape (2, 3), stride (1, 3)",
+      "Shape (3, 2), stride (3, 1)"
+    ],
+    "answer_index": 1,
+    "explanation": "Transposing swaps both the shape entries and the stride entries: shape (2, 3) becomes (3, 2) and stride (3, 1) becomes (1, 3). Stride (2, 1) would be the contiguous layout for a fresh (3, 2) tensor, which a transpose does not produce."
+  },
+  {
+    "id": "00.2-033",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "permute / transpose: views that reorder axes",
+    "question": "Why is a transposed tensor typically non-contiguous?",
+    "options": [
+      "Its data has been split across two devices, one half per axis",
+      "Its elements were copied into a new, scattered buffer during the transpose",
+      "Its dtype changed during the transpose, so the element size no longer fits",
+      "Its logical reading order no longer matches the flat order of its buffer"
+    ],
+    "answer_index": 3,
+    "explanation": "After transposing [[0,1,2],[3,4,5]], reading the (3,2) result left-to-right, top-to-bottom visits the buffer as 0, 3, 1, 4, 2, 5 — not in flat order. Logical and physical layouts disagree, which is what non-contiguous means. No copy or dtype change occurs."
+  },
+  {
+    "id": "00.2-034",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "permute / transpose: views that reorder axes",
+    "question": "Is a non-contiguous tensor an error state?",
+    "options": [
+      "Yes; nearly every operation raises an error until .contiguous() is called",
+      "Yes; it means the tensor's underlying memory has been corrupted",
+      "No; it is legal for most operations but some, like view, may fail on it",
+      "No; and view always works on it too, since only the stride differs"
+    ],
+    "answer_index": 2,
+    "explanation": "Non-contiguous tensors are perfectly legal and fine for most operations. They do, however, set up the classic mistake: view may refuse certain shapes because it cannot relabel the buffer without reordering."
+  },
+  {
+    "id": "00.2-035",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "What is the first rule any .view(...) shape must satisfy?",
+    "options": [
+      "The new shape must have the same number of axes",
+      "The product of the new shape must equal numel()",
+      "The new shape must keep the first axis unchanged",
+      "The new shape must be square"
+    ],
+    "answer_index": 1,
+    "explanation": "A view only relabels the same elements, so the new shape's product must equal the element count. For a (2, 3) tensor, (6,), (3, 2) and (3, -1) are fine; (4, 2) is not, because 8 is not 6. The number of axes may change."
+  },
+  {
+    "id": "00.2-036",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "What does -1 mean in a call like x.view(3, -1)?",
+    "options": [
+      "That axis's length is inferred from numel and the other axes",
+      "The last element along that axis is dropped before reshaping",
+      "The axis is reversed, like flipping it with torch.flip",
+      "The axis is broadcast to whatever length the other operand has"
+    ],
+    "answer_index": 0,
+    "explanation": "One axis may be given as -1 and PyTorch infers it so the product equals numel(). For a 6-element tensor, view(3, -1) gives (3, 2). Only one -1 is allowed because the inference must be unique."
+  },
+  {
+    "id": "00.2-037",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "Which reshapes always work with view, even on a non-contiguous tensor?",
+    "options": [
+      "Splitting one axis into several, or inserting a size-1 axis",
+      "Merging any two axes into one, as long as numel is unchanged",
+      "Flattening the tensor to 1-D with view(-1)",
+      "Swapping the first and last axes of the tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "Splitting an axis or inserting a size-1 axis never requires reordering, so they always work. Merging neighbouring axes, including flattening, works only if those axes already sit back-to-back in memory. Swapping axes is a transpose, not a view reshape."
+  },
+  {
+    "id": "00.2-038",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "On a non-contiguous tensor, when can view merge neighbouring axes i and i+1?",
+    "options": [
+      "Only if size[i] = size[i+1], so the merged axis is square",
+      "Only if stride[i] = 1 for the outer axis",
+      "Never; merging non-contiguous axes always requires a copy",
+      "Only if stride[i] = stride[i+1] x size[i+1]"
+    ],
+    "answer_index": 3,
+    "explanation": "Merging axes i and i+1 works when they already sit back-to-back in memory, which is the condition stride[i] = stride[i+1] x size[i+1]. Equal sizes or a unit stride are not the criterion. If the condition fails, view raises."
+  },
+  {
+    "id": "00.2-039",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "When view cannot produce a requested shape, what are the two remedies?",
+    "options": [
+      "Call .detach() first to drop the graph, then call .view(...) on the result",
+      "Move the tensor to the GPU, or cast it to a dtype that view accepts",
+      "Call .contiguous().view(...) for an explicit copy, or use .reshape(...)",
+      "Call .transpose() again on the result, or call .squeeze() before .view"
+    ],
+    "answer_index": 2,
+    "explanation": ".contiguous() copies the data into flat logical order so view then works; .reshape() copies only when the view rules fail. Detach only cuts the autograd graph and does not change memory layout, and device or dtype changes are irrelevant."
+  },
+  {
+    "id": "00.2-040",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "For mt = torch.arange(6).view(2, 3).transpose(0, 1) (shape (3, 2), stride (1, 3)), which call succeeds?",
+    "options": [
+      "mt.view(6)",
+      "mt.view(3, 1, 2)",
+      "mt.view(6, 1)",
+      "mt.view(-1, 1, 1)"
+    ],
+    "answer_index": 1,
+    "explanation": "view(3, 1, 2) only inserts a size-1 axis, which always works. view(6), view(6, 1) and view(-1, 1, 1) all merge axes 0 and 1, which needs stride[0] = stride[1] x size[1], i.e. 1 = 3 x 2 — false, so they raise."
+  },
+  {
+    "id": "00.2-041",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "View rules",
+    "question": "x = torch.arange(24).view(2, 3, 4)[:, :, :2] has shape (2, 3, 2) and stride (12, 4, 1). Does x.view(6, 2) work?",
+    "options": [
+      "No, because x is non-contiguous, and view always fails on such tensors",
+      "No, because 6 x 2 = 12 does not equal x.numel(), which is 24",
+      "Yes, but only because view silently copies the data into a contiguous buffer",
+      "Yes, because merging axes 0 and 1 needs 12 = 4 x 3, which holds"
+    ],
+    "answer_index": 3,
+    "explanation": "Slicing the last axis broke contiguity between rows, but axes 0 and 1 are still back-to-back: stride[0] = 12 = stride[1] x size[1] = 4 x 3. So they can be merged into 6 and the view succeeds without copying. This shows non-contiguous does not automatically mean view fails; numel is 12 = 6 x 2."
+  },
+  {
+    "id": "00.2-042",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "Why does torch.arange(6).view(2, 3).transpose(0, 1).view(6) raise?",
+    "options": [
+      "The element count changes from 6 to 3 after the transpose, so view(6) is invalid",
+      "transpose returns a read-only tensor, and view refuses to relabel read-only data",
+      "view cannot relabel the non-contiguous buffer as flat without reordering it",
+      "view(6) on a transposed tensor is only implemented for CUDA tensors, not CPU"
+    ],
+    "answer_index": 2,
+    "explanation": "The transposed tensor reads its buffer as 0, 3, 1, 4, 2, 5, so a flat length-6 view of the existing buffer in that order is impossible without moving data. view refuses rather than copy, raising 'view size is not compatible with input tensor's size and stride'. The count is still 6."
+  },
+  {
+    "id": "00.2-043",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "What do mt.reshape(6) and mt.contiguous().view(6) return for mt = torch.arange(6).view(2, 3).transpose(0, 1)?",
+    "options": [
+      "Both return tensor([0, 1, 2, 3, 4, 5])",
+      "Both return tensor([0, 3, 1, 4, 2, 5])",
+      "reshape returns [0,3,1,4,2,5]; contiguous().view returns [0,1,2,3,4,5]",
+      "Both raise the same error as view(6)"
+    ],
+    "answer_index": 1,
+    "explanation": "Both flatten in the tensor's current logical order, which for the transpose is 0, 3, 1, 4, 2, 5. reshape copies because it must; .contiguous() first copies into that logical order so view works. Neither recovers the original 0..5 order."
+  },
+  {
+    "id": "00.2-044",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "What does .contiguous() do?",
+    "options": [
+      "Allocates a fresh buffer with the numbers laid out in the current logical order",
+      "Marks the existing buffer as contiguous by rewriting its strides, without moving data",
+      "Sorts the tensor's values in ascending order so they are adjacent in memory",
+      "Moves the tensor into one GPU memory page so its elements are physically adjacent"
+    ],
+    "answer_index": 0,
+    "explanation": ".contiguous() copies the data into a new buffer arranged in the tensor's current logical order, producing a contiguous tensor that view can reshape freely. It does not just flip a flag, sort values, or deal with GPU pages. If the tensor is already contiguous it returns itself."
+  },
+  {
+    "id": "00.2-045",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "Why does multi-head attention code use x.transpose(1, 2).contiguous().view(B, T, C)?",
+    "options": [
+      "After the transpose the tensor is non-contiguous, so view cannot merge the heads into C without a copy",
+      "contiguous() is required so that gradients can flow back through the following view call into the heads",
+      "contiguous() moves the tensor onto the GPU first, because view on CPU cannot handle 4-D tensors",
+      "view requires contiguous input in order to reverse the head order back to the original token order"
+    ],
+    "answer_index": 0,
+    "explanation": "Transposing the head axis back produces a non-contiguous tensor, and collapsing the heads into the channel dimension is a merge view cannot do on that layout. .contiguous() copies into flat order first, so view(B, T, C) works. It is about memory layout, not gradients or devices."
+  },
+  {
+    "id": "00.2-046",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "Why should you not blindly replace every .view with .reshape?",
+    "options": [
+      "reshape is always much slower than view, because it copies the whole data on every single call",
+      "If you rely on aliasing, reshape may silently copy, so in-place mutations will not propagate",
+      "reshape does not support -1 for inferred axes, so every dimension must be spelled out",
+      "reshape detaches its result from the autograd graph, so gradients stop at that point"
+    ],
+    "answer_index": 1,
+    "explanation": "reshape copies when the view rules fail, so code that mutates the result expecting the original to change would silently stop working. When reshape can view, it costs the same as view; it supports -1 and keeps autograd tracking. The danger is the hidden copy."
+  },
+  {
+    "id": "00.2-047",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "The classic mistake: reshape/view after transpose",
+    "question": "If .view(...) raises 'view size is not compatible with input tensor's size and stride', what is the most likely cause?",
+    "options": [
+      "The input has an integer dtype, which view cannot reinterpret into a new shape",
+      "The input requires gradients, and view is not allowed on tensors tracked by autograd",
+      "The input lives on the CPU, whereas view's stride logic is only implemented on GPU",
+      "The input is non-contiguous, almost always from a recent transpose or permute"
+    ],
+    "answer_index": 3,
+    "explanation": "That message means the requested shape cannot be expressed over the existing strides — the input is non-contiguous, almost always because it was just transposed or permuted. Dtype, requires_grad and device do not cause it. Fix with .contiguous() first or use .reshape()."
+  },
+  {
+    "id": "00.2-048",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "A model 'runs but learns nothing'. Which operator mix-up is a possible cause?",
+    "options": [
+      "Using + where torch.add was meant to be called",
+      "Using @ where torch.matmul was meant to be called",
+      "An elementwise * where a matmul @ belonged",
+      "Using .sum() where torch.sum() was meant to be used"
+    ],
+    "answer_index": 2,
+    "explanation": "* keeps the shape and multiplies element by element, so it can run without error where @ was intended, yet compute something meaningless. The other pairs are just equivalent spellings of the same operation."
+  },
+  {
+    "id": "00.2-049",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What should you always ask yourself before choosing dim in a reduction?",
+    "options": [
+      "Which axis is the longest?",
+      "Which axis do I want gone?",
+      "Which axis is contiguous?",
+      "Which axis has the smallest stride?"
+    ],
+    "answer_index": 1,
+    "explanation": "dim=0 and dim=1 give different shapes and meanings; the deciding question is which axis should disappear. Length, contiguity and stride do not determine the correct reduction axis."
+  },
+  {
+    "id": "00.2-050",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if you forget keepdim=True before broadcasting a reduced tensor back?",
+    "options": [
+      "The shape fails to line up, or worse, lines up wrongly by accident",
+      "The reduction itself returns the wrong numerical values for each row",
+      "The reduced tensor is silently moved back to the CPU",
+      "Gradients stop flowing through the reduction and the parameters freeze"
+    ],
+    "answer_index": 0,
+    "explanation": "Without keepdim the reduced axis vanishes, so aligning from the right may fail with an error — or may match a different axis by coincidence and silently compute the wrong thing. The reduced values themselves are correct; it is the alignment that breaks."
+  },
+  {
+    "id": "00.2-051",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "You need an independent tensor that will not change when you mutate it and will not affect its source. What should you call?",
+    "options": [
+      ".view()",
+      ".transpose()",
+      ".clone()",
+      ".to(device) with the same device"
+    ],
+    "answer_index": 2,
+    "explanation": "Mutating a view mutates its parent, so if you need an independent tensor, .clone() copies the data. view and transpose return views that alias the original, and .to on the same device returns the same tensor."
+  },
+  {
+    "id": "00.2-052",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Exercise",
+    "question": "For x of shape (B, T, C) = (2, 4, 6), which line subtracts each position's mean over the channels and returns a (2, 4, 6) tensor?",
+    "options": [
+      "x - x.mean(dim=-1)",
+      "x - x.mean(dim=0, keepdim=True)",
+      "x - x.mean(dim=(0, 1), keepdim=True)",
+      "x - x.mean(dim=-1, keepdim=True)"
+    ],
+    "answer_index": 3,
+    "explanation": "x.mean(dim=-1, keepdim=True) reduces the channel axis to length 1, giving (2, 4, 1), which broadcasts across the 6 channels when subtracted. Without keepdim the mean is (2, 4), which does not align from the right with (2, 4, 6). dim=0 averages over the batch, and dim=(0, 1) averages each channel over batch and positions instead — this is the centring step inside LayerNorm."
+  },
+  {
+    "id": "00.2-053",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For x of shape (5, 3), what shapes do x.sum(dim=0), x.sum(dim=1) and x.sum(dim=1, keepdim=True) have?",
+    "options": [
+      "(5,), (3,) and (1, 3)",
+      "(3,), (5,) and (1, 5)",
+      "(1, 3), (5, 1) and (5, 1)",
+      "(3,), (5,) and (5, 1)"
+    ],
+    "answer_index": 3,
+    "explanation": "dim=0 removes axis 0 leaving (3,); dim=1 removes axis 1 leaving (5,); with keepdim=True axis 1 is kept as length 1, giving (5, 1). Without keepdim the reduced axis is dropped entirely."
+  },
+  {
+    "id": "00.2-054",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Which matrix product is legal: (4, 5) @ (4, 5) or (4, 5) @ (5, 2)?",
+    "options": [
+      "Only (4, 5) @ (5, 2), giving (4, 2)",
+      "Only (4, 5) @ (4, 5), giving shape (4, 5)",
+      "Both are legal, giving (4, 5) and (4, 2)",
+      "Neither is legal, as both need a transpose"
+    ],
+    "answer_index": 0,
+    "explanation": "(4, 5) @ (4, 5) has inner dimensions 5 and 4, which do not match, so it is illegal. (4, 5) @ (5, 2) has matching inner dims 5 and 5, giving (4, 2). Same-shape operands are fine for elementwise * but not generally for @."
+  },
+  {
+    "id": "00.2-055",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Do shapes (2, 3) and (3,) broadcast, and what is the result?",
+    "options": [
+      "No; the ranks differ, so PyTorch raises a shape-mismatch error instead",
+      "Yes; (3,) is treated as (1, 3) and added to every row, giving (2, 3)",
+      "Yes; each row is paired with every element, giving shape (2, 3, 3)",
+      "Yes; (3,) is added down each column instead, giving shape (3, 2)"
+    ],
+    "answer_index": 1,
+    "explanation": "Aligned from the right, 3 vs 3 match, and the missing leading axis is treated as 1 and stretches to 2. So [[1,2,3],[4,5,6]] + [10,20,30] = [[11,22,33],[14,25,36]], shape (2, 3). Different ranks are fine for broadcasting."
+  },
+  {
+    "id": "00.2-056",
+    "chapter": "00.2",
+    "chapter_name": "Ops, broadcasting, views vs copies",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-02.md",
+    "section": "Check yourself",
+    "question": "After y = x.view(2, 3) and y[0, 0] = 0, x has also changed. How could you have avoided that?",
+    "options": [
+      "Use x.view(2, 3).detach() so that y no longer shares anything with x",
+      "Use x.transpose(0, 1).view(2, 3) to get a reordered layout",
+      "Use x.view(2, 3).clone() (or x.clone().view(2, 3)) to get independent data",
+      "Use x.view(2, 3) inside a torch.no_grad() block so writes stay local"
+    ],
+    "answer_index": 2,
+    "explanation": "view shares storage with x, so mutating y writes into x's buffer. .clone() copies the data, making y independent. detach and no_grad only affect autograd tracking, not memory sharing; transpose is another view."
+  }
+]

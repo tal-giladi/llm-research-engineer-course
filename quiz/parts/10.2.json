@@ -1,0 +1,1550 @@
+[
+  {
+    "id": "10.2-001",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is a scaling law used for in practice by labs planning pretraining?",
+    "options": [
+      "Guarantee the final loss of any model on any data mix before a single training step is run",
+      "Compute the exact number of GPUs and days a run requires from the parameter count alone",
+      "Choose the tokenizer vocabulary size that minimizes loss for a given amount of compute",
+      "Fit a power law on cheap small runs and extrapolate it to predict a big model's loss"
+    ],
+    "answer_index": 3,
+    "explanation": "Scaling laws let labs predict the future: measure small models, fit the straight log-log line, and extrapolate to say what loss a 100× bigger model will reach. It is a forecast, not a guarantee, and it underpins compute-optimal allocation."
+  },
+  {
+    "id": "10.2-002",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which mathematical background is sufficient to fit a power-law scaling curve?",
+    "options": [
+      "Stochastic differential equations for the training dynamics",
+      "Eigen-decomposition of the loss Hessian at convergence",
+      "Fourier analysis of the loss curve over training steps",
+      "Logarithms and a straight-line fit y = mx + b"
+    ],
+    "answer_index": 3,
+    "explanation": "Taking logs turns a power law into a straight line, so fitting reduces to linear regression of log loss on log size. No more advanced math is needed."
+  },
+  {
+    "id": "10.2-003",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "In a model-size scaling plot, what quantity is N?",
+    "options": [
+      "The total parameter count, including the embedding tables",
+      "The number of non-embedding parameters of a trained model",
+      "The number of optimizer steps each model was trained for",
+      "The number of tokens in the held-out set used for evaluation"
+    ],
+    "answer_index": 1,
+    "explanation": "N is the non-embedding parameter count, as counted for the 6ND convention. For example N = 10^6 means a 1M-parameter model."
+  },
+  {
+    "id": "10.2-004",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "In a scaling-law plot, what is the loss L on the vertical axis?",
+    "options": [
+      "Training accuracy on the final batch, where higher is better",
+      "Average cross-entropy on held-out text, where lower is better",
+      "The gradient norm at the end of training, where lower is better",
+      "The percentage of held-out tokens predicted wrongly by the model"
+    ],
+    "answer_index": 1,
+    "explanation": "L is mean held-out cross-entropy (nats/token). Lower means the model assigns more probability to the tokens that actually occur."
+  },
+  {
+    "id": "10.2-005",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "Does a held-out cross-entropy loss of 3.0 mean the model is 3% wrong or 75% accurate?",
+    "options": [
+      "It means the model is 3 times better than a uniform random guesser",
+      "Yes; it means that about 3% of held-out tokens are predicted wrongly",
+      "Neither; it is a cross-entropy value, not an error rate or accuracy",
+      "Yes; a loss of 3.0 corresponds to roughly 75% top-1 token accuracy"
+    ],
+    "answer_index": 2,
+    "explanation": "Cross-entropy measures how much probability the model puts on the actual tokens, in nats per token. It is not a percentage; loss 3.0 is simply better than 4.0."
+  },
+  {
+    "id": "10.2-006",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "On a model-size scaling plot, what does each dot represent?",
+    "options": [
+      "A different held-out batch evaluated by one fixed trained model",
+      "A separately trained model, measured once at its final loss",
+      "A different learning rate tried for one fixed model size and corpus",
+      "Another training step of the same model, logged along its loss curve"
+    ],
+    "answer_index": 1,
+    "explanation": "Each dot is a distinct model of a given size, trained and then evaluated on held-out text. It is not a point along one model's training curve."
+  },
+  {
+    "id": "10.2-007",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "To compare model sizes meaningfully on a scaling plot, which conditions should hold?",
+    "options": [
+      "Each model must use a different tokenizer, so that no single vocabulary biases the comparison",
+      "Each model must be trained for exactly one step, so that training time is held constant",
+      "Same tokenizer and held-out text, and enough data and training that size is the main limit",
+      "Each model must have the same number of parameters, so that only the data size varies"
+    ],
+    "answer_index": 2,
+    "explanation": "Using a shared tokenizer and evaluation text keeps losses comparable. Giving each model enough data and training ensures size, not training, limits it; a large model stopped too early tells you about its training, not its potential."
+  },
+  {
+    "id": "10.2-008",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.1 First, understand one dot on the plot",
+    "question": "A larger model on a size sweep shows a worse loss than a smaller one because it was stopped too early. What does that dot tell you?",
+    "options": [
+      "That the power law has already reached the irreducible loss at that size",
+      "That the tokenizer used for that model is mismatched with the held-out set",
+      "Something about its insufficient training, not its potential at that size",
+      "That larger models are always worse beyond a certain size on this corpus"
+    ],
+    "answer_index": 2,
+    "explanation": "If a model is undertrained, its loss reflects the training budget rather than the capacity limit at that size. Such points do not belong on a clean model-size scaling curve."
+  },
+  {
+    "id": "10.2-009",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.2 The pattern: multiply size, multiply loss",
+    "question": "In a power law, as model size is multiplied by 10 repeatedly, what stays constant?",
+    "options": [
+      "The fractional (proportional) reduction in loss",
+      "The number of parameters added at each step",
+      "The loss itself, once the curve has flattened",
+      "The absolute amount of loss subtracted each time"
+    ],
+    "answer_index": 0,
+    "explanation": "With L = c·N^(-α), each ×10 multiplies loss by the same factor (e.g. 0.866). Absolute drops shrink (0.536 then 0.464 in the example), but the ratio is fixed."
+  },
+  {
+    "id": "10.2-010",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.2 The pattern: multiply size, multiply loss",
+    "question": "If each ×10 in model size multiplies loss by 0.866, why does improvement slow down in absolute terms?",
+    "options": [
+      "The exponent itself decreases as the model grows, so each ×10 helps less",
+      "The same fraction of a smaller loss is a smaller absolute amount",
+      "The larger models start overfitting immediately, eating the gains",
+      "Cross-entropy saturates at 1.0, so the curve compresses near that value"
+    ],
+    "answer_index": 1,
+    "explanation": "Removing 13.4% of 4.0 removes 0.536, while removing 13.4% of 3.464 removes only 0.464. The proportional rule is unchanged; the base got smaller."
+  },
+  {
+    "id": "10.2-011",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.2 The pattern: multiply size, multiply loss",
+    "question": "Which relationship is called a power law in the scaling context?",
+    "options": [
+      "One in which loss decays exponentially with the number of training steps that are taken",
+      "One where multiplying a resource by a fixed factor multiplies loss by a fixed factor",
+      "One in which adding a fixed amount of resource subtracts a fixed amount of loss",
+      "One in which loss stays constant regardless of model size beyond a threshold"
+    ],
+    "answer_index": 1,
+    "explanation": "A power law L = c·x^(-α) gives a fixed loss ratio per fixed resource multiplier. A constant subtraction per added amount would be linear; exponential decay in steps is a different form."
+  },
+  {
+    "id": "10.2-012",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "On a logarithmic axis, what do equal distances represent?",
+    "options": [
+      "Equal additions (e.g. 10M, 20M, 30M equally spaced)",
+      "Equal numbers of training steps between the tick marks",
+      "Equal percentages of the full axis range, from min to max",
+      "Equal multiplications (e.g. 1M, 10M, 100M equally spaced)"
+    ],
+    "answer_index": 3,
+    "explanation": "Ordinary axes space equal additions evenly; log axes space equal multiplications evenly, giving each ×10 jump the same horizontal room."
+  },
+  {
+    "id": "10.2-013",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "Why must both axes be logarithmic for a power law to plot as a straight line?",
+    "options": [
+      "Because log axes subtract out the irreducible loss, leaving a straight power-law remainder",
+      "Because only the vertical axis carries the exponent, so the x-axis must match its scale",
+      "Because a log x-axis alone already linearises any curve, and the log y-axis just rescales it",
+      "Equal size ratios must map to equal x steps and equal loss ratios to equal y steps"
+    ],
+    "answer_index": 3,
+    "explanation": "Each 'size ×10, loss ×0.866' jump must move the same distance right and the same distance down. That requires log scaling on both axes; with only one axis logged, a power law remains curved."
+  },
+  {
+    "id": "10.2-014",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "Re-plotting scaling measurements on log-log axes changes which of the following?",
+    "options": [
+      "Only the positions of the dots on the page, not the models or their losses",
+      "The number of parameters of each model, which is rounded to a power of ten",
+      "The losses of the models, which come out lower once log-transformed",
+      "The training data of each model, which is re-weighted by the log scale"
+    ],
+    "answer_index": 0,
+    "explanation": "Changing axes is purely a change of display. The same models with the same sizes and losses are shown; their arrangement becomes a straight line."
+  },
+  {
+    "id": "10.2-015",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "What did Kaplan et al. (2020) publicly document about language-model loss?",
+    "options": [
+      "That loss depends mainly on the tokenizer and only weakly on model size or data",
+      "Approximate power laws in held-out loss vs model size, data size and allocated compute",
+      "That loss stops improving beyond about 1B parameters, regardless of dataset size",
+      "That loss falls linearly with the number of parameters across seven orders of magnitude"
+    ],
+    "answer_index": 1,
+    "explanation": "Kaplan et al. (Figure 1, section 1.2) found approximate power-law relationships between held-out loss and N, D and well-allocated compute. Their exponents are specific to their setup, not universal constants."
+  },
+  {
+    "id": "10.2-016",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "Are the exponents Kaplan et al. reported universal constants for every corpus and model?",
+    "options": [
+      "Yes; but only for English text, where they were measured on WebText2",
+      "No; they are arbitrary fitting choices with no real empirical basis",
+      "No; they describe that experimental setup and must be re-checked elsewhere",
+      "Yes; they are physical constants of language, like the entropy of English"
+    ],
+    "answer_index": 2,
+    "explanation": "The fitted exponents characterise Kaplan's data, tokenizer and training setup. Other corpora or architectures can give different exponents; the useful claim is the regularity, which must be checked before extrapolating."
+  },
+  {
+    "id": "10.2-017",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "1.3 Why change the axes?",
+    "question": "What is the precise useful claim of a scaling law, beyond 'bigger models are better'?",
+    "options": [
+      "Over a range, multiplying a resource by a fixed factor gives a ~fixed proportional loss change",
+      "Loss decreases by a fixed absolute amount for every parameter that is added to the model",
+      "Doubling any one resource always halves the loss, regardless of where you start on the loss curve",
+      "Larger models never overfit, so loss always keeps falling as long as you add more parameters"
+    ],
+    "answer_index": 0,
+    "explanation": "The regularity — fixed multiplier in resource → fixed proportional loss change — is what enables prediction. It holds over a range and must be checked against data before extrapolating."
+  },
+  {
+    "id": "10.2-018",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "In L(N) = c·N^(-α_N), what does the coefficient c control?",
+    "options": [
+      "The vertical level of the curve",
+      "The irreducible loss floor",
+      "How quickly loss falls as size grows",
+      "The number of parameters"
+    ],
+    "answer_index": 0,
+    "explanation": "c scales the whole curve up or down. The exponent α_N controls the rate of decline. A bare power law has no floor term."
+  },
+  {
+    "id": "10.2-019",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "In L(N) = c·N^(-α_N), what does α_N control?",
+    "options": [
+      "The vertical level of the curve on the plot",
+      "The predicted loss at N = 1 only, nothing else",
+      "How quickly loss falls as model size grows",
+      "The units of N, e.g. parameters vs millions"
+    ],
+    "answer_index": 2,
+    "explanation": "α_N is the fitted scaling exponent: larger α_N means faster improvement per multiplicative increase in N. c sets the level."
+  },
+  {
+    "id": "10.2-020",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "In the notation L(N), what do the parentheses mean?",
+    "options": [
+      "Loss at step N of the training run",
+      "Loss multiplied by the model size N",
+      "Loss divided by N, i.e. loss per parameter",
+      "Loss as a function of model size"
+    ],
+    "answer_index": 3,
+    "explanation": "L(N) is function notation: the predicted loss for a model of size N. It does not mean L times N."
+  },
+  {
+    "id": "10.2-021",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "What does a negative exponent such as N^(-0.5) mean?",
+    "options": [
+      "Take the negative square root of N, i.e. −√N",
+      "Multiply by −0.5·N, which makes the term negative",
+      "Subtract 0.5 from N before raising it to a power",
+      "Divide by a power of N; N^(-0.5) = 1/√N"
+    ],
+    "answer_index": 3,
+    "explanation": "A negative exponent is a reciprocal: N^(-0.5) = 1/N^0.5 = 1/√N. With c = 8, α = 0.5, L(4) = 8/2 = 4 and L(16) = 8/4 = 2."
+  },
+  {
+    "id": "10.2-022",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "With L(N) = 8·N^(-0.5), how does making the resource four times larger change the loss?",
+    "options": [
+      "It doubles the loss",
+      "It quarters the loss",
+      "It halves the loss",
+      "It reduces the loss by 0.5"
+    ],
+    "answer_index": 2,
+    "explanation": "4^(-0.5) = 1/2, so a 4× larger resource multiplies the loss by 0.5: L(4) = 4, L(16) = 2."
+  },
+  {
+    "id": "10.2-023",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.1 The formula, one piece at a time",
+    "question": "In which units is the predicted held-out loss L(N) expressed in Kaplan-style laws?",
+    "options": [
+      "Percent of held-out tokens wrong",
+      "Bits per model parameter",
+      "Nats per token (cross-entropy)",
+      "FLOPs per training token"
+    ],
+    "answer_index": 2,
+    "explanation": "L is held-out cross-entropy using natural logs, in nats per token. It is not a percentage."
+  },
+  {
+    "id": "10.2-024",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.2 What the exponent tells you",
+    "question": "For a power law L(N) = c·N^(-α_N), what is the loss ratio L(kN)/L(N) when size grows by a factor k?",
+    "options": [
+      "1 − α_N·k, which is linear in the growth factor k",
+      "c·k^(-α_N), which depends on the coefficient c",
+      "(kN)^(-α_N), which depends on the starting N",
+      "k^(-α_N), independent of c and the starting N"
+    ],
+    "answer_index": 3,
+    "explanation": "The c and N^(-α_N) factors cancel, leaving k^(-α_N). The loss ratio depends only on the size multiplier and the exponent."
+  },
+  {
+    "id": "10.2-025",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.2 What the exponent tells you",
+    "question": "With α_N = 0.06247, what does a ×10 increase in model size do to loss?",
+    "options": [
+      "Multiplies it by about 0.5",
+      "Multiplies it by about 0.866",
+      "Reduces it by 0.06247 nats",
+      "Reduces it by exactly 6.247%"
+    ],
+    "answer_index": 1,
+    "explanation": "10^(-0.06247) ≈ 0.866, so loss 4.0 becomes ≈ 3.464 and 3.464 becomes ≈ 3.0. The exponent is not itself a fraction to subtract."
+  },
+  {
+    "id": "10.2-026",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.2 What the exponent tells you",
+    "question": "For the same ×10 increase in model size, how do α_N = 0.1 and α_N = 0.5 compare?",
+    "options": [
+      "0.1 multiplies loss by ~0.794, 0.5 by ~0.316: larger exponent, faster improvement",
+      "0.1 improves faster, because a smaller exponent means the loss curve decays more slowly",
+      "Both multiply loss by the same factor, because the growth factor k is the same",
+      "0.1 multiplies loss by about 0.9 and 0.5 by about 0.5, as 1 − α"
+    ],
+    "answer_index": 0,
+    "explanation": "10^(-0.1) ≈ 0.794 and 10^(-0.5) ≈ 0.316. A larger positive exponent means faster loss decline for the same resource multiplier."
+  },
+  {
+    "id": "10.2-027",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.2 What the exponent tells you",
+    "question": "Does a scaling exponent α_N = 0.1 mean a 10% loss reduction?",
+    "options": [
+      "Yes; every added parameter reduces the loss by 10% of its current value",
+      "No; the reduction depends on how much you grow the resource, via k^(-0.1)",
+      "No; it means a fixed 1% reduction in loss for every ×10 in model size",
+      "Yes; every doubling of model size reduces the loss by exactly 10%"
+    ],
+    "answer_index": 1,
+    "explanation": "The loss multiplier is k^(-α). For k = 10 that is 0.794 (≈ 20.6% reduction); for k = 2 it is about 0.933. The exponent is not a percentage."
+  },
+  {
+    "id": "10.2-028",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "How is Kaplan's form L(N) = (N_c/N)^(α_N) related to L = c·N^(-α_N)?",
+    "options": [
+      "They are the same curve with c = N_c^(α_N)",
+      "They differ: Kaplan's form is exponential, not a power law",
+      "Kaplan's form adds an irreducible loss term",
+      "Kaplan's form uses N_c as the trained model's size"
+    ],
+    "answer_index": 0,
+    "explanation": "Expanding gives N_c^(α_N)·N^(-α_N), identical to c·N^(-α_N) with c = N_c^(α_N). There is no floor term in either."
+  },
+  {
+    "id": "10.2-029",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "What is N_c in Kaplan's law L(N) = (N_c/N)^(α_N)?",
+    "options": [
+      "The number of layers in the reference model used for fitting",
+      "The size of the particular model being trained in this run",
+      "A fitted scale with N's units, where the formula predicts loss 1",
+      "The critical batch size above which data parallelism stops helping"
+    ],
+    "answer_index": 2,
+    "explanation": "N_c is a fitted constant, not the model's size. Substituting N = N_c gives (1)^α = 1, so N_c is where the fitted formula would predict loss 1, even if far outside the fitted range."
+  },
+  {
+    "id": "10.2-030",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "In Kaplan's data law L(D) = (D_c/D)^(α_D), what is D?",
+    "options": [
+      "Number of documents",
+      "Dataset size in tokens",
+      "Model depth in layers",
+      "Vocabulary size"
+    ],
+    "answer_index": 1,
+    "explanation": "D is dataset size measured in tokens; D_c is its fitted scale and α_D its exponent."
+  },
+  {
+    "id": "10.2-031",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "In Kaplan's compute law L(C) = (C_c/C)^(α_C), how is lowercase c (the fit coefficient) different from uppercase C?",
+    "options": [
+      "Uppercase C is the context length; lowercase c is the compute in FLOPs",
+      "Lowercase c is the coefficient of c·N^(-α); uppercase C is training FLOPs",
+      "Lowercase c is the training compute; uppercase C is the fitted coefficient",
+      "They are the same quantity, the fitted coefficient, written two ways"
+    ],
+    "answer_index": 1,
+    "explanation": "The notation overlaps: c is the multiplicative coefficient in the generic fitting function, while C is a compute budget (with C_c its fitted scale in the same compute unit)."
+  },
+  {
+    "id": "10.2-032",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "Are Kaplan's L(N), L(D) and L(C) three terms to add together into one loss?",
+    "options": [
+      "No; L(C) is the product of L(N) and L(D), so they are multiplied, not added",
+      "Yes; but only for models above 1B parameters, where all three are in effect",
+      "Yes; the total loss is L(N) + L(D) + L(C), each measured on the same runs",
+      "No; they are separate relationships, each measured when the others don't bind"
+    ],
+    "answer_index": 3,
+    "explanation": "Each law describes loss when one resource is the binding constraint. L(N) needs ample data and training, L(D) needs a large enough model with suitable duration, L(C) needs good allocation. They are not summed."
+  },
+  {
+    "id": "10.2-033",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "To measure Kaplan's model-size law L(N), what must be provided?",
+    "options": [
+      "Enough data and training that model capacity is the main limitation",
+      "A deliberately tiny dataset, so that each model is pushed to overfit",
+      "A fixed number of FLOPs for every model, regardless of its size",
+      "The same number of parameters for every run, varying only the data"
+    ],
+    "answer_index": 0,
+    "explanation": "L(N) isolates capacity, so data and training must not be the bottleneck. Otherwise the measured loss reflects undertraining or data limits."
+  },
+  {
+    "id": "10.2-034",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "To measure Kaplan's data law L(D), what condition is required?",
+    "options": [
+      "Unlimited repeated passes over the data, so every model fully converges on it",
+      "A large enough model, trained only as long as it avoids overfitting the dataset",
+      "A very small model, so that the data size is the only variable that matters",
+      "Exactly one epoch with a tiny model, so that no token is ever seen twice"
+    ],
+    "answer_index": 1,
+    "explanation": "To make data the binding constraint, the model must be big enough not to be capacity-limited, and training duration should avoid overfitting the finite dataset."
+  },
+  {
+    "id": "10.2-035",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "Why does giving an arbitrary model extra FLOPs not automatically place it on Kaplan's L(C) curve?",
+    "options": [
+      "L(C) describes compute-efficient training with well-chosen size and allocation",
+      "Because L(C) ignores data entirely, so extra FLOPs on more tokens are wasted",
+      "Because FLOPs are not counted in L(C); it is indexed by wall-clock time instead",
+      "Because L(C) only applies to models with exactly 1B parameters and fixed data"
+    ],
+    "answer_index": 0,
+    "explanation": "The compute law describes the best achievable loss at a compute budget, with sufficient data and a well-chosen model size. Kaplan writes it as C_min; a poorly allocated run lies above the curve."
+  },
+  {
+    "id": "10.2-036",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "Kaplan reports α_N ≈ 0.076. What loss multiplier does doubling model size then predict?",
+    "options": [
+      "About 0.076 (≈92.4% decrease)",
+      "About 0.949 (≈5.1% decrease)",
+      "About 0.924 (≈7.6% decrease)",
+      "About 0.5 (≈50% decrease)"
+    ],
+    "answer_index": 1,
+    "explanation": "2^(-0.076) ≈ 0.949, so doubling N cuts loss by about 5.1%. Reading 0.076 as a 7.6% decrease confuses the exponent with a percentage."
+  },
+  {
+    "id": "10.2-037",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.3 Kaplan's notation: the same curve written another way",
+    "question": "How does the token count in the 6ND FLOP estimate differ from dataset size D in Kaplan's data law?",
+    "options": [
+      "6ND counts parameters, not tokens; D in the data law counts unique tokens",
+      "6ND counts processed tokens, repeats included; D counts unique tokens",
+      "They are always identical, since each token is seen exactly once in training",
+      "6ND counts unique tokens only, while dataset size D in the data law counts repeats"
+    ],
+    "answer_index": 1,
+    "explanation": "The FLOP estimate uses tokens processed, so repeated epochs add compute. Dataset size D counts distinct tokens available. The two differ whenever data is reused."
+  },
+  {
+    "id": "10.2-038",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "What does log10(a) ask?",
+    "options": [
+      "10 raised to what power equals a?",
+      "How many digits does a have after the decimal point?",
+      "What is a divided by 10?",
+      "a raised to what power equals 10?"
+    ],
+    "answer_index": 0,
+    "explanation": "log10(a) is the exponent you must raise 10 to in order to get a. So log10(10^6) = 6."
+  },
+  {
+    "id": "10.2-039",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "Going from a 1M- to a 100M-parameter model, what is the horizontal change in log10 N?",
+    "options": [
+      "99M (100M minus 1M)",
+      "100 (a ×100 increase)",
+      "2 (two ×10 increases)",
+      "0.02 (2 divided by 100)"
+    ],
+    "answer_index": 2,
+    "explanation": "log10(10^8) − log10(10^6) = 8 − 6 = 2. The size ratio is 100, but its log is 2."
+  },
+  {
+    "id": "10.2-040",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "Which two log rules convert a power law into a line?",
+    "options": [
+      "log(a + b) = log a + log b and log(a/b) = log a · log b",
+      "log(a^r) = a·log r and log(ab) = log a · log b",
+      "log(ab) = log a + log b and log(a^r) = r·log a",
+      "log(a − b) = log a / log b and log(1) = 1"
+    ],
+    "answer_index": 2,
+    "explanation": "Products become sums and exponents become multipliers. Note log of a sum does not split — that becomes important for Chinchilla's three-term formula."
+  },
+  {
+    "id": "10.2-041",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "Taking log10 of L = c·N^(-α_N) gives which equation?",
+    "options": [
+      "log10 L = log10 c − α_N·log10 N",
+      "log10 L = c − α_N·N",
+      "log10 L = −α_N·log10(c·N)",
+      "log10 L = log10 c + α_N·log10 N"
+    ],
+    "answer_index": 0,
+    "explanation": "log(c·N^(-α)) = log c + log(N^(-α)) = log c − α·log N. This is a straight line in (log N, log L)."
+  },
+  {
+    "id": "10.2-042",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "Mapping log10 L = log10 c − α_N·log10 N onto Y = mX + b, what are the slope and intercept?",
+    "options": [
+      "Slope m = α_N, intercept b = c",
+      "Slope m = c, intercept b = α_N",
+      "Slope m = log10 c, intercept b = −α_N",
+      "Slope m = −α_N, intercept b = log10 c"
+    ],
+    "answer_index": 3,
+    "explanation": "X = log N and Y = log L, so the slope is −α_N (negative for a decaying law) and the intercept is log c."
+  },
+  {
+    "id": "10.2-043",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "Fitting a power law with natural logs instead of base-10 logs gives what exponent?",
+    "options": [
+      "An exponent larger by a factor of ln 10 ≈ 2.303 than the base-10 fit",
+      "The same exponent; only the intercept's form changes, undone with exp",
+      "A meaningless exponent, because the power-law convention requires base 10",
+      "A negative exponent, because natural logs flip the sign of the fitted slope"
+    ],
+    "answer_index": 1,
+    "explanation": "Changing log base rescales both axes by the same factor, so the slope (and exponent) is unchanged. The intercept is then ln c, recovered with np.exp."
+  },
+  {
+    "id": "10.2-044",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "On a log-log plot of loss vs model size, what is the sign relationship between the slope and the scaling exponent?",
+    "options": [
+      "The slope is positive and α_N equals the slope",
+      "The slope is zero and α_N is read off the intercept",
+      "The slope is negative and α_N = −slope is positive",
+      "The slope and α_N are both negative, with equal value"
+    ],
+    "answer_index": 2,
+    "explanation": "Loss falls as size grows, so the line slopes downward (negative m). The scaling exponent is defined as α_N = −m, a positive number."
+  },
+  {
+    "id": "10.2-045",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "In a fitted log-log scaling line, what does the intercept control versus the exponent?",
+    "options": [
+      "The intercept is always zero, so only the exponent matters",
+      "Both together control the irreducible loss floor of the curve",
+      "The intercept sets the line's level; the exponent sets its decline",
+      "The intercept sets the rate of decline; the exponent sets the level"
+    ],
+    "answer_index": 2,
+    "explanation": "Intercept b = log c shifts the line up or down; the slope magnitude α_N determines how steeply loss falls with size."
+  },
+  {
+    "id": "10.2-046",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "2.4 Logs translate multiplication into addition",
+    "question": "What is the simple recipe for fitting a power law?",
+    "options": [
+      "Exponentiate the measurements, fit a straight line, and take logs of the slope",
+      "Average the losses, divide by the average model size, and read off the exponent",
+      "Fit a degree-5 polynomial to the raw measurements in linear space and differentiate",
+      "Take logs of the measurements, fit a line, translate slope and intercept back"
+    ],
+    "answer_index": 3,
+    "explanation": "In log space a power law is linear, so ordinary line fitting gives slope = −α and intercept = log c, which you convert back."
+  },
+  {
+    "id": "10.2-047",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.1 Find the slope: change in log loss divided by change in log size",
+    "question": "When fitting a line through two scaling measurements (log10 N, log10 L), how is the slope computed?",
+    "options": [
+      "(Y2 − Y1) / (X2 − X1) using log values",
+      "Y2 / X2 using log values of the last point",
+      "(L2 − L1) / (N2 − N1) using raw values",
+      "(X2 − X1) / (Y2 − Y1) using log values"
+    ],
+    "answer_index": 0,
+    "explanation": "Slope is vertical change over horizontal change in log coordinates. Using raw L and N would not give the power-law exponent."
+  },
+  {
+    "id": "10.2-048",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.1 Find the slope: change in log loss divided by change in log size",
+    "question": "With measurements (1M, loss 4.0) and (100M, loss 3.0), why is the horizontal change in the slope computation 2 and not 100?",
+    "options": [
+      "Because the horizontal axis is log10 N, and log10(100) = 2",
+      "Because there are two measurements, one at each end of the line",
+      "Because the slope must be divided by 50 to normalise the size range",
+      "Because the loss changed by 1 and 100/50 = 2 sets the run spacing"
+    ],
+    "answer_index": 0,
+    "explanation": "The x-coordinates are log10 N = 6 and 8. The size ratio is 100, but the difference in logs is log10(100) = 2."
+  },
+  {
+    "id": "10.2-049",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.1 Find the slope: change in log loss divided by change in log size",
+    "question": "Fitting (1M, 4.0) and (100M, 3.0) gives α_N ≈ 0.06247. What does that mean per ×10 in size?",
+    "options": [
+      "Loss falls by exactly 0.06247 nats per ×10",
+      "Loss is multiplied by 0.06247 for each ×10",
+      "Loss is multiplied by 10^(-0.06247) ≈ 0.866",
+      "Loss falls by exactly 6.247% for each ×10"
+    ],
+    "answer_index": 2,
+    "explanation": "Each ×10 multiplies loss by 10^(-α) ≈ 0.866, about a 13.4% reduction. The exponent is not a direct subtraction or percentage."
+  },
+  {
+    "id": "10.2-050",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.2 Predict relative to a model we already measured",
+    "question": "What is the anchored form of a fitted power law through a measured model at (1M, loss 4.0) with α_N = 0.06247?",
+    "options": [
+      "L(N) = 4.0 − 0.06247·log10(N / 10^6)",
+      "L(N) = 10^6 · (4.0 / N)^(-0.06247)",
+      "L(N) = (4.0 · 10^6 / N)^(0.06247)",
+      "L(N) = 4.0 · (N / 10^6)^(-0.06247)"
+    ],
+    "answer_index": 3,
+    "explanation": "Anchoring to a measured model means: start at its loss, divide the target size by its size to get a multiplier, raise to −α. The coefficient c is not needed."
+  },
+  {
+    "id": "10.2-051",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.2 Predict relative to a model we already measured",
+    "question": "Predicting the loss of a 10M model from fits at 1M and 100M is called what?",
+    "options": [
+      "Interpolation: a prediction between the measured sizes, still to be tested",
+      "Extrapolation: a prediction beyond the measured sizes, so it is least reliable",
+      "Regularisation: the fit is smoothed toward the middle of the measured range",
+      "A measurement, since any point lying on the fitted line is already observed"
+    ],
+    "answer_index": 0,
+    "explanation": "10M lies between the two fitted sizes, so it is interpolation. It is a prediction to check, not an extra measurement."
+  },
+  {
+    "id": "10.2-052",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.2 Predict relative to a model we already measured",
+    "question": "Why does a power-law line fitted through exactly two points reproduce both measured losses?",
+    "options": [
+      "Because the coefficient is always chosen as the average of the two losses",
+      "Because the measurements are fitted in linear space, where lines are exact",
+      "Because the irreducible loss term absorbs whatever error the line leaves",
+      "A straight line through two points passes through both by construction"
+    ],
+    "answer_index": 3,
+    "explanation": "Two points uniquely define a line in log space, so the fit matches both exactly. This agreement is therefore no evidence that a power law is the right model."
+  },
+  {
+    "id": "10.2-053",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.3 Recover the coefficient that fit_power_law returns",
+    "question": "fit_power_law([1e6, 1e8], [4.0, 3.0]) returns approximately (0.06247, 9.4815). What is the order of the returned values?",
+    "options": [
+      "Exponent first, coefficient second",
+      "Slope first, intercept second",
+      "Intercept first, exponent second",
+      "Coefficient first, exponent second"
+    ],
+    "answer_index": 0,
+    "explanation": "The function returns (exponent, coefficient) for y = coefficient · x^(-exponent). The exponent is the positive negated slope; the coefficient is exp(intercept)."
+  },
+  {
+    "id": "10.2-054",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.3 Recover the coefficient that fit_power_law returns",
+    "question": "Why must N be the raw parameter count (e.g. 1e6) when using a coefficient returned by fit_power_law?",
+    "options": [
+      "Because fit_power_law only accepts integer sizes and rounds anything else",
+      "Because the coefficient is unitless and independent of the scale of N",
+      "Changing the unit of N changes the exponent but leaves the coefficient alone",
+      "Changing N's unit changes the coefficient, though the exponent is unchanged"
+    ],
+    "answer_index": 3,
+    "explanation": "If N were in millions, c would differ by a factor of (10^6)^α. The exponent stays the same. The anchored form N/10^6 avoids the trap by making the ratio explicit."
+  },
+  {
+    "id": "10.2-055",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.3 Recover the coefficient that fit_power_law returns",
+    "question": "What advantage does the anchored form L(N) = L_0·(N/N_0)^(-α) have over the unanchored c·N^(-α)?",
+    "options": [
+      "It requires no measurements, since L_0 and N_0 are universal constants",
+      "It includes the irreducible loss floor, so it cannot over-extrapolate",
+      "It states the size ratio explicitly, avoiding unit mistakes in c",
+      "It gives a different and more accurate exponent than the unanchored fit"
+    ],
+    "answer_index": 2,
+    "explanation": "Writing N/N_0 makes the computation about a size multiplier from a measured model, so the coefficient's dependence on units never arises."
+  },
+  {
+    "id": "10.2-056",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.4 Try one prediction beyond the measurements",
+    "question": "Starting from a measured 100M model with loss 3.0 and α_N = 0.06247, what is the predicted loss at 1B and what kind of prediction is it?",
+    "options": [
+      "About 3.0, since loss stops falling past 100M on this corpus",
+      "About 2.598, an extrapolation beyond the largest measured model",
+      "About 2.0, an extrapolation obtained by subtracting the exponent",
+      "About 2.598, an interpolation between the two measured models"
+    ],
+    "answer_index": 1,
+    "explanation": "3.0 × 10^(-0.06247) ≈ 3.0 × 0.866 ≈ 2.598. Because 1B exceeds the largest measured size, it is extrapolation — a forecast, not a guarantee."
+  },
+  {
+    "id": "10.2-057",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.4 Try one prediction beyond the measurements",
+    "question": "Before trusting an extrapolated power-law prediction, what should be checked?",
+    "options": [
+      "That the predicted loss is below zero, confirming the curve has not flattened",
+      "That the fitted coefficient is greater than 1, so the units of N are consistent",
+      "That the fitted exponent is exactly 0.076, matching Kaplan et al.'s published value",
+      "That the setup stays comparable and the curve isn't flattening toward the floor"
+    ],
+    "answer_index": 3,
+    "explanation": "Extrapolation assumes the same conditions and a continuing straight line. Changes in setup, or approach to the data's irreducible loss, can break it."
+  },
+  {
+    "id": "10.2-058",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "3.4 Try one prediction beyond the measurements",
+    "question": "Why can two measurements not establish that a power law describes the real relationship?",
+    "options": [
+      "Because two points always lie on a curved line in log space",
+      "Two points always define a line in log space, whatever the truth",
+      "Because two points have no defined slope in log-log coordinates",
+      "Because a power-law fit requires exactly three points to be unique"
+    ],
+    "answer_index": 1,
+    "explanation": "Any two positive points can be joined by a log-log line, so a perfect fit is guaranteed. With several measurements you can check whether they lie approximately on a straight line."
+  },
+  {
+    "id": "10.2-059",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "4. From scratch: fit_power_law via log-log least squares",
+    "question": "What are the steps inside fit_power_law(x, y)?",
+    "options": [
+      "Average log y, divide by average log x, and return that ratio as the exponent",
+      "Run gradient descent on the raw losses until the predicted curve stops improving",
+      "Fit a degree-2 polynomial in linear space and take its positive root as the exponent",
+      "Log x and y, fit a degree-1 least-squares line, negate slope, exp the intercept"
+    ],
+    "answer_index": 3,
+    "explanation": "It computes log_x, log_y, uses np.polyfit(..., deg=1) for slope and intercept, returns exponent = −slope and coefficient = exp(intercept)."
+  },
+  {
+    "id": "10.2-060",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "4. From scratch: fit_power_law via log-log least squares",
+    "question": "Why does fit_power_law fit in log space rather than linear space?",
+    "options": [
+      "Squared error on log L treats a 10% error at loss 5 like one at loss 2, matching the law",
+      "Because log space removes the irreducible loss, so the fit only sees the power-law part",
+      "Because linear-space least squares always returns a negative exponent for decaying data",
+      "Because numpy cannot fit a straight line in linear space without a log transform first"
+    ],
+    "answer_index": 0,
+    "explanation": "A power law is multiplicative, so relative errors are what matter. Fitting raw values lets large-loss points dominate the squared error and distorts the exponent."
+  },
+  {
+    "id": "10.2-061",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "4. From scratch: fit_power_law via log-log least squares",
+    "question": "Why does fit_power_law negate the fitted slope?",
+    "options": [
+      "Because the fitted intercept is negative, and the sign must be carried to the slope",
+      "To correct a known sign bug in numpy.polyfit's degree-1 least-squares solution",
+      "So a decaying law reports a positive exponent, matching the (N_c/N)^α convention",
+      "To convert the natural-log slope into the base-10 slope that the plots use"
+    ],
+    "answer_index": 2,
+    "explanation": "The log-log line slopes downward when loss decreases, so the slope is negative. Negating gives a positive α in the decay convention."
+  },
+  {
+    "id": "10.2-062",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "4. From scratch: fit_power_law via log-log least squares",
+    "question": "In fit_power_law, how is the coefficient recovered from the natural-log fit?",
+    "options": [
+      "coefficient = 10**intercept",
+      "coefficient = exp(intercept)",
+      "coefficient = intercept / slope",
+      "coefficient = −intercept"
+    ],
+    "answer_index": 1,
+    "explanation": "Since np.log was used, the intercept is ln c and c = exp(intercept). If base-10 logs were used, it would be 10^intercept."
+  },
+  {
+    "id": "10.2-063",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "5. Fit a real curve: a tiny GPT sweep",
+    "question": "What does the scaling_sweep.py experiment vary to produce a model-size scaling curve?",
+    "options": [
+      "The number of layers from 2 to 64 with a fixed width of 64",
+      "The width n_embd from 8 to 64, 2 layers each, on one toy corpus",
+      "The learning rate from 1e-5 to 1e-1 at a single fixed model size",
+      "The corpus size from 1k to 1M tokens with one fixed model size"
+    ],
+    "answer_index": 1,
+    "explanation": "Six tiny GPTs of increasing width (8, 16, 24, 32, 48, 64), all with two layers and the same corpus, are trained; their final losses are fit with fit_power_law."
+  },
+  {
+    "id": "10.2-064",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "5. Fit a real curve: a tiny GPT sweep",
+    "question": "In the tiny GPT sweep, which N is recorded for each model before fitting?",
+    "options": [
+      "The number of training steps each model ran for (600)",
+      "The batch size times the context length used for every run",
+      "model.num_params(non_embedding=True), the non-embedding count",
+      "The total parameter count, including the 256-token embedding"
+    ],
+    "answer_index": 2,
+    "explanation": "The sweep uses the non-embedding count, consistent with the scaling convention, then pairs it with each model's held-out final loss."
+  },
+  {
+    "id": "10.2-065",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "5. Fit a real curve: a tiny GPT sweep",
+    "question": "In the tiny GPT sweep, what loss value is paired with each model size?",
+    "options": [
+      "The training loss at step 1, before any updates are applied",
+      "The mean loss over a few held-out batches after training",
+      "The gradient norm at the last step, averaged over parameters",
+      "The minimum training loss over all steps of the toy run"
+    ],
+    "answer_index": 1,
+    "explanation": "final_loss averages loss over several held-out batches after 600 training steps, giving one evaluation number per trained model."
+  },
+  {
+    "id": "10.2-066",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "5. Fit a real curve: a tiny GPT sweep",
+    "question": "The toy sweep fits α_N ≈ 0.07, close to Kaplan's 0.076. What should you conclude?",
+    "options": [
+      "That six models are enough for a reliable scaling study on any corpus or architecture",
+      "That the toy sweep has accurately measured the true scaling exponent of natural language",
+      "That Kaplan's exponent of 0.076 applies to all corpora and architectures",
+      "Nothing about the real exponent; the match is chance, it only shows the mechanism"
+    ],
+    "answer_index": 3,
+    "explanation": "Six ~100k-parameter models on a repeated toy corpus cannot estimate the real exponent. What the sweep honestly shows is the mechanism: bigger model, lower loss, roughly straight in log-log."
+  },
+  {
+    "id": "10.2-067",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "5. Fit a real curve: a tiny GPT sweep",
+    "question": "What do real scaling studies do that a six-model toy sweep does not?",
+    "options": [
+      "Span many orders of N, use a corpus big enough that data never binds, tune LR, average seeds",
+      "Fit the curve in linear space rather than log space, for higher numerical precision at large N",
+      "Use a tiny 5-sentence corpus repeated many times, so every model sees identical token statistics",
+      "Use the same learning-rate schedule and step count for every model size, to keep the runs equal"
+    ],
+    "answer_index": 0,
+    "explanation": "Real studies cover wide ranges, avoid data bottlenecks, tune schedules per size, and average across seeds. A toy sweep's exponent is qualitative only."
+  },
+  {
+    "id": "10.2-068",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "6. Under the hood: least squares, and what the fit assumes",
+    "question": "What does np.polyfit(log_x, log_y, 1) actually solve?",
+    "options": [
+      "A linear least-squares problem minimising Σ (b + m·log x_i − log y_i)²",
+      "A maximum-likelihood problem with a Huber loss, solved by iterative reweighting",
+      "An eigenvalue problem on the covariance matrix of log x and log y, as in PCA",
+      "A nonlinear problem that needs L-BFGS with several random restarts to converge"
+    ],
+    "answer_index": 0,
+    "explanation": "It finds slope m and intercept b minimising squared residuals in log space. This has a closed-form normal-equations solution, so the fit is instant with no hyperparameters."
+  },
+  {
+    "id": "10.2-069",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "6. Under the hood: least squares, and what the fit assumes",
+    "question": "What key assumption does a log-log line fit make about scaling data?",
+    "options": [
+      "That the irreducible loss is zero over the range, but only once N exceeds 1B",
+      "That the held-out losses are normally distributed around the fitted line",
+      "That all models have the same number of layers, so only width differs",
+      "That a single power law holds over the measured range: log-log is linear"
+    ],
+    "answer_index": 3,
+    "explanation": "Fitting a line presumes linearity in log-log space. Kaplan verified this empirically for its range; it can break, notably near the irreducible loss."
+  },
+  {
+    "id": "10.2-070",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "6. Under the hood: least squares, and what the fit assumes",
+    "question": "What is the irreducible loss in scaling-law terms?",
+    "options": [
+      "The loss due to limited numerical precision in bf16 training",
+      "The training loss at step 0, before any learning has happened",
+      "The loss of the smallest model in the sweep, used as a baseline",
+      "The entropy of the data itself, a floor no model can go below"
+    ],
+    "answer_index": 3,
+    "explanation": "Natural text has inherent uncertainty given its context; even a perfect model has nonzero cross-entropy. This floor is the E term in Chinchilla's formula."
+  },
+  {
+    "id": "10.2-071",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "6. Under the hood: least squares, and what the fit assumes",
+    "question": "Why does extrapolating a pure power law too far predict impossibly low loss?",
+    "options": [
+      "The pure law decreases toward zero, while real loss flattens near the floor",
+      "Because the fitted coefficient keeps growing with N beyond the fitted range",
+      "Because log space systematically overestimates the loss of the largest models",
+      "Because the exponent turns negative at large N, so the curve accelerates downward"
+    ],
+    "answer_index": 0,
+    "explanation": "c·N^(-α) → 0 as N grows, but loss cannot go below the data's entropy. Near that floor the real curve bends away from the straight line."
+  },
+  {
+    "id": "10.2-072",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "6. Under the hood: least squares, and what the fit assumes",
+    "question": "What should a good scaling-law fit report about its range?",
+    "options": [
+      "A single universal prediction that applies to all model sizes and corpora",
+      "The range it was fit over, without extrapolating past where the line stays straight",
+      "The coefficient in arbitrary units, so that it can be rescaled to any N later",
+      "Only the exponent, since the measured range is irrelevant to a power law"
+    ],
+    "answer_index": 1,
+    "explanation": "A fit is only validated within its measured range. Stating the range and avoiding extrapolation past the straight portion guards against bending near the floor."
+  },
+  {
+    "id": "10.2-073",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Research connection",
+    "question": "What compute-allocation conclusion did Kaplan et al. (2020) reach?",
+    "options": [
+      "Spend most extra compute on more training tokens",
+      "Spend most extra compute on bigger models",
+      "Spend extra compute on longer context windows",
+      "Split compute exactly equally between N and D"
+    ],
+    "answer_index": 1,
+    "explanation": "Kaplan favoured growing model size faster than data. Chinchilla later revised exactly this conclusion, so it should be held loosely."
+  },
+  {
+    "id": "10.2-074",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Research connection",
+    "question": "When reading Kaplan et al. 2020 on a first pass, what is recommended to skip?",
+    "options": [
+      "The equations for L(N), L(D) and L(C) and their fitted constants",
+      "The compute-allocation conclusion about model size versus tokens",
+      "The abstract and the main power-law figure summarising the results",
+      "The critical-batch-size derivations and fitting-methodology appendices"
+    ],
+    "answer_index": 3,
+    "explanation": "The core is the abstract, the straight log-log figure, and the equation set. Critical batch size derivations and fitting appendices can wait."
+  },
+  {
+    "id": "10.2-075",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Research connection",
+    "question": "According to Kaplan et al., how does sample efficiency relate to model size?",
+    "options": [
+      "Larger models are more sample-efficient",
+      "Only models under 1M parameters are sample-efficient",
+      "Smaller models are more sample-efficient",
+      "Sample efficiency is independent of model size"
+    ],
+    "answer_index": 0,
+    "explanation": "One takeaway is that larger models reach a given loss with fewer tokens. This fed Kaplan's recommendation to favour model size."
+  },
+  {
+    "id": "10.2-076",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Exercise",
+    "question": "Measurements of 3.60, 3.00 and 2.50 at 1M, 10M and 100M give α_N ≈ 0.07918. What fraction of loss remains after each ×10 in size?",
+    "options": [
+      "About 50% (half the loss)",
+      "About 7.9% (the exponent)",
+      "About 92.1% (1 − α_N)",
+      "About 83.3% (≈ 5/6)"
+    ],
+    "answer_index": 3,
+    "explanation": "r = 10^(-0.07918) ≈ 0.8333, and both observed ratios 3.00/3.60 and 2.50/3.00 equal 5/6. Each ×10 removes about 16.7%."
+  },
+  {
+    "id": "10.2-077",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Exercise",
+    "question": "With r = 0.8333 per ×10 and loss 2.50 at 100M, what does the power law predict at 1B?",
+    "options": [
+      "About 2.08, an extrapolation",
+      "About 2.00, an interpolation",
+      "About 1.50, by subtracting 0.50 twice",
+      "About 2.08, an interpolation"
+    ],
+    "answer_index": 0,
+    "explanation": "2.50 × 0.8333 ≈ 2.083. Since 1B is beyond the largest measured size, it is extrapolation. Subtracting fixed amounts is wrong for a power law."
+  },
+  {
+    "id": "10.2-078",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Exercise",
+    "question": "A teammate says three points agreeing with a power law guarantee a 1B model will reach the predicted loss. Which response is correct?",
+    "options": [
+      "Correct, as long as the tokenizer and the held-out evaluation set are kept unchanged",
+      "Too strong: it could be undertrained or data-limited, and loss flattens at a floor",
+      "Correct: three points that agree with each other prove the power law holds at every scale",
+      "Too weak: the 1B model will certainly do better than the predicted loss"
+    ],
+    "answer_index": 1,
+    "explanation": "A larger model could be undertrained, run out of data, or need different optimisation. Also, a pure power law heads to zero, but real loss approaches a floor E > 0, so the true curve eventually lies above the straight-line prediction."
+  },
+  {
+    "id": "10.2-079",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Exercise",
+    "question": "On a log-log plot, how does the real loss curve deviate from the pure power law as it nears the irreducible loss?",
+    "options": [
+      "It oscillates around the straight line with growing amplitude",
+      "It bends downward, falling faster than the straight-line trend",
+      "It bends upward relative to the continued straight line",
+      "It stays exactly on the line until the loss reaches zero"
+    ],
+    "answer_index": 2,
+    "explanation": "Approaching the floor, real loss decreases more slowly than the power law predicts, so the curve lies above the extended straight line — bending upward relative to it."
+  },
+  {
+    "id": "10.2-080",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong when you fit a scaling law by least squares in linear space?",
+    "options": [
+      "The exponent comes out exactly right, but the coefficient is badly off",
+      "The irreducible loss is overestimated and absorbs most of the curvature",
+      "Large-loss points dominate the error and distort the exponent",
+      "The fit always fails to converge, because the problem is non-convex"
+    ],
+    "answer_index": 2,
+    "explanation": "Linear-space squared error weighs absolute deviations, so high-loss points dominate. Fitting logs weighs relative error, matching the multiplicative law."
+  },
+  {
+    "id": "10.2-081",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "A practitioner treats the exponent from six tiny models on a toy corpus as 'the' scaling exponent. Why is that a mistake?",
+    "options": [
+      "Because toy exponents are always exactly zero on small corpora",
+      "The toy sweep estimates the mechanism, not the real α_N",
+      "Because six models always overestimate α by roughly 10×",
+      "Because toy sweeps fit in linear space rather than log space"
+    ],
+    "answer_index": 1,
+    "explanation": "Tiny models on a repeated corpus cannot represent real data and scale. The exponent is qualitative, illustrating that loss falls in a straight log-log line."
+  },
+  {
+    "id": "10.2-082",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A fit returns exponent 0.05 and coefficient 8.0. What loss does it predict at N = 10^7?",
+    "options": [
+      "About 4.47",
+      "About 0.40",
+      "About 3.57",
+      "About 7.65"
+    ],
+    "answer_index": 2,
+    "explanation": "L = 8.0 × (10^7)^(-0.05) = 8.0 × 10^(-0.35) ≈ 8.0 × 0.4467 ≈ 3.57."
+  },
+  {
+    "id": "10.2-083",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Check yourself",
+    "question": "With α_N = 0.076 and ignoring the irreducible floor, roughly how much must you grow N to halve the loss?",
+    "options": [
+      "About 9,400× (about four orders of magnitude)",
+      "About 76× (one over the exponent)",
+      "About 13× (just over one order of magnitude)",
+      "About 2× (doubling halves the loss)"
+    ],
+    "answer_index": 0,
+    "explanation": "Halving needs x^(-0.076) = 0.5, so x = 2^(1/0.076) ≈ 2^13.2 ≈ 9,400. Such small exponents are why frontier-scale gains are so expensive."
+  },
+  {
+    "id": "10.2-084",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A six-point sweep bends at the largest model instead of staying straight. What are plausible causes?",
+    "options": [
+      "The power law turning into an exponential law once N passes a critical size",
+      "The tokenizer silently changing between runs as the vocabulary is re-fitted",
+      "The irreducible floor or overfitting the tiny corpus, or mistuned larger models",
+      "A bug in np.log that loses precision only for very large input values"
+    ],
+    "answer_index": 2,
+    "explanation": "Approaching the floor or overfitting flattens the curve, and using the same steps and LR for all sizes can mis-measure large models. Either way, refit only on the straight portion or fix training."
+  },
+  {
+    "id": "10.2-085",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Hardware track",
+    "question": "Why is a GPU pointless for the six-model toy scaling sweep?",
+    "options": [
+      "~1k–100k params, so kernel-launch overhead dominates; it runs in 1–2 min on CPU",
+      "Because GPUs cannot run AdamW's per-parameter updates for such small tensors",
+      "Because the sweep needs fp64 accumulation, which consumer GPUs do not support",
+      "Because the sweep uses no matrix multiplications, only embedding lookups"
+    ],
+    "answer_index": 0,
+    "explanation": "At this tiny size per-kernel launch overhead outweighs any parallel speedup, so a laptop CPU is as good. Real scaling studies, by contrast, are cluster jobs spanning many GPU-days."
+  },
+  {
+    "id": "10.2-086",
+    "chapter": "10.2",
+    "chapter_name": "Kaplan scaling laws; fit a curve",
+    "module": "10",
+    "module_name": "Scaling laws",
+    "source": "lessons/module-10/lesson-02.md",
+    "section": "Next",
+    "question": "What does Chinchilla add beyond Kaplan's separate L(N) and L(D) laws?",
+    "options": [
+      "A method to subtract the irreducible loss before fitting each law separately",
+      "A third law for context length, alongside the model-size and data-size laws",
+      "A proof that the power laws are exact rather than empirical approximations",
+      "A single fit L(N, D) plus a constrained optimisation over C = 6ND"
+    ],
+    "answer_index": 3,
+    "explanation": "The planning question couples N and D through C = 6ND. Chinchilla fits a joint surface and optimises along the constraint, overturning Kaplan's 'spend it on bigger models'."
+  }
+]

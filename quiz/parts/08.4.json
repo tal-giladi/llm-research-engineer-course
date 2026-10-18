@@ -1,0 +1,1514 @@
+[
+  {
+    "id": "08.4-001",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What was the main obstacle that capped the context length of transformer models before FlashAttention?",
+    "options": [
+      "The O(T^2) memory of materializing the T×T attention score matrix",
+      "The O(T^3) FLOP cost of multiplying the query and key matrices",
+      "The limited number of positions in learned positional embeddings",
+      "The quadratic number of parameters in the attention projections"
+    ],
+    "answer_index": 0,
+    "explanation": "Standard attention stores a T×T score/probability matrix per head per layer, so its memory grows quadratically with sequence length T. That quadratic memory was the wall on context length. The QK^T matmul costs O(T^2 d), not O(T^3), and the projection weights do not depend on T at all."
+  },
+  {
+    "id": "08.4-002",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How does the output of FlashAttention compare with the output of standard softmax(QK^T/sqrt(d))V attention?",
+    "options": [
+      "It is a sparse approximation that drops low-scoring keys",
+      "It is a low-rank approximation with a small bounded error",
+      "It is the exact same output, up to floating-point rounding",
+      "It matches only when the sequence length is a multiple of the block size"
+    ],
+    "answer_index": 2,
+    "explanation": "FlashAttention changes how the computation is scheduled through memory, not the mathematics. Tiling plus the online-softmax recurrence reproduces full-row softmax exactly, so the only differences are rounding at the ~1e-6 level in fp32. It is not a sparse or low-rank approximation like some efficient-attention methods."
+  },
+  {
+    "id": "08.4-003",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "How much memory does FlashAttention need for the attention activations as a function of sequence length T?",
+    "options": [
+      "O(1), because every tile is discarded immediately after use",
+      "O(T log T), because tiles are merged in a tree reduction",
+      "O(T^2), the same as standard attention but with a smaller constant",
+      "O(T), because only per-row statistics and small tiles are kept"
+    ],
+    "answer_index": 3,
+    "explanation": "FlashAttention never stores the T×T matrix; it keeps the output and a few running numbers per query row, which is linear in T. Standard attention is O(T^2). It is not O(1) because the output O itself and the per-row statistics scale with T."
+  },
+  {
+    "id": "08.4-004",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is FlashAttention described as a natural capstone of a module on GPU architecture, the roofline and kernel fusion?",
+    "options": [
+      "It applies the SRAM/HBM hierarchy, the roofline and fusion to the operation that most needed them",
+      "It replaces the separate SRAM and HBM levels with a single unified memory pool managed by the kernel",
+      "It is the first algorithm that makes attention compute-bound by deliberately adding more FLOPs per byte",
+      "It is the only kernel that runs both matmuls and the softmax on tensor cores rather than CUDA cores"
+    ],
+    "answer_index": 0,
+    "explanation": "FlashAttention is essentially the memory hierarchy (fast small SRAM vs slow large HBM), the roofline (attention is bandwidth-bound) and fusion (do everything in one kernel to avoid HBM round trips) applied to attention. It does not change the hardware, and its point is fewer bytes moved, not more FLOPs."
+  },
+  {
+    "id": "08.4-005",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Roughly what change in model context lengths is FlashAttention credited with enabling?",
+    "options": [
+      "From about 128k tokens to tens of millions of tokens",
+      "From about 1–2k tokens to 128k tokens and beyond",
+      "From about 128 tokens to roughly 512 tokens",
+      "From about 512 tokens to roughly 2k tokens"
+    ],
+    "answer_index": 1,
+    "explanation": "By removing the quadratic memory of the score matrix, FlashAttention is credited with letting models move from 1–2k contexts to 128k+ contexts. It is now standard in every serious training and inference stack."
+  },
+  {
+    "id": "08.4-006",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "For single-head attention with Q, K, V of shape (T, d), what are the shapes of the score matrix S = QK^T/sqrt(d), the probability matrix P = softmax(S), and the output O = PV?",
+    "options": [
+      "S is (d, d), P is (d, d), O is (T, d)",
+      "S is (T, T), P is (T, T), O is (T, d)",
+      "S is (T, T), P is (T, d), O is (T, d)",
+      "S is (T, d), P is (T, d), O is (T, T)"
+    ],
+    "answer_index": 1,
+    "explanation": "QK^T contracts over the d dimension, giving one score per (query, key) pair, so S is T×T; softmax is applied row-wise and keeps that shape. Multiplying the T×T P by the T×d V gives a T×d output. The d×d option would be K^T Q, which is not attention."
+  },
+  {
+    "id": "08.4-007",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "In a naive (unfused) attention implementation, where do the intermediate matrices S and P live between steps?",
+    "options": [
+      "In on-chip SRAM, kept resident so they never touch main memory",
+      "In CPU RAM, copied over PCIe to the host and back between steps",
+      "In HBM (GPU main memory), written and read back between steps",
+      "In registers only, because each element is consumed exactly once"
+    ],
+    "answer_index": 2,
+    "explanation": "The naive implementation runs separate kernels: compute S and write it to HBM, read S back to apply softmax and write P to HBM, then read P back to multiply by V. Each T×T intermediate therefore makes round trips through slow HBM. They are far too large to fit in SRAM or registers at long T."
+  },
+  {
+    "id": "08.4-008",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "Which sequence describes the HBM traffic of naive attention?",
+    "options": [
+      "Write P; read P and write S; read S and write O",
+      "Read Q once; stream K and V; write O once",
+      "Read S once; write O once; never store P",
+      "Write S; read S and write P; read P and write O"
+    ],
+    "answer_index": 3,
+    "explanation": "Naive attention computes S = QK^T/sqrt(d) and writes it to HBM, reads it back to apply softmax and writes P, then reads P back and multiplies by V to write O. The option 'read Q once, stream K and V, write O once' describes FlashAttention's traffic, not the naive pattern."
+  },
+  {
+    "id": "08.4-009",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "For T = 8192 in fp16, approximately how large is one T×T attention matrix for a single head?",
+    "options": [
+      "About 1.1 GB",
+      "About 8 MB",
+      "About 134 MB",
+      "About 16 MB"
+    ],
+    "answer_index": 2,
+    "explanation": "One T×T matrix has 8192^2 ≈ 67 million elements; at 2 bytes each in fp16 that is about 134 MB. Naive attention reads and writes such matrices several times per head per layer, so the traffic and memory add up quickly."
+  },
+  {
+    "id": "08.4-010",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "Why is the softmax step of standard attention considered memory-bound?",
+    "options": [
+      "It must synchronize all SMs after every element is processed",
+      "It performs a large matrix multiplication that saturates the tensor cores",
+      "It reads a huge matrix, does only a few FLOPs per element, and writes it back",
+      "It requires a division that is much slower than multiplication on GPUs"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax is a low-arithmetic-intensity reduction: per element it does a max, a subtraction, an exp and a division, but it must move every element in and out of HBM. Its runtime is therefore set by bandwidth, not FLOPs. It contains no large matmul."
+  },
+  {
+    "id": "08.4-011",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "Where does standard long-sequence attention sit on the roofline plot?",
+    "options": [
+      "Exactly at the ridge point between the two regimes",
+      "Far right, on the flat compute-limited ceiling",
+      "Above the compute ceiling, due to tensor-core boosts",
+      "Far left, on the bandwidth-limited slope"
+    ],
+    "answer_index": 3,
+    "explanation": "Because naive attention is dominated by shuttling the T×T matrix through HBM, its arithmetic intensity is low and it sits on the bandwidth slope at the left of the roofline. Nothing can sit above the compute ceiling; that is the hardware maximum."
+  },
+  {
+    "id": "08.4-012",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "Besides bandwidth, why does the O(T^2) score matrix make long context run out of GPU memory during training?",
+    "options": [
+      "It must be stored in fp64 for numerical stability",
+      "It is a parameter that must be stored with its optimizer state",
+      "It is an activation that must be kept for the backward pass",
+      "It is copied to every GPU in the data-parallel group"
+    ],
+    "answer_index": 2,
+    "explanation": "In training, the score/probability matrix is an activation that autograd saves for the backward pass, so it stays in memory per head per layer. That quadratic activation memory is what overflows the GPU at long context. It is not a parameter and is not stored in fp64."
+  },
+  {
+    "id": "08.4-013",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "Switching attention from fp32 to bf16 halves the bytes of the score matrix. Why does that not solve the long-context memory problem?",
+    "options": [
+      "It helps only by a constant factor and leaves the O(T^2) scaling unchanged",
+      "It makes the softmax unstable so the matrix must be recomputed in fp32",
+      "It increases the number of elements in the matrix to compensate",
+      "It only affects the weights, not the activations of attention"
+    ],
+    "answer_index": 0,
+    "explanation": "Halving the dtype halves every byte count, but the matrix still has T^2 elements, so doubling T still quadruples memory. To break the quadratic wall you must avoid writing the full matrix at all, which is what FlashAttention does."
+  },
+  {
+    "id": "08.4-014",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "1. The problem: standard attention is memory-bound",
+    "question": "According to the analysis of standard attention, what is the real bottleneck at long sequence length?",
+    "options": [
+      "Scaling every score by 1/sqrt(d) before the softmax step",
+      "Loading the Q, K and V projection weights from HBM each step",
+      "Materializing the T×T score/probability matrix in HBM",
+      "Running the two matrix multiplications QK^T and PV on tensor cores"
+    ],
+    "answer_index": 2,
+    "explanation": "The matmuls are compute-efficient; the problem is writing and reading the T×T intermediates through HBM, which costs O(T^2) memory and bandwidth and feeds a memory-bound softmax. The scaling is a trivial elementwise op and the weights are tiny by comparison."
+  },
+  {
+    "id": "08.4-015",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "What property of the attention output makes it possible to compute O = PV without ever holding the whole matrix P?",
+    "options": [
+      "The matrix P is symmetric, so only its upper triangle has to be computed and kept in SRAM",
+      "The rows of P are identical across queries, so one row can be computed once and reused for all",
+      "The matrix P is always low-rank, so it can be factorized exactly into two thin T×r matrices",
+      "Each output row O_i = Σ_j P_ij V_j is a sum over keys that can be accumulated incrementally"
+    ],
+    "answer_index": 3,
+    "explanation": "The output row for query i is a weighted sum over keys, and a sum can be built up block by block. FlashAttention brings one block of keys/values into SRAM, folds its contribution into a running output and discards it. P is generally neither low-rank, symmetric, nor constant across rows."
+  },
+  {
+    "id": "08.4-016",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "In FlashAttention, what is the largest score object that exists in memory at any moment?",
+    "options": [
+      "One full T × T matrix, held in HBM",
+      "One small B_q × B_k tile, held in SRAM",
+      "One T × B_k strip, held in HBM",
+      "One B_q × T strip, held in L2 cache"
+    ],
+    "answer_index": 1,
+    "explanation": "For each query block FlashAttention loops over key blocks and computes only the B_q × B_k tile of scores, in on-chip SRAM. The full T×T matrix, or even a full row strip, never exists. That is what drops memory from O(T^2) to O(T)."
+  },
+  {
+    "id": "08.4-017",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "How are the block sizes in FlashAttention chosen?",
+    "options": [
+      "So that every block contains exactly one row maximum",
+      "So that the number of blocks equals the number of attention heads",
+      "So that the block size divides the vocabulary size evenly",
+      "So the Q, K and V tiles fit in the SM's shared memory (SRAM)"
+    ],
+    "answer_index": 3,
+    "explanation": "Tiles are sized to fit into each SM's fast shared memory, so all arithmetic on a tile happens on-chip. Block size has no effect on correctness, only on memory traffic and throughput. It is unrelated to the number of heads or vocabulary."
+  },
+  {
+    "id": "08.4-018",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "In FlashAttention, what is the HBM traffic for Q, K, V and O?",
+    "options": [
+      "Q, K and V are each read once, and the full T×T score matrix is written once to HBM",
+      "Q is re-read once per key block, while K, V and O are each read or written exactly once",
+      "All four tensors are read and written once per tile, so traffic grows with the tile count",
+      "Q is read once, O is written once, and K and V are streamed once per query block"
+    ],
+    "answer_index": 3,
+    "explanation": "Each query block is loaded once, the key/value blocks are streamed through SRAM once per query block, and the normalized output block is written once. The T×T score matrix is never written or read, which is the whole saving."
+  },
+  {
+    "id": "08.4-019",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "For T = 4096, d = 64 and 128-row query blocks, roughly how does FlashAttention change the HBM traffic of one attention head?",
+    "options": [
+      "From about 35 MB to about 136 MB",
+      "From about 136 MB to about 1 MB",
+      "From about 136 MB to about 35 MB",
+      "From about 1.1 GB to about 136 MB"
+    ],
+    "answer_index": 2,
+    "explanation": "The worked numbers quoted for this configuration drop traffic from roughly 136 MB to roughly 35 MB, a large constant-factor reduction, while the memory held drops from O(T^2) to O(T). The traffic does not fall to near zero, because K and V are still streamed once per query block."
+  },
+  {
+    "id": "08.4-020",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "2. The idea: tile into SRAM, never store the full matrix",
+    "question": "What is the main subtlety that tiling attention into key blocks introduces?",
+    "options": [
+      "Softmax normalizes over the whole row of keys, but only one block of keys is seen at a time",
+      "The 1/sqrt(d) scale must be recomputed per block because each block has its own head dimension",
+      "Key blocks must be processed in descending order of their scores so the max always arrives first",
+      "Matrix multiplication is not associative, so per-block partial products cannot be combined exactly"
+    ],
+    "answer_index": 0,
+    "explanation": "Softmax needs the row maximum and the sum of exponentials over all keys, yet tiling shows only one key block at a time. The online-softmax recurrence solves this by maintaining running statistics and correcting them as new blocks arrive. Block order does not matter for the final result."
+  },
+  {
+    "id": "08.4-021",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "Which two whole-row quantities does a numerically stable softmax need?",
+    "options": [
+      "The row mean and the row variance of the scores",
+      "The row sum of the scores and the row product",
+      "The row maximum and the sum of exponentials",
+      "The row minimum and the row maximum of the scores"
+    ],
+    "answer_index": 2,
+    "explanation": "Stable softmax subtracts the row max before exponentiating and divides by the sum of exponentials (the denominator). Online softmax computes both incrementally. Mean and variance are what normalization layers use, not softmax."
+  },
+  {
+    "id": "08.4-022",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "Why is the maximum score subtracted before exponentiating in softmax?",
+    "options": [
+      "To make all softmax probabilities sum to exactly one",
+      "To remove the need for the 1/sqrt(d) scaling",
+      "To prevent exp of a large score from overflowing",
+      "To make the softmax output sparse"
+    ],
+    "answer_index": 2,
+    "explanation": "exp of a large positive score overflows floating point; subtracting the max makes every exponent ≤ 0, so every exp is ≤ 1. Mathematically the max cancels between numerator and denominator, so it does not change the probabilities; they sum to one with or without it."
+  },
+  {
+    "id": "08.4-023",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "Which three running quantities does online softmax keep per query row?",
+    "options": [
+      "Running max m, running minimum, and running already-normalized output",
+      "Running max m, running denominator ℓ, and running unnormalized output o",
+      "Running mean, running variance, and running normalized output vector",
+      "Running sum of raw scores, running sum of value vectors, and key count"
+    ],
+    "answer_index": 1,
+    "explanation": "Online softmax maintains m (the max of scores seen so far), ℓ = Σ exp(score − m) and o = Σ exp(score − m)·v. The answer at the end is o/ℓ. Keeping a normalized output would require knowing the final denominator in advance."
+  },
+  {
+    "id": "08.4-024",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "What are the initial values of the running max m, running denominator ℓ, and running output o in online softmax?",
+    "options": [
+      "m = 0, ℓ = 0, o = −∞",
+      "m = −∞, ℓ = 1, o = 1",
+      "m = 0, ℓ = 1, o = 0",
+      "m = −∞, ℓ = 0, o = 0"
+    ],
+    "answer_index": 3,
+    "explanation": "Starting m at −∞ means any first block's max becomes the running max, and with α = exp(m − m_new) = 0 the empty initial sums ℓ = 0 and o = 0 contribute nothing. Starting ℓ at 1 would add a phantom term to the denominator."
+  },
+  {
+    "id": "08.4-025",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "In online softmax, what is the running denominator ℓ?",
+    "options": [
+      "The exponential of the running maximum score, exp(m)",
+      "The sum of exp(score − m) over all scores seen so far",
+      "The sum of the raw scores seen so far, before any exp",
+      "The number of keys processed so far across all blocks"
+    ],
+    "answer_index": 1,
+    "explanation": "ℓ accumulates exp(score − m) over the processed keys, referenced to the current running max m. At the end it equals the full-row softmax denominator (relative to the true max). It is neither a count nor a sum of raw scores."
+  },
+  {
+    "id": "08.4-026",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "In online softmax, what is the running output o?",
+    "options": [
+      "The softmax-normalized weighted average of the value vectors seen so far",
+      "The plain unweighted sum of all value vectors seen so far, divided at the end",
+      "The value vector of the single key with the largest score seen so far",
+      "The unnormalized sum of exp(score − m) times each value vector seen so far"
+    ],
+    "answer_index": 3,
+    "explanation": "o = Σ exp(score − m)·v is the numerator of the softmax-weighted average, not yet divided by the denominator. Normalization happens once, at the end, as o/ℓ. Storing it already normalized would require knowing the final denominator in advance."
+  },
+  {
+    "id": "08.4-027",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "When a new block of scores arrives in online softmax, how is the new running maximum computed?",
+    "options": [
+      "m_new = m + m_blk, adding the new block's max to the running max",
+      "m_new = (m + m_blk)/2, the average of the running and block maxima",
+      "m_new = m_blk, always replacing the old running max with the block's max",
+      "m_new = max(m, m_blk), where m_blk is the max score within the new block"
+    ],
+    "answer_index": 3,
+    "explanation": "The running max is the max over all scores seen so far, so it is the larger of the old running max and the new block's max. Always replacing it with m_blk would lose the old maximum whenever a later block has smaller scores."
+  },
+  {
+    "id": "08.4-028",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "In online softmax, what does the correction factor α = exp(m − m_new) do?",
+    "options": [
+      "It rescales the new block's exponentials so that they are expressed relative to the old running max",
+      "It normalizes the final output so that the attention weights across all keys sum to one",
+      "It rescales the old ℓ and o, computed against the old max, so they are relative to the new max",
+      "It scales the raw scores by 1/sqrt(d) before exponentiation to keep the softmax stable"
+    ],
+    "answer_index": 2,
+    "explanation": "ℓ and o were accumulated with exponents referenced to the old max m. Multiplying them by exp(m − m_new) re-references them to m_new, so they can be added to the new block's terms, which are computed against m_new. The final normalization is o/ℓ, a separate step."
+  },
+  {
+    "id": "08.4-029",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "What values can the online-softmax correction factor α = exp(m − m_new) take?",
+    "options": [
+      "α ≥ 1 always, and α = 1 on the very first block because nothing is rescaled",
+      "α can be any positive number, depending on block size and the score scale",
+      "α ≤ 1 always, and α = 0 on the very first block because m starts at −∞",
+      "α is always exactly 1, except on blocks where every key is masked out"
+    ],
+    "answer_index": 2,
+    "explanation": "Because m_new = max(m, m_blk) ≥ m, the exponent m − m_new is ≤ 0, so α ≤ 1. On the first block m = −∞, so α = exp(−∞) = 0, which wipes out the empty initial state. α = 1 occurs whenever the max does not change."
+  },
+  {
+    "id": "08.4-030",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "In online softmax, against which maximum are the new block's scores exponentiated?",
+    "options": [
+      "Against zero, with no max subtraction",
+      "Against the new running max m_new",
+      "Against the old running max m",
+      "Against the block's own max m_blk only"
+    ],
+    "answer_index": 1,
+    "explanation": "The new block's terms are p_t = exp(s_t − m_new), the same reference as the rescaled old sums α·ℓ and α·o, so all terms share one scale before being added. Using m_blk alone would leave old and new terms on different scales whenever m_blk < m."
+  },
+  {
+    "id": "08.4-031",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "What is the online-softmax update for the running denominator ℓ when a new block with exponentials p_t arrives?",
+    "options": [
+      "ℓ ← α·ℓ + Σ_t p_t",
+      "ℓ ← ℓ + α·Σ_t p_t",
+      "ℓ ← ℓ·Σ_t p_t",
+      "ℓ ← α·(ℓ + Σ_t p_t)"
+    ],
+    "answer_index": 0,
+    "explanation": "The old denominator is rescaled to the new max by α, then the new block's terms (already computed against m_new) are added. Applying α to the new terms or to the sum of both would put them on the wrong scale. The output o is updated the same way with p_t·v_t."
+  },
+  {
+    "id": "08.4-032",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "After all key blocks have been processed by online softmax, how is the attention output for a query row obtained?",
+    "options": [
+      "Divide the accumulated output by the accumulated denominator: o/ℓ",
+      "Apply a fresh softmax over the entries of the accumulated output o",
+      "Multiply the accumulated output by the final running max: o·m",
+      "Use o directly, since each block already normalized its contribution"
+    ],
+    "answer_index": 0,
+    "explanation": "o is the softmax numerator Σ exp(s − m)·v and ℓ is the denominator Σ exp(s − m), so o/ℓ is exactly the softmax-weighted average of the values. o by itself is unnormalized."
+  },
+  {
+    "id": "08.4-033",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "How much state per query row does online softmax need, independent of sequence length?",
+    "options": [
+      "O(log T): one partial sum per level of a reduction tree",
+      "O(T): one stored exponential per key, kept for the final divide",
+      "O(1): a max, a denominator and an output vector of size d",
+      "O(T^2): the full score row for every query-key pair"
+    ],
+    "answer_index": 2,
+    "explanation": "Per query row, online softmax keeps only m, ℓ and the d-dimensional o, regardless of how many keys there are. This O(1)-per-row state (constant in T) is why the full score matrix never needs to be stored."
+  },
+  {
+    "id": "08.4-034",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "3. Online softmax: running max m and running denominator ℓ",
+    "question": "Why does online softmax give a result identical to computing softmax over the whole row at once?",
+    "options": [
+      "It approximates the denominator per block, and the errors average out to zero over many blocks",
+      "It processes keys in sorted order of their scores, so the row maximum is always seen in the very first block",
+      "It recomputes the whole row from scratch whenever a new block raises the running maximum score",
+      "The correction factor lets the max change midstream and retroactively fixes the accumulated sums"
+    ],
+    "answer_index": 3,
+    "explanation": "Whenever a later block contains a larger score, α rescales the stored ℓ and o to the new reference max, so the running state is always equivalent to having exponentiated all seen scores against the current max. No sorting, recomputation or approximation is required."
+  },
+  {
+    "id": "08.4-035",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4. Worked example (tiny numbers, by hand)",
+    "question": "In a one-query online-softmax example with scores [1, 2, 3, 0] and values [10, 20, 30, 40] processed in two blocks of two, the provisional output after block 1 is about 17.31 and the final output is about 26.21. Why does it change so much?",
+    "options": [
+      "The provisional value is computed in lower precision than the final value",
+      "Block 2 holds the highest-scoring key, which carries most of the softmax weight",
+      "Block 2 is processed with a larger correction factor than block 1",
+      "The final value includes the 1/sqrt(d) scaling, which the provisional value omits"
+    ],
+    "answer_index": 1,
+    "explanation": "After block 1 only scores [1, 2] with values [10, 20] are known, so the weighted average sits near 17. Block 2 contains score 3 with value 30, which gets weight ≈ 0.64 in the full softmax; folding it in (after rescaling the old sums by α) pulls the output to 26.21. The provisional output is only correct over the keys seen so far."
+  },
+  {
+    "id": "08.4-036",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4. Worked example (tiny numbers, by hand)",
+    "question": "In online softmax, if the running max is 2 after the first block and the second block contains a score of 3, what is the correction factor α applied to the old sums?",
+    "options": [
+      "exp(3 − 2) = e ≈ 2.718",
+      "exp(−3) ≈ 0.050",
+      "exp(2 − 3) = e^{-1} ≈ 0.368",
+      "1, because the correction only applies on the first block"
+    ],
+    "answer_index": 2,
+    "explanation": "α = exp(m_old − m_new) = exp(2 − 3) = e^{-1}. It shrinks the old ℓ and o because they were referenced to a smaller max; it is always ≤ 1. e^{+1} would push them in the wrong direction."
+  },
+  {
+    "id": "08.4-037",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4. Worked example (tiny numbers, by hand)",
+    "question": "After online softmax has processed every key block of a row, how does the final running denominator ℓ compare with the full-row softmax denominator Σ exp(s − max s)?",
+    "options": [
+      "ℓ is larger by a factor of the number of blocks",
+      "They are equal",
+      "They differ unless the max appears in the first block",
+      "ℓ is smaller by the product of all correction factors"
+    ],
+    "answer_index": 1,
+    "explanation": "By the end, m equals the true row max and ℓ = Σ exp(s − m) over all keys, which is exactly the full-row denominator. This holds regardless of which block held the maximum, because α corrected any earlier blocks."
+  },
+  {
+    "id": "08.4-038",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "What is the invariant that proves online softmax is exact?",
+    "options": [
+      "After any number of blocks, m, ℓ and o are the max, Σ exp(s − m) and Σ exp(s − m)·v over the scores seen so far",
+      "After any number of blocks, the correction factor α equals one, so the running sums never need rescaling",
+      "After any number of blocks, o/ℓ already equals the final attention output computed over every key in the full row",
+      "After any number of blocks, ℓ equals the full-row softmax denominator taken over all keys, seen or not"
+    ],
+    "answer_index": 0,
+    "explanation": "The invariant says the running state is exactly what you would compute directly over the seen subset, referenced to that subset's max. It does not claim ℓ or o/ℓ are final before all keys are seen; those hold only after the last block, when 'seen' is every key."
+  },
+  {
+    "id": "08.4-039",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "In the proof that online softmax is exact, why does the base case (first block) work?",
+    "options": [
+      "m starts at −∞, so α = 0 and the update reduces to sums over the first block relative to its max",
+      "m starts at 0, so α = 1 and the first block's exponentials are added to the empty state unchanged",
+      "The first block always contains the row maximum, so no correction is ever needed for that block",
+      "ℓ starts at 1, which exactly cancels the normalization of the first block's exponentials"
+    ],
+    "answer_index": 0,
+    "explanation": "With m = −∞, α = exp(−∞) = 0 wipes the empty initial state, leaving ℓ = Σ_blk exp(s − m_new) and o = Σ_blk exp(s − m_new)·v, which is the invariant for the first block. The first block need not contain the global max."
+  },
+  {
+    "id": "08.4-040",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "In the inductive step of the online-softmax proof, what identity shows that α·ℓ is the old sum re-referenced to the new max?",
+    "options": [
+      "exp(m − m_new)·Σ exp(s) = Σ exp(s − m), because the max ends up subtracted twice inside",
+      "exp(m − m_new) + Σ exp(s − m) = Σ exp(s − m_new), because exponentials of differences add",
+      "exp(m_new − m)·Σ exp(s − m) = Σ exp(s + m_new), because the exponents add term by term",
+      "exp(m − m_new)·Σ exp(s − m) = Σ exp(s − m_new), because the m cancels inside the exponent"
+    ],
+    "answer_index": 3,
+    "explanation": "Multiplying each term exp(s − m) by exp(m − m_new) gives exp(s − m + m − m_new) = exp(s − m_new). So rescaling by α is exactly the same as having exponentiated the old scores against m_new from the start. The same argument, multiplied by v, works for o."
+  },
+  {
+    "id": "08.4-041",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "Why does the choice of reference maximum not affect the final online-softmax result o/ℓ?",
+    "options": [
+      "The reference maximum is subtracted only from the values, not the scores",
+      "The reference maximum is added back after normalization",
+      "The reference maximum is always zero after scaling by 1/sqrt(d)",
+      "The factor exp(−m) appears in both numerator and denominator and cancels"
+    ],
+    "answer_index": 3,
+    "explanation": "o/ℓ = Σ exp(s − m)·v / Σ exp(s − m) = exp(−m)Σ exp(s)·v / (exp(−m)Σ exp(s)), and exp(−m) cancels, leaving the ordinary softmax-weighted average. Any reference max gives the same answer mathematically."
+  },
+  {
+    "id": "08.4-042",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "If the reference max cancels out of o/ℓ mathematically, why does online softmax keep track of it at all?",
+    "options": [
+      "To compute the 1/sqrt(d) scaling factor",
+      "To keep every exponential ≤ 1 so nothing overflows",
+      "To decide which key blocks can be skipped",
+      "To make the final output sum to one across value dimensions"
+    ],
+    "answer_index": 1,
+    "explanation": "The max exists only for numerical safety: subtracting it keeps every exponent ≤ 0 and every exp ≤ 1, so large scores never overflow. Mathematically it cancels; numerically it is essential."
+  },
+  {
+    "id": "08.4-043",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.1 Why it is exact — the proof, checked on the same numbers",
+    "question": "In online softmax, rescaling the old running denominator by α = exp(m_old − m_new) is equivalent to what?",
+    "options": [
+      "Having exponentiated the old scores against the new max m_new from the start",
+      "Discarding the old scores entirely and keeping only the new block's exponentials",
+      "Having exponentiated the old scores against zero instead of against any running max",
+      "Averaging the old and new denominators with equal weight before adding the new block"
+    ],
+    "answer_index": 0,
+    "explanation": "Checking numerically, α·ℓ equals Σ exp(s_old − m_new) computed directly; for example 0.3679 × 1.3679 = 0.5032 = e^{1−3} + e^{2−3}. Rescaling is literally the same as re-referencing the old terms to the new max. Nothing is discarded."
+  },
+  {
+    "id": "08.4-044",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.2 A full FlashAttention pass by hand: two queries, d = 2",
+    "question": "When FlashAttention processes a tile with several query rows, how does the online-softmax recurrence apply?",
+    "options": [
+      "It runs on every query row of the tile independently, each with its own m, ℓ and o",
+      "It runs once for the whole tile, sharing a single max across all query rows",
+      "It runs only on the query row with the largest score in the tile",
+      "It runs once per value dimension, sharing ℓ across query rows"
+    ],
+    "answer_index": 0,
+    "explanation": "Softmax is row-wise, so each query row has its own running max, denominator and output vector. Sharing one max across rows would still be mathematically valid but is not what the algorithm does, and different rows have their maxima in different blocks."
+  },
+  {
+    "id": "08.4-045",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.2 A full FlashAttention pass by hand: two queries, d = 2",
+    "question": "In flash_attention_reference, the correction factor corr has shape (B, nh, Bq, 1). How is it applied to the running output acc of shape (B, nh, Bq, hd)?",
+    "options": [
+      "It is broadcast across hd, multiplying every column of each query row's output",
+      "It multiplies only the first column of each query row's output, leaving the rest unchanged",
+      "It is applied only to the running denominator l, never to the running output acc",
+      "It is summed over Bq and then applied as one scalar to every entry of the whole tile"
+    ],
+    "answer_index": 0,
+    "explanation": "α is one correction per query row, and that row's entire output vector was accumulated relative to the old max, so every one of its hd entries must be rescaled. The trailing size-1 dimension broadcasts across hd. Both l and acc are multiplied by corr."
+  },
+  {
+    "id": "08.4-046",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.2 A full FlashAttention pass by hand: two queries, d = 2",
+    "question": "In online softmax, if a query row's maximum score appears in the first key block and no later block exceeds it, what is the correction factor on the later blocks?",
+    "options": [
+      "α = 0, because the max was already found",
+      "α equals the number of remaining blocks",
+      "α = e^{-1}, the default correction per block",
+      "α = 1, because the running max never changes"
+    ],
+    "answer_index": 3,
+    "explanation": "α = exp(m_old − m_new); if m_new = m_old then α = exp(0) = 1 and the old sums need no rescaling. α = 0 occurs only on the first block, when m_old = −∞."
+  },
+  {
+    "id": "08.4-047",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.2 A full FlashAttention pass by hand: two queries, d = 2",
+    "question": "For a FlashAttention tile with 2 query rows and head dimension d = 2, what are the shapes of the running max m, running denominator ℓ and running output o?",
+    "options": [
+      "m is (2, 1), ℓ is (2, 1), o is (2, 2)",
+      "m is (1, 1), ℓ is (1, 1), o is (2, 2)",
+      "m is (2, 2), ℓ is (2, 2), o is (2, 1)",
+      "m is (2, 4), ℓ is (2, 4), o is (2, 2)"
+    ],
+    "answer_index": 0,
+    "explanation": "m and ℓ are one scalar per query row, so (B_q, 1) = (2, 1); o holds one d-dimensional output per row, (B_q, d) = (2, 2). Nothing in the state has a key dimension; that is why the full score matrix is never needed."
+  },
+  {
+    "id": "08.4-048",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.2 A full FlashAttention pass by hand: two queries, d = 2",
+    "question": "In FlashAttention, once a key/value block has been folded into the running state for a query block, when must it be read again for that query block?",
+    "options": [
+      "Once per value dimension of the output, since each column is accumulated separately",
+      "Every time a later block raises the running max, to re-exponentiate its scores",
+      "Once more at the end, to compute the final denominator used to normalize o",
+      "Never; its contribution is already in m, ℓ and o, so the tile is discarded"
+    ],
+    "answer_index": 3,
+    "explanation": "Thanks to the correction factor, a later increase in the max is handled by rescaling the stored sums, not by revisiting earlier keys. So each key block is read once per query block and then discarded."
+  },
+  {
+    "id": "08.4-049",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.3 What goes wrong without α",
+    "question": "What happens if online softmax accumulates ℓ and o across blocks without the correction factor α?",
+    "options": [
+      "Only rows whose max is in the first block get the wrong output; all other rows stay correct",
+      "Rows whose max grows in a later block get the wrong output, pulled toward earlier blocks' values",
+      "Every row's output becomes NaN, because the unrescaled exponentials overflow in fp32 after a few blocks",
+      "All rows still get a correct output, but the denominator is off by a constant factor per block"
+    ],
+    "answer_index": 1,
+    "explanation": "Without α, earlier blocks were exponentiated against a smaller max, so their weights are too large relative to later blocks (by e^{Δmax}), and the output is biased toward early values. Rows whose max is in the first block have α = 1 anyway and remain correct."
+  },
+  {
+    "id": "08.4-050",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.3 What goes wrong without α",
+    "question": "Why is a missing online-softmax correction factor a dangerous, silent bug?",
+    "options": [
+      "It still passes any test where the first block holds the row maximum",
+      "It only fails in fp16, where exp overflows, and never shows up in fp32",
+      "It only fails when the block size is one, a size no test would ever use",
+      "It always raises an exception, which the autograd engine catches and suppresses"
+    ],
+    "answer_index": 0,
+    "explanation": "When the first block holds the row max, the max never changes and α would be 1 anyway, so omitting it has no effect. Tests that happen to have that structure pass while real data, where the max can appear anywhere, gets wrong outputs."
+  },
+  {
+    "id": "08.4-051",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.3 What goes wrong without α",
+    "question": "Without the online-softmax correction, if block 1's scores were exponentiated against a max of 2 and block 2's against a max of 3, how are block 1's weights distorted relative to block 2's?",
+    "options": [
+      "They are e^1 ≈ 2.7 times too large",
+      "They are unchanged; only the denominator is wrong",
+      "They are 2/3 of their correct size",
+      "They are e^1 ≈ 2.7 times too small"
+    ],
+    "answer_index": 0,
+    "explanation": "Block 1's terms exp(s − 2) are e^{3−2} = e times larger than they would be against the common max 3. Without α to shrink them, they get about 2.7× too much relative weight, pulling the output toward block 1's values."
+  },
+  {
+    "id": "08.4-052",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.5 Run it",
+    "question": "flash_attention_reference assumes self-attention with equal query and key lengths. How do you run it on 2 queries against 4 keys?",
+    "options": [
+      "Repeat Q twice to 4 rows and average the two output halves",
+      "Transpose Q so that its length dimension matches that of K",
+      "Pad Q to 4 rows and read only the first 2 output rows",
+      "Truncate K and V to their first 2 rows so they match Q"
+    ],
+    "answer_index": 2,
+    "explanation": "Because the function requires T_q = T_k, the extra query rows are padding; each query row's output depends only on its own query and all keys, so the first two rows are unaffected by the padding rows. Truncating K and V would change the attention itself."
+  },
+  {
+    "id": "08.4-053",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.5 Run it",
+    "question": "flash_attention_reference applies the 1/sqrt(d) scale itself. If your Q has already been divided by sqrt(d), how do you avoid double scaling?",
+    "options": [
+      "Square the attention output afterwards to undo the extra scaling",
+      "Set block_size equal to d so that the internal scale becomes one",
+      "Pre-multiply Q by sqrt(d) so the internal scale cancels it",
+      "Divide K by sqrt(d) as well, so the two scalings cancel out"
+    ],
+    "answer_index": 2,
+    "explanation": "The internal scale multiplies scores by 1/sqrt(d); multiplying Q by sqrt(d) beforehand cancels that, leaving the intended pre-scaled scores. Dividing K too would scale twice more, and block size has no effect on scaling."
+  },
+  {
+    "id": "08.4-054",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.5 Run it",
+    "question": "When flash_attention_reference is compared with naive attention and F.scaled_dot_product_attention in fp32, the maximum difference is about 4×10^-6. What does that difference reflect?",
+    "options": [
+      "An approximation error inherent to tiled attention",
+      "Floating-point rounding, not an algorithmic difference",
+      "The error from skipping the 1/sqrt(d) scale",
+      "The error from padding the query matrix"
+    ],
+    "answer_index": 1,
+    "explanation": "Different operation orders round differently in fp32, producing differences at the 1e-6 level. Mathematically the three methods are identical; FlashAttention is exact, not an approximation."
+  },
+  {
+    "id": "08.4-055",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.5 Run it",
+    "question": "What happens to the output of flash_attention_reference if block_size is changed from 2 to 1 or 4?",
+    "options": [
+      "It becomes slightly less accurate with smaller blocks",
+      "Nothing; tiling never changes the answer",
+      "It becomes slightly less accurate with larger blocks",
+      "It changes because the correction factor depends on block size"
+    ],
+    "answer_index": 1,
+    "explanation": "The online-softmax recurrence is exact for any partition of the keys into blocks, so block size only changes the schedule of computation, not the result (beyond rounding). The correction factors differ along the way but the final o/ℓ is the same."
+  },
+  {
+    "id": "08.4-056",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "4.5 Run it",
+    "question": "What do the tests in code/tests/test_flash.py assert about flash_attention_reference?",
+    "options": [
+      "It uses strictly less than O(T) memory on every input size and stays under a fixed byte budget per call",
+      "It matches softmax(QK^T/√d)V and F.scaled_dot_product_attention to 1e-4, causal and non-causal, for any block size",
+      "It is at least twice as fast as naive attention on CPU for every sequence length, block size and dtype tested",
+      "It matches naive attention to 1e-4, but only for non-causal inputs whose lengths are powers of two"
+    ],
+    "answer_index": 1,
+    "explanation": "The tests check exactness against both a plain implementation and PyTorch's SDPA, in both causal and non-causal modes, and that the result does not depend on block size. They do not test speed, since the reference is slower on CPU."
+  },
+  {
+    "id": "08.4-057",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "Why is flash_attention_reference deliberately not a fused kernel?",
+    "options": [
+      "Fusing the block ops would change the numerical result of attention in fp32",
+      "Each block op is an ordinary PyTorch call so it runs on CPU and proves the numerics",
+      "Fused kernels cannot express the online-softmax recurrence across key blocks",
+      "PyTorch forbids Python loops inside custom autograd functions, so it cannot be fused"
+    ],
+    "answer_index": 1,
+    "explanation": "The reference exists to demonstrate the algorithm's correctness on any machine. Writing it with ordinary PyTorch ops in Python loops makes it slow but transparent; the same recurrence runs inside a fused GPU kernel in production without changing the result."
+  },
+  {
+    "id": "08.4-058",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "In flash_attention_reference, what is the shape of the score tile s computed inside the inner loop?",
+    "options": [
+      "(B, nh, T, Bk), all queries against one key block",
+      "(B, nh, Bq, Bk), one tile of query block by key block",
+      "(B, nh, T, T), the full score matrix",
+      "(B, nh, Bq, hd), the size of the output block"
+    ],
+    "answer_index": 1,
+    "explanation": "s = q_blk @ k_blk^T × scale is a B_q × B_k tile per batch and head. It is the only score object that ever exists and is never T×T. The output block is (Bq, hd), a different tensor."
+  },
+  {
+    "id": "08.4-059",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "How does flash_attention_reference handle causal masking efficiently?",
+    "options": [
+      "It reverses the key order so that future keys are processed last and simply ignored",
+      "It masks only within diagonal tiles and breaks out of key blocks that are entirely in the future",
+      "It builds one full T×T lower-triangular mask up front and then applies a slice of it to every tile",
+      "It runs non-causal attention over all keys and then zeroes the upper triangle of the output"
+    ],
+    "answer_index": 1,
+    "explanation": "For each query block, any key block starting after the block's last query is entirely future and is skipped with break, so causal attention does roughly half the work. Inside a diagonal tile it masks future keys to −∞. Building a full T×T mask would reintroduce O(T^2) memory."
+  },
+  {
+    "id": "08.4-060",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "In flash_attention_reference, when is the running output acc divided by the running denominator l?",
+    "options": [
+      "Only when the running max changes, so that acc is renormalized to it",
+      "Before the first key block, to initialize the output to a valid average",
+      "After every key block, so that acc always holds a normalized average",
+      "Once, after all key blocks for that query block have been processed"
+    ],
+    "answer_index": 3,
+    "explanation": "acc is the unnormalized numerator; normalizing once at the end (out = acc / l) is both cheaper and exact. Normalizing after every block would require un-normalizing again when new keys arrive."
+  },
+  {
+    "id": "08.4-061",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "How does the CPU reference flash_attention_reference relate to a real GPU FlashAttention kernel?",
+    "options": [
+      "The two Python loops become the kernel's internal loops, with tiles held in SRAM",
+      "The GPU kernel removes the inner loop by processing every key of the row at once",
+      "The GPU kernel materializes the full score matrix, but in fp16 instead of fp32",
+      "The GPU kernel uses a different, approximate recurrence that trades accuracy for speed"
+    ],
+    "answer_index": 0,
+    "explanation": "The reference and the GPU kernel run the same recurrence; on a GPU the loops over query and key blocks run inside one kernel with tiles in shared memory, which is what yields the speed and memory win. Processing all keys at once would require the full row."
+  },
+  {
+    "id": "08.4-062",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "5. The from-scratch implementation (CPU, exact)",
+    "question": "In flash_attention_reference, what does the tensor corr = exp(m − m_new) represent?",
+    "options": [
+      "The causal mask applied to keys that lie in the future of each query",
+      "The softmax probabilities of the current tile, before multiplying by V",
+      "The online-softmax correction factor α, which is 0 on the first block",
+      "The 1/sqrt(d) scaling factor of the scores, applied before exponentiation"
+    ],
+    "answer_index": 2,
+    "explanation": "corr is α, one value per query row, used to rescale l and acc before adding the current tile. On the first block m = −∞, so exp(−∞) = 0. The tile's probabilities are p = exp(s − m_new)."
+  },
+  {
+    "id": "08.4-063",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6. An illustrative Triton kernel (will not run here)",
+    "question": "What is Triton?",
+    "options": [
+      "A distributed-training framework for splitting large models across many GPUs",
+      "A CUDA library that ships pre-built attention kernels and nothing else",
+      "A Python-like language for writing GPU kernels that compile to fast code",
+      "A PyTorch profiler that records per-kernel timings and memory on the GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Triton lets you write GPU kernels in Python-like syntax, compiled to efficient code; many production attention and fusion kernels are written in it, and TorchInductor (torch.compile's backend) emits Triton. It is not a profiler or a distributed framework."
+  },
+  {
+    "id": "08.4-064",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6. An illustrative Triton kernel (will not run here)",
+    "question": "Which PyTorch compiler component emits Triton kernels?",
+    "options": [
+      "Autograd engine",
+      "TorchScript JIT",
+      "DataLoader",
+      "TorchInductor"
+    ],
+    "answer_index": 3,
+    "explanation": "TorchInductor, the backend of torch.compile, generates Triton code for fused GPU kernels. Autograd computes gradients and DataLoader feeds data; neither generates kernels."
+  },
+  {
+    "id": "08.4-065",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6. An illustrative Triton kernel (will not run here)",
+    "question": "In a Triton FlashAttention forward kernel, what do tl.load and tl.store represent?",
+    "options": [
+      "Synchronization barriers between thread blocks",
+      "Transfers between CPU RAM and GPU memory",
+      "Reads and writes of the Python-level attention module's parameters",
+      "Explicit transfers between HBM and on-chip SRAM"
+    ],
+    "answer_index": 3,
+    "explanation": "In Triton, tl.load moves a block from global memory (HBM) into on-chip memory and tl.store writes results back. Making these explicit is how the kernel guarantees tiles stay on-chip and the T×T matrix never goes to HBM."
+  },
+  {
+    "id": "08.4-066",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6. An illustrative Triton kernel (will not run here)",
+    "question": "In a Triton FlashAttention forward kernel, what does each kernel instance identified by tl.program_id(0) own?",
+    "options": [
+      "One query block, which it loads once and loops over all key/value blocks for",
+      "One key/value block, which it loads once and broadcasts to every query block",
+      "One attention head over the whole sequence, computed without any tiling",
+      "One element of the output matrix, computed as a full dot product over all keys"
+    ],
+    "answer_index": 0,
+    "explanation": "Each program loads its query block once, keeps running m, ℓ and acc on-chip, streams K/V blocks through, and writes its output block once. Parallelism comes from many programs working on different query blocks."
+  },
+  {
+    "id": "08.4-067",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6. An illustrative Triton kernel (will not run here)",
+    "question": "Why does the fused Triton FlashAttention kernel deliver the real speed and memory win, while the CPU reference does not?",
+    "options": [
+      "The Triton kernel uses fewer FLOPs because it approximates the softmax with a cheap polynomial",
+      "Everything is one kernel, so tiles really stay on-chip and the T×T matrix is never written to HBM",
+      "Triton uses a more accurate exponential than PyTorch, so fewer blocks need to be recomputed later",
+      "The Triton kernel skips the correction factor on most blocks, saving one exp per row per block"
+    ],
+    "answer_index": 1,
+    "explanation": "The win comes from the IO pattern: within one fused kernel, scores and probabilities live only in SRAM, and HBM sees just Q, K, V reads and the O write. The recurrence and FLOPs are the same as the reference; it is neither approximate nor less work."
+  },
+  {
+    "id": "08.4-068",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6.1 Inside the fused kernel, animated",
+    "question": "Some Triton FlashAttention kernels use tl.exp2 with scores pre-multiplied by log2(e). Does this change the attention weights?",
+    "options": [
+      "No; but it requires recomputing the denominator in base e at the end",
+      "No; 2^(x·log2 e) = e^x, so the weights are identical",
+      "Yes; it introduces a constant bias that the output must correct",
+      "Yes; base-2 exponentials give sharper attention distributions"
+    ],
+    "answer_index": 1,
+    "explanation": "Since 2^(x·log2 e) equals e^x exactly, using exp2 with rescaled scores yields the same weights; it is chosen because exp2 maps well to hardware. No correction at the end is needed."
+  },
+  {
+    "id": "08.4-069",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "6.1 Inside the fused kernel, animated",
+    "question": "What extra per-row quantity does a FlashAttention forward kernel typically save for the backward pass?",
+    "options": [
+      "The full T×T score matrix S, stored in fp16",
+      "The per-row log-sum-exp L of the scores",
+      "The full T×T probability matrix P, in bf16",
+      "The value matrix V transposed, for dV"
+    ],
+    "answer_index": 1,
+    "explanation": "Saving one log-sum-exp per query row lets the backward pass recompute the probabilities tile by tile without storing P, keeping memory O(T). Saving P or S would reintroduce the O(T^2) memory FlashAttention eliminates."
+  },
+  {
+    "id": "08.4-070",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "7. Benchmark",
+    "question": "What does F.scaled_dot_product_attention use on capable GPUs?",
+    "options": [
+      "A CPU fallback that runs the Python reference",
+      "A sparse approximation that drops low-scoring keys",
+      "A FlashAttention backend, as a fused kernel",
+      "A naive three-kernel implementation that materializes P"
+    ],
+    "answer_index": 2,
+    "explanation": "PyTorch's SDPA dispatches to a fused FlashAttention backend on capable GPUs, giving the IO-aware speed and memory benefits. It computes exact attention, which is why the course's tests compare against it."
+  },
+  {
+    "id": "08.4-071",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "7. Benchmark",
+    "question": "On a CPU-only machine, what is the main job of the attention benchmark script that compares naive attention, SDPA and flash_attention_reference?",
+    "options": [
+      "Memory: it measures the SRAM usage of each path and reports peak bytes per kernel",
+      "Profiling: it identifies which CUDA kernels dominate runtime for each of the three paths",
+      "Correctness: it asserts all three agree to 1e-3 and reports the naive score-tensor size",
+      "Speed: it demonstrates that the flash reference is the fastest path even without a GPU"
+    ],
+    "answer_index": 2,
+    "explanation": "Without a GPU there is no SRAM/HBM gap to exploit, so CPU timings cannot show the win. The script's value on CPU is checking that the three implementations agree and showing how large the T×T tensor is that naive attention allocates and flash never does."
+  },
+  {
+    "id": "08.4-072",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "7. Benchmark",
+    "question": "Why is the flash_attention_reference path slower than naive attention on a CPU?",
+    "options": [
+      "It always computes in fp64, which is much slower than fp32 arithmetic on CPUs",
+      "It computes attention approximately and must iterate several times to converge",
+      "Its block loop runs in Python and the CPU has no SRAM/HBM distinction to exploit",
+      "It performs many fewer FLOPs, and CPUs run small, sparse workloads inefficiently"
+    ],
+    "answer_index": 2,
+    "explanation": "The reference loops over blocks in Python, adding interpreter overhead, and the benefit of tiling depends on a fast-on-chip vs slow-off-chip gap that does not exist in the same way on CPU. The speedup is a GPU HBM-traffic effect, so CPU timings should not be read as a speedup."
+  },
+  {
+    "id": "08.4-073",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "7. Benchmark",
+    "question": "What GPU results are representatively expected from FlashAttention (or the SDPA flash backend) at long context, e.g. T = 4k–16k?",
+    "options": [
+      "About 100× faster than naive attention, with constant memory independent of sequence length",
+      "About the same speed as naive attention, but with half the attention memory at every length",
+      "About 2× slower than naive attention because of recomputation, but with linear memory",
+      "About 2–4× faster than naive attention, with linear instead of quadratic attention memory"
+    ],
+    "answer_index": 3,
+    "explanation": "Representative figures from the FlashAttention paper and common reports are ~2–4× speedups and, more importantly, O(T) instead of O(T^2) memory for attention activations. That memory difference often decides between out-of-memory and fitting a long context."
+  },
+  {
+    "id": "08.4-074",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "7. Benchmark",
+    "question": "What hardware is recommended to actually observe the FlashAttention speed and memory win?",
+    "options": [
+      "A TPU pod running the pure-Python reference implementation under XLA compilation",
+      "An A100/H100-class GPU with bf16 and a FlashAttention-capable PyTorch build",
+      "Any multi-core CPU with at least 32 GB of RAM and AVX-512 vector units",
+      "A consumer GPU running the kernel in fp64 for maximum numerical accuracy"
+    ],
+    "answer_index": 1,
+    "explanation": "The win is an HBM-traffic effect on GPUs, so an A100/H100-class GPU with bf16 and a PyTorch build that has a FlashAttention backend is recommended. The correctness check, however, runs on any CPU."
+  },
+  {
+    "id": "08.4-075",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Research connection — FlashAttention (Dao et al. 2022)",
+    "question": "What is the central argument of the FlashAttention paper (Dao et al. 2022)?",
+    "options": [
+      "Attention is bottlenecked by parameter count; sharing K and V projections across all heads removes the redundancy",
+      "Attention is bottlenecked by HBM reads/writes; tiling plus online softmax gives exact attention with far fewer accesses",
+      "Attention is bottlenecked by FLOPs; a low-rank approximation of the score matrix removes most of them with small error",
+      "Attention is bottlenecked by softmax's numerical instability; computing scores in fp64 fixes it at modest cost"
+    ],
+    "answer_index": 1,
+    "explanation": "The paper's title stresses IO-awareness: attention's cost is dominated by memory traffic, not arithmetic, and an IO-aware algorithm computes exact attention with O(T) memory. Sharing K/V across heads is a different technique (multi-/grouped-query attention)."
+  },
+  {
+    "id": "08.4-076",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Research connection — FlashAttention (Dao et al. 2022)",
+    "question": "What do FlashAttention-2 and FlashAttention-3 change relative to the original FlashAttention?",
+    "options": [
+      "They refine tiling and work partitioning for newer GPUs; the core algorithm is the same",
+      "They remove online softmax entirely and store the full score matrix in fp8 instead",
+      "They move part of the attention computation from the GPU to the CPU to save HBM",
+      "They replace exact attention with an approximate low-rank method for very long contexts"
+    ],
+    "answer_index": 0,
+    "explanation": "The follow-ups improve how work is split across threads and SMs and tune tiling for newer hardware. The underlying tiled online-softmax algorithm, and exactness, are unchanged."
+  },
+  {
+    "id": "08.4-077",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Exercise",
+    "question": "If the four keys of an online-softmax example are processed in reverse block order (the block containing the max first), is the final attention output the same?",
+    "options": [
+      "Only if the block size is one, so that each key is its own block",
+      "Yes; online softmax is exact regardless of the order blocks arrive",
+      "No; reversing the order changes the denominator and therefore the weights",
+      "No; the output is only exact when the max arrives in the last block"
+    ],
+    "answer_index": 1,
+    "explanation": "Online softmax computes the exact softmax for any order and any partition of keys; only the intermediate running values differ. The final o/ℓ is the same number."
+  },
+  {
+    "id": "08.4-078",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Exercise",
+    "question": "If an online-softmax pass processes first the block that contains the row's global maximum, what is the correction factor α on the subsequent blocks?",
+    "options": [
+      "α > 1, because later blocks have smaller scores and the old sums must grow",
+      "α = 0, because the max has already been found and the old sums are reset",
+      "α < 1, because each later block shrinks the old sums by a constant factor",
+      "α = 1, because the running max is already the true max and never changes"
+    ],
+    "answer_index": 3,
+    "explanation": "Once m equals the global max, every later m_new = max(m, m_blk) = m, so α = exp(0) = 1 and no rescaling is needed. The first block still has α = 0 because m starts at −∞."
+  },
+  {
+    "id": "08.4-079",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Exercise",
+    "question": "What do block-size and block-order invariance tell you about how to choose FlashAttention's block_size on a GPU?",
+    "options": [
+      "Choose it as large as possible, because larger blocks give more accurate results",
+      "Choose it as small as possible, because smaller blocks reduce rounding error",
+      "Choose it equal to the sequence length so the correction factor is never needed",
+      "Choose it to fit tiles in SRAM and maximize throughput; it has no effect on correctness"
+    ],
+    "answer_index": 3,
+    "explanation": "Because the result is invariant to block size and order, block size is purely a performance knob: it should make the Q, K, V tiles fit in SRAM and keep the SM busy. Block size equal to T would mean materializing the full row, defeating the purpose."
+  },
+  {
+    "id": "08.4-080",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Is FlashAttention an approximation to softmax attention?",
+    "options": [
+      "No; it is exact up to floating-point rounding and changes memory traffic, not math",
+      "Yes; it approximates the softmax denominator with a running estimate per block",
+      "Only in causal mode, where whole future blocks are skipped instead of computed",
+      "Yes; it drops attention scores below a small fixed threshold to save memory and FLOPs"
+    ],
+    "answer_index": 0,
+    "explanation": "FlashAttention is exact attention; the running denominator is not an estimate but an exact sum corrected by α. In causal mode, skipped blocks are exactly the ones that would be masked to zero weight anyway, so skipping them is also exact."
+  },
+  {
+    "id": "08.4-081",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "How does FlashAttention's FLOP count compare with naive attention's?",
+    "options": [
+      "It is reduced by half in general, because only about half of the score tiles are ever computed",
+      "It is reduced from O(T^2 d) to O(T d), because the score matrix is never formed",
+      "It is identical, with zero extra operations of any kind beyond the naive version",
+      "It is not reduced and is slightly higher, due to recomputed exponentials and rescaling"
+    ],
+    "answer_index": 3,
+    "explanation": "FlashAttention's win is fewer HBM bytes and O(T) memory, not fewer FLOPs; the rescaling and recomputation add a little arithmetic. Confusing FLOPs saved with bytes saved is a common mistake. Causal skipping saves work in causal mode, but that is not a general halving of the algorithm."
+  },
+  {
+    "id": "08.4-082",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Why is materializing the causal mask as a full T×T tensor a mistake in a FlashAttention-style implementation?",
+    "options": [
+      "It reintroduces the O(T^2) memory the algorithm was designed to avoid",
+      "It produces numerically incorrect attention weights in fp16 and bf16",
+      "It forces all key blocks to be processed in reverse order of position",
+      "It prevents the correction factor α from being computed for masked rows"
+    ],
+    "answer_index": 0,
+    "explanation": "A full T×T mask is just as large as the score matrix FlashAttention avoids. The correct approach applies the mask per tile from row/column indices and skips fully-future blocks, never building the whole mask."
+  },
+  {
+    "id": "08.4-083",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Check yourself",
+    "question": "FlashAttention performs slightly more arithmetic than naive attention, yet runs faster on a GPU. Why?",
+    "options": [
+      "The extra arithmetic lets the GPU skip one of the two large matrix multiplications entirely",
+      "GPUs execute recomputed exponentials faster than cached ones, thanks to the special function units",
+      "Attention is memory-bound, so cutting HBM traffic from O(T^2) to O(T) outweighs the extra FLOPs",
+      "The extra FLOPs are offloaded to the CPU and run in parallel with the GPU's matmuls"
+    ],
+    "answer_index": 2,
+    "explanation": "At long context attention's runtime is set by HBM bandwidth, not FLOP count. Trading a little extra arithmetic for a large reduction in bytes moved wins, exactly as the roofline predicts for a kernel on the bandwidth slope."
+  },
+  {
+    "id": "08.4-084",
+    "chapter": "08.4",
+    "chapter_name": "FlashAttention & a Triton kernel; benchmark",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-04.md",
+    "section": "Next",
+    "question": "What is the through-line of GPU-performance reasoning that carries into distributed training across many GPUs?",
+    "options": [
+      "Larger batch sizes always remove the data-movement bottleneck",
+      "Lower precision always makes a kernel compute-bound",
+      "Memory is cheap and arithmetic is expensive",
+      "Arithmetic is cheap and moving data is expensive"
+    ],
+    "answer_index": 3,
+    "explanation": "From the memory hierarchy through the roofline, fusion, mixed precision and FlashAttention, the recurring lesson is that FLOPs are plentiful while data movement limits speed. In distributed training the same problem scales up to moving data between GPUs."
+  }
+]

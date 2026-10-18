@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "08.2-001",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is the roofline model useful before attempting a GPU optimization?",
+    "options": [
+      "It shows whether a kernel is bandwidth- or compute-bound, so whether a fix can help",
+      "It guarantees a 2x speedup for any kernel it is applied to, once the ridge is known",
+      "It replaces the need to ever profile a training run, since it predicts exact timings",
+      "It automatically rewrites memory-bound kernels so that they run on the Tensor Cores"
+    ],
+    "answer_index": 0,
+    "explanation": "The roofline is a back-of-envelope diagnosis. If a kernel is memory-bound, more FLOP/s does nothing and you must move fewer bytes; if compute-bound, the reverse. Getting this right separates optimizations that double throughput from ones that change nothing."
+  },
+  {
+    "id": "08.2-002",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "If a kernel is memory-bound, what effect does buying a GPU with more peak FLOP/s (or using lower-precision matmul arithmetic) have on it?",
+    "options": [
+      "It speeds up proportionally to the increase in peak FLOP/s",
+      "It makes the kernel compute-bound automatically, since the roof moves up",
+      "It slows the kernel down because of higher clock overhead",
+      "Essentially none; you must move fewer bytes to speed it up"
+    ],
+    "answer_index": 3,
+    "explanation": "A memory-bound kernel is limited by how fast bytes arrive, not by arithmetic. Raising the compute ceiling does not lift the bandwidth ceiling it is pinned under. Only reducing bytes moved (fusion, smaller dtypes, better reuse) helps."
+  },
+  {
+    "id": "08.2-003",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "1. Intuition: two ways a kernel can be slow",
+    "question": "What are the two fundamentally different reasons a GPU kernel can be slow?",
+    "options": [
+      "It uses too many registers per thread, or it launches too few threads per warp, starving the SM",
+      "It runs in fp32 instead of bf16, or it runs in fp16 and overflows its accumulators",
+      "Too much arithmetic for the units (compute-bound), or data too slow from HBM (memory-bound)",
+      "It has too many Python lines per step, or it uses too few concurrent CUDA streams"
+    ],
+    "answer_index": 2,
+    "explanation": "Either the arithmetic units are the limit even with instant data (a huge matmul, compute-bound), or the arithmetic is trivial and HBM bandwidth is the limit (an elementwise add, memory-bound). Which regime you are in decides which optimizations can help."
+  },
+  {
+    "id": "08.2-004",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "1. Intuition: two ways a kernel can be slow",
+    "question": "Which kernel is the canonical example of being limited by having too much arithmetic?",
+    "options": [
+      "An elementwise add of two tensors",
+      "A huge matrix multiply",
+      "A dropout mask applied per element",
+      "A bias add broadcast over a batch"
+    ],
+    "answer_index": 1,
+    "explanation": "A large matmul does so many FLOPs per byte that even with instant data, the arithmetic units' FLOP/s rate is the ceiling. Elementwise ops like add, dropout and bias add are memory-bound."
+  },
+  {
+    "id": "08.2-005",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "2. Arithmetic intensity: FLOPs per byte",
+    "question": "How is the arithmetic intensity (AI) of a kernel defined?",
+    "options": [
+      "Total bytes moved to/from HBM divided by the total FLOPs the kernel does",
+      "Total FLOPs the kernel does divided by total bytes it moves to/from HBM",
+      "Peak FLOP/s of the GPU divided by its HBM bandwidth in bytes per second",
+      "Number of threads launched divided by the number of SMs that run them"
+    ],
+    "answer_index": 1,
+    "explanation": "AI = FLOPs / bytes moved to or from HBM, measured in FLOPs per byte. It answers how much useful arithmetic each expensive byte buys. Peak FLOP/s divided by bandwidth is the ridge point, a property of the hardware, not of the kernel."
+  },
+  {
+    "id": "08.2-006",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "2. Arithmetic intensity: FLOPs per byte",
+    "question": "What does a high arithmetic intensity indicate about a kernel?",
+    "options": [
+      "Each expensive byte moved is spread over many cheap FLOPs, so it tends to be compute-bound",
+      "The kernel moves many bytes for every FLOP it does, so it starves waiting for data",
+      "The kernel will always run slower than a low-AI kernel, since it does more arithmetic",
+      "The kernel must be running in fp64, since only double precision reaches high arithmetic intensity"
+    ],
+    "answer_index": 0,
+    "explanation": "High AI means lots of arithmetic per byte, which keeps the units busy: compute-bound. Low AI means each byte is barely used before the next is needed, so the units starve: memory-bound."
+  },
+  {
+    "id": "08.2-007",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "2. Arithmetic intensity: FLOPs per byte",
+    "question": "In computing arithmetic intensity, which data movement counts in the 'bytes moved' denominator?",
+    "options": [
+      "All reads and writes at every level of the hierarchy, including register traffic",
+      "Only the traffic between host RAM and the GPU across the PCIe or NVLink link",
+      "Only HBM traffic; data kept in registers or SRAM does not count",
+      "Only the writes back to HBM, since the reads are absorbed by the L2 cache"
+    ],
+    "answer_index": 2,
+    "explanation": "The denominator is traffic to the slow memory level, HBM. Data staying in registers or SRAM is not counted. That is exactly why fusion and FlashAttention raise AI: they keep data on-chip so it never adds to the byte count."
+  },
+  {
+    "id": "08.2-008",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "2. Arithmetic intensity: FLOPs per byte",
+    "question": "Is arithmetic intensity a property of the hardware or of the algorithm?",
+    "options": [
+      "Of the hardware; it is fixed by the GPU model's FLOP/s and bandwidth alone",
+      "Of the driver version; it changes as CUDA updates alter the kernel launch path",
+      "Of the algorithm; it can be computed on paper before launching a kernel",
+      "Of the batch size only, independent of which operation the kernel performs"
+    ],
+    "answer_index": 2,
+    "explanation": "AI depends on how many FLOPs the computation does and how many bytes it must move, which is a property of the algorithm. The hardware sets the ridge point it is compared against. You can compute AI before running anything."
+  },
+  {
+    "id": "08.2-009",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "3. Worked example A: elementwise add (very low AI → memory-bound)",
+    "question": "For c = a + b with fp32 vectors of length n, what are the FLOPs and HBM bytes moved?",
+    "options": [
+      "2n FLOPs and 8n bytes (a multiply and an add per element; read a and b)",
+      "n FLOPs and 8n bytes (read a and read b; the write of c is not counted)",
+      "n FLOPs and 12n bytes (read a, read b, write c at 4 bytes each)",
+      "n^2 FLOPs and 12n bytes (every element of a meets every element of b)"
+    ],
+    "answer_index": 2,
+    "explanation": "One add per element gives n FLOPs. Reading a and b and writing c, each 4n bytes in fp32, totals 12n bytes. So AI = 1/12 ≈ 0.083 FLOPs/byte."
+  },
+  {
+    "id": "08.2-010",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "3. Worked example A: elementwise add (very low AI → memory-bound)",
+    "question": "Why does the arithmetic intensity of an elementwise add not depend on the vector length n?",
+    "options": [
+      "Because GPUs process all vectors in fixed-size chunks of 32, one per warp",
+      "FLOPs and bytes both scale linearly with n, so n cancels in the ratio",
+      "Because vectors longer than a few MB are automatically cached in the L2",
+      "Because the FLOP count is constant regardless of n, while bytes stay fixed"
+    ],
+    "answer_index": 1,
+    "explanation": "FLOPs = n and bytes = 12n, so AI = n/12n = 1/12. The intensity is fixed by the computation's structure — one FLOP per 12 bytes — not its size. Making the vector bigger does not help."
+  },
+  {
+    "id": "08.2-011",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "3. Worked example A: elementwise add (very low AI → memory-bound)",
+    "question": "Roughly what fraction of A100 peak FLOP/s can an fp32 elementwise add achieve?",
+    "options": [
+      "About 0.06%",
+      "About 50%",
+      "About 6%",
+      "About 100%"
+    ],
+    "answer_index": 0,
+    "explanation": "AI ≈ 0.083 against a ridge of ~150 means roughly 0.083/150 ≈ 0.06% of peak. The kernel is almost purely bandwidth-limited, so its runtime is bytes moved divided by HBM bandwidth."
+  },
+  {
+    "id": "08.2-012",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "3. Worked example A: elementwise add (very low AI → memory-bound)",
+    "question": "Which transformer operations have arithmetic intensity in the same tiny neighbourhood as an elementwise add?",
+    "options": [
+      "The QKV projection and MLP matmuls, which read large weight matrices",
+      "Only the vocabulary head matmul, because its output has V columns",
+      "The embedding lookup and the AdamW optimizer step, but no op in the forward pass",
+      "Bias add, GELU, dropout, residual add, and LayerNorm's scale-and-shift"
+    ],
+    "answer_index": 3,
+    "explanation": "All these elementwise ops do roughly one FLOP or a few per element while making a full HBM round trip, giving AI around 0.1 FLOPs/byte. Individually cheap in FLOPs, together they are a real cost. The weight matmuls are the high-AI exception."
+  },
+  {
+    "id": "08.2-013",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "How many FLOPs does a matmul of an (n x k) matrix by a (k x n) matrix take?",
+    "options": [
+      "n^2k",
+      "2nk",
+      "n^3/6",
+      "2n^2k"
+    ],
+    "answer_index": 3,
+    "explanation": "Each of the n^2 output elements is a length-k dot product: k multiplies and k adds, i.e. 2k FLOPs. Total 2n^2k, which for square matrices (k = n) is 2n^3."
+  },
+  {
+    "id": "08.2-014",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "In the ideal case, what is the arithmetic intensity of a square fp32 matmul C = AB with all matrices n x n?",
+    "options": [
+      "1/12 FLOPs/byte",
+      "n^2/6 FLOPs/byte",
+      "n/6 FLOPs/byte",
+      "6/n FLOPs/byte"
+    ],
+    "answer_index": 2,
+    "explanation": "FLOPs = 2n^3; bytes = read A, read B, write C = 3n^2 x 4 = 12n^2. AI = 2n^3/12n^2 = n/6. For n = 1024 that is ~171 FLOPs/byte."
+  },
+  {
+    "id": "08.2-015",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "Why does the arithmetic intensity of a square matmul grow with its size n?",
+    "options": [
+      "Larger matrices are stored in lower precision",
+      "FLOPs grow as n^3 while the data grows only as n^2",
+      "Larger matrices fit better in registers",
+      "Both FLOPs and data grow as n^2, but caches improve with size"
+    ],
+    "answer_index": 1,
+    "explanation": "The FLOP count is 2n^3 but only 3n^2 elements are moved, so their ratio is proportional to n. Bigger matmuls therefore reuse each byte over more FLOPs and have higher intensity."
+  },
+  {
+    "id": "08.2-016",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "A 1024 x 1024 fp32 matmul has AI of about 171 FLOPs/byte. On an A100, what is it, and which change would speed it up?",
+    "options": [
+      "Compute-bound; faster or lower-precision arithmetic would help, faster HBM would not",
+      "Memory-bound; faster HBM would help, while faster or lower-precision arithmetic would not",
+      "Memory-bound; fusing it with neighbouring elementwise ops would cut its bytes",
+      "Compute-bound; moving its operands to host RAM would free up HBM bandwidth"
+    ],
+    "answer_index": 0,
+    "explanation": "171 is above the A100 ridge of ~150, so the matmul sits on the flat compute ceiling. Its limit is FLOP/s, so lower-precision Tensor Cores or faster arithmetic help. Faster HBM addresses a limit it is not hitting."
+  },
+  {
+    "id": "08.2-017",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "What fundamental asymmetry makes deep learning fast on GPUs?",
+    "options": [
+      "Matmul, the dominant cost, has AI that rises with size, so it is compute-bound",
+      "Elementwise ops have rising arithmetic intensity, while matmuls stay fixed at 1/12",
+      "Matmuls move no bytes at all once weights are cached, so their cost is purely FLOPs",
+      "GPUs have more bandwidth than compute, so every kernel ends up compute-bound"
+    ],
+    "answer_index": 0,
+    "explanation": "Large matmuls naturally achieve high AI, putting the dominant workload on the good side of the roofline. The performance problem is the elementwise and reduction work around the matmuls, which stays at fixed low AI."
+  },
+  {
+    "id": "08.2-018",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "4. Worked example B: a large matmul (high AI → compute-bound)",
+    "question": "What is it that buys arithmetic intensity?",
+    "options": [
+      "Tensor size: bigger tensors always have higher intensity",
+      "Fewer kernel launches, each covering more of the model",
+      "Using fp32 instead of fp16, so each byte carries more",
+      "Reuse: using each loaded value in many computations"
+    ],
+    "answer_index": 3,
+    "explanation": "Matmuls reuse each loaded value across a whole row or column of outputs; elementwise ops use each value once. Reuse — not tensor size — is what raises FLOPs per byte. A huge elementwise add still has AI ≈ 1/12."
+  },
+  {
+    "id": "08.2-019",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "5. The roofline model",
+    "question": "What is the roofline model's formula for attainable FLOP/s?",
+    "options": [
+      "max(P_max, B x AI), with P_max peak FLOP/s and B HBM bandwidth",
+      "P_max x B / AI, with P_max the peak FLOP/s and B the HBM bandwidth",
+      "min(P_max, B x AI), with P_max peak FLOP/s and B HBM bandwidth",
+      "B / (P_max x AI), with P_max peak FLOP/s and B HBM bandwidth"
+    ],
+    "answer_index": 2,
+    "explanation": "Performance is capped by the lower of two ceilings: peak compute P_max, and bandwidth times intensity B x AI. You can only feed B bytes/s and each byte yields AI FLOPs, so B x AI is the bandwidth-limited rate."
+  },
+  {
+    "id": "08.2-020",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "5. The roofline model",
+    "question": "On a roofline plot, what does the compute ceiling look like?",
+    "options": [
+      "A slanted line rising with arithmetic intensity until it meets the ridge",
+      "A flat line at peak FLOP/s that no kernel exceeds at any intensity",
+      "A vertical line at the ridge point, separating the two kernel regimes",
+      "A curve that falls as intensity increases past the hardware's ridge point"
+    ],
+    "answer_index": 1,
+    "explanation": "The compute ceiling P_max is horizontal: no matter how high your AI, you cannot beat peak arithmetic rate. The slanted line is the bandwidth ceiling B x AI."
+  },
+  {
+    "id": "08.2-021",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "5. The roofline model",
+    "question": "On a roofline plot, why does the bandwidth ceiling rise with arithmetic intensity?",
+    "options": [
+      "Higher-intensity kernels are served from faster memory levels such as L2 and SRAM",
+      "You feed only B bytes/s and each byte yields AI FLOPs, so FLOP/s is B times AI",
+      "Higher intensity raises the GPU's boost clock, so more FLOPs complete per second",
+      "Effective bandwidth increases when fewer bytes are moved, so the line slopes up"
+    ],
+    "answer_index": 1,
+    "explanation": "The bandwidth ceiling is B x AI. At fixed bandwidth, getting more FLOPs out of each byte means more FLOP/s, so the line slopes upward until it hits peak compute."
+  },
+  {
+    "id": "08.2-022",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "5. The roofline model",
+    "question": "On what axes is the roofline usually plotted?",
+    "options": [
+      "Arithmetic intensity on x and attainable FLOP/s on y, both log scale",
+      "Wall-clock time on x and memory usage on y, both on a linear scale",
+      "Batch size on x and training loss on y, with loss on a log scale",
+      "Bytes moved on x and the number of active SMs on y, both on a log scale"
+    ],
+    "answer_index": 0,
+    "explanation": "With AI on the x-axis and attainable FLOP/s on the y-axis (log-log), the two ceilings form a rising diagonal meeting a flat cap. A kernel sits under the roofline at its own AI."
+  },
+  {
+    "id": "08.2-023",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "The ridge point",
+    "question": "Where is the ridge point of the roofline?",
+    "options": [
+      "At AI = B / P_max, where the compute ceiling meets the bandwidth ceiling",
+      "At AI = 1 FLOP/byte on every GPU, since one FLOP needs at least one byte",
+      "At the AI of the largest matmul in the model, which sets that GPU's limit",
+      "At AI = P_max / B, where the bandwidth ceiling meets the compute ceiling"
+    ],
+    "answer_index": 3,
+    "explanation": "The lines cross where B x AI = P_max, so AI_ridge = P_max / B. It is a hardware property: peak FLOP/s divided by bandwidth."
+  },
+  {
+    "id": "08.2-024",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "The ridge point",
+    "question": "What is the A100's ridge point using its 2039 GB/s HBM bandwidth and 312 TFLOP/s bf16 peak?",
+    "options": [
+      "About 9.6 FLOPs/byte",
+      "About 683 FLOPs/byte",
+      "About 153 FLOPs/byte",
+      "About 0.083 FLOPs/byte"
+    ],
+    "answer_index": 2,
+    "explanation": "312x10^12 / 2039x10^9 ≈ 153. Using the rounded 2 TB/s gives ~156. The 9.6 figure is the ridge for plain fp32 compute (19.5 TFLOP/s)."
+  },
+  {
+    "id": "08.2-025",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "The ridge point",
+    "question": "A kernel's AI is below the ridge point. Which optimizations can make it faster?",
+    "options": [
+      "Only buying a GPU with higher peak FLOP/s, since it is under the compute roof",
+      "Only reducing the number of FLOPs it performs, for example with approximations",
+      "Moving fewer bytes: fusion, lower precision, better reuse, or higher AI",
+      "Only switching to faster Tensor Cores or lower-precision matmul arithmetic"
+    ],
+    "answer_index": 2,
+    "explanation": "Below the ridge the kernel is on the slanted bandwidth line and memory-bound. Only fewer bytes or higher AI moves it up. Extra peak FLOP/s or fewer FLOPs does not lift the bandwidth limit."
+  },
+  {
+    "id": "08.2-026",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "The ridge point",
+    "question": "A kernel's AI is above the ridge point. Which optimizations can make it faster?",
+    "options": [
+      "Buying a GPU with more HBM bandwidth at the same peak FLOP/s",
+      "Doing fewer FLOPs or using faster/lower-precision arithmetic",
+      "Fusing it with neighbouring elementwise ops to save HBM bytes",
+      "Moving its inputs to pinned host memory to free HBM traffic"
+    ],
+    "answer_index": 1,
+    "explanation": "Above the ridge the kernel sits on the flat compute ceiling. Its limit is arithmetic, so fewer FLOPs or faster arithmetic helps. More bandwidth or fewer bytes addresses a limit it is not hitting."
+  },
+  {
+    "id": "08.2-027",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Placing our two examples on the roofline",
+    "question": "What is the attainable FLOP/s of an elementwise add (AI ≈ 0.083) on an A100?",
+    "options": [
+      "About 1.7x10^11 FLOP/s, roughly 0.05% of the 312 TFLOP/s peak",
+      "About 312 TFLOP/s, the full peak, since adds are the cheapest op",
+      "About 150 TFLOP/s, half of peak, set by the warp issue rate",
+      "About 1.7x10^14 FLOP/s, about half of the bf16 Tensor Core peak"
+    ],
+    "answer_index": 0,
+    "explanation": "B x AI = 2x10^12 x 0.083 ≈ 1.7x10^11 FLOP/s. The arithmetic is almost entirely idle; the GPU is acting as a bandwidth machine for this kernel."
+  },
+  {
+    "id": "08.2-028",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Placing our two examples on the roofline",
+    "question": "How does a square matmul's position on the A100 roofline change as n grows from 64 to 1024 to 4096?",
+    "options": [
+      "Its AI stays at 1/12 regardless of n, so it never leaves the memory-bound slope",
+      "Its AI falls as n grows, so it slides down the slope into memory-bound territory",
+      "It sits on the flat roof at every n, because matmuls are compute-bound by their very nature",
+      "Its AI rises (~10.7, 171, 683): it climbs the slope, crosses the ridge, then levels off"
+    ],
+    "answer_index": 3,
+    "explanation": "AI = n/6 gives ~10.7 at n=64 (memory-bound), ~171 at 1024 and ~683 at 4096 (both compute-bound). Once past the ridge, extra intensity does not raise attainable FLOP/s, since the compute cap is flat."
+  },
+  {
+    "id": "08.2-029",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Placing our two examples on the roofline",
+    "question": "Why can the same kernel become more memory-bound when moved from an A100 to an H100?",
+    "options": [
+      "The H100 has less HBM bandwidth than the A100, so every kernel slows down",
+      "The H100 lacks Tensor Cores for fp32 work, so the kernel falls back to the slower CUDA cores",
+      "The H100 counts register traffic as HBM traffic, lowering the measured AI",
+      "The H100's peak FLOP/s grew faster than its bandwidth, so its ridge moved right"
+    ],
+    "answer_index": 3,
+    "explanation": "The ridge is P_max / B. On the H100, peak compute increased more than bandwidth, so the ridge sits at higher AI. A kernel at fixed AI that was near the ridge on A100 can fall to the memory-bound side on H100."
+  },
+  {
+    "id": "08.2-030",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Placing our two examples on the roofline",
+    "question": "On the A100 roofline, where does LayerNorm sit, given an AI of about 2 FLOPs/byte?",
+    "options": [
+      "On the flat compute ceiling, since normalization is reduction-heavy",
+      "Exactly at the ridge point, where both ceilings limit it equally",
+      "On the memory-bound slope, far left of the ~153 ridge",
+      "Above the compute ceiling, because its FLOPs run in registers"
+    ],
+    "answer_index": 2,
+    "explanation": "AI ≈ 2 is far below ~153, so LayerNorm is deep in memory-bound territory, alongside elementwise ops. Its position does not improve with tensor size, because its AI is fixed by the computation."
+  },
+  {
+    "id": "08.2-031",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "What is the most important practical way to make a memory-bound elementwise chain faster?",
+    "options": [
+      "Rewriting each op with a cheaper approximation so it uses fewer FLOPs",
+      "Kernel fusion, so intermediates are not written to and read back from HBM",
+      "Running each op in fp64, so that every byte moved carries more useful arithmetic",
+      "Splitting each op into more, smaller kernels so more SMs work in parallel"
+    ],
+    "answer_index": 1,
+    "explanation": "The roofline says memory-bound kernels need fewer bytes moved. Fusion achieves that by performing the chain in one kernel with intermediates kept in registers. Fewer FLOPs would not help a bandwidth-limited kernel."
+  },
+  {
+    "id": "08.2-032",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "Unfused, what HBM traffic do bias add, GELU and dropout generate for an fp16 activation tensor of M elements?",
+    "options": [
+      "About 12M bytes: each of the three ops reads and writes 2M bytes",
+      "About 4M bytes: one read and one write of 2M bytes for the chain",
+      "About 6M bytes: each op reads its 2M-byte input but writes in place",
+      "About 36M bytes: each op reads all three tensors and writes three"
+    ],
+    "answer_index": 0,
+    "explanation": "Each op reads its input (2M bytes) and writes its output (2M bytes), 4M bytes per op, and three ops give ~12M bytes, for only a few FLOPs per element."
+  },
+  {
+    "id": "08.2-033",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "When bias add, GELU and dropout are fused into one kernel, where do the intermediates h and g live?",
+    "options": [
+      "In registers on the SM; they never leave the chip",
+      "In HBM, but written in a compressed fp8 format to save traffic",
+      "In pinned host RAM, reached over the PCIe link",
+      "In the L2 cache, evicted to HBM after the kernel"
+    ],
+    "answer_index": 0,
+    "explanation": "The fused kernel reads z once, does bias, GELU and dropout in registers, and writes y once. The intermediate tensors h and g never reach HBM, cutting traffic to about 4M bytes."
+  },
+  {
+    "id": "08.2-034",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "By how much does fusing bias add, GELU and dropout change HBM traffic and arithmetic intensity?",
+    "options": [
+      "Traffic halves and arithmetic intensity halves, since FLOPs drop with bytes",
+      "Traffic stays the same but FLOPs drop by a third, since bias is folded in",
+      "Traffic triples and intensity falls to a third, because tiles are re-read",
+      "Traffic falls to one third and arithmetic intensity triples, same FLOPs"
+    ],
+    "answer_index": 3,
+    "explanation": "Fused traffic is 4M bytes versus 12M unfused, a third, while FLOPs are unchanged. AI = FLOPs/bytes therefore triples, sliding the kernel up its bandwidth line toward the ridge."
+  },
+  {
+    "id": "08.2-035",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "Besides reducing HBM traffic, what other saving does fusing three elementwise kernels into one give?",
+    "options": [
+      "It removes the need for an optimizer step on the fused parameters",
+      "It lets the fused kernel run on the CPU while the GPU does matmuls",
+      "It removes two of the three kernel launches and their fixed cost",
+      "It halves the number of FLOPs, since bias and GELU share a multiply"
+    ],
+    "answer_index": 2,
+    "explanation": "Each kernel launch has a few microseconds of fixed overhead. Fusing three kernels into one removes two launches. The FLOPs remain the same."
+  },
+  {
+    "id": "08.2-036",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "Why can kernel fusion not speed up an already compute-bound matmul?",
+    "options": [
+      "Because fusion always increases FLOPs by recomputing the fused intermediates twice",
+      "It is limited by the arithmetic ceiling, so cutting HBM traffic does not help",
+      "Because a matmul cannot be placed inside a fused kernel with other operations",
+      "Because fusion only lowers launch overhead, which a single matmul barely has"
+    ],
+    "answer_index": 1,
+    "explanation": "Fusion lowers bytes moved, which helps kernels under the bandwidth ceiling. A compute-bound matmul sits on the flat compute cap, so reducing its HBM traffic changes nothing. Fusion is the lever for the memory-bound tail."
+  },
+  {
+    "id": "08.2-037",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "What does torch.compile with TorchInductor actually do to a run of pointwise ops?",
+    "options": [
+      "Converts them to fp64 kernels for accuracy and then dispatches each one separately",
+      "Fuses them into one generated kernel (often Triton): one HBM read and one write",
+      "Offloads them to the CPU so the GPU can focus entirely on the large matmuls",
+      "Removes them from the graph entirely by folding them into the adjacent matmul weights"
+    ],
+    "answer_index": 1,
+    "explanation": "TorchInductor generates one fused kernel for a run of elementwise ops, often through Triton. Its effect is the byte-count reduction of fusion. Knowing that predicts when compile will help: a memory-bound tail a lot, a compute-bound kernel little."
+  },
+  {
+    "id": "08.2-038",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "6. Kernel fusion: raise AI by not writing intermediates to HBM",
+    "question": "In a roofline explorer, as more elementwise ops are added to a chain, how do the unfused and fused dots move?",
+    "options": [
+      "The unfused dot stays put; the fused dot slides right, since its bytes stay fixed",
+      "Both dots slide left by the same amount, because each added op brings more bytes with it",
+      "The unfused dot slides right while the fused dot stays put at one read and write",
+      "Both dots move up onto the compute ceiling once the chain has enough FLOPs in it"
+    ],
+    "answer_index": 0,
+    "explanation": "Unfused, every added op is another full round trip, so FLOPs and bytes grow together and AI stays constant. Fused, FLOPs grow but bytes stay fixed, so AI rises and the dot moves right."
+  },
+  {
+    "id": "08.2-039",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.1 The chain we want to fuse",
+    "question": "Standard attention for one head is a chain of which three kernels?",
+    "options": [
+      "Bias add, GELU and dropout, applied to the attention scores",
+      "LayerNorm, the QK matmul, and a residual add of the values",
+      "The Q projection, the K projection and the V projection",
+      "S = QK^T/sqrt(d) (matmul), P = softmax(S), O = PV (matmul)"
+    ],
+    "answer_index": 3,
+    "explanation": "Standard attention computes the scores S with a matmul, applies row-wise softmax to get P, and multiplies by V to get O. S and P are written to and read from HBM between kernels."
+  },
+  {
+    "id": "08.2-040",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.1 The chain we want to fuse",
+    "question": "For one attention head, what sizes are Q, K, V, O and the intermediates S and P?",
+    "options": [
+      "All six are T x d, including S and P",
+      "Q, K, V, O are T x T; S and P are T x d",
+      "Q, K, V, O are T x d; S and P are T x T",
+      "All six are d x d, including S and P"
+    ],
+    "answer_index": 2,
+    "explanation": "Inputs and output are T x d, but the scores and probabilities are T x T. That quadratic size is what makes attention's intermediates so expensive."
+  },
+  {
+    "id": "08.2-041",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.1 The chain we want to fuse",
+    "question": "For one head with T = 4096, d = 64 and fp16, roughly how large is the score matrix S?",
+    "options": [
+      "About 0.5 MB",
+      "About 2 MB",
+      "About 33.5 MB",
+      "About 34 GB"
+    ],
+    "answer_index": 2,
+    "explanation": "4096^2 x 2 bytes ≈ 33.5 MB, compared with ~0.5 MB for each of Q, K, V, O. 34 GB is the size of a T x T matrix at T = 131,072."
+  },
+  {
+    "id": "08.2-042",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.1 The chain we want to fuse",
+    "question": "For standard attention with T = 4096 and d = 64, what are its approximate arithmetic intensity and roofline regime on an A100?",
+    "options": [
+      "About 124 FLOPs/byte; compute-bound near peak on the flat roof",
+      "About 32 FLOPs/byte; memory-bound, at most about 21% of peak",
+      "About 0.083 FLOPs/byte; memory-bound, at about 0.05% of peak",
+      "About 683 FLOPs/byte; compute-bound, well past the ~153 ridge"
+    ],
+    "answer_index": 1,
+    "explanation": "About 4.3 GFLOP over ~136 MB of traffic gives AI ≈ 32, left of the ~153 ridge. The bandwidth ceiling caps it near 21% of peak."
+  },
+  {
+    "id": "08.2-043",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.1 The chain we want to fuse",
+    "question": "In standard attention with T = 4096 and d = 64, what fraction of HBM bytes are the S and P intermediates?",
+    "options": [
+      "About 98%",
+      "About 2%",
+      "About 50%",
+      "About 25%"
+    ],
+    "answer_index": 0,
+    "explanation": "Writing and reading S and P is ~134 MB of the ~136 MB total; the inputs and outputs are only ~2 MB. Those intermediates are not needed once the output is computed, which is exactly what fusion targets."
+  },
+  {
+    "id": "08.2-044",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.2 Why section 6's fusion does not work as-is",
+    "question": "Why can softmax not be fused the same simple way as GELU?",
+    "options": [
+      "Softmax needs fp64 exponentials, which cannot be computed in registers on the SM",
+      "Softmax has almost no FLOPs, so there is nothing to gain by fusing it at all",
+      "Each softmax output needs the max and sum over a whole row of T scores",
+      "Softmax must run on the CPU, because the exp function is not available in CUDA"
+    ],
+    "answer_index": 2,
+    "explanation": "gelu(h_i) depends only on h_i, so chunks can be processed independently. P_ij = exp(S_ij - m_i) / sum_k exp(S_ik - m_i) needs the row max m_i and the row sum over all T scores before producing any output."
+  },
+  {
+    "id": "08.2-045",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.2 Why section 6's fusion does not work as-is",
+    "question": "Why does a block of 128 query rows of the score matrix not fit on chip for T = 4096?",
+    "options": [
+      "It is only 16 KB, but shared memory cannot hold floating-point values at all",
+      "It fits in SRAM, but registers are too slow to read it at the needed rate",
+      "It is kept in host RAM by the driver and cannot be moved onto the SM",
+      "In fp32 it is 2 MB, versus ~164 KB of SRAM per SM, and it grows with T"
+    ],
+    "answer_index": 3,
+    "explanation": "128 rows x 4096 columns x 4 bytes is 2 MB, about 12x the ~164 KB of SRAM per SM, and it grows linearly with T. Unlike GELU's intermediates, attention's intermediates do not fit on chip."
+  },
+  {
+    "id": "08.2-046",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.2 Why section 6's fusion does not work as-is",
+    "question": "Why is processing attention one query row at a time a bad way to make it fit on chip?",
+    "options": [
+      "One row of 4096 fp32 scores is 16 MB, which is too large to fit in an SM's SRAM",
+      "It requires approximating the softmax, since a row's max is not known in advance",
+      "Each row re-reads all of K and V from HBM: ~4 GB at T = 4096, ~30x worse",
+      "It increases the number of FLOPs by a factor of T, since each row redoes QK^T"
+    ],
+    "answer_index": 2,
+    "explanation": "One row of 4096 scores is 16 KB and fits, but every one of 4096 rows would read all of K and V (~1 MB) again, ~4 GB total. Tiny tiles destroy data reuse, and reuse is what buys arithmetic intensity."
+  },
+  {
+    "id": "08.2-047",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "How does FlashAttention tile attention so the work fits in SRAM?",
+    "options": [
+      "It cuts the vocabulary into tiles and processes each tile in a separate kernel",
+      "It keeps blocks of B_q query rows in SRAM and streams K, V tiles past each block",
+      "It splits each head's d dimensions across several GPUs so each fits in SRAM",
+      "It keeps the whole T x T score matrix in the L2 cache so that HBM is never touched"
+    ],
+    "answer_index": 1,
+    "explanation": "Each kernel instance owns a Q block (say 128 rows) held in SRAM and streams K and V tiles of B_k rows past it. A 128 x 128 fp32 score tile is 64 KB and fits on chip."
+  },
+  {
+    "id": "08.2-048",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "In FlashAttention's tiling, why does each K, V tile get high data reuse?",
+    "options": [
+      "Each K, V tile is used by all B_q query rows of the block: matmul-like reuse",
+      "Each K, V tile is loaded only once for the whole model and kept on chip",
+      "Each K, V tile stays in registers across all layers of the forward pass",
+      "Each K, V tile is shared across all heads, since heads use the same keys"
+    ],
+    "answer_index": 0,
+    "explanation": "With 128 query rows in SRAM, every K, V tile streamed in participates in 128 rows of computation. That keeps arithmetic intensity high, unlike the one-row-at-a-time approach."
+  },
+  {
+    "id": "08.2-049",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "What state does online softmax keep for each query row?",
+    "options": [
+      "A running max m, a running sum l, and a running output accumulator",
+      "The full row of T scores, kept in SRAM until the row is complete",
+      "Only the final probabilities, written to HBM after each K, V tile",
+      "A random sample of the scores used to estimate the row's maximum"
+    ],
+    "answer_index": 0,
+    "explanation": "Online softmax tracks a running maximum, running sum of exponentials and an output accumulator per row. This removes the need to see the whole row of scores at once."
+  },
+  {
+    "id": "08.2-050",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "When online softmax encounters a tile with a larger max than seen before, what does it do?",
+    "options": [
+      "Discards all previous tiles and restarts the row from the first tile",
+      "Ignores the new tile's max and keeps using the old one for stability",
+      "Approximates the new values by clamping them to the old maximum",
+      "Rescales what it has accumulated so far by exp(m_old - m_new)"
+    ],
+    "answer_index": 3,
+    "explanation": "Previous exponentials were computed relative to the old max. Multiplying the accumulators by exp(m_old - m_new) re-expresses them relative to the new max, keeping the result exact."
+  },
+  {
+    "id": "08.2-051",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "Is the result of online softmax an approximation of the true softmax?",
+    "options": [
+      "Yes; it drops scores far below the running max to save SRAM space",
+      "Yes; it uses a low-rank approximation of the score matrix per tile",
+      "No; after dividing by the running sum, it is exactly the full softmax",
+      "Yes; it estimates the row sum from the tiles seen so far and stops early"
+    ],
+    "answer_index": 2,
+    "explanation": "Online softmax rescales its accumulators exactly whenever the max changes and divides by the running sum at the end. The output equals full-row softmax, not an approximation."
+  },
+  {
+    "id": "08.2-052",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.3 The two extra tricks",
+    "question": "How does FlashAttention's backward pass avoid storing the T x T probability matrix P?",
+    "options": [
+      "It approximates the gradients with a low-rank sketch, so P is never needed",
+      "It recomputes score tiles from Q, K and saved m, l, trading FLOPs for bytes",
+      "It stores P in pinned host RAM between forward and backward, off the GPU",
+      "It skips the backward pass for attention entirely and only updates the MLP weights"
+    ],
+    "answer_index": 1,
+    "explanation": "Backward recomputes score tiles from Q, K and the saved per-row statistics. This trades extra FLOPs, which are cheap, for not storing and re-reading T x T bytes, which are expensive — a roofline decision."
+  },
+  {
+    "id": "08.2-053",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "For T = 4096, d = 64 and B_q = 128, how many times does FlashAttention stream K and V?",
+    "options": [
+      "Once per query row, 4096 times",
+      "T / B_q = 32 times",
+      "T = 4096 times, once per key",
+      "d = 64 times, once per dim"
+    ],
+    "answer_index": 1,
+    "explanation": "Each of the 4096/128 = 32 query blocks streams K and V once, about 33.6 MB in total. That plus Q and O gives ~35 MB of traffic."
+  },
+  {
+    "id": "08.2-054",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "What is FlashAttention's approximate HBM traffic and arithmetic intensity for T = 4096, d = 64, B_q = 128?",
+    "options": [
+      "About 35 MB and about 124 FLOPs/byte, versus 136 MB and 32 for standard",
+      "About 136 MB and about 32 FLOPs/byte, the same as standard attention",
+      "About 4 GB and about 1 FLOP/byte, because K and V are re-read for every row",
+      "About 2 MB and about 2000 FLOPs/byte, since only Q, K, V, O are moved"
+    ],
+    "answer_index": 0,
+    "explanation": "Reading Q, writing O (~1 MB) plus 32 passes of K and V (~33.6 MB) gives ~35 MB for the same 4.3 GFLOP. AI ≈ 124, lifting it from ~21% to ~81% of peak."
+  },
+  {
+    "id": "08.2-055",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "What is the bigger win of FlashAttention, beyond reduced HBM traffic?",
+    "options": [
+      "FLOPs drop from O(T^2) to O(T), since only the needed tiles are computed",
+      "Attention no longer needs the K and V matrices after the first query block",
+      "Training no longer needs a backward pass through the attention layers",
+      "Memory held drops from O(T^2) to O(T), since the T x T matrix never exists"
+    ],
+    "answer_index": 3,
+    "explanation": "Because S and P are never materialized, attention memory is O(T). At T = 131,072 a single fp16 T x T matrix would be ~34 GB per head per layer, so without this long context does not fit."
+  },
+  {
+    "id": "08.2-056",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "In FlashAttention, what still grows like T^2, and what drops to O(T)?",
+    "options": [
+      "The memory held still grows like T^2; the K, V traffic drops to O(T)",
+      "Both the K, V traffic and the memory held drop to O(T) with tiling",
+      "K, V re-read traffic still grows like T^2; the memory held drops to O(T)",
+      "Neither changes with T; only the FLOPs drop, from O(T^2) to O(T)"
+    ],
+    "answer_index": 2,
+    "explanation": "K and V are re-read T/B_q times, so traffic is still quadratic, but scaled by d/B_q, about 4x below standard attention's S/P traffic here. What becomes linear is the memory held."
+  },
+  {
+    "id": "08.2-057",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "As T grows, how do the arithmetic intensities of standard attention and FlashAttention behave?",
+    "options": [
+      "Both rise linearly with T, since longer rows give more reuse per byte",
+      "Standard attention's AI rises with T while FlashAttention's falls with T",
+      "Both barely move (about d/2 and B_q), while the standard T x T matrix grows",
+      "Both fall toward zero, since K and V traffic grows faster than the FLOPs"
+    ],
+    "answer_index": 2,
+    "explanation": "Standard attention's AI stays around d/2 and FlashAttention's around B_q regardless of T. The dramatic change with T is the size of the standard version's score matrix, from megabytes to tens of gigabytes."
+  },
+  {
+    "id": "08.2-058",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "7.4 What it buys, in numbers",
+    "question": "Which summary correctly describes FlashAttention?",
+    "options": [
+      "A sparse approximation of attention that skips scores below a learned threshold",
+      "Fusion of the whole attention chain with tiling, online softmax and recompute",
+      "A compiler pass that fuses only the elementwise ops around the attention matmuls",
+      "A way to run attention in fp64 for accuracy while keeping fp16 memory traffic"
+    ],
+    "answer_index": 1,
+    "explanation": "Fusion is the goal: never write S or P to HBM. Tiling makes intermediates fit in SRAM with high reuse, online softmax computes softmax tile by tile exactly, and backward recomputes instead of storing P."
+  },
+  {
+    "id": "08.2-059",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Exercise",
+    "question": "A LayerNorm over M fp16 elements reads M elements, writes M elements and does about 8 FLOPs per element. What is its arithmetic intensity?",
+    "options": [
+      "2 FLOPs/byte",
+      "8 FLOPs/byte",
+      "0.5 FLOPs/byte",
+      "16 FLOPs/byte"
+    ],
+    "answer_index": 0,
+    "explanation": "Bytes = 2M read + 2M write = 4M; FLOPs = 8M. AI = 8M/4M = 2 FLOPs/byte, far below the A100 ridge, so it is memory-bound."
+  },
+  {
+    "id": "08.2-060",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Exercise",
+    "question": "What dominates a LayerNorm's cost on an A100, and what helps?",
+    "options": [
+      "Its ~8 FLOPs per element; reducing its arithmetic helps most",
+      "Its kernel launch; running it on the CPU removes that cost",
+      "Its weight matrix; quantizing the gain and bias weights helps",
+      "Two HBM passes over the tensor; fusing with its neighbour helps"
+    ],
+    "answer_index": 3,
+    "explanation": "With AI ≈ 2, LayerNorm is memory-bound. Its cost is streaming the tensor in and out of HBM. Fusing its output into the next kernel avoids writing and re-reading the normalized tensor; faster arithmetic would change nothing."
+  },
+  {
+    "id": "08.2-061",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why does rewriting a softmax or LayerNorm kernel to use fewer arithmetic operations barely change its runtime?",
+    "options": [
+      "It is compute-bound, so its runtime is set by FLOP/s, which fewer ops cannot raise",
+      "The arithmetic for these ops is performed on the CPU, so the GPU timing is unaffected",
+      "Its FLOPs run on Tensor Cores, which finish them in a negligible fraction of the time",
+      "It is memory-bound, so its runtime is set by bytes moved, not by its FLOPs"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax and LayerNorm sit far left of the ridge. Their runtime is bandwidth-bound, so reducing arithmetic does not help. Always diagnose with arithmetic intensity before optimizing."
+  },
+  {
+    "id": "08.2-062",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why would counting register and SRAM traffic in the AI denominator be a mistake?",
+    "options": [
+      "Register traffic is always far larger than HBM traffic, so AI would collapse",
+      "SRAM traffic is measured in FLOPs rather than bytes, so the units would mix",
+      "Fusion would look useless, since it just moves traffic from HBM to on-chip memory",
+      "It would make every kernel appear compute-bound, hiding all memory bottlenecks"
+    ],
+    "answer_index": 2,
+    "explanation": "AI is FLOPs per byte moved to and from the slow level. Fusion keeps intermediates in registers and SRAM; counting that traffic would erase its measured benefit. Only HBM traffic belongs in the denominator."
+  },
+  {
+    "id": "08.2-063",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Your bottleneck kernel is memory-bound. Why may buying a GPU with more peak FLOP/s but similar bandwidth give little gain?",
+    "options": [
+      "Newer GPUs always ship with less bandwidth than older ones, so it gets slower",
+      "The kernel is under the bandwidth ceiling, which more peak FLOP/s does not raise",
+      "Peak FLOP/s figures only apply to fp64, so bf16 kernels never see the increase",
+      "More FLOP/s makes each kernel launch slower, offsetting any gain in arithmetic"
+    ],
+    "answer_index": 1,
+    "explanation": "A memory-bound kernel needs more bandwidth or fewer bytes. Raising the compute ceiling leaves it where it is. State which ceiling you are under before buying hardware."
+  },
+  {
+    "id": "08.2-064",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why can small matmuls (tiny batch, small hidden size) be memory-bound?",
+    "options": [
+      "Matmul AI grows like n/6, so it is small when the dimensions are small",
+      "Small matmuls skip the Tensor Cores and so do almost no FLOPs at all",
+      "Small matmuls are always kept in host RAM and must cross PCIe each call",
+      "Small matmuls need a T x T intermediate that dominates their HBM traffic"
+    ],
+    "answer_index": 0,
+    "explanation": "Compute-bound is not automatic for matmuls; it depends on size. With AI ≈ n/6, a matmul of n = 64 has AI ≈ 10.7, well below the ridge, so it is memory-bound."
+  },
+  {
+    "id": "08.2-065",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A kernel on an A100 (ridge ≈ 150) has AI = 4 FLOPs/byte and runs at 3% of peak FLOP/s. What should you conclude?",
+    "options": [
+      "Expected: the roofline caps it near 2.6% of peak, so cut the bytes it moves",
+      "A bug: a kernel doing so few FLOPs per byte should run at peak FLOP/s",
+      "It is compute-bound at AI = 4 and needs faster or lower-precision Tensor Cores",
+      "It is limited by PCIe bandwidth, so its inputs should be moved to host memory"
+    ],
+    "answer_index": 0,
+    "explanation": "B x AI = 2x10^12 x 4 = 8x10^12 FLOP/s ≈ 2.6% of 312 TFLOP/s, so ~3% is essentially at the bandwidth ceiling. Fuse with neighbours, use a smaller dtype, or reuse data on chip; optimizing its arithmetic is pointless."
+  },
+  {
+    "id": "08.2-066",
+    "chapter": "08.2",
+    "chapter_name": "Arithmetic intensity, roofline, fusion",
+    "module": "8",
+    "module_name": "GPU performance & memory",
+    "source": "lessons/module-08/lesson-02.md",
+    "section": "Check yourself",
+    "question": "A colleague says 'FlashAttention is just torch.compile fusing the attention ops.' What is missing from that claim?",
+    "options": [
+      "Nothing; torch.compile emits exactly FlashAttention's tiled kernel for any attention code it sees",
+      "FlashAttention is not fusion at all; it cuts FLOPs by skipping low-scoring blocks of keys",
+      "FlashAttention runs only on the CPU, while torch.compile generates fused GPU kernels",
+      "Plain fusion can't handle softmax's row dependency or SRAM size; it needs tiling and online softmax"
+    ],
+    "answer_index": 3,
+    "explanation": "The goal is fusion: never send S or P to HBM. But elementwise fusion cannot do it, because softmax needs a full row of T scores and a block of those rows does not fit in SRAM. Tiling plus online softmax make it possible, exactly."
+  }
+]

@@ -1,0 +1,1226 @@
+[
+  {
+    "id": "11.2-001",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which basic property of a hash function does exact document deduplication rely on?",
+    "options": [
+      "A hash maps similar inputs to similar outputs",
+      "A hash maps data to a fixed-size integer, and equal inputs give equal hashes",
+      "A hash is reversible, so the document can be recovered from it",
+      "A hash always produces a unique output for every distinct input with no collisions possible"
+    ],
+    "answer_index": 1,
+    "explanation": "Exact dedup relies on hashing being deterministic: equal inputs produce equal fixed-size fingerprints. Hashes are not similarity-preserving (that is why fuzzy dedup needs MinHash) and are not reversible."
+  },
+  {
+    "id": "11.2-002",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is every serious pretraining corpus deduplicated?",
+    "options": [
+      "Duplicates waste compute, worsen memorization, and inflate evaluation via contamination",
+      "Duplicates bloat the tokenizer vocabulary, since repeated text spawns many redundant merges",
+      "Duplicates make the training loss go NaN, because identical batches produce exploding gradients",
+      "Duplicates are illegal to train on under copyright law, while a single copy is fair use"
+    ],
+    "answer_index": 0,
+    "explanation": "The web is enormously redundant. Training on duplicates spends compute relearning the same tokens, makes the model memorize and potentially regurgitate repeated text, and can leak benchmark items into training. Dedup addresses all three."
+  },
+  {
+    "id": "11.2-003",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What is the standard way to perform near-duplicate deduplication at web scale?",
+    "options": [
+      "Exact SHA-1 hashing of whole documents",
+      "Training a classifier to predict duplicates",
+      "Sorting all documents alphabetically and comparing neighbors",
+      "MinHash + LSH (locality-sensitive hashing)"
+    ],
+    "answer_index": 3,
+    "explanation": "MinHash estimates Jaccard similarity from small signatures, and LSH banding finds candidate pairs without comparing all pairs. Together they are the standard near-duplicate method in large corpora. Exact hashing only catches byte-identical copies."
+  },
+  {
+    "id": "11.2-004",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "If the same 2,000-word article appears 500 times in a crawl and you train on all copies, what is the 'wasted compute' harm?",
+    "options": [
+      "The GPU runs out of memory, because each duplicate is cached separately in the activations",
+      "The optimizer's learning rate is effectively multiplied by 500 for that article's tokens",
+      "You spend 500× the FLOPs on one article instead of 500 different ones",
+      "The tokenizer must be retrained for each copy, since each one shifts the merge statistics"
+    ],
+    "answer_index": 2,
+    "explanation": "At a fixed compute budget, every duplicated token displaces a token of new information. 500 copies means 500× the compute on one article that could have gone to 500 different ones."
+  },
+  {
+    "id": "11.2-005",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "Why does duplicated training text worsen memorization in a language model?",
+    "options": [
+      "Duplicates are stored in a special cache inside the model that bypasses its normal weight updates",
+      "Text seen many times gets memorized rather than generalized, so it can be reproduced verbatim",
+      "Duplicates increase the vocabulary size, so rare words get their own memorized embeddings",
+      "Duplicates disable dropout for the repeated tokens, so the model overfits them exactly"
+    ],
+    "answer_index": 1,
+    "explanation": "Repeated exposure pushes the model to store the exact text instead of generalizing. Heavily duplicated passages can then be regurgitated verbatim — a privacy and copyright hazard and a sign capacity went to storage instead of learning."
+  },
+  {
+    "id": "11.2-006",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "How can duplication in training data cause evaluation contamination?",
+    "options": [
+      "If a duplicated document overlaps a benchmark item, the model has effectively seen the test",
+      "Duplicates cause the evaluation harness to count each correct answer twice, doubling scores",
+      "Duplicates change the benchmark's answer key, since repeated items are re-labelled on load",
+      "Duplicates lower the validation loss but have no effect at all on downstream benchmark scores"
+    ],
+    "answer_index": 0,
+    "explanation": "If text overlapping a benchmark appears (often many times) in training, the model can answer from memory rather than reasoning. That inflates benchmark scores, which is the contamination problem."
+  },
+  {
+    "id": "11.2-007",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "What does exact deduplication remove?",
+    "options": [
+      "Documents that share at least one full sentence, found by hashing each sentence separately",
+      "Documents with Jaccard similarity above 0.8, found by comparing MinHash signatures",
+      "Documents on the same topic, found by clustering their embeddings and keeping one per cluster",
+      "Byte-for-byte identical documents, found by hashing each one and dropping repeated hashes"
+    ],
+    "answer_index": 3,
+    "explanation": "Exact dedup hashes each document and drops any document whose hash was already seen. It only removes byte-identical copies; near-identical documents need fuzzy dedup."
+  },
+  {
+    "id": "11.2-008",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "What does fuzzy (near-duplicate) deduplication remove that exact hashing misses?",
+    "options": [
+      "Documents in different languages that say the same thing, e.g. an article and its translation",
+      "Documents that are byte-for-byte identical, which exact hashing cannot detect reliably",
+      "Nearly identical documents — e.g. the same article with a changed date or an added footer",
+      "Documents that contain PII, since names and emails differ slightly between copies"
+    ],
+    "answer_index": 2,
+    "explanation": "Fuzzy dedup targets near-duplicates: the same content with small changes such as a different date or extra footer. Exact hashing misses these because one different byte gives a completely different hash."
+  },
+  {
+    "id": "11.2-009",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "1. Intuition: why duplicates hurt",
+    "question": "Why does exact hashing miss near-duplicate documents?",
+    "options": [
+      "Hashes are too short to represent long documents faithfully",
+      "One different byte gives a completely different hash",
+      "Hash collisions make near-duplicates look unique",
+      "Exact hashing ignores whitespace"
+    ],
+    "answer_index": 1,
+    "explanation": "Hash functions scramble their input so that any small change — even one byte — produces an unrelated output. Two nearly identical documents therefore get unrelated fingerprints and both survive exact dedup."
+  },
+  {
+    "id": "11.2-010",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "2. Exact deduplication by hashing",
+    "question": "Why is exact dedup implemented by comparing 64-bit hashes rather than full document strings?",
+    "options": [
+      "Comparing fixed-size hashes is far cheaper than comparing strings, and set lookup is O(1)",
+      "Full strings cannot be compared for equality in Python once they exceed a few megabytes in size",
+      "Hashes preserve similarity, so near-duplicates map to nearby values and are also caught",
+      "Hashes compress each document losslessly, so it can be decoded later if it is needed"
+    ],
+    "answer_index": 0,
+    "explanation": "A fixed-size fingerprint makes each comparison cheap, and storing seen fingerprints in a hash set gives average O(1) membership tests. That makes exact dedup a single linear pass."
+  },
+  {
+    "id": "11.2-011",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "2. Exact deduplication by hashing",
+    "question": "In an exact-dedup function that iterates over documents, hashes each, and keeps a `seen` set, which occurrence of a repeated document is kept?",
+    "options": [
+      "The last occurrence",
+      "A random occurrence",
+      "None of them — all copies are removed",
+      "The first occurrence"
+    ],
+    "answer_index": 3,
+    "explanation": "The loop appends a document only if its hash is not in seen, then adds the hash. So the first copy is kept and later copies are dropped."
+  },
+  {
+    "id": "11.2-012",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "2. Exact deduplication by hashing",
+    "question": "Why should a real deduplication pipeline use a stable content hash (e.g. `hashlib.sha1` or `blake2b`) instead of Python's built-in `hash()`?",
+    "options": [
+      "Python's built-in `hash()` is too slow for large documents, since it walks every byte twice",
+      "Python's built-in `hash()` only works on integers and tuples, not on str or bytes objects",
+      "Python's built-in `hash()` is salted per process, so values differ between runs and shards",
+      "Python's built-in `hash()` produces 1024-bit outputs, far too large to store for every document"
+    ],
+    "answer_index": 2,
+    "explanation": "For strings and bytes, Python's built-in hash is randomized per process (PYTHONHASHSEED). Values computed in one run or worker do not match another, so they cannot be saved or compared across shards. A stable hash like sha1 or blake2b of the bytes gives the same value everywhere."
+  },
+  {
+    "id": "11.2-013",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "2. Exact deduplication by hashing",
+    "question": "What kind of changes cause exact hash-based dedup to see two documents as different, even though a human sees the same article?",
+    "options": [
+      "A different font or stylesheet in the rendered page, which changes how the text looks",
+      "Tiny edits like a changed timestamp, a visitor counter, or a 'Share on X' line",
+      "Being served from a different country, so the page arrives through a different CDN",
+      "Being crawled in a different month, even when the stored bytes are exactly identical"
+    ],
+    "answer_index": 1,
+    "explanation": "Any byte change — a timestamp, a counter, a share line — changes the hash completely. The web is full of such small variations, which is why a similarity measure tolerant of small edits is needed."
+  },
+  {
+    "id": "11.2-014",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "What is a k-shingle (k-gram) in near-duplicate detection?",
+    "options": [
+      "A window of k consecutive units — here, k consecutive words joined by spaces",
+      "A random sample of k words drawn from the document, with their order discarded",
+      "The k most frequent words in the document, ranked by their raw counts",
+      "The first k characters of the document, used as a cheap fingerprint of it"
+    ],
+    "answer_index": 0,
+    "explanation": "A k-shingle is a sliding window of k consecutive words. Sliding it across the document one word at a time produces the document's shingle set."
+  },
+  {
+    "id": "11.2-015",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "What is the 3-shingle set of 'the quick brown fox jumps'?",
+    "options": [
+      "{'the quick brown', 'quick brown fox', 'brown fox jumps', 'fox jumps'}",
+      "{'the quick brown fox', 'quick brown fox jumps'}",
+      "{'the quick', 'quick brown', 'brown fox', 'fox jumps'}",
+      "{'the quick brown', 'quick brown fox', 'brown fox jumps'}"
+    ],
+    "answer_index": 3,
+    "explanation": "Sliding a 3-word window across 5 words yields 5 − 3 + 1 = 3 shingles: 'the quick brown', 'quick brown fox', 'brown fox jumps'. The 2-word windows would be 2-shingles."
+  },
+  {
+    "id": "11.2-016",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "Why does a small edit to a document change only a few of its k-shingles?",
+    "options": [
+      "Because shingles are hashed with a similarity-preserving hash, so nearby edits map to nearby values",
+      "Because shingles skip all words shorter than k letters, so most small edits are ignored",
+      "Only the few shingles whose window spans the edited position change; the rest stay the same",
+      "Because the shingle set is sorted alphabetically, so an edit only moves a single entry"
+    ],
+    "answer_index": 2,
+    "explanation": "Each shingle covers k consecutive words. A local edit only affects the shingles whose window includes the edited word, so two near-identical documents still share most shingles."
+  },
+  {
+    "id": "11.2-017",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "When a document is converted to a set of shingles, what information is collapsed away?",
+    "options": [
+      "Vocabulary and spelling",
+      "Order and repetition",
+      "Word boundaries",
+      "All content information"
+    ],
+    "answer_index": 1,
+    "explanation": "Representing a document as a set discards the order of shingles and how many times each appears. What remains is which k-word runs the document contains, which is what near-duplicate comparison uses."
+  },
+  {
+    "id": "11.2-018",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "Why is near-duplicate detection done on sets of shingles rather than the raw word sequence?",
+    "options": [
+      "It measures how much content two documents share, not order, so reordered pages still overlap",
+      "Because sets are faster to tokenize with BPE than sequences, which matters at web scale",
+      "Because raw word sequences cannot be hashed, while sets of shingles can be hashed and compared directly",
+      "Because sets preserve the exact order of paragraphs, which sequences of words lose"
+    ],
+    "answer_index": 0,
+    "explanation": "Near-duplicate detection asks how much content is shared. Reordering paragraphs barely changes the shingle set, so set overlap correctly flags such pages as duplicates."
+  },
+  {
+    "id": "11.2-019",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "What is the effect of using a larger k for word shingles in near-duplicate detection?",
+    "options": [
+      "More unrelated documents are flagged as duplicates, since long shingles match each other more often",
+      "Shingle sets become smaller than the vocabulary, so every document looks almost identical",
+      "Order information is fully restored, so the set becomes equivalent to the raw sequence",
+      "Accidental overlap between unrelated documents becomes very unlikely, as long runs rarely coincide"
+    ],
+    "answer_index": 3,
+    "explanation": "Short runs like 2 words are shared by chance among unrelated texts; long runs like 8 words almost never are. Larger k therefore reduces spurious overlap between unrelated documents."
+  },
+  {
+    "id": "11.2-020",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "3. Fuzzy dedup: documents as sets of shingles",
+    "question": "What are typical shingle sizes k (in words) for web near-duplicate detection?",
+    "options": [
+      "1–2 words",
+      "50–100 words",
+      "5–10 words",
+      "Exactly one sentence"
+    ],
+    "answer_index": 2,
+    "explanation": "Typical values are 5–10 words: long enough that accidental shared runs are rare, short enough that small edits leave most shingles intact."
+  },
+  {
+    "id": "11.2-021",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "4. Jaccard similarity: the quantity we want",
+    "question": "What is the Jaccard similarity $J(A, B)$ of two sets A and B?",
+    "options": [
+      "$|A \\cap B| / |A|$ — the size of the intersection over the size of A alone",
+      "$|A \\cap B| / |A \\cup B|$ — the size of the intersection over the union",
+      "$|A \\cup B| / |A \\cap B|$ — the size of the union over the intersection",
+      "$|A| \\cdot |B| / |A \\cup B|$ — the product of the sizes over the union"
+    ],
+    "answer_index": 1,
+    "explanation": "Jaccard is intersection over union. It equals 1 for identical sets and 0 for disjoint sets. Normalizing only by |A| would make it directional rather than symmetric."
+  },
+  {
+    "id": "11.2-022",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "4. Jaccard similarity: the quantity we want",
+    "question": "What does Jaccard similarity J = 1 mean for two shingle sets?",
+    "options": [
+      "The sets are identical — every shingle is shared",
+      "The sets are disjoint — no shingle is shared at all",
+      "Exactly one shingle is shared between the two sets",
+      "One set is twice the size of the other, by count"
+    ],
+    "answer_index": 0,
+    "explanation": "J = 1 when intersection equals union, i.e. the sets are identical. J = 0 means disjoint; values in between are the fraction of all distinct shingles that both contain."
+  },
+  {
+    "id": "11.2-023",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "4. Jaccard similarity: the quantity we want",
+    "question": "What does a Jaccard similarity strictly between 0 and 1 represent for two shingle sets?",
+    "options": [
+      "The fraction of document A's words that also appear anywhere in document B's vocabulary",
+      "The probability that the two documents are written in the same language",
+      "The number of shared shingles divided by k, the shingle length in words",
+      "The fraction of all distinct shingles (across both) that both documents contain"
+    ],
+    "answer_index": 3,
+    "explanation": "Since J = |A∩B| / |A∪B|, it is exactly the share of the union that lies in the intersection: the fraction of all distinct shingles present in both documents."
+  },
+  {
+    "id": "11.2-024",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "4. Jaccard similarity: the quantity we want",
+    "question": "Around what Jaccard threshold does a dedup pass commonly declare two documents near-duplicates?",
+    "options": [
+      "About 0.1",
+      "About 0.3",
+      "About 0.8",
+      "Exactly 1.0"
+    ],
+    "answer_index": 2,
+    "explanation": "A common near-duplicate threshold is around J ≥ 0.8. Exactly 1.0 would only catch identical shingle sets, and low thresholds would delete merely related documents."
+  },
+  {
+    "id": "11.2-025",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "4. Jaccard similarity: the quantity we want",
+    "question": "What kind of computation is Jaccard similarity of shingle sets in a dedup pipeline?",
+    "options": [
+      "GPU matrix multiplication on float16 embeddings of each shingle",
+      "CPU set arithmetic on set counts — nothing is a tensor",
+      "A forward pass of a small transformer over both shingle sets",
+      "Gradient computation on token ids from the two documents"
+    ],
+    "answer_index": 1,
+    "explanation": "Every symbol in the Jaccard formula is a set size. Computing it is plain CPU set intersection and union, not tensor math."
+  },
+  {
+    "id": "11.2-026",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "5. The problem: exact Jaccard is too expensive at scale",
+    "question": "Why is computing exact Jaccard similarity for every pair of documents infeasible at web scale?",
+    "options": [
+      "Each pair requires intersecting large shingle sets, and there are ~$10^{18}$ pairs for $n = 10^9$",
+      "Jaccard can only be computed on a GPU, and no cluster has enough memory to hold every shingle set",
+      "Jaccard requires training a small model for each pair, which costs minutes per comparison",
+      "Jaccard is undefined for sets larger than 1,000 elements, which most web documents exceed"
+    ],
+    "answer_index": 0,
+    "explanation": "Two costs explode: storing and intersecting big shingle sets per pair, and the number of pairs, which grows quadratically. With a billion documents that is about 10^18 comparisons — utterly infeasible."
+  },
+  {
+    "id": "11.2-027",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "5. The problem: exact Jaccard is too expensive at scale",
+    "question": "Which cost of exact pairwise Jaccard does MinHash attack, and which does LSH banding attack?",
+    "options": [
+      "MinHash attacks the number of pairs (bucketing similar documents); LSH banding attacks the per-pair cost",
+      "Both attack only the per-pair cost: MinHash shrinks the sets and banding shrinks them further",
+      "Both attack only the number of pairs: MinHash skips dissimilar pairs and banding skips the rest",
+      "MinHash attacks the per-pair cost (small signatures); LSH banding attacks the number of pairs"
+    ],
+    "answer_index": 3,
+    "explanation": "MinHash replaces full shingle sets with small signatures so each comparison is cheap. LSH banding avoids comparing most pairs at all by bucketing likely-similar documents. Together they make near-duplicate detection tractable."
+  },
+  {
+    "id": "11.2-028",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "In MinHash, given a random permutation π of the shingle universe, how is minhash(A) defined?",
+    "options": [
+      "The element of A with the largest rank under π: $\\arg\\max_{x \\in A} \\pi(x)$, i.e. the last",
+      "The number of elements of A whose rank under π falls below |A|",
+      "The element of A with the smallest rank under π: $\\arg\\min_{x \\in A} \\pi(x)$",
+      "The average rank of A's elements under π, rounded down to an integer"
+    ],
+    "answer_index": 2,
+    "explanation": "A random permutation assigns every shingle a rank. The MinHash of a set is its member with the smallest rank. Max-based variants exist in principle, but the defined quantity here is the argmin."
+  },
+  {
+    "id": "11.2-029",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "What is the key identity that MinHash rests on?",
+    "options": [
+      "For a random permutation, P(minhash(A) = minhash(B)) = |A ∩ B|",
+      "For a random permutation, P(minhash(A) = minhash(B)) = J(A, B)",
+      "For a random permutation, minhash(A) = minhash(B) only when A = B",
+      "For a random permutation, P(minhash(A) = minhash(B)) = 1 − J(A, B)"
+    ],
+    "answer_index": 1,
+    "explanation": "The probability that two sets share their MinHash under a random permutation equals exactly their Jaccard similarity. That makes each permutation a Bernoulli trial succeeding with probability J."
+  },
+  {
+    "id": "11.2-030",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "Why does P(minhash(A) = minhash(B)) equal the Jaccard similarity J(A, B) under a random permutation?",
+    "options": [
+      "The smallest-ranked element of A ∪ B is uniform over the union, and they match iff it lies in A ∩ B",
+      "Because the permutation always ranks shared elements first, so the match rate tracks their overlap size",
+      "Because each set's MinHash is drawn uniformly from that set, independently of the other set",
+      "Because the permutation is applied separately to A and to B, so the two minima are independent"
+    ],
+    "answer_index": 0,
+    "explanation": "Under a random permutation, the overall minimum of the union is uniformly distributed over the union. Both sets have that element as their MinHash exactly when it is in both sets. So the match probability is |A∩B| / |A∪B| = J."
+  },
+  {
+    "id": "11.2-031",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "How is a MinHash signature of a set built?",
+    "options": [
+      "As the sorted list of all the set's shingles, truncated to keep only the first m entries",
+      "As a single hash of the concatenated shingles, repeated m times for redundancy",
+      "As the m most frequent shingles in the document, stored as their hash values",
+      "As the length-m vector of the set's MinHashes under m independent permutations"
+    ],
+    "answer_index": 3,
+    "explanation": "Apply m independent random permutations (or hash functions) and record the MinHash under each. The resulting length-m vector is the signature, replacing a set of thousands of shingles."
+  },
+  {
+    "id": "11.2-032",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "How is Jaccard similarity estimated from two MinHash signatures of length m?",
+    "options": [
+      "The cosine similarity of the two signature vectors, treating each slot's hash value as a coordinate",
+      "The Euclidean distance between the two signatures divided by m, then subtracted from one to get a similarity",
+      "$\\hat{J} = \\frac{1}{m}\\sum_{i} \\mathbb{1}[\\text{sig}_A[i] = \\text{sig}_B[i]]$ — the fraction of equal slots",
+      "The fraction of slots where sig_A[i] < sig_B[i], doubled to correct for symmetry"
+    ],
+    "answer_index": 2,
+    "explanation": "Each slot matches with probability J, so the fraction of equal slots estimates J. Cosine or Euclidean distance on hash values has no meaningful relation to J."
+  },
+  {
+    "id": "11.2-033",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "Is the MinHash estimator $\\hat J$ (fraction of matching signature slots) biased or unbiased for J?",
+    "options": [
+      "Biased upward by a factor of m, so it must be divided by m",
+      "Unbiased — each slot matches with probability exactly J",
+      "Biased downward because hash collisions are ignored",
+      "Unbiased only when J = 0.5, and biased toward 0.5 otherwise"
+    ],
+    "answer_index": 1,
+    "explanation": "Since each slot is an independent trial that matches with probability J, the expected fraction of matches is J. The estimator is unbiased; more slots just reduce its variance."
+  },
+  {
+    "id": "11.2-034",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "How does the standard deviation of the MinHash Jaccard estimate scale with the signature length m?",
+    "options": [
+      "It shrinks like $1/\\sqrt{m}$",
+      "It shrinks like $1/m^2$, quadratically",
+      "It grows like $\\sqrt{m}$",
+      "It does not depend on m at all"
+    ],
+    "answer_index": 0,
+    "explanation": "The estimate is an average of m Bernoulli(J) trials, so its standard deviation is sqrt(J(1−J)/m), shrinking like 1/sqrt(m). More permutations give a tighter estimate."
+  },
+  {
+    "id": "11.2-035",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "6. MinHash: estimating Jaccard from a tiny signature",
+    "question": "After MinHashing, what does comparing two documents cost?",
+    "options": [
+      "Intersecting their full shingle sets",
+      "One forward pass of a classifier",
+      "O(n^2) comparisons over the corpus",
+      "m integer comparisons"
+    ],
+    "answer_index": 3,
+    "explanation": "A signature of a few hundred integers replaces a set of thousands of shingles, so comparing two documents is just m equality checks."
+  },
+  {
+    "id": "11.2-036",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "7. Tiny MinHash example, worked entirely by hand",
+    "question": "For A = {1, 2, 3, 4} and B = {3, 4, 5, 6}, what is the true Jaccard similarity?",
+    "options": [
+      "1/2 (intersection {3,4} of size 2 over |A| = 4)",
+      "2/3 (the 4 elements outside the intersection over the union of 6)",
+      "1/3 (intersection {3,4} of size 2 over union of size 6)",
+      "1/4 (intersection {3,4} of size 2 over |A| + |B| = 8)"
+    ],
+    "answer_index": 2,
+    "explanation": "A ∩ B = {3, 4} has size 2 and A ∪ B = {1,…,6} has size 6, so J = 2/6 = 1/3. A tempting mistake is to divide by |A| = 4, giving 1/2."
+  },
+  {
+    "id": "11.2-037",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "7. Tiny MinHash example, worked entirely by hand",
+    "question": "For A = {1,2,3,4} and B = {3,4,5,6}, under which condition on a random permutation do minhash(A) and minhash(B) match?",
+    "options": [
+      "When element 1 is ranked first, since 1 is the smallest element of A",
+      "When the smallest-ranked element of the union is 3 or 4, in the intersection",
+      "When the permutation is the identity ordering, so each element's rank equals its value",
+      "When elements 5 and 6 are ranked last, so they cannot be B's MinHash"
+    ],
+    "answer_index": 1,
+    "explanation": "A match happens exactly when the minimum-ranked element of A ∪ B is in both sets, i.e. is 3 or 4. If element 1 is first, minhash(A) = 1 but B's MinHash is something else."
+  },
+  {
+    "id": "11.2-038",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "7. Tiny MinHash example, worked entirely by hand",
+    "question": "Why might a MinHash estimate with only six permutations land exactly on the true Jaccard, and what happens as the number of permutations grows?",
+    "options": [
+      "With few permutations it is partly luck, since the estimate has variance; with many it concentrates",
+      "Six permutations always give the exact answer for any sets; more permutations just confirm the same value",
+      "The estimate is exact for small m but becomes biased as the number of permutations grows",
+      "It is exact only when J = 1/3; with more permutations the estimate drifts steadily toward 0.5"
+    ],
+    "answer_index": 0,
+    "explanation": "Six trials is a very noisy sample, so hitting 1/3 exactly is partly luck. As m grows the estimate concentrates — 100,000 random permutations give about 0.3336 for the same sets."
+  },
+  {
+    "id": "11.2-039",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "Why does real MinHash use hash functions instead of literally shuffling the universe of all shingles?",
+    "options": [
+      "Shuffling with a standard PRNG is not random enough for the MinHash identity to hold",
+      "Hash functions give the exact Jaccard similarity instead of a noisy estimate, removing variance",
+      "Shuffling would reveal each document's content to the workers that hold the permutation",
+      "The universe of possible shingles is astronomically large, so a hash simulates a permutation"
+    ],
+    "answer_index": 3,
+    "explanation": "You cannot materialize a permutation over every possible shingle. A hash function assigns each shingle a pseudo-random value, and the smallest hash value plays the role of the smallest rank."
+  },
+  {
+    "id": "11.2-040",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "What form of universal hash function is used to simulate permutations in MinHash?",
+    "options": [
+      "$h(x) = x^2 \\bmod 2$, so that each shingle maps to one of two buckets",
+      "$h(x) = \\lfloor x / p \\rfloor$ with p prime and no random coefficients",
+      "$h(x) = (a \\cdot x + b) \\bmod p$ with large prime p and random a, b",
+      "$h(x) = a \\cdot x$ with a fixed to 1, so every shingle keeps its rank"
+    ],
+    "answer_index": 2,
+    "explanation": "A universal hash (a·x + b) mod p with large prime p and random a, b maps each shingle's base hash to a pseudo-random value. Different (a_i, b_i) pairs give the m independent hash functions."
+  },
+  {
+    "id": "11.2-041",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "In MinHash with universal hashes, how are the m independent 'permutations' obtained?",
+    "options": [
+      "By using m different prime moduli, chosen at random on each call",
+      "By using m different random $(a_i, b_i)$ coefficient pairs",
+      "By shuffling the document's words m times before shingling",
+      "By using m different shingle sizes k, one per hash function"
+    ],
+    "answer_index": 1,
+    "explanation": "Each (a_i, b_i) pair defines one hash function. Drawing m such pairs gives m independent functions, standing in for m random permutations."
+  },
+  {
+    "id": "11.2-042",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "In the `MinHasher.signature` implementation, what is the shape and dtype of the `hashed` array, and what does `min(axis=1)` do?",
+    "options": [
+      "Shape (m, |s|), uint64 on CPU; min over axis 1 reduces each hash function's row to its MinHash",
+      "Shape (|s|, m), float32 on the GPU; min over axis 1 picks the smallest shingle per hash function",
+      "Shape (m,), int64 on the CPU; min over axis 1 collapses the vector into a single scalar MinHash",
+      "Shape (m, m), uint8 on the CPU; min over axis 1 picks the diagonal entry of each hash function"
+    ],
+    "answer_index": 0,
+    "explanation": "Broadcasting (m,1) coefficients against (1,|s|) base hashes gives an (m, |s|) uint64 array: row i is hash function i applied to every shingle. Taking the min along axis 1 yields one MinHash per function, a length-m signature returned as a list of ints."
+  },
+  {
+    "id": "11.2-043",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "Why does the course's `MinHasher` use `_stable_hash` based on `blake2b` for shingles, and take a `seed` for its coefficients?",
+    "options": [
+      "So signatures are as short as possible, since blake2b digests compress well",
+      "So that two different documents can never collide in any signature slot",
+      "So that the hash coefficients change on each run, giving better randomness overall",
+      "So signatures are reproducible across runs and processes, unlike salted `hash()`"
+    ],
+    "answer_index": 3,
+    "explanation": "Python's built-in hash is salted per process, so it would give different signatures in different runs. Using blake2b for base hashes and a fixed seed for the a, b coefficients makes signatures identical across runs and workers."
+  },
+  {
+    "id": "11.2-044",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "8. From permutations to hash functions (what the code does)",
+    "question": "What does `estimate_jaccard(sig_a, sig_b)` compute?",
+    "options": [
+      "The size of the intersection of the two signatures as sets, divided by their union",
+      "The mean absolute difference between the two signatures, normalised by the largest value in either",
+      "The number of positions where the two signatures are equal, divided by the signature length",
+      "The maximum of the two signatures' minimum values, scaled into the range 0 to 1"
+    ],
+    "answer_index": 2,
+    "explanation": "estimate_jaccard counts equal slots with zip and divides by len(sig_a). That fraction of equal slots is the unbiased MinHash estimate of Jaccard."
+  },
+  {
+    "id": "11.2-045",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "9. It works on real text — and m controls accuracy",
+    "question": "When estimating Jaccard with MinHash at increasing signature sizes m (16, 64, 256, 1024), how does the error behave?",
+    "options": [
+      "It decreases strictly monotonically at every step, halving each time m quadruples",
+      "It trends down roughly as $1/\\sqrt{m}$, though not monotonically since the estimate is random",
+      "It stays roughly constant regardless of m, since the estimator is already unbiased",
+      "It increases with m, because longer signatures produce more accidental collisions between slots"
+    ],
+    "answer_index": 1,
+    "explanation": "At m = 16 the estimate is noisy; by 64–1024 it hugs the true value. Errors trend down like 1/sqrt(m) but can bounce around (e.g. 256 slightly worse than 64) because each estimate is random."
+  },
+  {
+    "id": "11.2-046",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "9. It works on real text — and m controls accuracy",
+    "question": "What is the accuracy/cost trade-off controlled by the MinHash signature length m?",
+    "options": [
+      "Bigger signatures cost more storage and comparison but estimate J more precisely",
+      "Bigger signatures are both cheaper and more precise, since they compress better",
+      "Bigger signatures cost more but are less precise, because more slots add noise",
+      "Signature length has no effect on cost, since each comparison is a single hash-table lookup"
+    ],
+    "answer_index": 0,
+    "explanation": "Storage and comparison cost grow linearly with m, while estimation error shrinks like 1/sqrt(m). You choose m to meet the precision your dedup threshold needs."
+  },
+  {
+    "id": "11.2-047",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "9. It works on real text — and m controls accuracy",
+    "question": "What does the course's dedup unit test assert about `estimate_jaccard`?",
+    "options": [
+      "That `estimate_jaccard` returns exactly the true Jaccard for any m and any pair of sets",
+      "That `estimate_jaccard` is always strictly below the true Jaccard, for every seed and every m tested",
+      "That `estimate_jaccard` runs faster than exact `jaccard` for any m on large shingle sets",
+      "With m ≥ 128 and a fixed seed, it lands within ~0.1 of the true `jaccard` for overlapping sets"
+    ],
+    "answer_index": 3,
+    "explanation": "The test checks that with at least 128 hash functions and a fixed seed, the MinHash estimate is within about 0.1 of the exact Jaccard. It allows for randomness rather than demanding exactness."
+  },
+  {
+    "id": "11.2-048",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "What problem does LSH banding solve in near-duplicate detection?",
+    "options": [
+      "It makes each pairwise comparison cheaper than checking m integers, by hashing whole signatures",
+      "It computes the exact Jaccard similarity instead of an estimate, using the band structure",
+      "It avoids comparing all $\\binom{n}{2}$ pairs by only comparing likely-similar documents",
+      "It removes byte-identical copies before MinHash runs, so the signatures are all distinct"
+    ],
+    "answer_index": 2,
+    "explanation": "MinHash made each comparison cheap, but there are still too many pairs. LSH banding generates candidate pairs that are likely similar, so most pairs are never compared at all."
+  },
+  {
+    "id": "11.2-049",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "In LSH banding of MinHash signatures, how is a length-m signature divided?",
+    "options": [
+      "Into r bands of b rows each, with m = b + r slots",
+      "Into b bands of r rows each, with m = b · r",
+      "Into m bands of one row each",
+      "Into two halves compared separately"
+    ],
+    "answer_index": 1,
+    "explanation": "Each signature is split into b bands, each containing r consecutive MinHash values, so m = b·r. Each band is then hashed into a bucket."
+  },
+  {
+    "id": "11.2-050",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "In LSH banding, when do two documents become a candidate pair?",
+    "options": [
+      "When they land in the same bucket for at least one band — sharing all r values of that band",
+      "When they land in the same bucket for every one of the b bands, i.e. across the whole signature",
+      "When at least one of their m MinHash values is equal, in any position of the signature",
+      "When their signatures have the same sum, which is cheap to compare across all documents"
+    ],
+    "answer_index": 0,
+    "explanation": "A candidate pair needs to match on all r rows of at least one band. Requiring all bands would be too strict; requiring one single slot would flag far too many pairs."
+  },
+  {
+    "id": "11.2-051",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "What is the probability that a pair of documents with Jaccard J becomes an LSH candidate pair with b bands of r rows?",
+    "options": [
+      "$1 - J^{r \\cdot b}$",
+      "$1 - (1 - J)^{r \\cdot b}$",
+      "$1 - (1 - J^{b})^{r}$",
+      "$1 - (1 - J^{r})^{b}$"
+    ],
+    "answer_index": 3,
+    "explanation": "A band matches entirely with probability J^r; it fails with probability 1 − J^r; all b bands fail with probability (1 − J^r)^b. So at least one band matches with probability 1 − (1 − J^r)^b."
+  },
+  {
+    "id": "11.2-052",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "What is the shape of the LSH candidate probability $1 - (1 - J^r)^b$ as a function of J, and roughly where is its threshold?",
+    "options": [
+      "Linear in J, with no threshold: doubling J doubles the chance of becoming a candidate",
+      "Bell-shaped, peaking at J = 0.5 and falling off for both very similar and very dissimilar pairs",
+      "S-shaped: near 0 below a threshold and near 1 above it, with the threshold near $(1/b)^{1/r}$",
+      "Decreasing in J, so dissimilar pairs are the most likely to become candidate pairs"
+    ],
+    "answer_index": 2,
+    "explanation": "The curve is an S: pairs with low J almost never become candidates and pairs with high J almost always do. The steep transition sits near (1/b)^(1/r), which b and r tune."
+  },
+  {
+    "id": "11.2-053",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "What do the LSH banding parameters b and r tune?",
+    "options": [
+      "The length of each shingle in words, which sets how strict the overlap test is",
+      "Where the S-curve cutoff sits — how similar documents must be before you compare them",
+      "The size of the stable hash in bits, which sets how often two different shingles collide",
+      "The number of documents per shard, which sets how many workers the job can use"
+    ],
+    "answer_index": 1,
+    "explanation": "Choosing b and r moves the threshold near (1/b)^(1/r). More rows per band make matching a band harder (higher threshold); more bands make it easier (lower threshold)."
+  },
+  {
+    "id": "11.2-054",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "With MinHash plus LSH banding, roughly how does total dedup work scale with the number of documents n?",
+    "options": [
+      "Roughly linear in n, instead of quadratic",
+      "Quadratic in n, but with a smaller constant",
+      "Cubic in n, since bands multiply the pairs",
+      "Constant, independent of n once tuned"
+    ],
+    "answer_index": 0,
+    "explanation": "Only candidate pairs from shared buckets are compared, and their number is small for a well-tuned banding. So the total work is roughly linear in n instead of O(n^2)."
+  },
+  {
+    "id": "11.2-055",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "What is the full near-duplicate deduplication pipeline in order?",
+    "options": [
+      "MinHash each document → shingle the signature → compare all pairs exactly → LSH band the survivors",
+      "LSH band the raw text → shingle each band → MinHash the shingles → compare all pairs exactly",
+      "Exact hash each document → shingle → train a duplicate classifier → drop documents it flags as duplicates",
+      "Shingle → MinHash signature → LSH band into candidate pairs → compare only candidates, drop above threshold"
+    ],
+    "answer_index": 3,
+    "explanation": "Shingling captures content, MinHash makes each comparison O(m), and banding makes the number of comparisons about O(n). Only candidate pairs are compared and those above the threshold are dropped."
+  },
+  {
+    "id": "11.2-056",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "10. LSH banding: avoiding the O(n^2) comparison",
+    "question": "Why does LSH banding work — why do similar documents tend to share a band while dissimilar ones do not?",
+    "options": [
+      "Because banding sorts documents by length first, so documents of similar length end up sharing buckets",
+      "Because bands are computed only from the first shingle, which near-duplicates usually share",
+      "Similar documents agree on most slots, so likely on all r rows of some band; dissimilar ones rarely do",
+      "Because dissimilar documents are removed before banding by an exact-hash pass over the whole corpus"
+    ],
+    "answer_index": 2,
+    "explanation": "High-J pairs match most slots, making a full-band match likely somewhere among b bands. Low-J pairs rarely match r slots in a row, so they almost never share a bucket."
+  },
+  {
+    "id": "11.2-057",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Exercise",
+    "question": "Two documents have shingle sets of size 100 each and share 60 shingles. What is their exact Jaccard similarity?",
+    "options": [
+      "60/100 = 0.60",
+      "60/140 ≈ 0.43",
+      "60/200 = 0.3",
+      "40/140 ≈ 0.286"
+    ],
+    "answer_index": 1,
+    "explanation": "The union is not 200: |A ∪ B| = |A| + |B| − |A ∩ B| = 100 + 100 − 60 = 140. So J = 60/140 = 3/7 ≈ 0.43. Dividing by 100 or 200 is the common mistake."
+  },
+  {
+    "id": "11.2-058",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Exercise",
+    "question": "Two documents with Jaccard similarity J are MinHashed with m hash functions. How many signature slots do you expect to match?",
+    "options": [
+      "m · J",
+      "m · (1 − J)",
+      "m / J",
+      "J / m"
+    ],
+    "answer_index": 0,
+    "explanation": "Each slot independently matches with probability J, so the expected number of matching slots is m·J. For J ≈ 0.43 and m = 200, about 86 slots."
+  },
+  {
+    "id": "11.2-059",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Exercise",
+    "question": "Why is the near-duplicate Jaccard threshold a deliberate choice rather than something to set low?",
+    "options": [
+      "Set it too low and exact duplicates survive the pass",
+      "Set it too low and the MinHash estimate becomes biased upward",
+      "Set it too low and the signatures must become longer",
+      "Set it too low and you delete merely-related documents"
+    ],
+    "answer_index": 3,
+    "explanation": "A low threshold flags documents that share a lot of content but are not truly duplicates, deleting useful related text. The threshold encodes how similar is 'the same document'."
+  },
+  {
+    "id": "11.2-060",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A MinHash signature implemented as `[min(hash((i, x)) for x in s) for i in range(self.m)]` flags different duplicate pairs every time a sharded pipeline runs. What is the bug?",
+    "options": [
+      "The min should be a max: MinHash only matches J when the largest hash in each row is kept",
+      "The tuple (i, x) cannot be hashed consistently, since tuples of str are unhashable in Python",
+      "Built-in `hash()` is salted per process for str/bytes, so workers compute different signatures",
+      "The signature length m is too small, so random estimate noise changes the flagged pairs each run"
+    ],
+    "answer_index": 2,
+    "explanation": "Built-in hash is randomized per process via PYTHONHASHSEED for str and bytes. Within one process signatures are consistent, so local tests pass, but different workers get different values. Fix it with a stable hash such as hashlib.blake2b of the encoded shingle."
+  },
+  {
+    "id": "11.2-061",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Why does a MinHash bug caused by Python's salted built-in `hash()` only show up across processes, not in a single local test?",
+    "options": [
+      "Because the bug only affects documents too large for RAM, which local tests never use",
+      "Within one process the hash values are self-consistent; only another process has a new salt",
+      "Because the salt changes every time hash() is called, which the local test happens to mask",
+      "Because multiprocessing disables hash randomization in the parent process but not in workers"
+    ],
+    "answer_index": 1,
+    "explanation": "The salt is fixed for the life of a process, so all hashes within it are consistent and a local test passes. A different worker has a different salt, so the same shingle hashes differently and collisions across shards disagree."
+  },
+  {
+    "id": "11.2-062",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "What makes hashing reproducible in a sharded MinHash dedup job?",
+    "options": [
+      "A stable content hash (e.g. `hashlib.blake2b` of the shingle) plus a fixed coefficient seed",
+      "Calling Python's built-in `hash()` twice per shingle and averaging the two results to cancel the salt",
+      "Setting a different random seed per worker, so each shard's coefficients are independent",
+      "Sorting the shingles before hashing them with built-in `hash()`, so order cannot matter"
+    ],
+    "answer_index": 0,
+    "explanation": "Reproducibility needs both a process-independent base hash (blake2b or sha1 of the bytes) and the same a, b coefficients everywhere, which a fixed seed guarantees. Reproducible hashing is not optional when work is sharded."
+  },
+  {
+    "id": "11.2-063",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which deduplication method did GPT-3 (Brown et al., 2020) apply to its Common Crawl data?",
+    "options": [
+      "Only exact deduplication with SHA-1",
+      "No deduplication at all",
+      "Semantic deduplication with sentence embeddings",
+      "Fuzzy deduplication with MinHash-LSH"
+    ],
+    "answer_index": 3,
+    "explanation": "GPT-3 applied fuzzy MinHash-LSH dedup to Common Crawl, and the technique is standard in major open corpora since (C4, RefinedWeb, Dolma, FineWeb)."
+  },
+  {
+    "id": "11.2-064",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which paper makes the empirical case that deduplicating training data improves language models and reduces memorization?",
+    "options": [
+      "\"Scaling Laws for Neural Language Models\" (Kaplan et al., 2020)",
+      "\"Training Compute-Optimal Large Language Models\" (Hoffmann et al., 2022)",
+      "\"Deduplicating Training Data Makes Language Models Better\" (Lee et al., 2021)",
+      "\"Attention Is All You Need\" (Vaswani et al., 2017)"
+    ],
+    "answer_index": 2,
+    "explanation": "Lee et al. (2021) show directly that dedup improves models and reduces memorization. Kaplan and Hoffmann are scaling-law papers; Vaswani introduced the transformer."
+  },
+  {
+    "id": "11.2-065",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why can exact hashing not catch the same article republished with a changed publication date, while fuzzy dedup can?",
+    "options": [
+      "Exact hashing ignores dates and numbers, so the two articles hash identically anyway",
+      "The changed bytes give a completely different hash, but the shingle sets still overlap almost entirely",
+      "Fuzzy dedup strips all dates and timestamps before hashing, so the copies become identical",
+      "Exact hashing only works on documents under 1,000 words, and news articles are usually longer than that"
+    ],
+    "answer_index": 1,
+    "explanation": "Any byte change produces an unrelated hash, so exact dedup sees two distinct documents. Only the few shingles spanning the date differ, so Jaccard of the shingle sets stays near 1 and fuzzy dedup flags them."
+  },
+  {
+    "id": "11.2-066",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For A = {1,2,3,4} and B = {3,4,5,6}, under the permutation ordering 5, 6, 1, 3, 2, 4 (first listed has rank 0), what are minhash(A) and minhash(B)?",
+    "options": [
+      "minhash(A) = 1 and minhash(B) = 5 — no match",
+      "minhash(A) = 5 and minhash(B) = 5 — match",
+      "minhash(A) = 3 and minhash(B) = 3 — match",
+      "minhash(A) = 1 and minhash(B) = 3 — so no match"
+    ],
+    "answer_index": 0,
+    "explanation": "Ranks are 5→0, 6→1, 1→2, 3→3, 2→4, 4→5. A's smallest-ranked member is 1 (rank 2); B's is 5 (rank 0). They differ, so this permutation gives no match. 5 is not in A, so A cannot have MinHash 5."
+  },
+  {
+    "id": "11.2-067",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Check yourself",
+    "question": "You double the MinHash signature length m from 128 to 256. What happens to accuracy and cost?",
+    "options": [
+      "The standard deviation halves, since error scales like 1/m, while storage and comparison cost stay the same",
+      "The standard deviation shrinks by about 0.71, but storage and comparison cost both quadruple",
+      "Accuracy is unchanged because the estimator is unbiased, but storage and cost double",
+      "The standard deviation shrinks by $1/\\sqrt{2} \\approx 0.71$, while storage and comparison double"
+    ],
+    "answer_index": 3,
+    "explanation": "Error scales like 1/sqrt(m), so doubling m multiplies it by 1/sqrt(2) ≈ 0.71. Storage and comparison are linear in m, so they double. It is a direct accuracy-vs-cost trade."
+  },
+  {
+    "id": "11.2-068",
+    "chapter": "11.2",
+    "chapter_name": "Deduplication & MinHash",
+    "module": "11",
+    "module_name": "Data engineering",
+    "source": "lessons/module-11/lesson-02.md",
+    "section": "Next",
+    "question": "After deduplication removes redundancy within the training corpus, what subtler leak remains that the next stage targets?",
+    "options": [
+      "Duplicate tokens within a single document, which repeat the same phrases many times over",
+      "Documents in the wrong language that slipped through the language-ID threshold",
+      "Text from an evaluation benchmark sneaking into training, silently inflating scores",
+      "HTML boilerplate inside documents that the extractor failed to strip completely"
+    ],
+    "answer_index": 2,
+    "explanation": "Dedup handles within-corpus redundancy, but benchmark text can still be present in training. Detecting that requires an n-gram contamination check, followed by mixing and curriculum decisions."
+  }
+]

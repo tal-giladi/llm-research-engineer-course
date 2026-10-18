@@ -1,0 +1,884 @@
+[
+  {
+    "id": "19.1-001",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Beyond doing real work, what increasingly important roles do LLM agents play for the models being trained?",
+    "options": [
+      "Generating their own training data, running their own experiments, and fixing their own code",
+      "Replacing the optimizer during pretraining by proposing per-step learning rates and momentum values",
+      "Compressing the trained model's weights for deployment by choosing which layers to quantize",
+      "Choosing tokenizer merges during BPE training so the vocabulary fits the target domain"
+    ],
+    "answer_index": 0,
+    "explanation": "Agents are how trained models get used, and increasingly how they produce training data, run experiments, and repair code. Research engineers both build agent scaffolds and act as the human debugging them."
+  },
+  {
+    "id": "19.1-002",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "According to the view of agent engineering as a craft, what is the hard part of building an agent?",
+    "options": [
+      "Writing the loop's control flow, which needs complex scheduling, threading, and state machines",
+      "Implementing tensor representations of the action space so the model can sample actions",
+      "Choosing the GPU type and batch size so the control loop runs at interactive latency",
+      "Getting the interface and the feedback right; the loop itself is simple"
+    ],
+    "answer_index": 3,
+    "explanation": "The loop is a few lines of control flow. Whether an agent works depends on the tool interface and on the feedback the observations provide."
+  },
+  {
+    "id": "19.1-003",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "1. The causal story: one tool call is not enough",
+    "question": "Why can't a task like 'fix the failing test in this repo' be planned entirely up front?",
+    "options": [
+      "Each step depends on what the previous step revealed, such as a new failure after an edit",
+      "Repositories cannot be read by tools, so the agent has to guess file contents from the test name alone",
+      "Tests can only be run once per episode, so the plan must be finalized before the first test run",
+      "The model's context window forbids writing a multi-step plan before the first tool call is made"
+    ],
+    "answer_index": 0,
+    "explanation": "The task is a chain: inspect failure, find file, read code, edit, rerun, see a new failure, revise. You cannot write later actions before seeing earlier observations."
+  },
+  {
+    "id": "19.1-004",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "1. The causal story: one tool call is not enough",
+    "question": "What makes a tool-calling loop an agent?",
+    "options": [
+      "A single tool call with a well-written JSON schema, so that the model's one request is always valid and parseable",
+      "A model larger than a fixed parameter threshold, above which multi-tool use becomes reliable enough to deploy",
+      "Running on a GPU cluster rather than one device, so that several tools can execute in parallel at every step",
+      "Many iterative actions with feedback (inspect, act, observe, correct), driven by a model reasoning about what to do next"
+    ],
+    "answer_index": 3,
+    "explanation": "A single call answers one question. Repeating inspect-act-observe-correct under a model's control is what defines an agent."
+  },
+  {
+    "id": "19.1-005",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "1. The causal story: one tool call is not enough",
+    "question": "On the ladder from plain LLM to agent, what distinguishes a tool-calling LLM from a ReAct agent?",
+    "options": [
+      "A tool-calling LLM reasons in natural language but cannot act; ReAct acts on tools but never writes out its reasoning",
+      "A tool-calling LLM is trained with RL on tool rewards, while ReAct is trained only with SFT on human traces",
+      "A tool-calling LLM emits one structured call and reads one result; ReAct interleaves reasoning and acting in a loop",
+      "There is no real difference; the two terms are synonyms used by different labs for the same single-call setup"
+    ],
+    "answer_index": 2,
+    "explanation": "Module 18's tool-calling model handles a single call/result. ReAct adds the loop: think, act, observe, repeat."
+  },
+  {
+    "id": "19.1-006",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "1. The causal story: one tool call is not enough",
+    "question": "On the ladder from plain LLM to agent, what does the 'planning + iterative action' rung add beyond ReAct?",
+    "options": [
+      "The agent stops calling tools and switches to reasoning only, having already gathered enough context",
+      "The agent's weights are updated by a gradient step after each observation so it learns within the task",
+      "The agent maintains a goal, breaks it into sub-steps, and adapts the plan as observations arrive",
+      "The agent runs several models in parallel and takes a majority vote over their proposed next actions"
+    ],
+    "answer_index": 2,
+    "explanation": "Planning adds explicit goal decomposition and plan revision on top of the think-act-observe loop. The full agent then wraps this with a task, tool interface, and stopping condition."
+  },
+  {
+    "id": "19.1-007",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "1. The causal story: one tool call is not enough",
+    "question": "What three things wrap the loop to make a complete agent on the ladder from plain LLM to agent?",
+    "options": [
+      "A reward model, a value head, and a replay buffer",
+      "A tokenizer, an optimizer, and a learning-rate scheduler",
+      "A dataset, a validation split, and a held-out test split",
+      "A task, a tool interface, and a stopping condition"
+    ],
+    "answer_index": 3,
+    "explanation": "The agent rung is the whole loop wrapped with a task to solve, an interface of tools, and a condition for stopping."
+  },
+  {
+    "id": "19.1-008",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2. ReAct: Thought → Action → Observation",
+    "question": "In ReAct, what is a Thought?",
+    "options": [
+      "A structured tool call with a tool name and JSON arguments that the loop executes immediately",
+      "The tool's return value, appended to the history so the model can condition on it at the next step",
+      "A hidden activation vector passed between steps that stores the model's plan outside the visible text",
+      "A short natural-language reasoning step the model generates about what it knows and what to do next"
+    ],
+    "answer_index": 3,
+    "explanation": "A Thought is just generated text, but it forces the model to plan in the open so the plan can condition the next action."
+  },
+  {
+    "id": "19.1-009",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2. ReAct: Thought → Action → Observation",
+    "question": "In ReAct, what is an Action?",
+    "options": [
+      "A free-form sentence describing what the model intends to do next, written before any tool runs",
+      "A gradient update to the policy, applied after each step based on whether the tool call succeeded",
+      "A structured tool call (a tool name plus arguments) in the function-calling format",
+      "The final answer returned to the user once the loop decides that no further tool calls are needed"
+    ],
+    "answer_index": 2,
+    "explanation": "The Action follows the Module 18 function-calling format. The tool's result then becomes the Observation."
+  },
+  {
+    "id": "19.1-010",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2. ReAct: Thought → Action → Observation",
+    "question": "In ReAct, what is the Observation and what happens to it?",
+    "options": [
+      "The model's own prediction of what the tool will return, used in place of actually running the tool",
+      "A human rating of the preceding action, stored as a scalar reward for later RL fine-tuning",
+      "A log entry recorded for debugging that is kept out of the model's context to save tokens",
+      "The tool's return value, fed back into the context so the next Thought can use it"
+    ],
+    "answer_index": 3,
+    "explanation": "Observations ground reasoning in real feedback. They are appended to the running history for the next step."
+  },
+  {
+    "id": "19.1-011",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2. ReAct: Thought → Action → Observation",
+    "question": "Why did Yao et al. find ReAct outperforms reasoning-only and acting-only approaches?",
+    "options": [
+      "ReAct used a substantially larger model than all the baselines, so most of its gains simply reflect model scale",
+      "Reasoning picks good actions and actions ground reasoning in feedback; reasoning-only hallucinates, acting-only flails",
+      "ReAct never actually calls tools during evaluation, so it avoids all of the errors that real tool calls introduce",
+      "ReAct was fine-tuned on far more demonstration data than the acting-only methods it was compared against"
+    ],
+    "answer_index": 1,
+    "explanation": "Each component covers the other's weakness: reasoning without feedback makes things up, while acting without reasoning lacks direction."
+  },
+  {
+    "id": "19.1-012",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2. ReAct: Thought → Action → Observation",
+    "question": "When does a ReAct loop stop?",
+    "options": [
+      "After exactly three Thought-Action-Observation cycles, regardless of progress",
+      "When the model emits a final answer instead of another action",
+      "As soon as any tool call returns an error string as its observation",
+      "When the newest Observation is identical to the previous Observation"
+    ],
+    "answer_index": 1,
+    "explanation": "ReAct repeats Thought, Action, Observation until a final answer appears. A step budget is a separate safety stop."
+  },
+  {
+    "id": "19.1-013",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2.1 Why a *deterministic* loop for a course",
+    "question": "Why is an LLM policy unsuitable for teaching and unit-testing the ReAct mechanism?",
+    "options": [
+      "It is non-deterministic and needs a GPU or API key, so runs aren't reproducible or testable",
+      "It cannot emit structured actions in the function-calling format, so the loop has nothing to parse",
+      "It is too accurate on toy tasks, so it routes around loop bugs and hides them from the tests",
+      "It requires tensors inside the loop, which forces the whole control flow to run on the GPU"
+    ],
+    "answer_index": 0,
+    "explanation": "Non-determinism and external dependencies make tests flaky and costly. A scripted policy makes every run reproducible."
+  },
+  {
+    "id": "19.1-014",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2.1 Why a *deterministic* loop for a course",
+    "question": "How does the course's ReAct implementation separate concerns between loop and policy?",
+    "options": [
+      "The loop contains the model and generates every thought; the policy is just the list of tools it may call",
+      "The loop is deterministic control flow; the policy is any callable policy(history) -> action, scripted in tests",
+      "The policy runs the tools and records their outputs, while the loop generates thoughts between tool calls",
+      "Both are merged into a single LLM call that returns the full trace and the final answer in one generation"
+    ],
+    "answer_index": 1,
+    "explanation": "The loop calls the policy, runs the named tool, appends the observation, and repeats. The policy decides actions. This is how real agent frameworks are structured."
+  },
+  {
+    "id": "19.1-015",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "2.1 Why a *deterministic* loop for a course",
+    "question": "Why is the course's deterministic ReAct agent honestly called a scaffold?",
+    "options": [
+      "Because it cannot run any tools and only prints the actions it would have taken",
+      "Without a capable policy it only does what the script says",
+      "Because it has no step budget, so any policy that never finishes runs forever",
+      "Because it only works on GPUs, so it cannot be run in the course's CPU tests"
+    ],
+    "answer_index": 1,
+    "explanation": "The scripted policy lets you understand and test the plumbing, but it contains no intelligence. A real agent needs an LLM policy."
+  },
+  {
+    "id": "19.1-016",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "3. A worked trace, by hand",
+    "question": "In the ReAct trace for computing (3 + 4) × 2 with add and mul tools, where did step 2's argument a=7 come from?",
+    "options": [
+      "From step 1's observation, the result of add(3, 4)",
+      "From the task string, which the loop parses before step 1",
+      "From the policy computing the sum in advance, without a tool",
+      "From the mul tool's default argument, which is preset to 7"
+    ],
+    "answer_index": 0,
+    "explanation": "The dependency chain is the point: the second action could not be written before the first observation existed."
+  },
+  {
+    "id": "19.1-017",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "3. A worked trace, by hand",
+    "question": "In the ReAct trace for (3 + 4) × 2, how does the policy signal completion?",
+    "options": [
+      "By emitting the action {\"final\": 14} on step 3",
+      "By calling mul a second time with b=1 to signal no change",
+      "By returning an empty dict, which the loop reads as done",
+      "By raising StopIteration from inside the policy callable"
+    ],
+    "answer_index": 0,
+    "explanation": "The third step's action is {\"final\": 14}, and the loop stops, reporting finished after 3 steps with answer 14."
+  },
+  {
+    "id": "19.1-018",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "What does run_react do if max_steps is less than 1?",
+    "options": [
+      "It raises ValueError",
+      "It runs exactly one step",
+      "It runs until the policy finalizes",
+      "It returns answer=None immediately"
+    ],
+    "answer_index": 0,
+    "explanation": "The guard raises ValueError(f\"max_steps must be >= 1, got {max_steps}\") before any loop iterations."
+  },
+  {
+    "id": "19.1-019",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "How does run_react give the policy access to the task?",
+    "options": [
+      "It passes the task as a separate keyword argument on every single policy call",
+      "It stores the task in a module-level global variable the policy reads",
+      "It appends the task string to every tool's arguments before each call",
+      "It seeds history with a synthetic step 0 whose observation is the task"
+    ],
+    "answer_index": 3,
+    "explanation": "history[0] = Step(thought=\"task\", action={\"task\": task}, observation=task), so the policy reads its goal from history like any other step. No special task channel is needed."
+  },
+  {
+    "id": "19.1-020",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "In run_react, how does the loop detect that the policy is done?",
+    "options": [
+      "The action's tool name is the reserved string \"stop\"",
+      "The observation returned for the step is None",
+      "The thought text contains the keyword 'done' or 'finished'",
+      "The action dict contains a \"final\" key"
+    ],
+    "answer_index": 3,
+    "explanation": "If \"final\" in action, the loop appends the step with observation None and returns ReActResult with answer=action[\"final\"] and finished=True."
+  },
+  {
+    "id": "19.1-021",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "In run_react, what observation results when the policy names a tool not in the tools dict?",
+    "options": [
+      "A KeyError that ends the episode",
+      "The string \"error: unknown tool '<name>'\"",
+      "None, and the step is skipped",
+      "The loop calls the first available tool instead"
+    ],
+    "answer_index": 1,
+    "explanation": "Unknown tools produce an error string as the observation, which the policy can read and recover from next step."
+  },
+  {
+    "id": "19.1-022",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "In run_react, what happens when a tool raises an exception?",
+    "options": [
+      "The exception propagates out of run_react and ends the episode with a traceback",
+      "The exception is caught and the observation becomes \"error: <ExceptionType>: <message>\"",
+      "The loop retries the same tool call up to three times before giving up on the step",
+      "The failing step is removed from history so the policy never sees the failed call"
+    ],
+    "answer_index": 1,
+    "explanation": "Errors become observations, not crashes, exactly like a real agent handling a failed command. A crash would end the episode; an observation allows retry."
+  },
+  {
+    "id": "19.1-023",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "What is the `steps` value in a ReActResult?",
+    "options": [
+      "len(history) - 1, i.e. steps excluding the synthetic task step",
+      "len(history), counting the seeded task step as the first step",
+      "The number of steps whose observation was an error string",
+      "max_steps, always, because the loop records its full step budget"
+    ],
+    "answer_index": 0,
+    "explanation": "Because history[0] is the seeded task, the step count subtracts one."
+  },
+  {
+    "id": "19.1-024",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "Why does run_react take tools as a plain dict[str, callable] instead of importing a tool module?",
+    "options": [
+      "Dependency injection decouples the loop from any one tool set, so it is reusable and testable with tiny tools",
+      "Python cannot import a module from inside a function body, so the tools have to be passed in as arguments",
+      "A plain dict lookup is much faster than a registry import, which matters because tools run every single step",
+      "Tools must be redefined on every step with fresh state, so a statically imported module would go stale"
+    ],
+    "answer_index": 0,
+    "explanation": "run_react never imports llmre.tools, so you can drive it with a calculator, filesystem, search API, or test tools. The loop does not care."
+  },
+  {
+    "id": "19.1-025",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "When run_react exhausts max_steps without a final action, what does it return?",
+    "options": [
+      "It raises RuntimeError with the last observation attached to the error message",
+      "The last observation as the answer, with finished=True so callers treat it as done",
+      "It restarts the loop from step 0 with max_steps doubled, up to a fixed retry limit",
+      "A ReActResult with answer=None and finished=False, a clean, testable halt"
+    ],
+    "answer_index": 3,
+    "explanation": "Hitting the budget is a distinct outcome. Real LLM policies sometimes loop forever, so this halt is essential."
+  },
+  {
+    "id": "19.1-026",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "4. The loop, from scratch",
+    "question": "Where would PyTorch's work happen in a ReAct agent built like run_react?",
+    "options": [
+      "Inside the tools dict, whose entries hold the model's weight tensors between calls",
+      "Inside policy(history), where a transformer forward pass yields each Thought and Action",
+      "In the history list, which stores the hidden activations of every previous step",
+      "In the max_steps check, which runs a small classifier to decide when the loop stops"
+    ],
+    "answer_index": 1,
+    "explanation": "The loop has no tensors: an agent is control flow around a policy. Swapping the scripted policy for a model changes nothing about the loop."
+  },
+  {
+    "id": "19.1-027",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "What is the central idea of SWE-agent (Yang et al. 2024)?",
+    "options": [
+      "Coding agents only need a raw shell plus a strong model; any extra interface design is unnecessary overhead",
+      "Agents should be trained only on GitHub commit histories so they learn how real developers edit code",
+      "The Agent-Computer Interface (commands to view, edit, and run code) matters as much as the model",
+      "Test suites should be hidden from coding agents so they cannot overfit their patches to the visible tests"
+    ],
+    "answer_index": 2,
+    "explanation": "SWE-agent shows the ACI determines coding-agent performance on real GitHub issues (SWE-bench). A narrow, well-designed interface helps the model reason."
+  },
+  {
+    "id": "19.1-028",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "Why does a narrow, well-designed agent-computer interface beat handing a coding agent a raw shell?",
+    "options": [
+      "Raw shells are too slow for agents, since every command spawns a new process that takes seconds to start",
+      "Narrow interfaces let the model skip reading files entirely, because the edit commands infer the context",
+      "Raw shells cannot run tests, so the agent never gets pass or fail feedback on its edits without a wrapper",
+      "Every command returns a tidy observation, like a clean pass/fail from run_tests, that the model can reason about"
+    ],
+    "answer_index": 3,
+    "explanation": "Scoped edits and clean results keep observations interpretable. Raw shell output is noisy and harder to act on."
+  },
+  {
+    "id": "19.1-029",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "What is the course's mini SWE-agent Workspace?",
+    "options": [
+      "An in-memory dict of path -> contents, making the scaffold hermetic and testable",
+      "A Docker container with a real filesystem, reset to a clean snapshot after each task",
+      "A git repository cloned from GitHub at the commit where the target issue was filed",
+      "A tensor of file embeddings that the policy searches to decide which file to open next"
+    ],
+    "answer_index": 0,
+    "explanation": "Keeping files in memory means tests never touch disk or network and are fully reproducible."
+  },
+  {
+    "id": "19.1-030",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "Which four tools does the course's mini SWE-agent give the ReAct loop?",
+    "options": [
+      "read_file, write_file, run_tests, and list_files",
+      "shell, python, git, and browser, each wrapped as a tool",
+      "search, calculator, python_eval, and mock_search",
+      "open_file, edit_lines, submit_patch, and find_symbol"
+    ],
+    "answer_index": 0,
+    "explanation": "These form the agent-computer interface over the Workspace: inspect, edit, check, and list."
+  },
+  {
+    "id": "19.1-031",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "In the mini SWE-agent, what does run_tests return?",
+    "options": [
+      "The full pytest stdout, including tracebacks for every failure",
+      "A bare boolean, True if all tests passed, False otherwise",
+      "\"PASS: ...\" or \"FAIL: ...\" derived from an injected checker",
+      "The number of lines changed since the previous test run"
+    ],
+    "answer_index": 2,
+    "explanation": "run_tests formats the injected test_runner's result as a clean PASS/FAIL observation the policy can act on."
+  },
+  {
+    "id": "19.1-032",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "What is solve(policy, workspace, task, test_runner) in the mini SWE-agent?",
+    "options": [
+      "A separate agent loop with its own error handling and step budget",
+      "A fine-tuning routine that trains the policy on its successful fixes",
+      "Just run_react with file-oriented tools built by make_tools",
+      "A planner that writes all of its edits before running any tests"
+    ],
+    "answer_index": 2,
+    "explanation": "solve builds the ACI with make_tools(workspace, test_runner) and calls run_react. The same loop becomes a coding agent once its tools are file-oriented."
+  },
+  {
+    "id": "19.1-033",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "What cycle makes the mini SWE-agent an agent rather than a one-shot code generator?",
+    "options": [
+      "read_file (inspect) → write_file (edit) → run_tests (observe) → decide → retry if it failed",
+      "Generate the complete patch once from the task description, write it, then stop without testing",
+      "Run the tests first, then delete any failing tests from the workspace so the suite reports PASS",
+      "List the files repeatedly until one of them changes, then read that file and return its contents"
+    ],
+    "answer_index": 0,
+    "explanation": "Inspect-act-observe-correct with retry on failure is the agentic part. A one-shot generator never sees test feedback."
+  },
+  {
+    "id": "19.1-034",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "5. From a loop to a mini SWE-agent",
+    "question": "Why does the course's mini SWE-agent only fix the specific bug its script targets?",
+    "options": [
+      "Because write_file can modify only one file per episode, so multi-file fixes are impossible",
+      "Because run_tests checks only one test, so the agent cannot see failures in other parts of the code",
+      "Because the Workspace forbids creating new files, so only edits to existing files are possible",
+      "Its policy is scripted; a real SWE-agent's LLM policy decides which file to open and what to edit"
+    ],
+    "answer_index": 3,
+    "explanation": "The scaffold teaches the interface and loop, not the model. Everything hard about SWE-agent lives in the missing LLM policy."
+  },
+  {
+    "id": "19.1-035",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Hardware track",
+    "question": "What hardware does the course's ReAct and mini SWE-agent scaffold require?",
+    "options": [
+      "None special: it runs on CPU in well under a second, with no tensors or GPU",
+      "A single A100 to run the policy model's forward pass at each loop step",
+      "At least 16 GB of GPU memory to hold the history of every step's activations",
+      "A multi-node cluster so the four workspace tools can execute in parallel"
+    ],
+    "answer_index": 0,
+    "explanation": "The only compute is Python control flow. A real agent's cost is in LLM policy calls, which the scaffold factors out."
+  },
+  {
+    "id": "19.1-036",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Hardware track",
+    "question": "Where does nearly all the cost of a real LLM agent come from?",
+    "options": [
+      "The Python loop's control flow, which dominates once there are many steps",
+      "Appending steps to the history list, which copies the full trace each time",
+      "Formatting error strings and observations so the policy can parse them",
+      "The LLM policy calls: API latency or GPU inference"
+    ],
+    "answer_index": 3,
+    "explanation": "Control flow is negligible. Each policy call is a full model generation."
+  },
+  {
+    "id": "19.1-037",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "6. Running it",
+    "question": "Why do the agent tests in code/tests/test_agents.py define their own add, mul, and noop tools instead of importing llmre.tools?",
+    "options": [
+      "Because llmre.tools has no arithmetic tools, only file and search tools for the SWE scaffold",
+      "It shows the decoupling that lets the agents module be built and tested apart from the tools module",
+      "Because pytest disallows importing project modules inside a test file that also defines fixtures",
+      "Because locally defined tools are compiled and run on the GPU, which makes the test suite faster"
+    ],
+    "answer_index": 1,
+    "explanation": "Because run_react takes tools by injection, the tests can use tiny local tools and need nothing from Module 18."
+  },
+  {
+    "id": "19.1-038",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "6. Running it",
+    "question": "Which behaviors do the course's agent tests check?",
+    "options": [
+      "Model accuracy on SWE-bench Verified, per-step latency, and peak GPU memory use during a full agent run on real repositories",
+      "Only that every module in llmre.agents imports cleanly without error and exposes each of the documented public functions",
+      "The scripted policy solves the arithmetic task in ≤ 3 steps, the loop halts at max_steps, and the SWE scaffold fixes a toy file",
+      "That the LLM policy produces identical thoughts across random seeds, so that every agent trace is fully reproducible in CI"
+    ],
+    "answer_index": 2,
+    "explanation": "The tests verify the loop mechanics: solving, halting on the budget, and the coding scaffold's fix."
+  },
+  {
+    "id": "19.1-039",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Exercise",
+    "question": "With injected sub, add, and mul tools, what is the minimum number of ReAct steps to compute (10 − 3) × (2 + 5)?",
+    "options": [
+      "One step, since the policy can write the whole expression in one call",
+      "Two tool-call steps plus a final step, since mul can nest the add call",
+      "Three tool-call steps plus a final step",
+      "Five steps, one per number, then the operations"
+    ],
+    "answer_index": 2,
+    "explanation": "There are three binary operations, each tool returns one value, and mul needs both earlier results. So sub, add, mul, then {\"final\": 49}."
+  },
+  {
+    "id": "19.1-040",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Exercise",
+    "question": "In a scripted ReAct policy computing (10 − 3) × (2 + 5), how does the mul step get the subtraction result?",
+    "options": [
+      "It recomputes 10 − 3 inside the policy without calling a tool",
+      "It reads a global variable that the sub tool sets as a side effect",
+      "It reaches back into history, e.g. history[1].observation",
+      "The mul tool caches previous tool calls and looks up the result"
+    ],
+    "answer_index": 2,
+    "explanation": "The running trace is the agent's memory, so earlier observations can be retrieved from history."
+  },
+  {
+    "id": "19.1-041",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why must a ReAct loop treat 'hit the step budget' as a distinct reported outcome rather than success?",
+    "options": [
+      "Because hitting the budget always means a tool crashed and the loop could not recover from the error",
+      "It means the policy failed to finish, e.g. looping on the same call, not that the task was solved",
+      "Because the last observation at the budget is always the correct answer and must be reported specially",
+      "Because the budget is only ever reached on success, when the policy has run every step it planned"
+    ],
+    "answer_index": 1,
+    "explanation": "LLM policies sometimes loop forever. Reporting the budget halt separately avoids mistaking non-termination for a result."
+  },
+  {
+    "id": "19.1-042",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is the problem with importing the tool registry into run_react?",
+    "options": [
+      "It makes the loop slower, because the tool module gets loaded twice: once at import and again per call",
+      "It causes a circular import in every case, since the tools module itself imports run_react to register",
+      "It couples the loop to one tool set, so it can't be tested in isolation or reused with another interface",
+      "It prevents the loop from catching tool exceptions, because imported functions raise outside its try block"
+    ],
+    "answer_index": 2,
+    "explanation": "Injection keeps the loop generic. Importing tools hard-wires one interface."
+  },
+  {
+    "id": "19.1-043",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "What is the mistake in 'confusing the scaffold with an agent'?",
+    "options": [
+      "Scaffolds are much slower than agents because they replay every scripted step from the beginning",
+      "A deterministic policy is a test harness, not intelligence; the hard part is the LLM that decides",
+      "Scaffolds cannot use tools at all, so they only simulate what a real agent's tool calls would return",
+      "Agents do not need loops, so any code with a loop is a scaffold rather than a real agent by definition"
+    ],
+    "answer_index": 1,
+    "explanation": "The scripted scaffold proves the plumbing works. It doesn't solve unseen tasks."
+  },
+  {
+    "id": "19.1-044",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "A ReAct policy calls tool 'add' but then checks last.action.get(\"tool\") == \"sum\" before finalizing. What happens?",
+    "options": [
+      "The loop raises a KeyError on 'sum', since no tool by that name is in the tools dict, and the episode crashes",
+      "The check is never true, so the policy keeps calling add(0, 0) and the loop halts at max_steps with answer=None",
+      "The policy finalizes after the first add, because get returns None and the comparison falls through to final",
+      "The loop finalizes on step 2 with answer 0, because the unknown-tool error string is converted to a zero"
+    ],
+    "answer_index": 1,
+    "explanation": "The name mismatch means the final branch is unreachable. Fix by comparing against \"add\"."
+  },
+  {
+    "id": "19.1-045",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Debugging exercise",
+    "question": "When a ReAct agent never finalizes, what is the general cause?",
+    "options": [
+      "A tool that returns the wrong type, such as a string where the policy expects an integer result",
+      "A max_steps value that is too large, which keeps the loop running long after the answer is known",
+      "Almost always a policy that never recognizes the history state in which it should stop",
+      "A history list that is truncated too aggressively, so the policy forgets the task before finishing"
+    ],
+    "answer_index": 2,
+    "explanation": "The policy branches on history; if no branch matches the stopping state, it never emits final."
+  },
+  {
+    "id": "19.1-046",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In the course's run_react, what is appended to history each iteration?",
+    "options": [
+      "Only the observation, since that is the part fed back for the next step",
+      "Only the action, so the history is a replayable list of tool calls",
+      "The whole Step (thought, action, observation); the policy gets the full history",
+      "Nothing; history holds just the task, and the policy reads only the latest step"
+    ],
+    "answer_index": 2,
+    "explanation": "The Observation is the part fed back for the next Thought and Action, but the implementation appends the entire Step."
+  },
+  {
+    "id": "19.1-047",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Besides testability and reuse, what other benefit does injecting tools into run_react give?",
+    "options": [
+      "It lets tools share one GPU, since injected callables run in the policy's process",
+      "It avoids a build-order dependency between modules written in parallel",
+      "It encrypts tool arguments in transit, since injected tools never touch disk",
+      "It speeds up the policy, because tool lookups are cached between loop steps"
+    ],
+    "answer_index": 1,
+    "explanation": "Since the loop doesn't import the tools module, the agents and tools modules can be developed independently."
+  },
+  {
+    "id": "19.1-048",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In the mini SWE-agent, what is the signature and role of the injected test_runner?",
+    "options": [
+      "test_runner() -> int, counting the files in the workspace that changed since the episode began",
+      "test_runner(policy) -> str, grading the quality of the policy's thoughts with a short written verdict",
+      "test_runner(path) -> str, reading one file from the workspace and returning its contents for the policy",
+      "test_runner(workspace) -> (passed: bool, message: str), deciding what passing means for the task"
+    ],
+    "answer_index": 3,
+    "explanation": "It is injected so the scaffold never hard-codes correctness; each task supplies its checker, like different repos have different test suites. run_tests formats its result as PASS/FAIL."
+  },
+  {
+    "id": "19.1-049",
+    "chapter": "19.1",
+    "chapter_name": "ReAct → a mini SWE-agent",
+    "module": "19",
+    "module_name": "Agents & research engineering",
+    "source": "lessons/module-19/lesson-01.md",
+    "section": "Next",
+    "question": "After building agents, what does the course name as the final piece of the research-engineer toolkit?",
+    "options": [
+      "Designing experiments, measuring honestly across seeds, and writing up findings reproducibly",
+      "Writing custom CUDA and Triton kernels for every agent tool so that policy calls run faster",
+      "Training a larger tokenizer on agent traces so that tool calls compress into fewer tokens",
+      "Deploying agents to production clusters with autoscaling, monitoring, and on-call rotations"
+    ],
+    "answer_index": 0,
+    "explanation": "The last piece isn't code: it is experiment design, multi-seed measurement, and trustworthy write-ups."
+  }
+]

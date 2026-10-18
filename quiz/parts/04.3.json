@@ -1,0 +1,866 @@
+[
+  {
+    "id": "04.3-001",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "Why is a pretraining data loader considered one of the most invisible sources of training bugs?",
+    "options": [
+      "If the (x, y) shift is off or documents bleed together, the model silently learns the wrong objective",
+      "It is the only component that runs custom CUDA kernels, so any indexing error crashes the entire GPU process",
+      "It rebuilds the model architecture every epoch, so a bad batch silently changes the layer count",
+      "It owns the learning-rate schedule, so a wrong batch count makes the optimizer diverge mid-run"
+    ],
+    "answer_index": 0,
+    "explanation": "The data loader is called every training step. If the target shift is wrong or documents bleed into each other, nothing crashes — the model just learns the wrong objective and you chase a mysteriously bad loss for days."
+  },
+  {
+    "id": "04.3-002",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "In next-token pretraining, how are the input x and target y of a batch related?",
+    "options": [
+      "y is an independent random window drawn from elsewhere in the stream",
+      "y is x reversed in time, so the model learns to predict in both directions",
+      "y is the document label of x, one class id per window",
+      "They are the same slice of the token stream, shifted by one position"
+    ],
+    "answer_index": 3,
+    "explanation": "The input x and target y are the same slice of the stream shifted by one position, so y[t] is the token that follows x[t]. That shift is the entire supervision signal for pretraining. Random or reversed targets would teach nothing useful."
+  },
+  {
+    "id": "04.3-003",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "1. Intuition: from a pile of documents to training windows",
+    "question": "What three jobs turn a pile of tokenized documents into pretraining batches?",
+    "options": [
+      "Sort documents by length, pad each one to the longest with zeros, and shuffle the padded rows every epoch",
+      "Remove stop words, lowercase all text, and deduplicate repeated sentences before tokenizing",
+      "Mark document boundaries, pack all ids into one stream, cut fixed-length windows with a one-step shift",
+      "Split documents into sentences, label each sentence by topic, and batch together sentences with one label"
+    ],
+    "answer_index": 2,
+    "explanation": "Three jobs stand between raw documents and the model: mark boundaries (so documents do not run into each other), pack (concatenate all ids into one long 1-D array), and cut windows of length block_size paired with the same window shifted one step."
+  },
+  {
+    "id": "04.3-004",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "1. Intuition: from a pile of documents to training windows",
+    "question": "Why must pretraining mark the boundary between documents?",
+    "options": [
+      "Otherwise the tokenizer cannot decode the stream back into separate documents",
+      "Otherwise the model learns to run one article straight into an unrelated one",
+      "Otherwise the concatenated stream overflows the model's fixed context window",
+      "Otherwise the embedding table ends up with too few rows for the merged documents"
+    ],
+    "answer_index": 1,
+    "explanation": "Without a boundary, concatenated documents look like one continuous text, so the model learns spurious continuations from one article into the next. Marking boundaries gives it an explicit 'document over' signal. The tokenizer and context window are unaffected."
+  },
+  {
+    "id": "04.3-005",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "1. Intuition: from a pile of documents to training windows",
+    "question": "What is the advantage of packing documents into one long 1-D stream of ids?",
+    "options": [
+      "Each document keeps its own fixed-length row, simplifying masking",
+      "No padding and no wasted space — every token is training signal",
+      "Short documents are automatically discarded",
+      "The model sees each document only once per epoch in order"
+    ],
+    "answer_index": 1,
+    "explanation": "Packing concatenates every document's ids into one stream, so there is no padding and every token contributes to the loss. Padding-based batching would waste compute on pad tokens."
+  },
+  {
+    "id": "04.3-006",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "1. Intuition: from a pile of documents to training windows",
+    "question": "In the pretraining data pipeline, what is block_size?",
+    "options": [
+      "The model's fixed context length T, the length of each training window",
+      "The number of separate documents packed into each training batch of windows",
+      "The number of raw bytes stored for each token id in the stream",
+      "The size of the tokenizer's vocabulary, including special tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "block_size (written T) is the model's fixed context length. The packed stream is sliced into T-length windows, each paired with the same window shifted one step right. The batch size and vocabulary size are separate quantities."
+  },
+  {
+    "id": "04.3-007",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "What is a special token?",
+    "options": [
+      "A byte value that UTF-8 never produces, so it can safely mark boundaries inside the raw stream",
+      "The learned merge that occurs more often than any other, promoted to a fixed reserved id after training",
+      "A token that the loss function always masks out, so the model never learns to predict it",
+      "A reserved vocabulary id that does not stand for any byte or subword and carries structural meaning"
+    ],
+    "answer_index": 3,
+    "explanation": "A special token is an id in the vocabulary with structural, not lexical, meaning — it does not stand for any byte or subword. The most fundamental pretraining example is <|endoftext|>, the document separator."
+  },
+  {
+    "id": "04.3-008",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "What is <|endoftext|> in GPT-2-style pretraining?",
+    "options": [
+      "A marker placed at the start of every sentence so the model knows a new clause begins",
+      "The padding token used to fill short documents up to block_size before batching",
+      "The end-of-text separator placed between documents to signal 'this document is over'",
+      "The token that replaces out-of-vocabulary words the byte-level tokenizer cannot encode"
+    ],
+    "answer_index": 2,
+    "explanation": "<|endoftext|> is GPT-2's name for the end-of-text separator. It is placed between documents so the model sees an explicit end-of-document signal. Byte-level BPE has no OOV, so it is not an unknown-word token, and packing uses no padding."
+  },
+  {
+    "id": "04.3-009",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "If 'The cat sat.' and 'Quantum error correction…' are concatenated without a separator, what does the model learn?",
+    "options": [
+      "Nothing harmful, because the tokenizer inserts a document boundary automatically",
+      "To ignore the second document entirely, since its topic is unrelated to the first one shown",
+      "To predict 'Quantum' as the natural continuation of 'The cat sat.' — a nonsense dependency",
+      "To translate the first document into the second, treating the two as a parallel sentence pair"
+    ],
+    "answer_index": 2,
+    "explanation": "Without a separator, the training target after 'The cat sat.' is 'Quantum', so the model is trained to predict a nonsense cross-document continuation and wastes capacity on it. The tokenizer inserts nothing automatically."
+  },
+  {
+    "id": "04.3-010",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "Because the causal mask still lets attention look back across an <|endoftext|> boundary, what does the model learn about that token?",
+    "options": [
+      "That tokens before <|endoftext|> must be copied verbatim after it",
+      "That <|endoftext|> means 'reset — a new document starts now'",
+      "That <|endoftext|> should never be predicted, only consumed as input",
+      "That attention must be fully blocked across every document boundary"
+    ],
+    "answer_index": 1,
+    "explanation": "Attention can still see across the boundary, so the model learns <|endoftext|> as a reset signal: what follows is a fresh, independent document. This is exactly what lets a trained model stop generating at the end of a sample."
+  },
+  {
+    "id": "04.3-011",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "Why does including <|endoftext|> in training let a model stop generating?",
+    "options": [
+      "The model learns to emit the end-of-text token where documents end, giving an explicit stop signal",
+      "Generation always stops automatically once exactly block_size new tokens have been sampled",
+      "The token resets the model's weights to their initial values, which cleanly ends the current generated sample",
+      "The decoder deletes every token generated after the first repeated phrase it detects"
+    ],
+    "answer_index": 0,
+    "explanation": "Having seen <|endoftext|> at every document end, the model learns to predict it when a sample is complete. Emitting it is the explicit 'document over' signal that ends generation. It does not touch weights."
+  },
+  {
+    "id": "04.3-012",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "Which additional special tokens do chat models add beyond <|endoftext|>?",
+    "options": [
+      "One token per supported language",
+      "Separate tokens for each digit 0–9",
+      "A token for every punctuation mark",
+      "Role markers and turn boundaries"
+    ],
+    "answer_index": 3,
+    "explanation": "Chat models add more special tokens such as role markers and turn boundaries to structure conversations; the course builds those in Module 14. Digits and punctuation are ordinary byte/subword tokens."
+  },
+  {
+    "id": "04.3-013",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "2. Special tokens and the <|endoftext|> boundary",
+    "question": "If a BPE tokenizer has V ordinary tokens, how is the <|endoftext|> id typically added?",
+    "options": [
+      "Reuse id 0, replacing the null byte, so the vocabulary size and both tables stay at exactly V rows each",
+      "Map it onto the most frequent merged token, so it inherits an already well-trained embedding",
+      "Store it outside the vocabulary as a string flag, so it has no embedding row or output logit",
+      "Reserve one more id, e.g. V itself, so the embedding table and output head each get an extra row"
+    ],
+    "answer_index": 3,
+    "explanation": "You reserve one extra id (say V) for <|endoftext|>, so the model's embedding table and output head both have one more row for it. It is a real vocabulary id with its own embedding, not a reused byte or an out-of-vocabulary marker."
+  },
+  {
+    "id": "04.3-014",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "What does pack_documents(list_of_id_lists, eot_id) do?",
+    "options": [
+      "Pads every document to the same length with eot_id and stacks them into a 2-D tensor",
+      "Inserts eot_id only between the first and the last document, leaving the middle ones joined directly",
+      "Concatenates every document's ids into one stream with eot_id appended after each document",
+      "Replaces the most frequent id in each document with eot_id to mark where it ends"
+    ],
+    "answer_index": 2,
+    "explanation": "pack_documents extends a list with each document's ids and appends eot_id after every document, then returns the stream as a 1-D torch.long tensor. It does not pad; eot_id follows every document, including the last."
+  },
+  {
+    "id": "04.3-015",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "What is pack_documents([[10, 11, 12], [20, 21]], eot_id=0)?",
+    "options": [
+      "tensor([10, 11, 12, 20, 21]), length 5",
+      "tensor([10, 11, 12, 0, 20, 21, 0]), length 7",
+      "tensor([0, 10, 11, 12, 0, 20, 21]), length 7",
+      "tensor([[10, 11, 12], [20, 21, 0]]), shape (2, 3)"
+    ],
+    "answer_index": 1,
+    "explanation": "Each document is followed by eot_id 0, so the result is [10, 11, 12, 0, 20, 21, 0], a 1-D tensor of length 3 + 1 + 2 + 1 = 7. The two zeros are the boundaries. The separator goes after each document, not before."
+  },
+  {
+    "id": "04.3-016",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "Why do token-id tensors use dtype torch.long?",
+    "options": [
+      "Token ids index the embedding table, and PyTorch's embedding lookup requires an integer index type",
+      "long is the fastest dtype for matrix multiplication on GPUs, so the lookups can run directly on tensor cores",
+      "Token ids can be negative after packing, which requires a signed 64-bit floating-point type",
+      "long uses less memory per element than uint8, which matters for multi-gigabyte corpora"
+    ],
+    "answer_index": 0,
+    "explanation": "Ids index the embedding table, and PyTorch's embedding lookup (and cross-entropy target) require an integer index type; long (64-bit) is the dtype every id tensor uses in the course. Float ids would be meaningless as indices."
+  },
+  {
+    "id": "04.3-017",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "How are very large pretraining corpora stored in practice?",
+    "options": [
+      "Ids are streamed to a memory-mapped uint16 file on disk and opened with np.memmap for training",
+      "The whole corpus is held as one Python list of ints in RAM and sliced into windows each step",
+      "Each document is stored as a separate float32 tensor kept resident on the GPU throughout training",
+      "Ids are stored as JSON text files and re-parsed into tensors at the start of every training step"
+    ],
+    "answer_index": 0,
+    "explanation": "Real corpora are too large for a Python list. Documents are streamed through the tokenizer and ids written to a memory-mapped uint16 file, then np.memmap lets the OS page in only the windows you touch. The packing logic is identical."
+  },
+  {
+    "id": "04.3-018",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "Why is uint16 enough to store token ids for a GPT-2-sized vocabulary on disk?",
+    "options": [
+      "Token ids are always below 256",
+      "uint16 stores floats with enough precision for ids",
+      "The embedding table is limited to 16 columns",
+      "A vocabulary under 65,536 entries fits in 16 bits"
+    ],
+    "answer_index": 3,
+    "explanation": "uint16 holds integers 0..65,535, so any vocabulary under 65,536 (like GPT-2's 50,257) fits, halving storage versus 32-bit. Ids go above 255 once merges exist, so 8 bits would not suffice."
+  },
+  {
+    "id": "04.3-019",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "3. Packing: one corpus, one id stream",
+    "question": "What does np.memmap give a pretraining data loader?",
+    "options": [
+      "Automatic placement of the whole dataset in GPU memory before the first training step",
+      "Built-in shuffling of documents at every epoch, so get_batch can read windows in order",
+      "The OS pages in only the windows actually touched, so the full corpus never has to fit in RAM",
+      "Compression of the stored ids to 4 bits each, shrinking the corpus file on disk roughly fourfold"
+    ],
+    "answer_index": 2,
+    "explanation": "A memory-mapped file is accessed like an array, but the OS loads only the disk pages for the windows read. With memmap the main cost of a batch is the pages faulted in. It does not move data to GPU, shuffle, or compress."
+  },
+  {
+    "id": "04.3-020",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "For a pretraining window x, how is the target window y defined?",
+    "options": [
+      "y[t] = x[t-1] — x slid one step to the right",
+      "y[t] = x[t+1] — x slid one step to the left",
+      "y[t] = x[t] — the same window",
+      "y[t] = x[T-1-t] — the window reversed"
+    ],
+    "answer_index": 1,
+    "explanation": "At every position t the model must predict the token that actually comes next, so y[t] = x[t+1]. Using y = x would train the model to predict tokens it can already see."
+  },
+  {
+    "id": "04.3-021",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "How many next-token prediction problems does one length-T training window supply?",
+    "options": [
+      "1 — only the final position of each window is supervised by the loss term",
+      "T — position 0 predicts token 1, position 1 predicts token 2, and so on",
+      "T^2 — every pair of positions forms a separate prediction problem",
+      "T/2 — only even positions get a target, so windows never overlap"
+    ],
+    "answer_index": 1,
+    "explanation": "Each of the T positions has a target, so one window gives T prediction problems at once. The causal mask ensures position t uses only tokens at positions ≤ t, so this is not cheating."
+  },
+  {
+    "id": "04.3-022",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What guarantees that position t in a training window cannot peek at its own target?",
+    "options": [
+      "The causal mask, which lets position t use only tokens at positions ≤ t",
+      "The <|endoftext|> token, which hides every future token from attention",
+      "Random sampling of window start positions, so targets are never adjacent",
+      "The torch.long dtype of the id tensor, which blocks reading ahead"
+    ],
+    "answer_index": 0,
+    "explanation": "The causal attention mask blocks position t from attending to later positions, so it cannot see token t+1, its target. Without it, supervising all T positions at once would be trivial cheating."
+  },
+  {
+    "id": "04.3-023",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "How many consecutive tokens from the stream are needed to build one (x, y) training example of length T?",
+    "options": [
+      "T — x and y are exactly the same T tokens of the stream",
+      "2T — x and y are two disjoint consecutive windows of T tokens each",
+      "T − 1 — the last token of each window is dropped from both",
+      "T + 1 — the first T are x and the last T, offset by one, are y"
+    ],
+    "answer_index": 3,
+    "explanation": "x is data[i : i+T] and y is data[i+1 : i+1+T], so together they span T + 1 consecutive tokens. Forgetting the extra token is the root of off-by-one errors."
+  },
+  {
+    "id": "04.3-024",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "In get_batch, why is high = data.numel() - block_size?",
+    "options": [
+      "It reserves the final block_size tokens of the stream as a held-out validation set that training never sees",
+      "It makes the largest start exactly N - block_size, so the very last window of the stream is sampled twice as often",
+      "randint's high is exclusive, so the largest start is N - block_size - 1, where x and shifted y still fit",
+      "It ensures every sampled start index is a multiple of block_size, so windows never overlap one another"
+    ],
+    "answer_index": 2,
+    "explanation": "The target slice data[i+1 : i+1+block_size] reads up to index i + block_size, so we need i ≤ N − block_size − 1. Since randint's high is exclusive, high = N − block_size makes the max draw exactly that. Off by one wastes the last window or indexes past the end."
+  },
+  {
+    "id": "04.3-025",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What does data.numel() return for the 1-D packed token stream?",
+    "options": [
+      "The number of documents packed into the stream",
+      "The number of distinct token ids that appear in it",
+      "The number of elements, i.e. the stream's length N",
+      "The size of the stream in bytes, i.e. 8 bytes per id"
+    ],
+    "answer_index": 2,
+    "explanation": "numel() returns the total number of elements in a tensor; for a 1-D id stream that is just its length N. It does not count documents, distinct ids, or bytes."
+  },
+  {
+    "id": "04.3-026",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What does ix = torch.randint(low=0, high=high, size=(batch_size,)) produce in get_batch?",
+    "options": [
+      "A (batch_size, block_size) tensor of random token ids drawn from the vocabulary",
+      "A 1-D int64 tensor of shape (batch_size,) with uniform random start positions in [0, high)",
+      "A single random integer that is used as the start position for every row of the batch",
+      "A float tensor of probabilities over start positions, later sampled from with torch.multinomial"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.randint returns int64 values uniformly from [0, high), here batch_size of them, one start per row. Sampling indices, not data, is nearly free and lets get_batch slice views from the one big tensor."
+  },
+  {
+    "id": "04.3-027",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "Why does get_batch draw random window starts rather than sweeping through the stream in order?",
+    "options": [
+      "Random starts make successive batches near-independent, so consecutive gradients are not highly correlated",
+      "Sequential sweeps would need the entire stream resident in GPU memory, which exceeds capacity at scale",
+      "Random starts guarantee that every token is seen exactly once per epoch, unlike sequential sweeps",
+      "torch.stack only accepts slices taken in random order, so a sequential sweep raises an error"
+    ],
+    "answer_index": 0,
+    "explanation": "Marching through the stream in order gives consecutive batches from adjacent text, so gradients are highly correlated and training less stable. Random starts make batches near-independent. They do not guarantee exactly-once coverage."
+  },
+  {
+    "id": "04.3-028",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "Why does get_batch sample start indices instead of shuffling the data itself?",
+    "options": [
+      "Shuffling the stream in place would silently convert it from torch.long to a float dtype",
+      "Index tensors can be sent to the GPU, but the packed data tensor itself is pinned to the CPU",
+      "Shuffling would remove the <|endoftext|> separators, since they are sorted to the end of the stream",
+      "A handful of integers is almost free and lets it slice views from the one big tensor without copying"
+    ],
+    "answer_index": 3,
+    "explanation": "Drawing batch_size integers is trivially cheap, and slicing data[i : i+block_size] gives views into the existing tensor. Shuffling a giant array would be expensive and would also destroy the contiguous order windows depend on."
+  },
+  {
+    "id": "04.3-029",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "In get_batch, what shape does torch.stack produce from batch_size slices each of shape (block_size,)?",
+    "options": [
+      "(batch_size * block_size,), concatenated end to end",
+      "(block_size, batch_size), along a new trailing axis",
+      "(batch_size, block_size, 1), with an extra singleton axis",
+      "(batch_size, block_size), along a new leading axis"
+    ],
+    "answer_index": 3,
+    "explanation": "torch.stack joins tensors along a new dimension 0, giving (batch_size, block_size). torch.cat would instead concatenate the windows end to end into one 1-D tensor, which is why stack is used."
+  },
+  {
+    "id": "04.3-030",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "In get_batch, how do the slices and the stacked batch differ in memory?",
+    "options": [
+      "Both the slices and the stacked batch are views into data, so no memory is allocated per batch",
+      "The slices are copies of data, while torch.stack returns a view that stitches those copies together",
+      "The slices are views into data, while torch.stack allocates a new contiguous tensor independent of it",
+      "Both are fresh copies, so each call temporarily doubles memory compared with the stream itself"
+    ],
+    "answer_index": 2,
+    "explanation": "Basic slicing data[i : i+block_size] returns a view sharing storage with data. torch.stack allocates a new tensor, so the batch is contiguous and independent of the stream."
+  },
+  {
+    "id": "04.3-031",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "Why must get_batch reuse the same ix for building y as for x?",
+    "options": [
+      "Reusing ix halves the random-number generation cost, but drawing a fresh ix for y would work equally well",
+      "So y[b, t] = data[i+1+t] = x[b, t+1]; fresh random starts would make targets unrelated to inputs",
+      "torch.randint can only be called once per batch, since a second call resets the global generator state",
+      "Drawing a new ix for y would change its dtype from torch.long to int32, breaking cross-entropy"
+    ],
+    "answer_index": 1,
+    "explanation": "x[b] and y[b] come from the same start i, so y[b, t] = data[i+1+t] and x[b, t] = data[i+t], giving y[b, t] == x[b, t+1]. If y used different random starts, the targets would have nothing to do with the inputs and the model would learn nothing."
+  },
+  {
+    "id": "04.3-032",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "Why does get_batch do its indexing on the CPU and call .to(device) only at the end?",
+    "options": [
+      "Integer bookkeeping is cheap on CPU, and moving only finished batches avoids forcing the stream onto the GPU",
+      "GPUs cannot index tensors with integer index tensors, so every slice has to be computed on the CPU first",
+      "torch.stack is not implemented for CUDA tensors, so the batch must be stacked on the CPU before transfer",
+      "Calling .to(device) before slicing would silently change the dtype of the stream from long to float32"
+    ],
+    "answer_index": 0,
+    "explanation": "The slicing and stacking are cheap integer work on CPU; only the two finished (B, T) batches are transferred to the compute device. Threading device through as an argument avoids putting the entire data stream on the GPU up front. If device is 'cpu', .to('cpu') is effectively a no-op."
+  },
+  {
+    "id": "04.3-033",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "Which two guard clauses does the real get_batch in llmre.data.loader add, and why?",
+    "options": [
+      "That data is 1-D and that data.numel() > block_size, because both failures are otherwise silent or opaque",
+      "That data is float32 and that batch_size is even, because odd batches break the stacking logic",
+      "That the device is CUDA and that block_size is a power of two, because randint needs an aligned range",
+      "That every document ends with eot_id and that ids are sorted, because packing assumes sorted input"
+    ],
+    "answer_index": 0,
+    "explanation": "A 2-D data tensor would make the slices mean the wrong thing silently, and a stream no longer than block_size gives high ≤ 0, which torch.randint rejects with an opaque error. Failing early with a clear message is cheaper than debugging symptoms."
+  },
+  {
+    "id": "04.3-034",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What vectorized alternative to the Python loop builds a get_batch batch in one indexing op?",
+    "options": [
+      "x = data.view(batch_size, block_size) and y = x.roll(1) over the time dimension",
+      "x = data[ix] and y = data[ix + 1], gathering one token per row of the batch",
+      "x = torch.cat([data[ix]] * block_size) and y = x + 1, broadcast over every position",
+      "idx = ix[:, None] + torch.arange(block_size), then x = data[idx] and y = data[idx + 1]"
+    ],
+    "answer_index": 3,
+    "explanation": "Broadcasting ix[:, None] + arange(block_size) gives a (batch_size, block_size) index matrix; gathering data[idx] and data[idx + 1] yields x and y in one fused op, faster on GPU since it launches one kernel instead of batch_size slice-and-stack steps."
+  },
+  {
+    "id": "04.3-035",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "With data = torch.arange(12), block_size = 4, if a row of x is [4, 5, 6, 7], what is the matching row of y?",
+    "options": [
+      "[4, 5, 6, 7]",
+      "[3, 4, 5, 6]",
+      "[5, 6, 7, 8]",
+      "[8, 9, 10, 11]"
+    ],
+    "answer_index": 2,
+    "explanation": "y is x shifted one token: from start i = 4, x = data[4:8] = [4, 5, 6, 7] and y = data[5:9] = [5, 6, 7, 8]. Position 0 sees 4 and predicts 5; position 1 sees 4, 5 and predicts 6."
+  },
+  {
+    "id": "04.3-036",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What one-line sanity check confirms a pretraining data loader's targets are correctly shifted?",
+    "options": [
+      "torch.equal(x, y) returns True for the whole batch",
+      "torch.equal(x[:, 1:], y[:, :-1]) returns True",
+      "torch.equal(x[:, :-1], y[:, 1:]) returns True",
+      "x.sum() == y.sum() for every row of the batch"
+    ],
+    "answer_index": 1,
+    "explanation": "If y is x shifted left by one, then every target except the last equals the next input: y[:, :-1] == x[:, 1:]. Run this boolean whenever you touch a data loader. torch.equal(x, y) being True would indicate the unshifted bug."
+  },
+  {
+    "id": "04.3-037",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "4. Cutting windows: the one-position shift",
+    "question": "What symptom indicates the classic data-loader off-by-one y = data[i : i + block_size]?",
+    "options": [
+      "Training loss stays exactly constant from the first step, as if the gradients were all zero",
+      "Training loss plummets to near zero within a few steps while the model learns nothing useful",
+      "The loss becomes NaN immediately on the first backward pass because the targets overflow",
+      "The model quickly collapses to predicting only <|endoftext|> at every single position"
+    ],
+    "answer_index": 1,
+    "explanation": "Without the +1, y equals x, so the model is trained to predict a token it can already see — trivial to fit. A suspiciously low training loss in the first few steps almost always means the targets are not shifted."
+  },
+  {
+    "id": "04.3-038",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "5. Tensor-shape summary",
+    "question": "What are the shape and dtype of the packed token stream in the pretraining pipeline?",
+    "options": [
+      "(N,), torch.long — the whole corpus with documents joined by eot_id",
+      "(B, T), torch.long — one fixed-length row per original document",
+      "(N, C), torch.float32 — every token already looked up in the embedding",
+      "(N,), torch.float16 — ids normalized to [0, 1] by the vocabulary size"
+    ],
+    "answer_index": 0,
+    "explanation": "The packed stream is a 1-D long tensor of length N containing every document's ids separated by eot_id. Batches cut from it are (B, T). Embeddings (B, T, C) come later in the model."
+  },
+  {
+    "id": "04.3-039",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "5. Tensor-shape summary",
+    "question": "What are the shape and dtype of a pretraining batch x and its target y?",
+    "options": [
+      "x is (B, T) long and y is (B,) long",
+      "x is (B, T, C) float32 and y is (B, T) long",
+      "Both (T, B) with dtype torch.float32",
+      "Both (B, T) with dtype torch.long"
+    ],
+    "answer_index": 3,
+    "explanation": "x holds B input windows of length T = block_size, and y holds the same windows shifted one token left, so both are (B, T) long. y supplies one target per position, not one per window."
+  },
+  {
+    "id": "04.3-040",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "5. Tensor-shape summary",
+    "question": "Where do x and y go after get_batch returns them?",
+    "options": [
+      "x goes to the cross-entropy loss as the target, and y is looked up in the embedding table",
+      "Both are embedded to (B, T, C) and concatenated along the channel axis before the first layer",
+      "x enters the embedding table, (B, T) → (B, T, C); y is the target for the cross-entropy loss",
+      "x is decoded back into text for logging, and y is discarded once the batch has been validated"
+    ],
+    "answer_index": 2,
+    "explanation": "The input ids x are looked up in the embedding table to become (B, T, C) activations, and y is passed as the integer target to cross-entropy. y is never embedded."
+  },
+  {
+    "id": "04.3-041",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "6. Under the hood: why random windows, and the cost",
+    "question": "What is the cost of one get_batch call, and how does it compare to training?",
+    "options": [
+      "O(N) per call because it scans the whole stream to find document boundaries before sampling starts",
+      "O(N log N) per call because it sorts the stream by token id before drawing the window start positions",
+      "O(B · T) memory copies, negligible next to the forward/backward pass, so re-sampling each step is fine",
+      "O(B · T^2) per call because it computes causal attention over each window before returning it"
+    ],
+    "answer_index": 2,
+    "explanation": "get_batch draws B random integers and gathers B windows of length T, so its cost is O(B · T) copies — negligible next to the model's forward and backward pass. With a memmap, the only real cost is the disk pages the OS faults in."
+  },
+  {
+    "id": "04.3-042",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "6. Under the hood: why random windows, and the cost",
+    "question": "What mild side benefit comes from sampling window starts uniformly over the stream?",
+    "options": [
+      "Every document is guaranteed to appear in exactly one batch per epoch, so coverage is perfectly even",
+      "A token is seen in many different context alignments, with window boundaries in different places",
+      "Rare tokens are automatically oversampled relative to common ones, which balances the vocabulary",
+      "The model never sees an <|endoftext|> token at a window boundary, so documents are never split"
+    ],
+    "answer_index": 1,
+    "explanation": "Because starts are uniform, a given token lands at different positions with different preceding context across an epoch, and window boundaries fall in different places. That is a mild, free form of data augmentation. It does not guarantee coverage or rebalance tokens."
+  },
+  {
+    "id": "04.3-043",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Exercise",
+    "question": "For data = torch.arange(100), what are the shapes and dtype of x and y from get_batch(data, block_size=8, batch_size=16)?",
+    "options": [
+      "Both (16, 8) with dtype torch.long",
+      "Both (8, 16) with dtype torch.long",
+      "x is (16, 8) and y is (16, 9), dtype torch.long",
+      "Both (16, 8) with dtype torch.float32"
+    ],
+    "answer_index": 0,
+    "explanation": "get_batch returns batch_size windows of length block_size for both x and y, so (16, 8). torch.arange of integers is int64 and slicing preserves it, so the dtype is torch.long."
+  },
+  {
+    "id": "04.3-044",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Exercise",
+    "question": "For data = torch.arange(100) and block_size = 8, what is the largest start index get_batch can sample?",
+    "options": [
+      "92, since high = 100 − 8 = 92 is inclusive for torch.randint",
+      "99, the last valid index of the stream, since y can wrap around",
+      "88, the last multiple of block_size that fits before the end of the stream",
+      "91, since high = 92 is exclusive and y = data[92:100] ends at the last token"
+    ],
+    "answer_index": 3,
+    "explanation": "high = numel − block_size = 92 is the exclusive upper bound for torch.randint, so the max start is 91. Then x = data[91:99] and y = data[92:100], ending at index 99. A start of 92 would need index 100, which does not exist."
+  },
+  {
+    "id": "04.3-045",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Is <|endoftext|> just a string marker, or a real part of the model?",
+    "options": [
+      "It is a text marker that the tokenizer strips out before training, so no id is ever stored",
+      "It is a hard-coded rule in the sampler that halts generation, not an entry in the vocabulary",
+      "It is a byte sequence that BPE splits into ordinary tokens like any other piece of text",
+      "It is a real vocabulary id with its own embedding that the model can predict and emit"
+    ],
+    "answer_index": 3,
+    "explanation": "The separator is a reserved vocabulary id with its own embedding row and output logit. The model learns to predict it at document ends, which provides the 'document over' signal used to stop generation."
+  },
+  {
+    "id": "04.3-046",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Given x[0] = [4, 5, 6, 7] and correctly shifted targets, what does position 2 see and predict?",
+    "options": [
+      "It sees 4, 5, 6, 7 and is trained to predict 8, the next token after the window",
+      "It sees only 6, its own position, and is trained to predict 7",
+      "It sees 4, 5, 6 (the causal mask blocks 7) and is trained to predict 7",
+      "It sees 4, 5 (the mask blocks its own token) and is trained to predict 6"
+    ],
+    "answer_index": 2,
+    "explanation": "y[0] = [5, 6, 7, 8], so the target at position 2 is y[0][2] = 7. The causal mask lets position 2 attend only to positions 0–2 (tokens 4, 5, 6), so it cannot see 7, its answer."
+  },
+  {
+    "id": "04.3-047",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Check yourself",
+    "question": "A model reaches a training loss near 0 within 10 steps on real text. What is the single most likely bug?",
+    "options": [
+      "The learning rate is far too low, so the optimizer barely moves the weights",
+      "The targets are not shifted — y equals x (or is shifted the wrong way)",
+      "The tokenizer vocabulary is too small, so every token becomes easy to guess",
+      "The batch size is too large, so each gradient step averages away the noise"
+    ],
+    "answer_index": 1,
+    "explanation": "Real text cannot be predicted near-perfectly in 10 steps. The likely cause is y equal to x, so the model 'predicts' a token it can already see. Check torch.equal(x[:, 1:], y[:, :-1])."
+  },
+  {
+    "id": "04.3-048",
+    "chapter": "04.3",
+    "chapter_name": "Special tokens, packing, data loading",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why would float32 token ids be wrong in PyTorch?",
+    "options": [
+      "Embedding lookup and the cross-entropy target both need integer (long) indices, so floats are a type error",
+      "float32 cannot represent integers above 65,535 exactly, so ids from large vocabularies get corrupted",
+      "float32 ids would make training noticeably slower on GPUs but would still give exactly correct results",
+      "float32 ids are automatically rounded during lookup, which causes off-by-one errors near large ids"
+    ],
+    "answer_index": 0,
+    "explanation": "Token ids are integer indices into the embedding table. nn.Embedding and cross-entropy's target argument both require an integer index type, so passing floats is both meaningless and a type error."
+  }
+]

@@ -1,0 +1,920 @@
+[
+ {
+  "id": "16.3-001",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Prerequisites / why this matters",
+  "question": "In RLVR and rejection sampling, what effectively becomes the model's definition of 'correct'?",
+  "options": [
+   "Whatever the reference model assigns high probability",
+   "Whatever the SFT data contains",
+   "Whatever the human labelers wrote as gold",
+   "Whatever the verifier accepts"
+  ],
+  "answer_index": 3,
+  "explanation": "Training optimizes toward whatever the verifier accepts, so the verifier is the definition of correct. A wrong verifier trains a wrong model, silently. This is why verifier design is core research-engineering judgment."
+ },
+ {
+  "id": "16.3-002",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Prerequisites / why this matters",
+  "question": "What is often the cheapest, most robust lever in the reasoning toolkit, not requiring a policy-gradient loop?",
+  "options": [
+   "Train a larger critic network so advantages are less noisy",
+   "Sample a lot, keep what verifies, and fine-tune on it",
+   "Raise the KL penalty weight so the policy cannot drift away",
+   "Continue pretraining on more unlabeled math and code text"
+  ],
+  "answer_index": 1,
+  "explanation": "Rejection sampling, sampling many completions, keeping the verifier-accepted ones and fine-tuning on them, is often the cheapest robust improvement. It needs no advantages, clipping, or KL. A critic is a PPO component."
+ },
+ {
+  "id": "16.3-003",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "What moving parts does GRPO-based RLVR have that rejection sampling avoids?",
+  "options": [
+   "A verifier that grades answers, and a step that samples many completions per prompt",
+   "A supervised fine-tuning step on the outputs that the verifier accepted",
+   "Ratios, clipping, a KL term, a reference model, and sampling groups every step",
+   "A tokenizer shared with the policy and a dataset of prompts with gold answers"
+  ],
+  "answer_index": 2,
+  "explanation": "GRPO directly optimizes the policy with a gradient step per group, with ratios, clipping, a KL term and a reference model. Rejection sampling uses the same verifier and sampling but updates with plain SFT."
+ },
+ {
+  "id": "16.3-004",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "What are the steps of rejection-sampling fine-tuning?",
+  "options": [
+   "Generate many completions per prompt, keep only the verifier-accepted ones, SFT on them, repeat",
+   "Generate one completion per prompt, compute its advantage against a critic, take a clipped step",
+   "Collect human preference pairs on the samples, train a reward model, then run PPO against it",
+   "Sample many completions, rank them pairwise with the verifier, then train on the pairs with DPO"
+  ],
+  "answer_index": 0,
+  "explanation": "Rejection sampling generates a group of completions, filters with the verifier, and runs plain supervised fine-tuning on the model's own verified-correct outputs. Repeating lets the improved model generate better candidates. No advantages or clipping are involved."
+ },
+ {
+  "id": "16.3-005",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "What data does rejection-sampling fine-tuning train the model on?",
+  "options": [
+   "The model's own verifier-accepted completions",
+   "Human-written demonstrations only",
+   "The completions the verifier rejected",
+   "Pairs of accepted and rejected completions"
+  ],
+  "answer_index": 0,
+  "explanation": "Rejection sampling fine-tunes the model on its own outputs that the verifier accepted. Rejected completions are discarded. Using accepted/rejected pairs would be a preference method like DPO."
+ },
+ {
+  "id": "16.3-006",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "What is 'best-of-n' in the context of rejection sampling?",
+  "options": [
+   "Averaging the n sampled completions token by token into one consensus answer",
+   "Training n separate models on the same prompts and deploying the best one",
+   "Keeping only the single best completion per prompt out of n samples",
+   "Running n steps of GRPO per prompt and keeping the final checkpoint"
+  ],
+  "answer_index": 2,
+  "explanation": "Best-of-n is the variant of rejection sampling where you keep the single best completion per prompt. The general method keeps all verifier-accepted completions."
+ },
+ {
+  "id": "16.3-007",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "What is STaR (Self-Taught Reasoner)?",
+  "options": [
+   "A process reward model that scores each reasoning step and bootstraps from its own labels",
+   "Iterated rejection sampling: the model bootstraps by fine-tuning on chains it got right",
+   "A variant of PPO with a star-shaped critic that shares value heads across many prompts",
+   "A pretraining objective for reasoning that masks and reconstructs each step of a chain"
+  ],
+  "answer_index": 1,
+  "explanation": "STaR is the iterated form: generate, keep correct chains, fine-tune, and repeat with the improved model. It bootstraps reasoning from the model's own successes. It is not a process reward model or a PPO variant."
+ },
+ {
+  "id": "16.3-008",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1. You don't always need the RL loop",
+  "question": "Which of these does rejection-sampling fine-tuning not use?",
+  "options": [
+   "A rule-based verifier",
+   "Multiple completions sampled per prompt",
+   "Supervised fine-tuning on kept outputs",
+   "Advantages, clipping, or a KL term"
+  ],
+  "answer_index": 3,
+  "explanation": "Rejection sampling uses the same verifier as RLVR and samples many completions, but the update is ordinary supervised learning. There are no advantages, no clipping, and no KL term."
+ },
+ {
+  "id": "16.3-009",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.1 Why it works, and the connection to GRPO",
+  "question": "What fact do both rejection sampling and GRPO exploit?",
+  "options": [
+   "Wrong answers almost always contain more tokens than correct ones, so length separates them",
+   "The frozen reference model already assigns high probability to the correct final answers",
+   "A learned critic can predict a chain's correctness before any completion is even sampled",
+   "A model that is sometimes right samples correct chains at a nonzero rate; a verifier finds them"
+  ],
+  "answer_index": 3,
+  "explanation": "Both methods rely on the model occasionally producing correct chains, which the verifier identifies at no cost. Rejection sampling then imitates those correct chains directly; GRPO pushes them up via advantages."
+ },
+ {
+  "id": "16.3-010",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.1 Why it works, and the connection to GRPO",
+  "question": "How does rejection-sampling SFT treat correct and wrong completions, compared with GRPO?",
+  "options": [
+   "It pushes wrong completions down harder than GRPO, since each one gets a full negative gradient",
+   "It gives kept correct completions a full imitation gradient and discards wrong ones entirely",
+   "It gives correct and wrong completions graded advantages based on how close each answer was",
+   "It ignores the correct completions and trains on the wrong ones so the model learns to avoid them"
+  ],
+  "answer_index": 1,
+  "explanation": "Rejection-sampling SFT is the extreme, simplified cousin of the policy gradient: kept completions get a full imitation-learning gradient, and the rest are simply thrown away. GRPO instead pushes correct completions up smoothly by a graded advantage and pushes wrong ones down."
+ },
+ {
+  "id": "16.3-011",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.1 Why it works, and the connection to GRPO",
+  "question": "What happens in rejection sampling for a prompt where the model never produces a correct completion?",
+  "options": [
+   "The verifier relaxes its threshold for that prompt",
+   "The model is trained on its closest wrong completion",
+   "The filtered set is empty and that prompt teaches nothing",
+   "That prompt gets a large negative gradient"
+  ],
+  "answer_index": 2,
+  "explanation": "With no correct completions, nothing passes the filter, so there is nothing to fine-tune on. Rejection sampling can only amplify reasoning the model can already occasionally do. It never pushes completions down."
+ },
+ {
+  "id": "16.3-012",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.2 A tiny illustration with the tools you have",
+  "question": "In a toy rejection-sampling demo with a uniform policy over answers 0..9 and problem \"3 + 4\", what survives the verifier filter?",
+  "options": [
+   "Only samples equal to 7",
+   "Only samples within 1 of 7",
+   "The single most frequently sampled answer",
+   "All sampled answers, weighted by their reward"
+  ],
+  "answer_index": 0,
+  "explanation": "arithmetic_verifier accepts only the exact answer 7, so every other candidate is rejected. The survivors, all 7s, are the supervised targets for fine-tuning. There is no partial credit or weighting."
+ },
+ {
+  "id": "16.3-013",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.2 A tiny illustration with the tools you have",
+  "question": "How does the toy 'keep the verified answers' demo scale up to real rejection-sampling fine-tuning?",
+  "options": [
+   "Replace the single-number answer with a full chain of thought and SFT on accepted chains",
+   "Replace the rule verifier with a learned reward model that can grade free-form chains",
+   "Replace sampling with greedy decoding so that every candidate chain is deterministic",
+   "Replace the SFT step with a GRPO update so wrong chains are pushed down as well"
+  ],
+  "answer_index": 0,
+  "explanation": "Scale the 'answer' up to a full worked chain-of-thought, filter with the verifier, and fine-tune on the accepted chains: that is rejection-sampling fine-tuning. The verifier stays a rule, and the update stays SFT."
+ },
+ {
+  "id": "16.3-014",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.2 A tiny illustration with the tools you have",
+  "question": "In the toy rejection-sampling demo, how are the n = 12 candidates drawn?",
+  "options": [
+   "torch.topk on the logits, taking the 12 highest",
+   "torch.argmax on the probabilities, repeated 12 times",
+   "torch.multinomial on the softmax, replacement=True",
+   "torch.randperm over the answer space, first 12 kept"
+  ],
+  "answer_index": 2,
+  "explanation": "The demo softmaxes uniform logits and calls torch.multinomial(probs, 12, replacement=True). Top-k or argmax would be deterministic and would not sample the distribution."
+ },
+ {
+  "id": "16.3-015",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.3 Rejection sampling vs GRPO — when to reach for which",
+  "question": "Which is a strength of rejection sampling compared with GRPO?",
+  "options": [
+   "It uses negative signal from wrong answers to sharpen the policy",
+   "It is simpler, very stable (just SFT), and parallelizes trivially",
+   "It keeps improving well past the point that pure imitation reaches",
+   "It can push probability down on bad completions as well as up on good"
+  ],
+  "answer_index": 1,
+  "explanation": "Rejection sampling is just generation followed by a standard fine-tune, so it is simple, stable, and easy to parallelize, and it often gets most of the gain. Using negative signal and pushing probability down are GRPO's advantages."
+ },
+ {
+  "id": "16.3-016",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.3 Rejection sampling vs GRPO — when to reach for which",
+  "question": "Why does rejection sampling have a lower ceiling than GRPO?",
+  "options": [
+   "It requires a learned critic whose value errors cap how accurate the policy can become",
+   "It can only be run for a single round, since a second round would overfit the kept data",
+   "It cannot use a verifier at all, so it must rely on noisy human labels of correctness",
+   "It discards wrong answers' signal, cannot push probability down, and can narrow diversity"
+  ],
+  "answer_index": 3,
+  "explanation": "Rejection sampling discards wrong completions, so it never uses their negative signal or pushes their probability down, and repeated rounds can narrow output diversity. It uses a verifier and can be iterated (STaR)."
+ },
+ {
+  "id": "16.3-017",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.3 Rejection sampling vs GRPO — when to reach for which",
+  "question": "What does GRPO/RLVR gain over rejection sampling with the same verifier?",
+  "options": [
+   "It needs no sampling at all, since advantages are computed from the gold answers directly",
+   "It is more stable than rejection sampling, because its update is just plain SFT on samples",
+   "It removes the need for a verifier, because the group mean already defines what is correct",
+   "It uses negative signal from wrong completions and keeps optimizing past what imitation reaches"
+  ],
+  "answer_index": 3,
+  "explanation": "GRPO squeezes more from the same verifier: wrong completions get negative advantage and are pushed down, and optimization continues beyond imitation. The cost is a more delicate training loop. It still samples groups and still needs a verifier."
+ },
+ {
+  "id": "16.3-018",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "1.3 Rejection sampling vs GRPO — when to reach for which",
+  "question": "What common, publicly described pattern combines rejection sampling and GRPO?",
+  "options": [
+   "GRPO first, then rejection sampling to remove the KL term",
+   "Rejection-sampling SFT for a strong start, then RL (GRPO) on top",
+   "Running both simultaneously on disjoint halves of the model",
+   "Using rejection sampling only to train the reward model"
+  ],
+  "answer_index": 1,
+  "explanation": "A common pattern is rejection-sampling SFT first, then GRPO on top. DeepSeek-R1's pipeline interleaves SFT on filtered data with RL stages."
+ },
+ {
+  "id": "16.3-019",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "What is an outcome reward in reasoning RL?",
+  "options": [
+   "A score for each intermediate step of the chain, judged against the previous steps",
+   "A per-token reward taken from the frozen reference model's log-probabilities",
+   "One scalar for the whole completion, based only on the final answer",
+   "A reward proportional to the length of the reasoning before the final answer"
+  ],
+  "answer_index": 2,
+  "explanation": "An outcome reward scores the final answer: right or wrong. When learned it is an Outcome Reward Model (ORM); when it is a rule, like arithmetic_verifier, it is an outcome verifier. Scoring each step is a process reward."
+ },
+ {
+  "id": "16.3-020",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "What is the blind spot of an outcome reward?",
+  "options": [
+   "It can't tell a lucky right answer from sound reasoning, or show where a failed chain broke",
+   "It is never exact, even for verifiable tasks, since final answers must be parsed from free text",
+   "It is too expensive to compute at scale, because every completion must be graded by a human",
+   "It requires step-level human labels for every chain, which are slow and costly to collect"
+  ],
+  "answer_index": 0,
+  "explanation": "Outcome rewards see only the final answer, so a chain with broken reasoning that lands on the right answer scores the same as a correct chain, and a failed chain gets no localization of its error. For verifiable tasks they are cheap and exact; step labels are a PRM cost."
+ },
+ {
+  "id": "16.3-021",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "What does a process reward model (PRM) score?",
+  "options": [
+   "Each intermediate step: whether it is valid given the previous ones",
+   "Only the final answer of the chain, compared against the gold answer",
+   "The fluency and readability of the whole completion as a single score",
+   "The probability ratio between the new and old policies for each token"
+  ],
+  "answer_index": 0,
+  "explanation": "A PRM assigns a score to each intermediate step, judging validity given earlier steps. That gives denser signal and can credit the good part of a chain that later derails."
+ },
+ {
+  "id": "16.3-022",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "What is the main cost of a process reward?",
+  "options": [
+   "It can only be applied to code tasks, where each step is a line that can be executed",
+   "It requires removing the KL penalty, since step rewards and KL terms conflict in the loss",
+   "It needs step-level labels or a learned PRM, which is costly and itself a gameable proxy",
+   "It cannot be combined with any RL algorithm, so it is only usable for reranking at test time"
+  ],
+  "answer_index": 2,
+  "explanation": "Process rewards need step-level labels or a learned model to produce them. That is expensive, and a learned PRM is a proxy again, reintroducing reward-hacking risk. It is not limited to code."
+ },
+ {
+  "id": "16.3-023",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "What advantage does a process reward have over an outcome reward?",
+  "options": [
+   "It is un-hackable whenever the step checker is exact, unlike outcome rewards",
+   "Denser signal that pushes toward correct reasoning, not just correct final tokens",
+   "It is far cheaper to compute, since each step is short and graded independently",
+   "It requires no labels at all, because step validity is inferred from the final answer"
+  ],
+  "answer_index": 1,
+  "explanation": "Scoring each step gives denser credit assignment and rewards valid reasoning itself. Being un-hackable when exact and cheap are properties of outcome verifiers. PRMs need labels."
+ },
+ {
+  "id": "16.3-024",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "Why do verifiable outcome rewards have a key advantage over process rewards?",
+  "options": [
+   "They give richer, step-level credit assignment, so errors are localized to the step that failed",
+   "They reward correct reasoning steps directly, so lucky right answers no longer earn any credit",
+   "They need no sampling of completions, since the gold answer alone defines the reward signal",
+   "They are un-hackable when the verifier is exact; process rewards bring back a gameable model"
+  ],
+  "answer_index": 3,
+  "explanation": "Outcome rewards are simpler and un-hackable when the verifier is exact. Process rewards give richer credit assignment but reintroduce a learned proxy. The trade-off is open and task-dependent."
+ },
+ {
+  "id": "16.3-025",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "2. Outcome vs process rewards (ORM vs PRM)",
+  "question": "Which line of work on process reward models is named as a key reference for PRMs?",
+  "options": [
+   "Attention Is All You Need",
+   "Chinchilla scaling laws",
+   "Direct Preference Optimization",
+   "Let's Verify Step by Step"
+  ],
+  "answer_index": 3,
+  "explanation": "\"Let's Verify Step by Step\" is the line of work on process reward models, covered properly in 17.2 alongside DeepSeekMath. The others are about transformers, scaling, and preference optimization."
+ },
+ {
+  "id": "16.3-026",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3. Verifier design pitfalls: your checker is the reward",
+  "question": "Why does a buggy verifier not fail loudly during RLVR or rejection sampling?",
+  "options": [
+   "It raises exceptions on bad answers that the optimizer silently catches and skips",
+   "It silently trains the model to satisfy the bug, since training targets whatever it accepts",
+   "It lowers the loss on every step, which triggers early stopping before anyone notices",
+   "It produces NaN rewards that the advantage computation quietly drops from each group"
+  ],
+  "answer_index": 1,
+  "explanation": "Whatever the verifier accepts becomes the training target. Optimize hard enough and the model finds every gap in the checker, so a bug quietly becomes behaviour the model learns. Nothing crashes."
+ },
+ {
+  "id": "16.3-027",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.1 False positives — accepting a wrong answer",
+  "question": "What is a false positive in a verifier?",
+  "options": [
+   "The verifier returning 0.0 for an answer that is actually correct",
+   "The verifier raising an error on valid input",
+   "The verifier returning 1.0 for an answer that is actually wrong",
+   "The verifier returning a value outside {0, 1}"
+  ],
+  "answer_index": 2,
+  "explanation": "A false positive is accepting a wrong answer. RLVR reinforces it and rejection sampling fine-tunes on it, so every false positive is poison. Rejecting a correct answer is a false negative."
+ },
+ {
+  "id": "16.3-028",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.1 False positives — accepting a wrong answer",
+  "question": "What does exact_match(\"inf\", \"inf\") return, and why is it a concern?",
+  "options": [
+   "1.0, a degenerate accept: \"inf\" is a valid Python float and inf == inf",
+   "0.0, because inf is not treated as a number by the numeric comparison path",
+   "ValueError, because \"inf\" cannot be parsed by float() and exact_match re-raises",
+   "1.0, which is fine because inf is a legitimate answer to most math problems"
+  ],
+  "answer_index": 0,
+  "explanation": "float(\"inf\") parses and float(\"inf\") == float(\"inf\") is True, so the numeric path accepts. It is a degenerate accept: a format you likely never intended to grade as a valid answer."
+ },
+ {
+  "id": "16.3-029",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.1 False positives — accepting a wrong answer",
+  "question": "How does a naive float-based numeric comparison treat \"nan\" answers?",
+  "options": [
+   "As never equal, so a gold \"nan\" can never match: a false negative",
+   "As equal to any number at all, so every answer matches: a false positive",
+   "As equal to zero, so \"nan\" matches a gold \"0\" through the numeric path",
+   "As a parse error, so float() raises ValueError on it and exact_match fails"
+  ],
+  "answer_index": 0,
+  "explanation": "float(\"nan\") is never equal to anything, including itself, so a nan comparison always fails. That is a false negative. Inf, scientific notation and locale quirks are other quirks of naive numeric comparison."
+ },
+ {
+  "id": "16.3-030",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.1 False positives — accepting a wrong answer",
+  "question": "What does exact_match(\"1e1\", \"10\") return, and what does it illustrate?",
+  "options": [
+   "0.0; scientific notation is never parsed, so it falls back to comparing strings",
+   "ValueError; \"1e1\" cannot be parsed by float(), so exact_match raises on it",
+   "1.0; \"1e1\" parses to 10.0, so watch for formats you did not intend to accept",
+   "0.0; the numeric path only accepts plain integers, so \"1e1\" is never numeric"
+  ],
+  "answer_index": 2,
+  "explanation": "\"1e1\" parses to 10.0, so the numeric path matches \"10\". Correct here, but it shows the checker accepts formats you may not have intended. The numeric path inherits every quirk of float()."
+ },
+ {
+  "id": "16.3-031",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.1 False positives — accepting a wrong answer",
+  "question": "How can an overly aggressive math verifier produce a false positive like accepting \"12\" for gold \"1.2\"?",
+  "options": [
+   "By comparing the parsed float values for exact equality",
+   "By stripping periods or normalizing too aggressively",
+   "By raising ValueError whenever input cannot be parsed",
+   "By checking symbolic equality with a computer-algebra system"
+  ],
+  "answer_index": 1,
+  "explanation": "If normalization strips punctuation such as a period, \"1.2\" can become \"12\" and match. Exact value comparison and CAS checks are the defenses, and raising on bad input fails loudly."
+ },
+ {
+  "id": "16.3-032",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "Where is a real verifier most vulnerable to gaming?",
+  "options": [
+   "Comparing two already-extracted numbers for exact value equality",
+   "Loading the gold answers from disk at the start of each training run",
+   "Returning the reward to the training loop as a plain Python float",
+   "Answer extraction: pulling the final answer out of free-form text"
+  ],
+  "answer_index": 3,
+  "explanation": "Real verifiers must extract the final answer (the last number, or the contents of \\boxed{}) from free text. A model can emit a correct-looking boxed answer with nonsense reasoning, or print many numbers so the extractor grabs a right one."
+ },
+ {
+  "id": "16.3-033",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "How can a model game a verifier that extracts 'the last number' or the contents of \\boxed{} from its output?",
+  "options": [
+   "Produce very long outputs so that the verifier times out and the reward defaults to a pass",
+   "Repeat the question verbatim so that the verifier ends up comparing the gold answer to itself",
+   "Refuse to answer at all, so the verifier finds nothing to extract and defaults the reward to 1.0",
+   "Emit a correct-looking boxed answer over nonsense reasoning, or print many numbers to hit one"
+  ],
+  "answer_index": 3,
+  "explanation": "The extractor only sees what it pulls out, so the model can satisfy it without real reasoning. The verifier says 1.0 while the reasoning is garbage."
+ },
+ {
+  "id": "16.3-034",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "How can a model game a code verifier that is a visible unit-test suite?",
+  "options": [
+   "Write code that is too slow, so the test runner times out and the harness records a pass",
+   "Special-case the visible tests (if input == known_case: return known_answer)",
+   "Return code with syntax errors, which the harness skips and therefore counts as passing",
+   "Delete the test files from the sandbox so that the suite finds nothing to fail on"
+  ],
+  "answer_index": 1,
+  "explanation": "If the tests are visible, the model can hard-code their inputs and outputs. The tests pass but the solution generalizes to nothing. Hidden held-out tests are the defense."
+ },
+ {
+  "id": "16.3-035",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "What is format hacking in reasoning RL?",
+  "options": [
+   "When the tokenizer splits the answer markers so that the expected format is broken",
+   "When the verifier rejects answers that are correctly formatted but numerically equal",
+   "When part of the reward keys off format, so the model over-produces that format",
+   "When the KL penalty forces the policy into the fixed output format of the reference"
+  ],
+  "answer_index": 2,
+  "explanation": "If any part of the reward depends on format, as R1's format rules do, the model learns to over-produce that format. It optimizes the reward component, not the task."
+ },
+ {
+  "id": "16.3-036",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "Why is a single verifier false positive more damaging than a one-off wrong grade?",
+  "options": [
+   "It becomes a training target the model is pushed to reproduce, so the error self-amplifies",
+   "It permanently corrupts the frozen reference model, so every later KL term is wrong",
+   "It doubles the KL penalty for that prompt, so the policy stops learning anything from it",
+   "It causes the run to crash with a NaN loss, wasting all the compute since the last checkpoint"
+  ],
+  "answer_index": 0,
+  "explanation": "RLVR and rejection sampling optimize toward whatever the verifier accepts, so a false positive becomes something the model is trained to produce more of. Verifier bugs are silent and self-amplifying."
+ },
+ {
+  "id": "16.3-037",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.2 Gaming — the model exploits the checker, not the task",
+  "question": "What is the recommended way to audit a verifier before training against it?",
+  "options": [
+   "Audit it adversarially: try to fool your own checker",
+   "Check that it returns 1.0 for each of the gold answers",
+   "Run it once over the training set and look at the pass rate",
+   "Trust it as long as it compiles and its unit tests pass"
+  ],
+  "answer_index": 0,
+  "explanation": "Before training, actively try to fool your own checker with tricky inputs. Checking that gold answers pass does not find false positives."
+ },
+ {
+  "id": "16.3-038",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.3 Defenses",
+  "question": "Which defense against verifier bugs mirrors how arithmetic_verifier handles unparseable problems?",
+  "options": [
+   "Silently return 0 on anything unusual so that training never stops on bad input",
+   "Normalize every input as aggressively as possible before comparing to the gold",
+   "Make the parser strict and fail loudly, then test it against adversarial inputs",
+   "Accept anything float() can parse, so equivalent numeric formats are not rejected"
+  ],
+  "answer_index": 2,
+  "explanation": "arithmetic_verifier raises on unparseable problems instead of silently returning 0. Strict parsing plus adversarial testing is the first defense. Aggressive normalization and float() permissiveness are sources of false positives."
+ },
+ {
+  "id": "16.3-039",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.3 Defenses",
+  "question": "Which kind of check should a verifier prefer wherever possible?",
+  "options": [
+   "Fuzzy string matching with a small edit-distance tolerance",
+   "Exact or symbolic checks: value equality, a CAS, hidden tests",
+   "A learned similarity score between the answer and the gold",
+   "Checking that the answer length matches the gold answer length"
+  ],
+  "answer_index": 1,
+  "explanation": "Exact and symbolic checks (value equality, computer-algebra systems, comprehensive hidden tests) are preferred over fuzzy string matching, which can admit wrong answers."
+ },
+ {
+  "id": "16.3-040",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.3 Defenses",
+  "question": "Why should answer extraction be separated from grading in a verifier?",
+  "options": [
+   "Extraction is the slow step and should be batched separately on a GPU",
+   "Grading needs gradients for the policy while extraction does not need any",
+   "Separating them removes the need for gold answers during the grading step",
+   "Most gaming lives in extraction, so it should be tested on its own"
+  ],
+  "answer_index": 3,
+  "explanation": "Extraction, pulling the final answer from free text, is where most gaming happens. Separating it from grading lets you test it independently."
+ },
+ {
+  "id": "16.3-041",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.3 Defenses",
+  "question": "Why should code verifiers hold out hidden tests?",
+  "options": [
+   "To make the test suite run faster on every sampled program",
+   "To reduce the variance of the reward across the group of samples",
+   "So the verifier can award partial credit for each hidden test passed",
+   "So the model cannot special-case the visible tests"
+  ],
+  "answer_index": 3,
+  "explanation": "If all tests are visible, the model can hard-code them. Hidden held-out tests check whether the solution generalizes."
+ },
+ {
+  "id": "16.3-042",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "3.3 Defenses",
+  "question": "Why spot-check accepted completions by hand during RLVR or rejection-sampling training?",
+  "options": [
+   "To manually correct the reward assigned to each sampled completion before the update",
+   "A rising correct-rate driven by false positives is the failure you most need to catch",
+   "To gradually replace the rule-based verifier with human grading as training proceeds",
+   "To measure GPU utilization and generation throughput during the sampling phase"
+  ],
+  "answer_index": 1,
+  "explanation": "A rising correct-rate can come from the model learning to fool the verifier. Reading accepted completions reveals whether 'correct' really is correct."
+ },
+ {
+  "id": "16.3-043",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Exercise",
+  "question": "Why does exact_match(\"1_000\", \"1000\") return 1.0?",
+  "options": [
+   "The string path's _normalize strips underscores before comparing the two strings",
+   "exact_match ignores every non-digit character, so \"1_000\" reduces to \"1000\"",
+   "Python's float() accepts underscore digit separators, so \"1_000\" parses to 1000.0",
+   "The numeric path rounds both values to the nearest thousand before comparing them"
+  ],
+  "answer_index": 2,
+  "explanation": "Python's float() accepts underscores as digit separators, so float(\"1_000\") == 1000.0 and the numeric path matches. _normalize does not strip underscores; the match comes from float()'s permissiveness."
+ },
+ {
+  "id": "16.3-044",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Exercise",
+  "question": "What happens when exact_match is given \"1,000\" against gold \"1000\"?",
+  "options": [
+   "float(\"1,000\") raises, so the numeric path is skipped and the strings do not match",
+   "It matches, because float() treats commas as digit separators just like underscores",
+   "It matches, because the string path's _normalize strips commas before comparing",
+   "It raises ValueError out of exact_match, because the comma cannot be parsed at all"
+  ],
+  "answer_index": 0,
+  "explanation": "float() rejects commas, so \"1,000\" is not numeric and the string comparison fails. Underscores parse but commas do not, which makes behavior format-dependent and surprising."
+ },
+ {
+  "id": "16.3-045",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Exercise",
+  "question": "What should a production verifier do instead of relying on float()'s permissiveness?",
+  "options": [
+   "Normalize to a canonical numeric form deliberately",
+   "Accept anything that Python's float() is able to parse",
+   "Compare the raw strings only, with no numeric parsing",
+   "Use a learned model to judge whether answers are equivalent"
+  ],
+  "answer_index": 0,
+  "explanation": "The numeric path inherits every quirk of float(): underscores, scientific notation, inf. A production verifier should deliberately normalize to a canonical form. Raw string comparison would reject legitimate equivalents."
+ },
+ {
+  "id": "16.3-046",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Exercise",
+  "question": "Why do float() quirks like \"1e2\" or \"1_000\" not break the toy arithmetic RLVR loop?",
+  "options": [
+   "The toy policy can only output the integers 0 to 9 as answers",
+   "exact_match is not called anywhere by the toy RLVR loop",
+   "arithmetic_verifier only ever passes str(int) as gold",
+   "The toy loop wraps every float conversion in a try/except"
+  ],
+  "answer_index": 2,
+  "explanation": "In the toy, the gold is always str(int). These quirks matter once real model text flows through the checker. exact_match is used: arithmetic_verifier defers to it."
+ },
+ {
+  "id": "16.3-047",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Common mistakes",
+  "question": "If the verifier is wrong, what does a rising correct-rate during training indicate?",
+  "options": [
+   "The model is generalizing better than expected to new problems",
+   "The model may be learning to fool the verifier, not solve the task",
+   "The KL penalty is too strong and is pulling the policy toward the reference",
+   "The learning rate is too low, so only easy prompts have been learned so far"
+  ],
+  "answer_index": 1,
+  "explanation": "A correct-rate measured by a buggy verifier can rise because the model learns to satisfy the bug. Always audit what 'correct' is being measured by."
+ },
+ {
+  "id": "16.3-048",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Common mistakes",
+  "question": "What is the risk of adding extra normalizations to a verifier, such as stripping punctuation or coercing types?",
+  "options": [
+   "It makes the verifier reject correct answers more often than before",
+   "It slows the verifier enough that grading becomes the training bottleneck",
+   "It makes the reward continuous instead of a clean 0/1 correctness label",
+   "Each extra normalization is a new way to accept a wrong answer"
+  ],
+  "answer_index": 3,
+  "explanation": "Every normalization (strip punctuation, coerce types, float() everything) widens what the checker accepts, creating new false positives. Normalize deliberately and test adversarially."
+ },
+ {
+  "id": "16.3-049",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Common mistakes",
+  "question": "Is an exact outcome verifier fully safe from gaming?",
+  "options": [
+   "Yes; it checks ground truth, so it cannot be gamed in any way",
+   "No; it is a learned proxy that can be gamed just like a PRM",
+   "Yes, as long as format rewards are added on top of correctness",
+   "It is un-gameable on the answer but still blind to the reasoning"
+  ],
+  "answer_index": 3,
+  "explanation": "An exact outcome verifier cannot be fooled about whether the final answer is right, but it does not see the reasoning, so lucky wrong-reasoning chains still score. A PRM scores steps but is a learned proxy again."
+ },
+ {
+  "id": "16.3-050",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Check yourself",
+  "question": "You SFT a model on its own verifier-accepted completions; reported correct-rate climbs but held-out accuracy drops. What is a likely cause?",
+  "options": [
+   "The learning rate is too small for the fine-tune to generalize past the kept samples",
+   "The verifier has false positives or is gameable, so the model learns to please the checker",
+   "The frozen reference model is too far from the policy, so the KL term dominates the loss",
+   "The group size is too large, so most prompts end up with unanimous groups and no signal"
+  ],
+  "answer_index": 1,
+  "explanation": "If accepted completions include wrong reasoning the verifier mistakenly passed, training on them hurts real accuracy while the measured rate rises. Audit the verifier and inspect accepted completions."
+ },
+ {
+  "id": "16.3-051",
+  "chapter": "16.3",
+  "chapter_name": "Rejection sampling & verifiers",
+  "module": "16",
+  "module_name": "RL for reasoning",
+  "source": "lessons/module-16/lesson-03.md",
+  "section": "Check yourself",
+  "question": "What can a process reward distinguish that an outcome reward cannot?",
+  "options": [
+   "A correct final answer from a wrong final answer, which outcome rewards treat the same",
+   "A long completion from a short one, so it can penalize verbosity in the reasoning",
+   "A sound chain from one that reasons wrongly but stumbles onto the right final answer",
+   "A sampled answer from a greedy one, so it can tell when the policy is exploring"
+  ],
+  "answer_index": 2,
+  "explanation": "An outcome reward gives the same score to lucky-right and genuinely-right chains, and to a mostly-right chain that derails at the end versus one wrong throughout. A process reward scores each step, so it credits valid steps and penalizes invalid ones."
+ }
+]

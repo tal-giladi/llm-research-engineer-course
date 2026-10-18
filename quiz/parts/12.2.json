@@ -1,0 +1,902 @@
+[
+  {
+    "id": "12.2-001",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "Which three architectural changes together define the LLaMA-family architecture relative to GPT-2?",
+    "options": [
+      "RoPE, RMSNorm and SwiGLU",
+      "RoPE, LayerNorm and GELU",
+      "Learned position embeddings, RMSNorm and ReLU",
+      "Sinusoidal positions, BatchNorm and SwiGLU"
+    ],
+    "answer_index": 0,
+    "explanation": "LLaMA bundles RoPE (rotary positions), RMSNorm (normalization) and SwiGLU (gated FFN). Every serious open model since 2023 uses them. LayerNorm and GELU are the GPT-2 originals they replace."
+  },
+  {
+    "id": "12.2-002",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How do RMSNorm and SwiGLU compare with the GPT-2 originals (LayerNorm and the GELU MLP) in cost and quality?",
+    "options": [
+      "They cost far more FLOPs per layer but train much better",
+      "They are cheaper per layer but train noticeably worse overall",
+      "They only help at inference time and change nothing in training",
+      "They cost fewer or equal FLOPs and train at least as well"
+    ],
+    "answer_index": 3,
+    "explanation": "RMSNorm does less work than LayerNorm, and SwiGLU at width 8/3 C matches the GELU MLP's budget. Together they cost fewer FLOPs than the GPT-2 originals and train at least as well. That combination is why they became standard."
+  },
+  {
+    "id": "12.2-003",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "1. Intuition: normalization, minus the centering",
+    "question": "Which three steps does LayerNorm apply to each length-C feature vector?",
+    "options": [
+      "Divide by the root mean square, then apply a learned gain only, with no centering step or bias term",
+      "Subtract the batch mean, divide by the batch standard deviation, then add a learned per-feature bias",
+      "Subtract the mean, divide by the standard deviation, then apply a learned gain gamma and bias beta",
+      "Divide by the maximum absolute value, then apply a learned gain gamma and bias beta"
+    ],
+    "answer_index": 2,
+    "explanation": "LayerNorm re-centers (subtract the mean), re-scales (divide by the standard deviation), and then applies a learned affine transformation with gain gamma and bias beta. It normalizes per position over the C features, not over the batch. RMSNorm keeps only the re-scaling and the gain."
+  },
+  {
+    "id": "12.2-004",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "1. Intuition: normalization, minus the centering",
+    "question": "What empirical observation motivated RMSNorm (Zhang & Sennrich 2019)?",
+    "options": [
+      "Centering on the mean is what stabilizes training, while the re-scaling step barely matters at all",
+      "In transformers, the re-scaling stabilizes training while subtracting the mean barely matters",
+      "LayerNorm's learned bias is essential for stability, while its learned gain is redundant",
+      "Normalization layers can be removed entirely once warmup ends without hurting the loss"
+    ],
+    "answer_index": 1,
+    "explanation": "RMSNorm asked whether centering pulls its weight. Empirically for transformers it does not: the re-scaling is what stabilizes training. So RMSNorm drops the mean-subtraction and the bias and keeps only scaling plus a learned gain."
+  },
+  {
+    "id": "12.2-005",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "1. Intuition: normalization, minus the centering",
+    "question": "What is the RMSNorm formula for a length-$C$ vector $\\mathbf{x}$ with gain $\\mathbf{g}$?",
+    "options": [
+      "$\\mathbf{y} = \\dfrac{\\mathbf{x} - \\mu}{\\sqrt{\\sigma^2 + \\epsilon}}\\odot\\mathbf{g} + \\boldsymbol\\beta$",
+      "$\\mathbf{y} = \\dfrac{\\mathbf{x}}{\\sqrt{\\frac{1}{C}\\sum_i x_i^2 + \\epsilon}}\\odot\\mathbf{g}$",
+      "$\\mathbf{y} = \\dfrac{\\mathbf{x} - \\mu}{\\sqrt{\\frac{1}{C}\\sum_i x_i^2 + \\epsilon}}\\odot\\mathbf{g}$",
+      "$\\mathbf{y} = \\dfrac{\\mathbf{x}}{\\max_i |x_i| + \\epsilon}\\odot\\mathbf{g}$"
+    ],
+    "answer_index": 1,
+    "explanation": "RMSNorm divides by the root-mean-square $\\sqrt{\\frac{1}{C}\\sum x_i^2 + \\epsilon}$ and multiplies by a learned per-channel gain. There is no mean subtraction and no bias. The first distractor is LayerNorm; the second mixes in a mean subtraction RMSNorm does not have."
+  },
+  {
+    "id": "12.2-006",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "1. Intuition: normalization, minus the centering",
+    "question": "How is the RMSNorm gain g initialized?",
+    "options": [
+      "To ones",
+      "To zeros",
+      "To random normal values",
+      "To 1/sqrt(C)"
+    ],
+    "answer_index": 0,
+    "explanation": "The learned per-channel gain g starts at ones, so at initialization RMSNorm is a pure re-scaling by 1/RMS. In code this is nn.Parameter(torch.ones(dim)). Zero init would kill the signal through the norm."
+  },
+  {
+    "id": "12.2-007",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "1. Intuition: normalization, minus the centering",
+    "question": "How many reductions over the feature axis does RMSNorm need, compared with LayerNorm?",
+    "options": [
+      "Two, the same as LayerNorm, since it still needs a mean and a variance",
+      "Zero, because RMSNorm divides by a fixed scale that is set once at initialization",
+      "Three, because it also computes the max to guard against overflow",
+      "One (the mean of squares), versus two for LayerNorm (mean, then variance)"
+    ],
+    "answer_index": 3,
+    "explanation": "RMSNorm needs only the mean of squares. LayerNorm must first compute the mean and then the variance around it. That, plus skipping the subtraction and bias, is where RMSNorm's small compute saving comes from."
+  },
+  {
+    "id": "12.2-008",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "2. Mathematics: RMS vs standard deviation",
+    "question": "How are the RMS and standard deviation $\\sigma$ of a vector with mean $\\mu$ related?",
+    "options": [
+      "$\\operatorname{RMS}^2 = \\sigma^2 - \\mu^2$ for any vector",
+      "$\\operatorname{RMS} = \\sigma + \\mu$",
+      "$\\operatorname{RMS}^2 = \\sigma^2 + \\mu^2$",
+      "$\\operatorname{RMS}^2 = \\sigma^2\\mu^2$"
+    ],
+    "answer_index": 2,
+    "explanation": "RMS measures magnitude around zero, $\\frac{1}{C}\\sum x_i^2$, while variance measures spread around the mean, $\\frac{1}{C}\\sum (x_i-\\mu)^2$. Expanding gives $\\operatorname{RMS}^2 = \\sigma^2 + \\mu^2$. So RMS is always at least $\\sigma$, with equality only when $\\mu = 0$."
+  },
+  {
+    "id": "12.2-009",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "2. Mathematics: RMS vs standard deviation",
+    "question": "When do RMSNorm and LayerNorm's normalizers (RMS and standard deviation) agree?",
+    "options": [
+      "Exactly when the vector has unit variance and norm",
+      "Always, for any vector with C components",
+      "Exactly when the vector already has zero mean",
+      "Only when all of the components are equal and nonzero"
+    ],
+    "answer_index": 2,
+    "explanation": "Since RMS^2 = sigma^2 + mu^2, the two coincide precisely when mu = 0. On a nonzero-mean vector they diverge, and that divergence is exactly the centering RMSNorm skips. A vector with all equal components has sigma = 0 but RMS > 0, the opposite extreme."
+  },
+  {
+    "id": "12.2-010",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "2. Mathematics: RMS vs standard deviation",
+    "question": "What is the role of epsilon in RMSNorm, and what values are typical?",
+    "options": [
+      "It is a learned bias added after normalization to shift every output, typically initialized to 0.1",
+      "It is added under the square root to avoid dividing by zero for a near-zero vector, typically 1e-5 or 1e-6",
+      "It is a dropout rate applied to the input before normalization, typically 0.1 throughout LLaMA pretraining runs",
+      "It clips the RMS from below so it is never smaller than 1, typically set to 1.0 for training stability"
+    ],
+    "answer_index": 1,
+    "explanation": "epsilon is a small constant under the root so a near-zero vector does not cause a division by zero. Typical values are 1e-5 or 1e-6. It is a fixed hyperparameter, not a learned bias, and is far too small to act as a clip."
+  },
+  {
+    "id": "12.2-011",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "3. Numerical example: RMSNorm vs LayerNorm on x = (1,2,3,4)",
+    "question": "Applied to x = (1, 2, 3, 4) with unit gain, RMSNorm gives all-positive outputs while LayerNorm gives outputs symmetric about zero. Why?",
+    "options": [
+      "RMSNorm never subtracts the mean, so all-positive inputs stay positive; LayerNorm centers on the mean first",
+      "RMSNorm applies an absolute value before scaling, so negative outputs are impossible, while LayerNorm does not",
+      "LayerNorm subtracts the maximum value before scaling, while RMSNorm subtracts the minimum value instead",
+      "RMSNorm adds a positive learned bias after scaling, which shifts every output above zero; LayerNorm does not"
+    ],
+    "answer_index": 0,
+    "explanation": "RMSNorm only divides by RMS = sqrt(7.5), so signs and order relative to zero are preserved: (0.365, 0.730, 1.095, 1.461). LayerNorm first subtracts mu = 2.5, sending below-average entries negative, giving (-1.342, -0.447, 0.447, 1.342). Both yield the right scale, which is what the downstream layer needs."
+  },
+  {
+    "id": "12.2-012",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "3. Numerical example: RMSNorm vs LayerNorm on x = (1,2,3,4)",
+    "question": "What do the RMSNorm and LayerNorm outputs for x = (1, 2, 3, 4) have in common, despite being very different vectors?",
+    "options": [
+      "Both are symmetric about zero after scaling",
+      "Both are identical up to a sign flip on each entry",
+      "Both have exactly zero mean and unit variance",
+      "Both have the right scale for the downstream layer"
+    ],
+    "answer_index": 3,
+    "explanation": "The outputs differ completely in location: RMSNorm's are all positive, LayerNorm's are centered. What both deliver is a properly scaled vector, which is what the next layer needs. Only LayerNorm's output has zero mean."
+  },
+  {
+    "id": "12.2-013",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "4. Tensor shapes",
+    "question": "What are the input and output shapes of RMSNorm on activations of shape (B, T, C), and over which axis is the reduction taken?",
+    "options": [
+      "(B, T, C) to (B, T, 1), reducing over the feature axis C",
+      "(B, T, C) to (B, T, C), reducing over the batch axis B only",
+      "(B, T, C) to (B, C), reducing over the sequence axis T",
+      "(B, T, C) to (B, T, C), reducing over the last axis C only"
+    ],
+    "answer_index": 3,
+    "explanation": "RMSNorm is shape-preserving, exactly like LayerNorm. The RMS is computed per position and per sequence, over the last (feature) axis only. Reducing over the batch would make it BatchNorm-like, which is not what RMSNorm does."
+  },
+  {
+    "id": "12.2-014",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "4. Tensor shapes",
+    "question": "How many learned parameters does RMSNorm have for feature width C, compared with LayerNorm?",
+    "options": [
+      "2C, the same as LayerNorm, since it keeps both gain and bias",
+      "Zero, because RMSNorm has no learned affine transform at all",
+      "C (the gain only), half of LayerNorm's 2C (gain and bias)",
+      "C^2, because it learns a full C x C mixing matrix per layer"
+    ],
+    "answer_index": 2,
+    "explanation": "RMSNorm's only parameter is the gain g of shape (C,). LayerNorm has both gamma and beta of shape (C,), so 2C. RMSNorm does have a learned affine scale, just no bias."
+  },
+  {
+    "id": "12.2-015",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "4. Tensor shapes",
+    "question": "In LLaMA, in what precision is the RMS computed when activations are in half precision?",
+    "options": [
+      "float16, to match the activations",
+      "float32, for numerical stability",
+      "int8, for speed on tensor cores",
+      "float64, for exactness of the sum"
+    ],
+    "answer_index": 1,
+    "explanation": "LLaMA computes the RMS in float32 even when the activations are half precision, then casts the result back. Summing many squared half-precision values risks overflow and precision loss. The output keeps the input's dtype and device."
+  },
+  {
+    "id": "12.2-016",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the from-scratch RMSNorm, what does torch.rsqrt(z) compute, and why is it used?",
+    "options": [
+      "1/sqrt(z) in one op, so the code multiplies by it instead of dividing",
+      "sqrt(z) rounded to the nearest integer, which keeps the output scale stable",
+      "The square root computed with gradient tracking disabled for speed",
+      "The running RMS accumulated across batches, as in BatchNorm"
+    ],
+    "answer_index": 0,
+    "explanation": "rsqrt is a reciprocal square root in a single operation. Multiplying x by rsqrt(mean(x^2) + eps) normalizes it without a separate division. It is a normal differentiable op, not a running statistic."
+  },
+  {
+    "id": "12.2-017",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In the from-scratch RMSNorm, why is mean(dim=-1, keepdim=True) used?",
+    "options": [
+      "It reduces the C axis to size 1 and keeps it so the result broadcasts against x",
+      "It averages over the batch while keeping the batch axis so statistics are shared",
+      "It removes the last axis entirely so the normalizer output has shape (B, T)",
+      "It computes the mean of x itself rather than the mean of x squared, for centering"
+    ],
+    "answer_index": 0,
+    "explanation": "keepdim=True leaves a size-1 trailing axis, so the per-position scale of shape (..., 1) broadcasts against x of shape (..., C). Without keepdim the shapes would not line up for the multiply. The mean is of x.pow(2), i.e. the squares."
+  },
+  {
+    "id": "12.2-018",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "What is the entire difference between the from-scratch RMSNorm and a from-scratch LayerNorm?",
+    "options": [
+      "RMSNorm adds a learned bias but no gain, and divides by the standard deviation",
+      "RMSNorm normalizes over the batch axis instead of the feature axis, like BatchNorm",
+      "RMSNorm uses a running average of statistics collected during training",
+      "No mean subtraction and no bias tensor, plus RMS in place of standard deviation"
+    ],
+    "answer_index": 3,
+    "explanation": "RMSNorm never subtracts the mean and has no bias parameter; it divides by the RMS and multiplies by the gain. Otherwise both normalize per position over the feature axis. Neither keeps running statistics."
+  },
+  {
+    "id": "12.2-019",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "6. Under the hood: verify, and count the cost",
+    "question": "Why is RMSNorm's FLOP saving per call small, yet its adoption still worthwhile?",
+    "options": [
+      "It saves roughly half of all model FLOPs, because normalization dominates the cost of each transformer block",
+      "It allows removing the residual connections entirely, since RMSNorm keeps activations at a fixed scale",
+      "Each call saves little, but it saves memory (no beta, fewer activations) and works as well, since centering did little",
+      "It makes the model train about twice as fast, because the mean reduction was the bottleneck kernel"
+    ],
+    "answer_index": 2,
+    "explanation": "Per call RMSNorm saves one reduction, a subtraction and a bias add, which is small. Normalization runs 2 n_layer + 1 times per forward pass, and the memory saving is real: no beta and half the norm-related activations kept for backward. The main reason it caught on is that it works as well."
+  },
+  {
+    "id": "12.2-020",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "6. Under the hood: verify, and count the cost",
+    "question": "In a pre-norm transformer with n_layer blocks, how many times is normalization applied per forward pass?",
+    "options": [
+      "n_layer (one per block)",
+      "2 n_layer + 1",
+      "2 n_layer (two per block)",
+      "n_layer + 1 (blocks plus final)"
+    ],
+    "answer_index": 1,
+    "explanation": "Each block has two norms (before attention and before the FFN), giving 2 n_layer, plus one final norm before the LM head. So 2 n_layer + 1 norm calls per forward pass. Small per-call savings are multiplied by this count."
+  },
+  {
+    "id": "12.2-021",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "6. Under the hood: verify, and count the cost",
+    "question": "What does a fused RMSNorm kernel (e.g. torch.nn.RMSNorm) compute?",
+    "options": [
+      "A mean, a variance, a subtraction, a division and a bias add over the features",
+      "One reduction, one reciprocal square root, and one elementwise multiply by the gain",
+      "A full matrix multiply of each feature vector by a learned C x C weight matrix",
+      "A softmax over the feature axis, followed by an elementwise multiply with the learned gain"
+    ],
+    "answer_index": 1,
+    "explanation": "RMSNorm is mechanically simple: reduce the squares to a mean, take rsqrt(mean + eps), multiply by x and the gain. The fused kernel does exactly that in one pass. Mean, variance, subtraction and bias belong to LayerNorm."
+  },
+  {
+    "id": "12.2-022",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "What is the structure of the GPT-2 MLP that SwiGLU replaces?",
+    "options": [
+      "Linear(C to 4C), GELU, Linear(4C to C)",
+      "Linear(C to C), ReLU, Linear(C to C)",
+      "Linear(C to 8/3 C), SiLU, Linear(8/3 C to C)",
+      "Two parallel Linear(C to 4C) multiplied together"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2 expands to a hidden width of 4C, applies the pointwise GELU nonlinearity, and projects back to C. SwiGLU keeps the expand-and-project shape but replaces the single nonlinear path with a gate. The 8/3 C width with SiLU is SwiGLU's design."
+  },
+  {
+    "id": "12.2-023",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "What is the SwiGLU feed-forward network?",
+    "options": [
+      "$\\operatorname{Swish}\\big(\\mathbf{x}W_{\\text{gate}} \\odot \\mathbf{x}W_{\\text{up}}\\big)W_{\\text{down}}$",
+      "$\\operatorname{Swish}(\\mathbf{x}W_{\\text{up}})W_{\\text{down}}$",
+      "$\\big(\\sigma(\\mathbf{x}W_{\\text{gate}}) + \\mathbf{x}W_{\\text{up}}\\big)W_{\\text{down}}$",
+      "$\\big(\\operatorname{Swish}(\\mathbf{x}W_{\\text{gate}}) \\odot \\mathbf{x}W_{\\text{up}}\\big)W_{\\text{down}}$"
+    ],
+    "answer_index": 3,
+    "explanation": "SwiGLU applies Swish to the gate projection only, multiplies it elementwise by the up projection, then projects down. Applying Swish after the product is a different, ungated function. Addition instead of multiplication would not gate anything."
+  },
+  {
+    "id": "12.2-024",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "How many weight matrices does SwiGLU have, and what do they map between?",
+    "options": [
+      "Two: a fused W_up maps C to 2h, and W_down maps h back to C",
+      "Three: W_gate, W_up and W_down all map C to C",
+      "Three: W_gate and W_up map C to h, and W_down maps h to C",
+      "Four: gate, up, down and an extra output projection back to C"
+    ],
+    "answer_index": 2,
+    "explanation": "SwiGLU uses W_gate and W_up, both C to h, and W_down, h to C. The GELU MLP has only two matrices. The extra matrix is why the hidden width must shrink to 8/3 C to keep the parameter count equal."
+  },
+  {
+    "id": "12.2-025",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "In SwiGLU, what happens to a hidden channel when its gate value Swish(x W_gate) is near zero?",
+    "options": [
+      "That channel is passed through to W_down unchanged",
+      "That channel is amplified to compensate for the small gate",
+      "That channel is shut off, regardless of the up signal",
+      "The whole FFN output for that token becomes zero"
+    ],
+    "answer_index": 2,
+    "explanation": "The gate multiplies the up signal channel by channel. A near-zero gate suppresses that hidden channel, while a large gate lets it through amplified. This data-dependent gating is more expressive than a fixed pointwise nonlinearity."
+  },
+  {
+    "id": "12.2-026",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "Why do gated feed-forward networks like SwiGLU outperform a plain GELU MLP?",
+    "options": [
+      "They have many more parameters at the same hidden width, and that extra capacity explains the gain",
+      "Data-dependent gating, where one projection modulates the other, is more expressive at equal size",
+      "They remove the need for normalization layers, so the network trains with fewer bottlenecks",
+      "They use a cheaper nonlinearity than GELU, so more training steps fit into the same budget"
+    ],
+    "answer_index": 1,
+    "explanation": "SwiGLU lets one learned path modulate another channel by channel based on the input. Gated FFNs consistently win on language modeling loss at equal parameter count, which is the comparison that matters. At equal width SwiGLU has more parameters, which is why the width is reduced to make the comparison fair."
+  },
+  {
+    "id": "12.2-027",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "What is the Swish (SiLU) function?",
+    "options": [
+      "$\\operatorname{Swish}(z) = z\\,\\sigma(z)$, where $\\sigma$ is the logistic sigmoid",
+      "$\\operatorname{Swish}(z) = \\max(0, z)$, the rectified linear unit with a learned slope",
+      "$\\operatorname{Swish}(z) = \\sigma(z)$, the logistic sigmoid applied elementwise",
+      "$\\operatorname{Swish}(z) = z\\tanh(z)$, a smooth even function of its input"
+    ],
+    "answer_index": 0,
+    "explanation": "Swish multiplies its input by the sigmoid of the input, $z\\sigma(z)$. It is a smooth version of ReLU: near zero for very negative inputs, roughly linear for large positive ones. Plain sigmoid would saturate at 1 rather than track $z$."
+  },
+  {
+    "id": "12.2-028",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "7. Intuition: a gated feed-forward network",
+    "question": "How does Swish/SiLU behave compared with ReLU?",
+    "options": [
+      "It is identical to ReLU but with a learned slope for negative inputs, as in the PReLU activation",
+      "It saturates at 1 for large positive inputs and at 0 for large negative inputs, just like a logistic sigmoid",
+      "It is exactly zero for all negative inputs like ReLU, but smooth and gently curved for all of the positive ones",
+      "Smooth everywhere: near zero for very negative inputs, linear for large positive ones, slightly negative just below zero"
+    ],
+    "answer_index": 3,
+    "explanation": "Swish is a smooth ReLU: approximately zero for very negative z, approximately z for large positive z, and with a small negative dip just below zero. Unlike ReLU it is differentiable everywhere. In PyTorch it is F.silu."
+  },
+  {
+    "id": "12.2-029",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "8. Mathematics & the 8/3 hidden width",
+    "question": "At equal hidden width, how many parameters would a SwiGLU FFN have relative to a two-matrix GELU MLP?",
+    "options": [
+      "The same number, since only the activation function changes",
+      "2 times as many, because the gate doubles both of its inputs",
+      "0.5 times as many, because each of the matrices is half as wide",
+      "1.5 times as many, because it has three matrices instead of two"
+    ],
+    "answer_index": 3,
+    "explanation": "SwiGLU has three C x h matrices while the GELU MLP has two. At the same hidden width that is 3/2 = 1.5 times the parameters. To compare fairly, LLaMA shrinks the hidden width to 8/3 C."
+  },
+  {
+    "id": "12.2-030",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "8. Mathematics & the 8/3 hidden width",
+    "question": "What hidden width does LLaMA use for its SwiGLU FFN, and why?",
+    "options": [
+      "4C, to match GPT-2 exactly so the checkpoints stay interchangeable",
+      "2C, to halve the FFN cost while keeping all three of the matrices",
+      "8/3 C, so the three-matrix SwiGLU has the same 8C^2 parameters as the 4C GELU MLP",
+      "16/3 C, to double the capacity of the gated FFN relative to GPT-2's 4C MLP budget"
+    ],
+    "answer_index": 2,
+    "explanation": "The GELU MLP has 2 x C x 4C = 8C^2 parameters. SwiGLU with three matrices at width h has 3Ch, and setting h = 8/3 C gives 8C^2. Since 3 x 8/3 = 8 = 2 x 4, the budgets match and the comparison is fair."
+  },
+  {
+    "id": "12.2-031",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "8. Mathematics & the 8/3 hidden width",
+    "question": "How many parameters (ignoring biases) does a GELU MLP with hidden width 4C have?",
+    "options": [
+      "4C^2",
+      "8C^2",
+      "12C^2",
+      "16C^2"
+    ],
+    "answer_index": 1,
+    "explanation": "It has W1 of C x 4C and W2 of 4C x C, so 4C^2 + 4C^2 = 8C^2. SwiGLU at width 8/3 C also has 8C^2. 12C^2 is what SwiGLU would have at width 4C."
+  },
+  {
+    "id": "12.2-032",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "8. Mathematics & the 8/3 hidden width",
+    "question": "In practice, how is LLaMA's SwiGLU hidden width h chosen beyond the 8/3 C formula?",
+    "options": [
+      "It is rounded to a hardware-friendly multiple, 256 in LLaMA",
+      "It is rounded down to the nearest power of two, 2048 in LLaMA",
+      "It is set to exactly 8/3 C, allowing fractional hidden channels",
+      "It is tuned separately for each layer with a small search"
+    ],
+    "answer_index": 0,
+    "explanation": "8/3 C is rarely an integer multiple of anything convenient, so LLaMA rounds h to a multiple of 256 for efficient hardware kernels. In code this is the multiple_of argument. Channels cannot be fractional."
+  },
+  {
+    "id": "12.2-033",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "8. Mathematics & the 8/3 hidden width",
+    "question": "Does LLaMA use biases in its linear layers?",
+    "options": [
+      "No, LLaMA drops the biases",
+      "Yes, in every linear layer",
+      "Only in the SwiGLU gate projection",
+      "Only in the attention output projection"
+    ],
+    "answer_index": 0,
+    "explanation": "LLaMA drops biases, which is why the parameter counting ignores them. RMSNorm similarly has no bias. The from-scratch SwiGLU defaults to bias=False."
+  },
+  {
+    "id": "12.2-034",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "9. Numerical example: Swish and the width identity",
+    "question": "What is Swish(-1), and what does it show about Swish versus ReLU?",
+    "options": [
+      "Exactly 0, the same as ReLU, showing Swish is flat for every negative input",
+      "About -1, showing Swish is linear for negative inputs, just as for the positives",
+      "About 0.2689, showing Swish is always positive, like the logistic sigmoid",
+      "About -0.2689, showing Swish dips slightly negative where ReLU is flat zero"
+    ],
+    "answer_index": 3,
+    "explanation": "Swish(-1) = -1 x sigmoid(-1) = -0.2689. Swish is slightly negative for small negative inputs, whereas ReLU is exactly zero there. For large positive inputs Swish tracks z, e.g. Swish(2) = 1.7616."
+  },
+  {
+    "id": "12.2-035",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "9. Numerical example: Swish and the width identity",
+    "question": "For C = 768 (GPT-2 small width), how do a GELU MLP with hidden 4C and a SwiGLU with hidden floor(8/3 C) = 2048 compare in parameters?",
+    "options": [
+      "SwiGLU has 1.5 times as many weights",
+      "SwiGLU has half as many weights in total",
+      "Identical: both have 4,718,592 weights",
+      "GELU MLP has 2048 more weights than SwiGLU"
+    ],
+    "answer_index": 2,
+    "explanation": "GELU: 2 x 768 x 3072 = 4,718,592. SwiGLU: 3 x 768 x 2048 = 4,718,592. They are exactly the same budget, which illustrates the 8/3 width identity."
+  },
+  {
+    "id": "12.2-036",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "10. Tensor shapes & from-scratch PyTorch",
+    "question": "What are the tensor shapes inside SwiGLU for an input of shape (B, T, C)?",
+    "options": [
+      "Gate and up are (B, T, C), and their product is the (B, T, C^2) outer product",
+      "Gate and up are (B, T, h), their product is (B, T, h), and W_down returns (B, T, C)",
+      "Gate is (B, T, h), up is (B, T, C), and the output stays at width h with shape (B, T, h)",
+      "Gate and up are (B, h) after pooling over T, and the output is (B, C) per sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "W_gate and W_up both project (B, T, C) to (B, T, h). The elementwise product keeps (B, T, h), and W_down maps back to (B, T, C). The time axis is preserved throughout."
+  },
+  {
+    "id": "12.2-037",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "10. Tensor shapes & from-scratch PyTorch",
+    "question": "In the from-scratch SwiGLU, what is computed when hidden_dim is None and multiple_of = 256?",
+    "options": [
+      "4 * dim, rounded down to the nearest multiple of 256",
+      "int(8 * dim / 3), rounded up to the next multiple of 256",
+      "8 * dim / 3, rounded up to the nearest power of two",
+      "dim, unchanged, so the FFN keeps the model width C"
+    ],
+    "answer_index": 1,
+    "explanation": "The code sets hidden_dim = int(8 * dim / 3), then multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of), which is ceiling-rounding to a multiple. That gives a hardware-friendly width near 8/3 C. 4 * dim would be the GELU width."
+  },
+  {
+    "id": "12.2-038",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "10. Tensor shapes & from-scratch PyTorch",
+    "question": "What is the forward computation of the from-scratch SwiGLU module?",
+    "options": [
+      "w_down(F.silu(w_gate(x)) * w_up(x))",
+      "w_down(F.silu(w_gate(x) * w_up(x)))",
+      "w_down(torch.sigmoid(w_gate(x)) * w_up(x))",
+      "F.silu(w_down(w_gate(x) * w_up(x)))"
+    ],
+    "answer_index": 0,
+    "explanation": "SiLU is applied to the gate projection only, multiplied elementwise by the up projection, and then projected down. Applying SiLU after the product removes the gating. F.silu is Swish with beta = 1."
+  },
+  {
+    "id": "12.2-039",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "11. Under the hood: verify",
+    "question": "How do SwiGLU's total FLOPs and parameters compare with the GELU MLP at hidden width 8/3 C?",
+    "options": [
+      "SwiGLU is about 1.5 times cheaper in both FLOPs and parameters at that width",
+      "SwiGLU costs about 1.5 times more, since it runs three matmuls instead of just two",
+      "SwiGLU is cheaper in FLOPs but stores more parameters than the GELU MLP does",
+      "They land on the same 8C^2, so the win is quality at equal cost, not a cost reduction"
+    ],
+    "answer_index": 3,
+    "explanation": "SwiGLU runs two input projections and one output projection, but at width 8/3 C the totals match the GELU MLP's 8C^2. So SwiGLU does not reduce cost; it improves quality at the same cost. 1.5x would only apply at equal hidden width."
+  },
+  {
+    "id": "12.2-040",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "11. Under the hood: verify",
+    "question": "What extra memory does SwiGLU need in the backward pass compared with the GELU MLP?",
+    "options": [
+      "None; it stores exactly the same activations as the GELU MLP, since h is smaller",
+      "It stores the full (B, T, T) attention matrix a second time so the gate can be recomputed",
+      "It keeps both the gate and up activations, each (B, T, h), a bit more than the GELU MLP",
+      "It stores all three weight matrices twice, once in fp32 and once in half precision"
+    ],
+    "answer_index": 2,
+    "explanation": "To backpropagate through the elementwise product, both factors (gate and up, each (B, T, h)) must be kept. The GELU MLP stores one hidden activation. So SwiGLU uses a little more activation memory."
+  },
+  {
+    "id": "12.2-041",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is adding a bias to RMSNorm a mistake?",
+    "options": [
+      "The bias makes RMSNorm exactly identical to LayerNorm, so the whole change is redundant",
+      "The bias causes a division by zero whenever the input vector lies near the origin",
+      "RMSNorm has only the gain g; adding a bias makes it a different and generally worse normalizer",
+      "The bias doubles the FLOPs of the following attention layer, which dominates block cost"
+    ],
+    "answer_index": 2,
+    "explanation": "RMSNorm by definition has no bias term, only a learned gain. Adding one changes the normalizer into something different and generally worse. It would still not be LayerNorm, since there is no centering."
+  },
+  {
+    "id": "12.2-042",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is it wrong to compute RMSNorm using standard-deviation formulas?",
+    "options": [
+      "Standard deviation is undefined for vectors of length C unless C is a power of two",
+      "RMS is the root mean of squares around zero, so the mean must not be subtracted",
+      "Standard deviation is taken over the batch axis, while RMS is taken over the features",
+      "Standard deviation formulas drop the epsilon term, so they divide by zero more often"
+    ],
+    "answer_index": 1,
+    "explanation": "RMS measures magnitude around zero; standard deviation measures spread around the mean. Using sigma means subtracting the mean, which is precisely the centering RMSNorm drops. Both are computed over the feature axis."
+  },
+  {
+    "id": "12.2-043",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if a SwiGLU FFN keeps the hidden width at 4C?",
+    "options": [
+      "The FFN inflates to 12C^2 parameters, 1.5 times the GELU budget",
+      "The FFN shrinks to 4C^2 parameters, half of the GELU MLP's budget",
+      "The gating no longer works, since 4C hidden units saturate",
+      "The output shape becomes (B, T, 4C) instead of (B, T, C)"
+    ],
+    "answer_index": 0,
+    "explanation": "With three matrices at width 4C, SwiGLU has 3 x C x 4C = 12C^2 parameters, 1.5 times the 8C^2 of the GELU MLP. Use 8/3 C (rounded) to match. The output shape is still (B, T, C) because W_down projects back."
+  },
+  {
+    "id": "12.2-044",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why must SwiGLU's gate and up projections be separate learned matrices?",
+    "options": [
+      "Because a single shared matrix cannot be multiplied elementwise with its own output",
+      "Because sharing the matrix would change the shape of the SwiGLU output tensor to (B, T, h)",
+      "Because a shared matrix cannot be built with bias=False in nn.Linear and still be trained",
+      "Sharing one matrix for both collapses the gate, since both paths would see the same projection"
+    ],
+    "answer_index": 3,
+    "explanation": "The gate must be a different learned view of the input so it can modulate the up signal. With one shared matrix, the computation becomes Swish(xW) * xW, so the gate is no longer an independent path. Shapes still work, which makes the bug silent."
+  },
+  {
+    "id": "12.2-045",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Exercise",
+    "question": "RMSNorm and LayerNorm produce the same normalized output (up to affine parameters) on a vector x. What must be true of x?",
+    "options": [
+      "x has unit variance",
+      "x has all positive components",
+      "x has unit L2 norm",
+      "x has zero mean"
+    ],
+    "answer_index": 3,
+    "explanation": "Since RMS^2 = sigma^2 + mu^2, RMS equals the standard deviation exactly when mu = 0. Then LayerNorm's centering does nothing and both divide by the same quantity. Unit variance or unit norm does not make the mean zero."
+  },
+  {
+    "id": "12.2-046",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A student writes SwiGLU as w_down(F.silu(w_gate(x) * w_up(x))). Why is this not SwiGLU?",
+    "options": [
+      "It is equivalent to SwiGLU, because elementwise multiplication commutes with SiLU for any inputs",
+      "It applies SiLU twice in a row, which shrinks the output so it no longer matches the residual stream",
+      "It multiplies two projections first (a bilinear form) and applies Swish once, so there is no gating",
+      "It uses the wrong output projection shape, mapping h back to h instead of mapping h back to C"
+    ],
+    "answer_index": 2,
+    "explanation": "SwiGLU applies the nonlinearity to the gate path before the elementwise product. The buggy version forms a bilinear product of two linear projections and only then applies Swish, so neither path modulates the other through a nonlinearity. It is a different, weaker function, and SiLU does not commute with multiplication."
+  },
+  {
+    "id": "12.2-047",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which paper bundled RMSNorm, SwiGLU and RoPE into one reference architecture?",
+    "options": [
+      "GLU Variants Improve Transformer (Shazeer 2020)",
+      "LLaMA: Open and Efficient Foundation Language Models (Touvron et al. 2023)",
+      "Root Mean Square Layer Normalization (Zhang & Sennrich 2019)",
+      "RoFormer: Enhanced Transformer with Rotary Position Embedding (Su et al. 2021)"
+    ],
+    "answer_index": 1,
+    "explanation": "LLaMA combined all three into its reference architecture, and its hyperparameter table lists the 8/3-derived FFN widths. SwiGLU traces to Shazeer 2020, RMSNorm to Zhang & Sennrich 2019, and RoPE to RoFormer. Each of those introduced only one component."
+  },
+  {
+    "id": "12.2-048",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which paper introduced the SwiGLU gated feed-forward network?",
+    "options": [
+      "GLU Variants Improve Transformer (Shazeer 2020)",
+      "Fast Transformer Decoding: One Write-Head is All You Need (Shazeer 2019)",
+      "LLaMA: Open and Efficient Foundation Language Models (2023)",
+      "RoFormer: Enhanced Transformer with Rotary Position Embedding"
+    ],
+    "answer_index": 0,
+    "explanation": "SwiGLU traces to Shazeer's 2020 paper GLU Variants Improve Transformer. Shazeer's 2019 Fast Transformer Decoding introduced MQA. LLaMA adopted SwiGLU rather than inventing it."
+  },
+  {
+    "id": "12.2-049",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Which two things does RMSNorm remove from LayerNorm?",
+    "options": [
+      "The mean-subtraction (centering) and the learned bias beta",
+      "The learned gain gamma and the epsilon term under the square root",
+      "The division by the scale and the learned gain gamma",
+      "The epsilon term and the per-feature learned gain gamma"
+    ],
+    "answer_index": 0,
+    "explanation": "RMSNorm drops centering and the bias. It keeps re-scaling, now by RMS instead of standard deviation, and the learned gain. It still uses an epsilon for numerical safety."
+  },
+  {
+    "id": "12.2-050",
+    "chapter": "12.2",
+    "chapter_name": "RMSNorm & SwiGLU",
+    "module": "12",
+    "module_name": "Modern architectures",
+    "source": "lessons/module-12/lesson-02.md",
+    "section": "Check yourself",
+    "question": "What is Swish(0), and why does Swish's behaviour for small negative inputs help optimization?",
+    "options": [
+      "Swish(0) = 0.5; for negative inputs it saturates toward zero like a sigmoid, so gradients there vanish quickly",
+      "Swish(0) = 1; for negative inputs it is linear with slope one, so it behaves like the identity function there",
+      "Swish(0) = 0; its gradient is exactly zero for every negative input, so it behaves like ReLU in that region",
+      "Swish(0) = 0; for small negative inputs it is smooth and slightly negative with a nonzero gradient"
+    ],
+    "answer_index": 3,
+    "explanation": "Swish(0) = 0 x sigmoid(0) = 0. For small negative z, ReLU is exactly zero with zero gradient, but Swish is slightly negative (e.g. -0.2689 at -1) and has a nonzero gradient. That gradient signal helps optimization."
+  }
+]

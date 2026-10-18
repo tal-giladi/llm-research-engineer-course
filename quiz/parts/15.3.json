@@ -1,0 +1,830 @@
+[
+  {
+    "id": "15.3-001",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What practical change did DPO bring to preference tuning?",
+    "options": [
+      "It replaced a fragile four-model RL loop with a stable supervised loss that runs like SFT",
+      "It replaced pairwise preferences with absolute human scores, regressed directly with an MSE loss",
+      "It added a second reward model to stabilize PPO, so the policy no longer needs a value head",
+      "It made preference tuning require fresh online sampling at every step, like PPO but cheaper"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO collapses RLHF into a supervised classification loss on preference pairs, removing the reward model, value model, and generation loop. It is the default alignment method for most open-weight models today. It still uses pairwise preferences and needs no sampling."
+  },
+  {
+    "id": "15.3-002",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is DPO's derivation considered especially instructive in post-training?",
+    "options": [
+      "It shows the KL-constrained RLHF objective and a simple classification loss are two views of one thing",
+      "It proves that SFT on chosen completions and full RLHF always converge to identical final models",
+      "It shows the reward model can be replaced by a larger tokenizer that encodes preferences directly",
+      "It proves PPO's clipping is unnecessary for any RL problem once a KL penalty is added to the loss"
+    ],
+    "answer_index": 0,
+    "explanation": "The derivation turns the RLHF objective, via its closed-form optimum, into a Bradley-Terry classification loss on policy log-ratios. That reveals RLHF and a supervised loss as equivalent formulations. It makes no claims about SFT equivalence or PPO in general."
+  },
+  {
+    "id": "15.3-003",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "The causal story: keep the goal, drop the machinery",
+    "question": "What is DPO's core insight about the RLHF objective?",
+    "options": [
+      "It is non-convex in the policy, so it must be approximated by clipping the update ratio as in PPO",
+      "It can be solved exactly by greedy decoding from the reference model with the reward as a re-ranker",
+      "It is equivalent to maximizing expected reward with no KL term once beta is folded into the reward",
+      "It has a closed-form solution; rewriting the loss through it cancels the reward model and sampling"
+    ],
+    "answer_index": 3,
+    "explanation": "For a fixed reward the KL-constrained objective has an exact maximizer. Expressing the reward through that optimal policy and substituting into Bradley-Terry removes both the explicit reward model and the need to sample. What is left is a loss computed directly from preference pairs, hence 'Direct'."
+  },
+  {
+    "id": "15.3-004",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 1 — the KL-constrained RLHF objective",
+    "question": "What objective do both PPO-based RLHF and DPO optimize?",
+    "options": [
+      "min over pi of the cross-entropy against chosen completions only",
+      "max over pi of E[r(x, y)] with no constraint",
+      "max over pi of E[r(x, y)] - beta · KL(pi(.|x) || pi_ref(.|x))",
+      "min over pi of KL(pi_ref || pi) with no reward term"
+    ],
+    "answer_index": 2,
+    "explanation": "The KL-constrained RLHF objective maximizes expected reward while penalizing divergence from the reference policy. PPO chases it with RL using a reward term and KL penalty; DPO solves the same objective analytically and fits it with a supervised loss. Dropping the KL term would invite reward hacking."
+  },
+  {
+    "id": "15.3-005",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 1 — the KL-constrained RLHF objective",
+    "question": "In the KL-constrained RLHF objective, what does a larger beta do?",
+    "options": [
+      "Lets the policy move farther from the reference",
+      "Forces the policy to stay closer to the reference",
+      "Increases the weight of the reward relative to the prompt",
+      "Increases the sampling temperature"
+    ],
+    "answer_index": 1,
+    "explanation": "beta weights the KL penalty, so increasing it makes drifting from pi_ref more costly and the policy hugs the reference. A smaller beta lets the policy chase reward further. It plays the same role in DPO's loss."
+  },
+  {
+    "id": "15.3-006",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 1 — the KL-constrained RLHF objective",
+    "question": "How is KL(pi || pi_ref) defined for a prompt x in the RLHF objective?",
+    "options": [
+      "E_{y~pi_ref}[ log( pi(y|x) / pi_ref(y|x) ) ]",
+      "E_{y~pi}[ log( pi(y|x) / pi_ref(y|x) ) ]",
+      "E_{y~pi}[ pi(y|x) - pi_ref(y|x) ]",
+      "E_{y~pi}[ ( log pi(y|x) - log pi_ref(y|x) )^2 ]"
+    ],
+    "answer_index": 1,
+    "explanation": "KL(pi || pi_ref) is the expectation under pi of the log-ratio log(pi/pi_ref). The direction matters: samples come from pi, the policy being optimized. Differences of probabilities or squared log-ratios are different quantities."
+  },
+  {
+    "id": "15.3-007",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 2 — the closed-form optimal policy",
+    "question": "How is the KL-constrained RLHF objective rewritten to find its maximizer for a fixed reward?",
+    "options": [
+      "As maximizing E_{y~pi}[ r(x,y) · pi_ref(y|x) ], a reward weighted by the reference's own probability",
+      "As minimizing the squared error between log pi(y|x) and r(x,y)/beta, summed over all completions",
+      "As maximizing log Z(x) with respect to beta, then reading pi off the partition function's gradient",
+      "As minimizing a KL from pi to the reweighted reference pi_ref(y|x) exp(r(x,y)/beta)"
+    ],
+    "answer_index": 3,
+    "explanation": "Dividing by beta and pulling r into the log turns the objective into a KL between pi and the unnormalized distribution pi_ref exp(r/beta). A KL is minimized (to zero) exactly when the distributions are equal (after normalization), which yields the closed-form optimum."
+  },
+  {
+    "id": "15.3-008",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 2 — the closed-form optimal policy",
+    "question": "What is the closed-form optimal policy pi* of the KL-constrained RLHF objective?",
+    "options": [
+      "pi*(y|x) = softmax(r(x,y)) with no dependence on pi_ref",
+      "pi*(y|x) = pi_ref(y|x) + beta · r(x,y)",
+      "pi*(y|x) = (1/Z(x)) · pi_ref(y|x) · exp(r(x,y)/beta)",
+      "pi*(y|x) = pi_ref(y|x)^beta · r(x,y)"
+    ],
+    "answer_index": 2,
+    "explanation": "The optimum is the reference reweighted by exp(reward/beta) and renormalized by the partition function Z(x). It boosts completions the reward likes in proportion to how much, tempered by beta. It always depends on pi_ref; additive or power forms are wrong."
+  },
+  {
+    "id": "15.3-009",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 2 — the closed-form optimal policy",
+    "question": "What is the partition function Z(x) in the DPO derivation, and why is it a problem?",
+    "options": [
+      "Z(x) is the number of tokens in the prompt x; it is a problem because prompts vary in length across a batch",
+      "Z(x) = sum over y of pi_ref(y|x) exp(r(x,y)/beta); it normalizes pi*, but summing over all completions is intractable",
+      "Z(x) is the reward model's scalar bias term; it is a problem because it is never trained and drifts with beta",
+      "Z(x) = KL(pi || pi_ref) summed over completions; it is a problem because it can go negative and break the log"
+    ],
+    "answer_index": 1,
+    "explanation": "Z(x) sums the reweighted reference over every possible completion to make pi* sum to 1. The space of completions is astronomically large, so computing it is intractable. This is what blocked earlier direct uses of the closed-form solution, and DPO makes it cancel."
+  },
+  {
+    "id": "15.3-010",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 2 — the closed-form optimal policy",
+    "question": "On which variables does the partition function Z(x) in the DPO derivation depend?",
+    "options": [
+      "On the prompt x but not on the completion y",
+      "On the completion y but not on the prompt x",
+      "On both the prompt x and the completion y being scored",
+      "On neither; it is a global constant"
+    ],
+    "answer_index": 0,
+    "explanation": "Z(x) sums over all completions y, so y is marginalized out, leaving dependence only on the prompt (and on beta and the reward). Because it depends only on x, it is identical for the chosen and rejected completions of the same prompt, which is why it cancels."
+  },
+  {
+    "id": "15.3-011",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 2 — the closed-form optimal policy",
+    "question": "What is the intuitive interpretation of the optimal policy pi* in KL-constrained RLHF?",
+    "options": [
+      "A deterministic policy that always outputs the single highest-reward completion, for any value of beta",
+      "The reward model's own distribution over completions, softmaxed with temperature beta, pi_ref ignored",
+      "The reference reweighted by exp(reward/beta): completions the reward likes are boosted, tempered by beta",
+      "The uniform distribution over completions with positive reward, with negative-reward completions given zero mass"
+    ],
+    "answer_index": 2,
+    "explanation": "pi* keeps the reference's shape but multiplies each completion's probability by exp(r/beta). Large beta tempers the reweighting (staying near pi_ref); small beta sharpens it toward high-reward completions. It is not a deterministic argmax unless beta goes to zero."
+  },
+  {
+    "id": "15.3-012",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 3 — invert it: reward in terms of the policy",
+    "question": "Inverting the closed-form optimum, how is the reward expressed in terms of the optimal policy?",
+    "options": [
+      "r(x,y) = log pi*(y|x) - log pi_ref(y|x) - log Z(x), with no beta factor",
+      "r(x,y) = beta · ( pi*(y|x) - pi_ref(y|x) ) + beta · Z(x)",
+      "r(x,y) = beta · log( pi*(y|x) / pi_ref(y|x) ) + beta · log Z(x)",
+      "r(x,y) = (1/beta) · log( pi_ref(y|x) / pi*(y|x) ) + log Z(x)"
+    ],
+    "answer_index": 2,
+    "explanation": "Taking logs: log pi* = log pi_ref + r/beta - log Z. Solving for r gives beta times the log-ratio of optimal to reference policy, plus beta log Z(x). This shows the optimal policy already encodes the reward up to a prompt-only term."
+  },
+  {
+    "id": "15.3-013",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 3 — invert it: reward in terms of the policy",
+    "question": "What is the key conceptual consequence of writing the reward as r = beta log(pi*/pi_ref) + beta log Z(x)?",
+    "options": [
+      "The reward must be recomputed by sampling fresh completions from pi* at every training step",
+      "The optimal policy already encodes the reward, so no separate reward network is needed",
+      "The reward is independent of the policy, so it must still be learned by a separate network",
+      "The partition function becomes tractable, since it is now a sum over the prompt's tokens only"
+    ],
+    "answer_index": 1,
+    "explanation": "The reward is expressible through the policy and reference, plus a term depending only on the prompt. So a policy can stand in for the reward model. Z(x) stays intractable; it is eliminated later by taking reward differences."
+  },
+  {
+    "id": "15.3-014",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 4 — substitute into Bradley-Terry; Z(x) cancels",
+    "question": "When the reparameterized reward is substituted into the Bradley-Terry margin r(x,y_w) - r(x,y_l), why does Z(x) disappear?",
+    "options": [
+      "Both completions share prompt x, so their identical beta log Z(x) terms subtract to zero",
+      "Z(x) is approximated as 1 for long completions, so beta log Z(x) is negligible in the margin",
+      "Z(x) is absorbed into the learning rate, since it scales every gradient by the same constant",
+      "Z(x) is estimated by sampling completions, and the estimates average to zero across a batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Bradley-Terry depends only on the reward difference, and the two completions in a pair are for the same prompt. Each reward carries the same + beta log Z(x), which cancels exactly. That cancellation removes the one intractable piece."
+  },
+  {
+    "id": "15.3-015",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 4 — substitute into Bradley-Terry; Z(x) cancels",
+    "question": "After Z(x) cancels, what replaces the unknown optimal policy pi* to obtain a trainable loss?",
+    "options": [
+      "The frozen reference policy pi_ref, which pi* is closest to",
+      "A separately trained reward model whose scores define pi*",
+      "The uniform distribution over the vocabulary at every step",
+      "The trainable policy pi_theta, fitted so that it becomes pi*"
+    ],
+    "answer_index": 3,
+    "explanation": "We fit theta so that pi_theta becomes pi*, so pi* is replaced by pi_theta in the margin. The margin is then placed inside the Bradley-Terry -log sigmoid and averaged over the dataset. pi_ref stays as the frozen anchor."
+  },
+  {
+    "id": "15.3-016",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 4 — substitute into Bradley-Terry; Z(x) cancels",
+    "question": "What is the DPO loss?",
+    "options": [
+      "-E[ log sigmoid( r_phi(x,y_w) - r_phi(x,y_l) ) ], with r_phi a separately trained reward model network",
+      "-E[ log pi_theta(y_w|x) ] + beta · KL(pi_theta || pi_ref), i.e. SFT on chosen completions plus a KL penalty",
+      "E[ ( log(pi_theta(y_w|x)/pi_ref(y_w|x)) - log(pi_theta(y_l|x)/pi_ref(y_l|x)) - 1/(2 beta) )^2 ]",
+      "-E[ log sigmoid( beta log(pi_theta(y_w|x)/pi_ref(y_w|x)) - beta log(pi_theta(y_l|x)/pi_ref(y_l|x)) ) ]"
+    ],
+    "answer_index": 3,
+    "explanation": "DPO is the Bradley-Terry loss with the implicit reward beta log(pi_theta/pi_ref) in place of an explicit reward. It needs only the policy and reference log-probs on chosen and rejected completions. The first option is reward-model training, the second is SFT with a KL penalty, and the squared form is IPO-style, not DPO."
+  },
+  {
+    "id": "15.3-017",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Step 4 — substitute into Bradley-Terry; Z(x) cancels",
+    "question": "What does computing the DPO loss require?",
+    "options": [
+      "Sampling new completions from the policy each step and scoring them with a separately trained reward model",
+      "Policy and frozen-reference forwards on the given chosen and rejected completions, summing sequence log-probs",
+      "Training a value head alongside the policy to estimate per-token advantages for the chosen completion",
+      "Collecting absolute human ratings for each completion and regressing the policy's log-probs onto them"
+    ],
+    "answer_index": 1,
+    "explanation": "DPO needs no reward model and no sampling. It is a supervised classification loss on fixed preference pairs, as easy to run as SFT, yet it optimizes the same KL-constrained objective PPO does."
+  },
+  {
+    "id": "15.3-018",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "What each term means",
+    "question": "In DPO, what is the implicit reward of a completion y?",
+    "options": [
+      "beta · ( log pi_theta(y|x) - log pi_ref(y|x) ): how much more likely the policy makes y than the reference",
+      "r_phi(x, y): the scalar score a separately trained reward model assigns to y, scaled by beta",
+      "beta · log pi_theta(y|x) alone: the policy's own log-probability of y, with no reference term",
+      "The sum over y's tokens of PPO advantages, estimated with GAE from a separately learned value head"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO's implicit reward is beta times the log-ratio of policy to reference probability for the completion. It measures how much the policy has raised y's likelihood relative to its starting point. No explicit reward model is involved."
+  },
+  {
+    "id": "15.3-019",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "What each term means",
+    "question": "What does minimizing the DPO loss do to the policy's probabilities?",
+    "options": [
+      "Raises pi_theta(y_w) and pi_theta(y_l) equally, so only the shared prompt likelihood grows",
+      "Pulls pi_theta toward pi_ref exactly, so both log-ratios are driven back to zero over training",
+      "Lowers pi_theta(y_w) slightly to avoid overconfidence, while leaving pi_theta(y_l) unchanged",
+      "Raises pi_theta(y_w) and lowers pi_theta(y_l), each measured relative to the reference"
+    ],
+    "answer_index": 3,
+    "explanation": "Minimizing -log sigmoid of the implicit reward margin pushes the margin up: the chosen completion's log-ratio rises and/or the rejected one's falls. Because ratios are relative to the reference, the push is measured against the starting model, not absolute probabilities."
+  },
+  {
+    "id": "15.3-020",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "What each term means",
+    "question": "Why does DPO not need a separate KL-penalty term the way PPO does?",
+    "options": [
+      "DPO uses PPO-style clipping of the probability ratio instead of an explicit KL penalty term",
+      "DPO's loss is defined to be zero once the policy drifts too far, which halts further updates",
+      "The reference appears inside the loss itself, so the KL constraint is baked in via beta",
+      "DPO freezes all layers except the last, so the policy physically cannot drift from the reference"
+    ],
+    "answer_index": 2,
+    "explanation": "The log-ratio to pi_ref in the implicit reward ties the objective to the reference, and beta plays the same role as the RLHF KL weight. Small beta lets the policy move far; large beta keeps it close. No clipping or freezing is involved."
+  },
+  {
+    "id": "15.3-021",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Numerical example",
+    "question": "In DPO, if the policy already prefers the chosen completion over the rejected one more than the reference does, how does the loss compare with log 2?",
+    "options": [
+      "It is below log 2 ≈ 0.693, because the implicit margin is positive",
+      "It is exactly log 2, because the reference is unchanged",
+      "It is above log 2, because the policy has drifted from the reference",
+      "It is zero, because the preference is already satisfied"
+    ],
+    "answer_index": 0,
+    "explanation": "A positive margin (pi_logratios greater than ref_logratios) gives sigmoid(beta · margin) > 0.5 and loss below log 2; for margin 1.0 and beta 0.5 the loss is about 0.474. The loss approaches zero only as the margin grows large. log 2 corresponds to a zero margin."
+  },
+  {
+    "id": "15.3-022",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Numerical example",
+    "question": "In a DPO loss computation, what are pi_logratios and ref_logratios?",
+    "options": [
+      "pi_logratios = log pi_theta(y_w) - log pi_theta(y_l); ref_logratios = log pi_ref(y_w) - log pi_ref(y_l)",
+      "pi_logratios = log pi_theta(y_w) - log pi_ref(y_w); ref_logratios = log pi_theta(y_l) - log pi_ref(y_l)",
+      "pi_logratios = pi_theta(y_w) / pi_theta(y_l); ref_logratios = pi_ref(y_w) / pi_ref(y_l)",
+      "pi_logratios = log pi_theta(y_w); ref_logratios = log pi_ref(y_l)"
+    ],
+    "answer_index": 0,
+    "explanation": "pi_logratios is chosen minus rejected under the policy; ref_logratios is chosen minus rejected under the reference. Their difference is algebraically the same implicit margin as the per-completion log-ratio form. The loss is -logsigmoid(beta · (pi_logratios - ref_logratios))."
+  },
+  {
+    "id": "15.3-023",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Computing the sequence log-probs: sequence_logprob",
+    "question": "What quantity does sequence_logprob compute for DPO?",
+    "options": [
+      "The mean per-token log-probability over prompt and completion",
+      "The log-probability of only the last completion token",
+      "The cross-entropy averaged over the vocabulary",
+      "log pi(y|x) = sum over completion tokens of log pi(y_t | y_<t, x)"
+    ],
+    "answer_index": 3,
+    "explanation": "DPO needs the log-probability of the whole completion, which is the sum of per-token log-probs of the true tokens. It is the same gather-the-true-token operation as cross-entropy, but summed, not averaged, and restricted to response tokens."
+  },
+  {
+    "id": "15.3-024",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Computing the sequence log-probs: sequence_logprob",
+    "question": "In sequence_logprob, which tokens contribute to log pi(y|x)?",
+    "options": [
+      "All tokens including the prompt, since the prompt conditions the completion and shares its loss",
+      "Only the prompt tokens, since they are fixed and identical for the chosen and rejected completions",
+      "Only completion tokens; prompt and pad labels are set to ignore_index (-100) and masked out",
+      "Only tokens whose predicted probability exceeds 0.5, so low-confidence positions are ignored"
+    ],
+    "answer_index": 2,
+    "explanation": "log pi(y|x) is about the completion given the prompt, so prompt positions are masked exactly like response-only SFT loss masking. Pad positions are masked too. Including prompt tokens would add a term unrelated to the preference."
+  },
+  {
+    "id": "15.3-025",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Computing the sequence log-probs: sequence_logprob",
+    "question": "What are the shapes and dtypes of the inputs and output of sequence_logprob?",
+    "options": [
+      "logits (B, V) float; labels (B,) int64 holding one id per sequence; output (B, T) float",
+      "logits (B, T, V) float; labels (B, T) int64 with -100 for prompt/pad; output (B,) float",
+      "logits (B, T) float; labels (B, T, V) bool one-hot with -100 for prompt; output scalar",
+      "logits (T, V) float16 for one sequence; labels (T,) float; output (V,) float per vocab id"
+    ],
+    "answer_index": 1,
+    "explanation": "The policy produces (B, T, V) logits; labels hold the true completion token ids per position with ignored positions at -100; the function returns one summed log-prob per sequence, shape (B,)."
+  },
+  {
+    "id": "15.3-026",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Computing the sequence log-probs: sequence_logprob",
+    "question": "Why does sequence_logprob call labels.clamp(min=0) before gather?",
+    "options": [
+      "To convert negative log-probs into positive values before they are summed over the completion",
+      "gather cannot index with -100, so ignored positions are made valid indices and later zeroed by the mask",
+      "To remove padding tokens from the vocabulary so the log-softmax normalizes over real tokens only, not pad",
+      "To prevent the log-softmax from overflowing when labels at ignored positions are large negatives"
+    ],
+    "answer_index": 1,
+    "explanation": "-100 is not a valid vocabulary index, so gathering with it would error. Clamping replaces it with 0, a harmless index, and the result at those positions is multiplied by the boolean mask, zeroing them before the sum. The clamp has nothing to do with numerical overflow."
+  },
+  {
+    "id": "15.3-027",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Computing the sequence log-probs: sequence_logprob",
+    "question": "In sequence_logprob, what does logp.gather(-1, safe.unsqueeze(-1)).squeeze(-1) produce?",
+    "options": [
+      "A (B, T, V) tensor of all log-probabilities, reordered by the label ids",
+      "A (B,) tensor holding the maximum log-probability reached in each sequence",
+      "A (B, T) int64 tensor of the argmax token id predicted at every position",
+      "A (B, T) tensor of the log-probability of the true token at each position"
+    ],
+    "answer_index": 3,
+    "explanation": "gather along the vocab axis picks, for each (b, t), the log-prob at index labels[b, t]. unsqueeze adds the index dimension and squeeze removes it, yielding (B, T). Masking and summing over T then give the (B,) sequence log-prob."
+  },
+  {
+    "id": "15.3-028",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Implementing dpo_loss",
+    "question": "In dpo_loss, what is the final returned expression?",
+    "options": [
+      "-torch.log(torch.sigmoid(pi_logratios + ref_logratios)).sum()",
+      "F.mse_loss(pi_logratios, ref_logratios) * beta",
+      "-F.logsigmoid(beta * (pi_logratios - ref_logratios)).mean()",
+      "-(beta * pi_logratios).mean() + ref_logratios.mean()"
+    ],
+    "answer_index": 2,
+    "explanation": "dpo_loss forms the implicit margin as policy log-ratio minus reference log-ratio, scales by beta, applies the numerically stable logsigmoid, negates, and averages. Adding the log-ratios or using MSE would not be the DPO objective."
+  },
+  {
+    "id": "15.3-029",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Implementing dpo_loss",
+    "question": "In a DPO training step, how are the reference model's sequence log-probs computed?",
+    "options": [
+      "With gradients enabled on both models, so the reference co-adapts slowly with the policy",
+      "Under torch.no_grad() on a frozen reference, for both chosen and rejected completions",
+      "Only for the chosen completion, since the rejected one's reference term cancels in the loss",
+      "By sampling fresh completions from the reference and scoring them under torch.no_grad()"
+    ],
+    "answer_index": 1,
+    "explanation": "The reference is a fixed anchor: its log-probs on chosen and rejected completions are computed without gradients (or precomputed and cached). Only the policy's log-probs carry grad. No sampling occurs."
+  },
+  {
+    "id": "15.3-030",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Implementing dpo_loss",
+    "question": "What does the unit test for DPO's gradient check after a few SGD steps from zero policy log-ratios?",
+    "options": [
+      "The chosen-minus-rejected margin grows and chosen's implicit reward ends above rejected's",
+      "The loss reaches exactly zero, confirming the preference pair has been fully fitted",
+      "The policy log-probs become identical to the reference's, so both log-ratios return to zero",
+      "The rejected completion's log-prob increases faster than the chosen one's, as the loss expects"
+    ],
+    "answer_index": 0,
+    "explanation": "Starting from zero log-ratios, SGD on the DPO loss provably increases the chosen-minus-rejected margin, and the implicit rewards beta log(pi_theta/pi_ref) end with chosen above rejected. This confirms the loss does what the derivation promised. The loss does not reach exactly zero in a few steps."
+  },
+  {
+    "id": "15.3-031",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Under the hood / cost",
+    "question": "How many forward passes does DPO need per preference pair, and how can this be reduced?",
+    "options": [
+      "Two always: only the policy is forwarded, since the reference's log-probs are taken as uniform",
+      "Eight, because both models must also generate fresh completions; batching generation halves that",
+      "Four (policy and reference, each on chosen and rejected); caching reference log-probs cuts it to two",
+      "One, because chosen and rejected share the prompt; packing both into a single sequence keeps it at one"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO forwards the policy on chosen and rejected and the reference on chosen and rejected — four forwards, no generation. Because the reference is frozen, its log-probs can be precomputed once and cached, leaving two forwards per pair in steady state."
+  },
+  {
+    "id": "15.3-032",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Under the hood / cost",
+    "question": "What must be resident in memory during DPO training, compared with PPO?",
+    "options": [
+      "The policy, reference, reward model, and value model, exactly like PPO, but with no sampling loop",
+      "Only the reward model and the frozen reference, since the policy's log-probs are cached up front",
+      "The policy and a frozen reference (or its cached log-probs); no reward model, value head, or rollouts",
+      "The policy plus a replay buffer of generated rollouts, with the reference dropped after warmup"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO keeps just the trainable policy and a frozen reference (or cached reference log-probs). PPO keeps four live models plus a sampling loop. This is a large part of DPO's simplicity."
+  },
+  {
+    "id": "15.3-033",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Under the hood / cost",
+    "question": "Why is DPO more stable to train than PPO?",
+    "options": [
+      "It uses a much larger batch size by default, which averages away the noise in preference labels",
+      "It is a smooth supervised loss with far fewer knobs; beta is the main hyperparameter",
+      "It clips gradients and policy ratios at every step, so updates can never exceed a trust region",
+      "It updates only the scalar reward head, leaving the transformer body frozen during training"
+    ],
+    "answer_index": 1,
+    "explanation": "DPO trains like SFT: a smooth classification loss on fixed data, with beta as the main knob. PPO's many interacting hyperparameters (epsilon, beta_KL, GAE lambda, rollout size) and online sampling make it finicky."
+  },
+  {
+    "id": "15.3-034",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Under the hood / cost",
+    "question": "What happens if the DPO reference model accidentally trains along with the policy?",
+    "options": [
+      "The log-ratio collapses toward zero, so DPO has no target to push against",
+      "DPO converges faster, because both models improve together and share gradient signal",
+      "The loss becomes negative and training diverges as the two models chase each other",
+      "Nothing changes, because beta automatically compensates for the reference's movement"
+    ],
+    "answer_index": 0,
+    "explanation": "The reference must be the frozen starting model (typically SFT), in eval() mode with requires_grad=False and log-probs under no_grad. If it moves with the policy, pi_theta/pi_ref stays near 1, the implicit margin stays near zero, and the objective degenerates."
+  },
+  {
+    "id": "15.3-035",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Under the hood / cost",
+    "question": "What is the hardware guidance for DPO on a 7B model, and can it run on CPU?",
+    "options": [
+      "Recommended 8× H100 as for PPO; CPU training is practical for 7B with enough RAM",
+      "A single 8GB consumer GPU with full fine-tuning and no LoRA; CPU is about as fast",
+      "No GPU needed, because without generation a 7B DPO run fits comfortably on CPU",
+      "Recommended 1×–2× A100 40GB; unit tests run on CPU but real training needs a GPU"
+    ],
+    "answer_index": 3,
+    "explanation": "DPO is roughly SFT cost with a second frozen model: min 1× 24GB GPU for ~1B with LoRA (caching reference log-probs), recommended 1×–2× A100 40GB for 7B, hours of runtime and single-digit to low tens of GPU-hours. dpo_loss and sequence_logprob tests run instantly on CPU, but real training needs a GPU."
+  },
+  {
+    "id": "15.3-036",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Why must sequence_logprob sum, not average, per-token log-probs?",
+    "options": [
+      "Averaging would make the loss non-differentiable, because the divisor depends on the integer mask length",
+      "Summing is much faster than averaging on GPUs, since it skips a division and a reduction over the mask",
+      "Averaging would silently include the prompt tokens, because the mean's denominator ignores the mask",
+      "log pi(y|x) is a log of a product of token probabilities, i.e. a sum; a mean rescales the implicit reward vs beta"
+    ],
+    "answer_index": 3,
+    "explanation": "The sequence log-probability is the sum of per-token log-probs. The per-token mean is a different quantity that changes the implicit reward's scale and breaks its calibration against beta. Differentiability and speed are not the issue."
+  },
+  {
+    "id": "15.3-037",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "In DPO, what happens if chosen and rejected are swapped in the margin computation?",
+    "options": [
+      "Nothing, because the sigmoid is symmetric around zero",
+      "The model is trained to prefer the worse answer",
+      "The loss becomes zero and training stalls immediately",
+      "Only beta's sign flips, which Adam's update cancels out"
+    ],
+    "answer_index": 1,
+    "explanation": "The margin must be (policy chosen - policy rejected) - (ref chosen - ref rejected). Swapping chosen and rejected flips the sign of the margin, so minimizing the loss pushes the rejected completion up. Sign and ratio-order slips are a classic DPO bug."
+  },
+  {
+    "id": "15.3-038",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Which tokens should be excluded when computing log pi(y|x) for DPO, and how?",
+    "options": [
+      "Prompt and pad tokens, by setting their labels to ignore_index",
+      "The completion's first token, by slicing it off the shifted logits",
+      "High-probability tokens, by thresholding their softmax at 0.9",
+      "End-of-sequence tokens, by zeroing their logits before log-softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "Only completion tokens should contribute to log pi(y|x). Setting prompt and pad labels to ignore_index masks them out, exactly as in response-only SFT masking. Otherwise prompt likelihood leaks into the implicit reward."
+  },
+  {
+    "id": "15.3-039",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "A DPO run's loss sits at about 0.6931, and chosen/rejected implicit rewards stay equal, though gradients flow. What is the most likely bug?",
+    "options": [
+      "The learning rate is far too small, so the policy log-probs barely move from their starting values",
+      "beta is set too large, so the KL constraint pins the policy exactly to the reference at every step",
+      "The prompt tokens were masked out, so only pad positions contribute to each sequence log-prob",
+      "The reference is the same object as the policy (or updates with it), so the log-ratios are always zero"
+    ],
+    "answer_index": 3,
+    "explanation": "0.6931 = log 2 = -log sigmoid(0), so the implicit margin is stuck at zero. If the reference is the policy itself, log pi_theta - log pi_ref = 0 for both completions at every step. Fix by making the reference a separate frozen copy (eval, requires_grad=False, no_grad) or by caching its log-probs before training."
+  },
+  {
+    "id": "15.3-040",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "A loss pinned at log 2 appears both in reward-model training and in DPO. How do the typical causes differ?",
+    "options": [
+      "Reward model: the learning rate is zero; DPO: beta is zero, so both margins are scaled away",
+      "Reward model: logsigmoid is used; DPO: log(sigmoid) is used, which underflows to a constant",
+      "Reward model: the same input feeds both scores; DPO: the reference is, or trains with, the policy",
+      "Both are caused by masking the prompt, which removes every token the two models could compare"
+    ],
+    "answer_index": 2,
+    "explanation": "In both cases the margin is identically zero. For a reward model, that usually means the same input reaches both reward computations. For DPO, it usually means the policy and reference log-ratios cancel because the reference is not a separate frozen model."
+  },
+  {
+    "id": "15.3-041",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Exercise",
+    "question": "How is DPO's 'reward accuracy' metric computed?",
+    "options": [
+      "The fraction of pairs where chosen's implicit reward beta·log(pi_theta/pi_ref) exceeds rejected's",
+      "The fraction of completion tokens where the policy's argmax equals the chosen completion's token",
+      "The mean of sigmoid(beta · margin) over pairs, i.e. the model's average preference probability",
+      "The fraction of pairs where log pi_theta(y_w) exceeds log pi_ref(y_w), ignoring the rejected one"
+    ],
+    "answer_index": 0,
+    "explanation": "Reward accuracy counts how often the implicit reward ranks chosen above rejected. Since beta > 0, beta does not change the sign of the comparison. It is the standard metric logged during DPO training."
+  },
+  {
+    "id": "15.3-042",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Exercise",
+    "question": "How does DPO reward accuracy typically evolve in a healthy run?",
+    "options": [
+      "It climbs from about 0.5 toward 0.7 or higher",
+      "It starts near 1.0 and decays toward 0.5",
+      "It stays at exactly 0.5 for the whole run",
+      "It jumps to 1.0 immediately after the first step"
+    ],
+    "answer_index": 0,
+    "explanation": "At the start the policy equals the reference, so implicit rewards are equal and accuracy is about chance (0.5). As training proceeds, chosen implicit rewards rise above rejected, and reward accuracy climbs toward 0.7+."
+  },
+  {
+    "id": "15.3-043",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Research connection",
+    "question": "Which part of the DPO paper (Rafailov et al. 2023) should be read closely?",
+    "options": [
+      "Only the appendix of hyperparameter sweeps, since the derivation is standard RL and can be skipped",
+      "Only the experiments section on image classification, which shows where the loss generalizes",
+      "The theoretical equivalence proofs in full, before reading the derivation or any of the experiments",
+      "Section 4 (the optimal policy, reward reparameterization, and loss) and the gradient interpretation"
+    ],
+    "answer_index": 3,
+    "explanation": "Section 4 contains the derivation — closed-form optimal policy, reward reparameterization, and the loss — and the gradient interpretation explains what the update does. The theoretical equivalence proofs can be skimmed on a first pass. This paper is why most open-weight models are aligned with DPO rather than PPO."
+  },
+  {
+    "id": "15.3-044",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Check yourself",
+    "question": "What is the DPO loss when the policy exactly matches the reference?",
+    "options": [
+      "0, because there is nothing left for the policy to learn",
+      "Infinity, because the log-ratio log(1) is undefined",
+      "log 2 ≈ 0.693, because the implicit margin is zero",
+      "beta, because only the scale of the margin remains"
+    ],
+    "answer_index": 2,
+    "explanation": "If pi_theta = pi_ref, then pi_logratios equals ref_logratios and the margin is 0. sigmoid(0) = 0.5, so the loss is -log 0.5 = log 2. A policy identical to the reference sits at maximum uncertainty with no preference signal yet."
+  },
+  {
+    "id": "15.3-045",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Check yourself",
+    "question": "In DPO, how does beta relate to PPO-based RLHF?",
+    "options": [
+      "PPO's clip epsilon under a different name: it bounds how far each update moves the ratio",
+      "The same KL weight: large beta keeps pi_theta near the reference, small beta lets it move far",
+      "The learning rate of PPO's value head, reused in DPO to scale the step size on the policy",
+      "The temperature PPO uses to sample rollouts, reused in DPO to soften the preference labels"
+    ],
+    "answer_index": 1,
+    "explanation": "beta is the KL weight from the KL-constrained RLHF objective that PPO also optimizes. In DPO it scales the implicit reward margin, and because the reference sits inside the loss, the KL constraint is built in. It is unrelated to PPO's clipping epsilon."
+  },
+  {
+    "id": "15.3-046",
+    "chapter": "15.3",
+    "chapter_name": "DPO: derivation & implementation",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Which two networks does DPO evaluate during training, and what does it not need?",
+    "options": [
+      "A reward model and a value model, as in PPO; no reference model and no policy sampling",
+      "The trainable policy and a frozen reference; no reward model and no sampling/generation",
+      "The policy and a learned reward model scoring each pair; no reference and no value head",
+      "The policy alone, scored against itself; no reference model, no reward model, and no data"
+    ],
+    "answer_index": 1,
+    "explanation": "DPO forwards pi_theta and the frozen pi_ref on chosen and rejected completions. It needs no reward model and no generation, which is what makes it as cheap and stable as SFT."
+  }
+]

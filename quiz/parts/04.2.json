@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "04.2-001",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "Which tokenizer family is the byte-level BPE built from scratch in llmre.tokenizer.bpe?",
+    "options": [
+      "The tokenizer family that sits in front of GPT-2 and most models since",
+      "A word-level tokenizer with an <unk> fallback, as used by early RNN language models",
+      "A character-level tokenizer that maps each Unicode code point to one fixed id",
+      "A learned neural tokenizer trained jointly with the language model"
+    ],
+    "answer_index": 0,
+    "explanation": "The byte-level BPE built in llmre.tokenizer.bpe is the actual tokenizer family in front of GPT-2 and most models since. It is reused for every training run in the course. It is neither word-level nor character-level, and it is not trained by gradient descent."
+  },
+  {
+    "id": "04.2-002",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "Which production facts does understanding byte-level BPE help explain?",
+    "options": [
+      "Why GPUs need FP16 for training, why batch size must be a power of two, and why dropout helps",
+      "Why attention uses softmax, why LayerNorm comes first, and why residuals exist",
+      "Why models hallucinate, why RLHF is needed, and why temperature changes outputs",
+      "Why a token is ~3/4 of a word, why leading spaces matter, and why numbers tokenize oddly"
+    ],
+    "answer_index": 3,
+    "explanation": "Byte-level BPE explains concrete tokenization facts: a token averages roughly three-quarters of an English word, leading spaces become part of tokens, and numbers split into odd digit chunks. The other options are about numerics, architecture, or alignment, not tokenization."
+  },
+  {
+    "id": "04.2-003",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "What single greedy step does BPE repeat while training?",
+    "options": [
+      "Find the rarest symbol in the corpus and split it back into its two constituent bytes",
+      "Find the longest repeated substring in the corpus and assign it a brand-new vocabulary id",
+      "Find the most frequent adjacent pair in the whole corpus and glue it into one new symbol",
+      "Find the most frequent whole word in the corpus and add it to the vocabulary as one token"
+    ],
+    "answer_index": 2,
+    "explanation": "BPE's core idea is greedy: find the most frequent adjacent pair of symbols in the whole corpus, glue it into a single new symbol, add it to the vocabulary, and repeat. It works only with pairs, not longest substrings, and never splits or removes symbols."
+  },
+  {
+    "id": "04.2-004",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "In BPE, what is a merge?",
+    "options": [
+      "Combining two separately trained tokenizers into one shared vocabulary with remapped ids",
+      "One glue operation that fuses an adjacent pair of symbols into a new vocabulary symbol",
+      "Joining two adjacent training documents into one sequence with an end-of-text separator",
+      "Averaging the embedding vectors of two adjacent tokens into a single shared vector"
+    ],
+    "answer_index": 1,
+    "explanation": "Each glue operation in BPE — fusing an adjacent pair like e + s into a new symbol 'es' — is called a merge. Merges are recorded in order and replayed during encoding. They have nothing to do with combining tokenizers, documents, or embeddings."
+  },
+  {
+    "id": "04.2-005",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "How can BPE produce multi-character units like 'est ' if each merge only fuses two symbols?",
+    "options": [
+      "Each merge fuses as many adjacent symbols as the longest common substring shared across words",
+      "Merged symbols can be merged again later: e+s → es, then es+t → est, then est+space → 'est '",
+      "A final pass after training concatenates all tokens that fall inside the same whitespace word",
+      "The tokenizer is seeded with a dictionary of common English suffixes before any merges run"
+    ],
+    "answer_index": 1,
+    "explanation": "A merged symbol is a first-class symbol that later merges can consume. So a first merge might create 'es', a later one 'est', and a later one 'est ' with a trailing space. Long units grow out of pairs without ever handling more than two symbols at once."
+  },
+  {
+    "id": "04.2-006",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "After a few thousand BPE merges, what kinds of symbols make up the vocabulary?",
+    "options": [
+      "Whole common words, frequent prefixes and suffixes, and the raw bytes as a fallback for rare text",
+      "Only whole words from the training corpus, with every rare or unseen word mapped to <unk>",
+      "Only the 256 single bytes, since the learned merges are discarded once training has finished",
+      "Fixed-length chunks of exactly four bytes each, chosen by how often they recur in the corpus"
+    ],
+    "answer_index": 0,
+    "explanation": "The surviving symbols are the byte-chunks that recur in the language: common whole words, frequent prefixes and suffixes, and — a fallback that never disappears — the raw bytes for anything rare. There is no <unk>, and merges are kept, not discarded."
+  },
+  {
+    "id": "04.2-007",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "Where does the name Byte-Pair Encoding come from?",
+    "options": [
+      "It encodes each input byte as a pair of hexadecimal digits so the vocabulary stays printable",
+      "It pairs each input byte with its position in the sequence to form a positional token id",
+      "It splits every byte into a pair of four-bit nibbles and assigns each possible nibble pair its own code",
+      "A compression scheme that repeatedly encodes the most frequent adjacent byte pair as one new symbol"
+    ],
+    "answer_index": 3,
+    "explanation": "The name literally describes the algorithm: repeatedly encode the most frequent pair of adjacent symbols (originally bytes) as one. It started as a data-compression scheme; using it to build tokenizer vocabularies is the twist that made it central to LLMs."
+  },
+  {
+    "id": "04.2-008",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "What are the four steps of the BPE training loop?",
+    "options": [
+      "Split on spaces, count words, keep the top V words as the vocabulary, and map every other word to <unk>",
+      "Encode to bytes, sort the bytes by frequency, drop the rarest bytes, and renumber the remaining ones",
+      "Count adjacent pairs, pick the most frequent, mint a new id and record it, rewrite the corpus fused",
+      "Count characters, pick the rarest one, split it into two bytes, and retrain the vocabulary from scratch"
+    ],
+    "answer_index": 2,
+    "explanation": "BPE training loops over: (1) count every adjacent symbol pair, (2) pick the most frequent, (3) mint a new symbol id and record the merge, (4) rewrite the corpus with that pair fused. It stops when the vocabulary reaches the target size. Encoding later replays the recorded merges."
+  },
+  {
+    "id": "04.2-009",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "1. Intuition: build a vocabulary by fusing what co-occurs",
+    "question": "When does BPE training stop?",
+    "options": [
+      "When every word in the corpus has been reduced to exactly one token, so no word can shrink further",
+      "When the encoded corpus has been compressed below 50% of its raw UTF-8 byte length",
+      "When the vocabulary reaches the target size (or, in the course code, when no pair repeats)",
+      "After exactly one full left-to-right pass over the corpus, merging each pair once"
+    ],
+    "answer_index": 2,
+    "explanation": "BPE stops when the vocabulary reaches the target size, i.e. after vocab_size − 256 merges. The course's train() also stops early if the most frequent pair occurs fewer than 2 times, since merging a non-repeating pair saves nothing. There is no compression-ratio or one-pass rule."
+  },
+  {
+    "id": "04.2-010",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "2. The setup: a tiny corpus and its byte view",
+    "question": "For an all-ASCII training corpus, what is the initial symbol sequence BPE starts from?",
+    "options": [
+      "The whitespace-separated words of the corpus, each assigned one integer id",
+      "The characters themselves, one byte each, equal to their code points",
+      "Overlapping pairs of adjacent characters, each pair treated as one symbol",
+      "Multi-byte UTF-8 sequences of two to four bytes for every single character"
+    ],
+    "answer_index": 1,
+    "explanation": "When every character is ASCII, each character is a single UTF-8 byte equal to its code point (e is 101, s is 115, space is 32). So the starting symbols are just the characters. On non-ASCII text the same algorithm runs, but the starting symbols include multi-byte sequences."
+  },
+  {
+    "id": "04.2-011",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "2. The setup: a tiny corpus and its byte view",
+    "question": "Does BPE training work differently on non-ASCII text such as 'é'?",
+    "options": [
+      "No — the same algorithm runs, but the starting symbols are multi-byte, as é → [195, 169]",
+      "Yes — non-ASCII characters are first mapped to an <unk> token before any merges are counted",
+      "Yes — non-ASCII characters skip BPE entirely and are added to the vocabulary as single tokens",
+      "Yes — non-ASCII text must first be transliterated to ASCII so every character is one byte"
+    ],
+    "answer_index": 0,
+    "explanation": "The algorithm is identical; it simply starts from the UTF-8 bytes, which for non-ASCII characters are multi-byte (é is [195, 169]). BPE may later merge those bytes into one token if the pair is frequent. There is no <unk> or transliteration step."
+  },
+  {
+    "id": "04.2-012",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "When counting adjacent pairs for BPE on the word 'newest', which pairs does it contribute?",
+    "options": [
+      "n, ne, new, newe, newes",
+      "n, e, w, e, s, t",
+      "ne, we, st",
+      "ne, ew, we, es, st"
+    ],
+    "answer_index": 3,
+    "explanation": "BPE counts every adjacent pair of symbols. 'newest' is n e w e s t, so its overlapping adjacent pairs are ne, ew, we, es, st — five pairs from six symbols. Triples are not counted, and pairs overlap rather than being disjoint."
+  },
+  {
+    "id": "04.2-013",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "In BPE training, when two pairs are tied for most frequent, how does the worked example break the tie?",
+    "options": [
+      "Randomly, by sampling one of the tied pairs using a fixed random seed for reproducibility",
+      "By choosing the tied pair whose combined byte values are larger, e.g. 's t' over 'e s'",
+      "By merging both tied pairs in the same training step, since each would save the same number of symbols",
+      "Deterministically: the pair that appears first when scanning the corpus left to right wins"
+    ],
+    "answer_index": 3,
+    "explanation": "In the worked corpus, 'e s' and 's t' both occur 5 times. The tie is broken deterministically by the pair that appears first scanning left to right; in 'newest' e s comes before s t, so e s wins. Only one pair is merged per step."
+  },
+  {
+    "id": "04.2-014",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "What new id does the first BPE merge receive, and why?",
+    "options": [
+      "0, because merges are numbered from the start of the vocabulary",
+      "1, because id 0 is reserved for padding",
+      "256, because ids 0–255 are already the raw byte values",
+      "50257, because it follows the GPT-2 vocabulary"
+    ],
+    "answer_index": 2,
+    "explanation": "The base vocabulary is the 256 byte values 0..255, so the first learned merge gets id 256, the next 257, and so on. In the worked example the first merge is recorded as (101, 115) → 256, the byte ids of e and s."
+  },
+  {
+    "id": "04.2-015",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "How much does a BPE merge shorten the corpus sequence?",
+    "options": [
+      "By exactly one symbol regardless of how often the pair occurs",
+      "By one symbol for each occurrence of the pair that gets fused",
+      "By half, because every adjacent pair in the sequence is fused at once",
+      "By the length of the new merged token measured in bytes"
+    ],
+    "answer_index": 1,
+    "explanation": "Each fusion replaces two symbols with one, removing one symbol per occurrence. In the worked example e s occurs 5 times, so the 34-symbol corpus becomes 29. The saving depends on the pair's count, not on token length."
+  },
+  {
+    "id": "04.2-016",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "After the first BPE merge creates 'es' (id 256), how are pairs counted for the next merge?",
+    "options": [
+      "Pairs are recounted in the rewritten sequence, where 'es' is a single symbol",
+      "The original byte-level pair counts from round one are reused unchanged for every merge",
+      "Only pairs that do not involve the new symbol are counted, to avoid double counting",
+      "Pairs are counted in a freshly re-encoded copy of the raw text"
+    ],
+    "answer_index": 0,
+    "explanation": "After a merge, the corpus is rewritten with the pair fused, and the next round counts pairs in that rewritten sequence. That lets the new symbol participate: in the example, (es, t) = (256, 116) now occurs 5 times and becomes merge 1."
+  },
+  {
+    "id": "04.2-017",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "Why is 'merges compound' described as the crucial move in BPE?",
+    "options": [
+      "A merged symbol is first-class, so later merges can consume it and grow long units from pairs",
+      "Each merge doubles the size of the vocabulary, so a few dozen merges already cover the language",
+      "Merges are applied simultaneously during encoding, so their individual length savings multiply",
+      "Each merge also merges the embeddings of its two children, compounding what the model knows"
+    ],
+    "answer_index": 0,
+    "explanation": "Because merged symbols can be used by later merges, BPE builds long units (like 'est' from 'es' + 't') while only ever handling two symbols at a time. Each merge adds exactly one vocabulary entry, and embeddings are not involved in tokenizer training."
+  },
+  {
+    "id": "04.2-018",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "In the worked BPE example, merge 2 fuses 'est' with a following space into 'est '. What does this show about byte-level BPE?",
+    "options": [
+      "Spaces are always stripped before training, so this merge reflects a bug in the worked example",
+      "Spaces can only appear inside special tokens, so this merge marks a reserved end-of-word token",
+      "Spaces are merged only at the very end of the corpus, where padding bytes accumulate",
+      "Spaces are ordinary bytes, so tokens routinely include a leading or trailing space"
+    ],
+    "answer_index": 3,
+    "explanation": "Because spaces are just bytes (32), BPE can and does merge them into tokens. That is why a real GPT-2 vocabulary has ' the' (with its space) as a single common token distinct from 'the'. Spaces are not stripped or treated specially."
+  },
+  {
+    "id": "04.2-019",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "Why does the order of a BPE merge table matter?",
+    "options": [
+      "The order only matters for display and debugging; any permutation produces identical encodings",
+      "Merges must be applied in reverse learned order, longest tokens first, so encoding is maximally greedy",
+      "Encoding must replay merges in learned order, since a later merge can use a symbol an earlier one made",
+      "The order determines each token id's dtype, so reordering changes the size of the output tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "The merge table is ordered, e.g. (101,115)→256, (256,116)→257, (257,32)→258. Merge 1 can only fire after merge 0 has produced symbol 256. Shuffle the order and you get a different or broken tokenizer."
+  },
+  {
+    "id": "04.2-020",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "After three BPE merges on top of the byte alphabet, how many entries does the vocabulary have?",
+    "options": [
+      "3 — only the merged symbols are kept",
+      "259 — the 256 bytes plus 3 merged symbols",
+      "256 — merges replace existing bytes",
+      "512 — each merge adds a pair of entries to the table"
+    ],
+    "answer_index": 1,
+    "explanation": "Each merge adds exactly one entry, and the 256 byte entries are kept as the fallback. So three merges give 256 + 3 = 259 entries; in the example the last three are 'es', 'est', and 'est '."
+  },
+  {
+    "id": "04.2-021",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "Is the vocabulary that BPE produces the optimal set of subwords for a corpus?",
+    "options": [
+      "Yes — BPE provably finds the minimum-length encoding of the corpus for the chosen vocabulary size",
+      "No — BPE greedily fuses the most frequent pair each step and never reconsiders, so it is only good enough",
+      "Yes — BPE searches over all possible merge orders with dynamic programming and keeps the shortest result",
+      "No — BPE picks pairs at random each step, so the vocabulary and its quality vary on every run"
+    ],
+    "answer_index": 1,
+    "explanation": "BPE is greedy, not optimal: at each step it fuses the single most frequent pair and never reconsiders. There is no claim the units are the theoretically best subwords, only that this cheap, deterministic procedure works well in practice. It is not random either."
+  },
+  {
+    "id": "04.2-022",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "3. The training algorithm, worked by hand",
+    "question": "What happens if two BPE implementations break ties between equally frequent pairs differently?",
+    "options": [
+      "They produce different but equally valid tokenizers",
+      "One of them will fail to round-trip some strings",
+      "They always converge to the same vocabulary after enough merges",
+      "The one with more merges will be strictly better"
+    ],
+    "answer_index": 0,
+    "explanation": "Tie-breaking is a free choice in greedy BPE, so different tie-breaks or corpora give different vocabularies. Both are valid tokenizers that round-trip correctly via the byte fallback, but they encode text differently. This is why the exact merge list must ship with a model."
+  },
+  {
+    "id": "04.2-023",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "4. Encoding: replay the merges in order",
+    "question": "When encoding a new string with a trained BPE tokenizer, which present pair is fused first?",
+    "options": [
+      "The present pair that occurs most frequently in the input string being encoded right now",
+      "The leftmost pair in the input string, regardless of its position in the merge table",
+      "The present pair whose fusion produces the longest resulting token in bytes",
+      "The present pair whose merge was learned earliest in training (smallest merge id)"
+    ],
+    "answer_index": 3,
+    "explanation": "Encoding converts the string to bytes and repeatedly fuses, among the present pairs that are in the merge table, the one with the smallest merge id. It stops when no present pair is mergeable. Frequency in the input is irrelevant at encoding time; that is a common bug."
+  },
+  {
+    "id": "04.2-024",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "4. Encoding: replay the merges in order",
+    "question": "Why must BPE encoding apply merges in 'earliest learned first' order?",
+    "options": [
+      "Earlier merges always produce longer tokens, so applying them first gives the best compression ratio",
+      "Later merges are learned from fewer examples, so they are unreliable and are skipped when they conflict",
+      "A later merge may use a symbol an earlier merge creates, so learned order reproduces training's symbols",
+      "It lets encoding run in constant time per token, because each merge is checked only once per string"
+    ],
+    "answer_index": 2,
+    "explanation": "Merge 1 (es, t) needed the 'es' symbol from merge 0. Replaying merges in learned order reproduces exactly the symbols training built. Earliest-first has nothing to do with token length or speed."
+  },
+  {
+    "id": "04.2-025",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "4. Encoding: replay the merges in order",
+    "question": "With a BPE tokenizer whose merges are (e,s)→256, (es,t)→257, (est,space)→258, how is the standalone word 'newest' encoded?",
+    "options": [
+      "[258] — a single token for the whole word",
+      "[110, 101, 119, 258] — n, e, w, 'est '",
+      "[110, 101, 119, 257] — n, e, w, est",
+      "[110, 101, 119, 101, 115, 116] — six raw bytes"
+    ],
+    "answer_index": 2,
+    "explanation": "The bytes are n e w e s t. Merge (e,s)→256 fires, then (es,t)→257, giving [110, 101, 119, 257]. The merge (est, space)→258 does not fire because standalone 'newest' has no trailing space. The rarer prefix 'new' stays as three bytes."
+  },
+  {
+    "id": "04.2-026",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "4. Encoding: replay the merges in order",
+    "question": "Why might the same word get different BPE tokens in different contexts?",
+    "options": [
+      "The tokenizer quietly re-trains its merge table on each new input string that it encodes",
+      "Which merges fire depends on the surrounding bytes, such as whether a space follows",
+      "BPE encoding is randomized at inference time to act as a form of data augmentation",
+      "Tokens depend on the absolute position of the word inside the model's context window"
+    ],
+    "answer_index": 1,
+    "explanation": "BPE operates on byte sequences, so neighbouring bytes matter. For example, 'newest' followed by a space could use the 'est ' merge, while standalone 'newest' cannot. Encoding is deterministic and position-independent; it never retrains."
+  },
+  {
+    "id": "04.2-027",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "4. Encoding: replay the merges in order",
+    "question": "Encoded with a three-merge BPE tokenizer trained on 'newest newest widest widest lowest', what do 'newest', 'widest' and 'lowest' share?",
+    "options": [
+      "All three end in the single suffix token 257 ('est')",
+      "All three are encoded as exactly one whole-word token each",
+      "All three begin with the same merged prefix token 256",
+      "Nothing — each one is encoded as its raw UTF-8 bytes"
+    ],
+    "answer_index": 0,
+    "explanation": "Each of these words ends with the merged suffix 'est' (id 257), so they share that token exactly. This is the morphology sharing that word vocabularies lacked. The prefixes (new, wid, low) stay as raw bytes because no merges cover them."
+  },
+  {
+    "id": "04.2-028",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "5. Decoding: expand ids back to bytes",
+    "question": "How does a BPE tokenizer decode a list of ids back into a string?",
+    "options": [
+      "Replay the learned merges in reverse order to split every merged token back into its bytes",
+      "Run the encoder repeatedly on candidate strings until its output ids match the input ids",
+      "Look up each id in a stored dictionary of English words and join them with spaces",
+      "Look up each id's stored byte string, concatenate them, and UTF-8-decode the result"
+    ],
+    "answer_index": 3,
+    "explanation": "Each id maps to a fixed byte string (256 → b\"es\", 257 → b\"est\", 110 → b\"n\"). Decoding looks up every id, concatenates the bytes, and UTF-8-decodes. It needs no merge logic at all."
+  },
+  {
+    "id": "04.2-029",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "5. Decoding: expand ids back to bytes",
+    "question": "Why does BPE decoding exactly invert encoding for any string?",
+    "options": [
+      "Decoding keeps a cache of every string the encoder has ever seen and looks the id list up in it",
+      "Encoding is lossy, but decoding repairs the dropped bytes using a small language model",
+      "Both functions share the same random seed, so the sampled splits always line up exactly",
+      "Encoding only emits ids whose byte expansions concatenate back to the original UTF-8 stream"
+    ],
+    "answer_index": 3,
+    "explanation": "Every id the encoder emits stands for a contiguous chunk of the original bytes, so concatenating the chunks reproduces the exact byte stream, which decodes back to the original string. Even an unseen emoji survives because it stays as raw bytes."
+  },
+  {
+    "id": "04.2-030",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "5. Decoding: expand ids back to bytes",
+    "question": "Which state does each direction of a BPE tokenizer need?",
+    "options": [
+      "Decode needs the ordered merge list; encode needs only the vocabulary",
+      "Both need the full training corpus at inference time to recount pair frequencies",
+      "Decode needs only the id→bytes vocabulary; encode needs the ordered merge list",
+      "Neither needs stored state; both are computed directly from UTF-8 encoding rules"
+    ],
+    "answer_index": 2,
+    "explanation": "Decoding is a context-free lookup of each id's bytes, so the vocabulary suffices. Encoding must choose which pairs to fuse in which sequence, and those choices depend on training order, so it needs the ordered merges. Together they compose to the identity."
+  },
+  {
+    "id": "04.2-031",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "5. Decoding: expand ids back to bytes",
+    "question": "Why does BPE decoding not need the merge order, while encoding does?",
+    "options": [
+      "Decoding processes the ids right to left, which automatically reverses the merge order the encoder applied",
+      "Each id expands to fixed bytes regardless of neighbours, while encoding must choose what to fuse and when",
+      "Decoding only ever sees byte ids 0–255, because merged ids are expanded before they are stored",
+      "The merge order is embedded in the high bits of every token id, so decode can read it back out"
+    ],
+    "answer_index": 1,
+    "explanation": "Decoding has no choices to make: each id's byte expansion is fixed, so concatenation reconstructs the bytes. Encoding must decide which pairs to fuse and in which order, and a later merge may need an earlier one's symbol, so it requires the ordered merge list."
+  },
+  {
+    "id": "04.2-032",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the BPE helper get_stats(ids), what does zip(ids, ids[1:]) yield?",
+    "options": [
+      "Exactly the adjacent pairs, e.g. [1,2,3] gives (1,2) then (2,3)",
+      "Every pair of elements in the list, e.g. [1,2,3] gives (1,2), (1,3), (2,3)",
+      "Non-overlapping pairs, e.g. [1,2,3,4] gives (1,2) then (3,4)",
+      "Each element paired with its index, e.g. (0,1), (1,2), (2,3)"
+    ],
+    "answer_index": 0,
+    "explanation": "zip(ids, ids[1:]) walks the sequence one step out of phase with itself, so it yields each element with its successor: the overlapping adjacent pairs. get_stats then counts how often each pair appears in a dict mapping (a, b) to count."
+  },
+  {
+    "id": "04.2-033",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "What does the BPE helper merge(ids, pair, new_id) do when it finds the pair at position i?",
+    "options": [
+      "Appends new_id to the output and advances i by 2 to skip both symbols",
+      "Appends both original symbols followed by new_id, then advances i by 1",
+      "Replaces only the first symbol with new_id and advances i by 1 to keep scanning",
+      "Stops scanning and returns the list with that single occurrence fused"
+    ],
+    "answer_index": 0,
+    "explanation": "merge scans left to right; when ids[i], ids[i+1] equal the pair it emits new_id and skips past both (i += 2), otherwise it copies ids[i] and advances by 1. It fuses every non-overlapping occurrence, not just the first."
+  },
+  {
+    "id": "04.2-034",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the from-scratch BPE train(), how many merge iterations are attempted for a target vocab_size?",
+    "options": [
+      "vocab_size, one iteration for each entry in the final vocabulary",
+      "256, one iteration per possible byte value in the base alphabet",
+      "log2(vocab_size), since each merge round doubles the current vocabulary",
+      "vocab_size − 256, one iteration per merge on top of the byte alphabet"
+    ],
+    "answer_index": 3,
+    "explanation": "train() loops for i in range(vocab_size - 256), because the 256 bytes already exist and each iteration adds one merge with id 256 + i. It may break early if no pair repeats."
+  },
+  {
+    "id": "04.2-035",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the from-scratch BPE train(), why does the loop break if stats[pair] < 2?",
+    "options": [
+      "Pairs seen fewer than twice make merge() index past the end of the id list and raise an IndexError",
+      "Python dicts keyed by tuples cannot reliably store pairs whose count is exactly one",
+      "If even the most frequent pair occurs once, nothing repeats, so further merges would not compress",
+      "It guarantees the final vocabulary size is always a power of two, which GPUs handle best"
+    ],
+    "answer_index": 2,
+    "explanation": "The most frequent pair is chosen with max(stats, key=stats.get). If its count is below 2, no pair repeats, so merging would only add useless vocabulary entries without shortening the corpus. The loop stops early."
+  },
+  {
+    "id": "04.2-036",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the from-scratch BPE train(), how is the byte string for a new merged id computed?",
+    "options": [
+      "self.vocab[new_id] = bytes([new_id]), storing the new id itself encoded as a single byte",
+      "self.vocab[new_id] = self.vocab[pair[0]] + self.vocab[pair[1]], concatenating the children's bytes",
+      "self.vocab[new_id] is left empty during training and filled in lazily the first time decode sees it",
+      "self.vocab[new_id] = the most common corpus word containing the pair, stored as UTF-8 bytes"
+    ],
+    "answer_index": 1,
+    "explanation": "Each new id stores the concatenation of its two children's byte strings, so every id — byte or merged — always knows the exact bytes it stands for. That is what makes decode a pure lookup."
+  },
+  {
+    "id": "04.2-037",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the from-scratch BPE encode(), what does min(stats, key=lambda p: self.merges.get(p, float(\"inf\"))) select?",
+    "options": [
+      "The present pair with the lowest occurrence count in the input, so that rare pairs fuse first",
+      "The present pair with the smallest merge id (learned earliest); unlearned pairs rank last",
+      "The present pair with the smallest byte values, which keeps ASCII letters merging first",
+      "The present pair that appears first in the input string, scanning from left to right"
+    ],
+    "answer_index": 1,
+    "explanation": "For a learned pair the key is its merge id, its rank: smaller id means learned earlier and applied first. Unlearned pairs get float(\"inf\"), larger than any real id. So min picks the earliest-learned present pair and never prefers an unlearned one."
+  },
+  {
+    "id": "04.2-038",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "Why does the BPE encode() key use float(\"inf\") as the default in self.merges.get(p, float(\"inf\"))?",
+    "options": [
+      "Unlearned pairs need a key above every real merge id; otherwise .get returns None and min crashes",
+      "It marks the end of the input, so the while loop knows when there is nothing left to encode",
+      "It converts every merge id to a float so the ranks can be averaged across present pairs",
+      "It forces unlearned pairs to sort first, so encoding tries novel pairs before the learned ones do"
+    ],
+    "answer_index": 0,
+    "explanation": "min needs a comparable number for every present pair. A never-learned pair has no merge id, so the default float(\"inf\") ranks it after all learned pairs. Without a default, .get would return None and comparing None with an int raises an error."
+  },
+  {
+    "id": "04.2-039",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "In the from-scratch BPE encode(), when does min() return an unlearned pair, and what happens then?",
+    "options": [
+      "Whenever an unlearned pair is more frequent than every learned one; it is then merged into a new id",
+      "Never; min filters unlearned pairs out of stats before comparing, so it cannot return one",
+      "On the first iteration only; the loop then restarts from raw bytes using the learned pairs",
+      "Only when every present pair is unlearned; then 'if pair not in self.merges' breaks the loop"
+    ],
+    "answer_index": 3,
+    "explanation": "Because unlearned pairs have key infinity, min only returns one when all present pairs are unlearned. Then 'if pair not in self.merges: break' stops encoding, since no further merge can apply."
+  },
+  {
+    "id": "04.2-040",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "With merges = {(104, 105): 256} (only h+i learned), what does the from-scratch BPE encode(\"hi!\") return?",
+    "options": [
+      "[104, 105, 33] — three raw bytes",
+      "[256] — one token for the whole string",
+      "[256, 33] — two tokens",
+      "[104, 256] — two tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "'hi!' is [104, 105, 33]. Round 1: (104,105) has key 256 and (105,33) has key inf, so min picks (104,105) and merges it, giving [256, 33]. Round 2: the only pair (256,33) is unlearned, so the loop breaks. The result is two tokens."
+  },
+  {
+    "id": "04.2-041",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "What types does the from-scratch BPE tokenizer produce from encode()?",
+    "options": [
+      "A torch.long tensor already moved to the GPU, ready to feed into the embedding layer",
+      "A NumPy uint8 array holding one raw byte per entry, to keep memory small",
+      "A plain Python list[int]; only the data loader turns ids into a torch.long tensor",
+      "A torch.float32 tensor of ids normalized to [0, 1] by dividing by vocab_size"
+    ],
+    "answer_index": 2,
+    "explanation": "The tokenizer works with plain Python ints and bytes — no tensors, dtype, or device. encode returns a list[int]. Converting lists of ids into a torch.long tensor happens later in the data loader."
+  },
+  {
+    "id": "04.2-042",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "Why is the from-scratch BPE training loop too slow for gigabytes of text?",
+    "options": [
+      "It uses floating-point arithmetic for every pair count, which is slow in pure Python",
+      "It does O(n) work per merge because it re-scans the whole sequence each time",
+      "It must run on a GPU but the code only supports CPU",
+      "It stores the whole corpus as a tensor, which cannot exceed 2 GB on a single device"
+    ],
+    "answer_index": 1,
+    "explanation": "Each merge re-counts all pairs and rewrites the whole sequence, so training costs O(n) per merge — fine for tiny corpora, far too slow at scale. Production tokenizers run the same algorithm with a Rust core and incremental pair counts."
+  },
+  {
+    "id": "04.2-043",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "6. The from-scratch implementation",
+    "question": "How do production tokenizers like tiktoken or HuggingFace tokenizers differ from the from-scratch BPE?",
+    "options": [
+      "Same algorithm, built for speed: Rust core, incremental pair counts, and a regex pre-split",
+      "They replace merges with a small neural network that scores candidate splits for every word",
+      "They use large word-level vocabularies with an <unk> token instead of a byte fallback",
+      "They skip the byte alphabet and start merging from Unicode code points to save memory"
+    ],
+    "answer_index": 0,
+    "explanation": "tiktoken and HuggingFace tokenizers run the identical byte-level BPE algorithm with a Rust core, incremental pair counts, and the regex split. Same math, engineered for throughput. The course implements the mechanism first, then reaches for the fast library."
+  },
+  {
+    "id": "04.2-044",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "7. Token count shrinks as merges grow",
+    "question": "With zero BPE merges (vocabulary of 256), how long is the encoding of a corpus?",
+    "options": [
+      "Exactly its word count, since each word starts as one symbol",
+      "Exactly its character count, regardless of encoding",
+      "Zero, because no tokens exist before the first merge",
+      "Exactly its raw byte count — it is a byte-level tokenizer"
+    ],
+    "answer_index": 3,
+    "explanation": "With no merges, every byte is its own token, so a 34-byte corpus encodes to 34 tokens. This is exactly the byte-level tokenizer. For non-ASCII text the byte count exceeds the character count."
+  },
+  {
+    "id": "04.2-045",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "7. Token count shrinks as merges grow",
+    "question": "Why do real BPE vocabularies stop in the tens of thousands instead of chasing ever-shorter sequences?",
+    "options": [
+      "Tokenizer ids are stored as uint16, so vocabularies can never represent ids above 65,535",
+      "After roughly 50,000 merges, BPE starts making sequences longer again because merged tokens begin to overlap",
+      "Merges beyond about 32k break the decode(encode(s)) == s round-trip guarantee on rare text",
+      "On real text the length curve flattens — later merges save less — while each extra row costs parameters"
+    ],
+    "answer_index": 3,
+    "explanation": "Early merges capture very frequent pairs and remove many symbols; later merges target progressively rarer pairs and save fewer tokens. Past a point, extra rows cost embedding parameters and gradient sparsity for little length savings. Round-tripping never breaks, and id width is not the limit."
+  },
+  {
+    "id": "04.2-046",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "7. Token count shrinks as merges grow",
+    "question": "Moving to a BPE tokenizer with more merges buys what, at what cost?",
+    "options": [
+      "A smaller embedding table, at the cost of longer sequences",
+      "Exact round-tripping, at the cost of slower decoding",
+      "Shorter sequences, at the cost of a wider embedding table",
+      "Fewer special tokens, at the cost of more <unk> tokens"
+    ],
+    "answer_index": 2,
+    "explanation": "More merges means a larger V and shorter encodings — the concrete face of the V-vs-T trade-off. The cost is a wider embedding table and output layer. Round-tripping holds at any size, and BPE has no <unk>."
+  },
+  {
+    "id": "04.2-047",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "What refinement does GPT-2 add to plain byte-level BPE?",
+    "options": [
+      "It lowercases and Unicode-normalizes all text before counting any pairs, to shrink the vocabulary",
+      "It first splits text with a regular expression into chunks and only allows merges within a chunk",
+      "It removes all spaces before training and has the decoder re-insert them between words",
+      "It merges triples of adjacent bytes instead of pairs, so units grow three times as fast"
+    ],
+    "answer_index": 1,
+    "explanation": "Before counting pairs, GPT-2 splits text with a regex into chunks — roughly runs of letters, numbers, and punctuation, with leading spaces attached to the following word. BPE merges are only allowed within a chunk, never across boundaries. It still merges pairs and preserves case and spaces."
+  },
+  {
+    "id": "04.2-048",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "In GPT-2's regex pre-tokenization, where do leading spaces go?",
+    "options": [
+      "They are attached to the following word, so ' the' and ' dog' are chunks",
+      "They are attached to the preceding word, so 'the ' and 'dog ' are the chunks",
+      "They become separate one-byte chunks that are never merged with anything",
+      "They are deleted by the regex and re-inserted by the decoder between words"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT-2's regex attaches a leading space to the following word. That is why it tends to tokenize a leading-space-plus-word as one clean token like ' the' or ' dog'. Spaces are kept as bytes, not deleted."
+  },
+  {
+    "id": "04.2-049",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "Why does GPT-2 forbid BPE merges across regex chunk boundaries?",
+    "options": [
+      "To stop greedy merges straddling a word and punctuation (like 'dog.') and fusing numbers with words",
+      "To let the tokenizer train in parallel, one worker per chunk, without locking the shared pair counts",
+      "To guarantee every word in the corpus becomes exactly one token once training has finished",
+      "To cap the vocabulary at 256 entries per chunk type, keeping the embedding table small"
+    ],
+    "answer_index": 0,
+    "explanation": "Without the split, greedy BPE could learn units like 'dog.' or 'the \"' that mix a word with its neighbour's punctuation, or fuse numbers with words. Restricting merges to chunks keeps tokens clean. It does not guarantee one token per word."
+  },
+  {
+    "id": "04.2-050",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "What consequence of GPT-2's regex pre-split affects how numbers tokenize?",
+    "options": [
+      "Every number becomes exactly one token regardless of how many digits it has",
+      "Numbers are spelled out as English words before tokenization begins",
+      "Numbers are replaced by a single <num> special token and the digits are dropped",
+      "Long numbers break into digit-chunks rather than fusing with surrounding words"
+    ],
+    "answer_index": 3,
+    "explanation": "The regex separates runs of numbers from letters and punctuation, and merges stay within chunks, so long numbers break into digit-chunks. This is one reason numbers tokenize oddly. Numbers are not converted or replaced with a special token."
+  },
+  {
+    "id": "04.2-051",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "Which facts about GPT-2's tokenizer are publicly documented?",
+    "options": [
+      "Its exact training corpus, plus the token count of every document in it",
+      "The exact merge lists of all the newer GPT-4-class proprietary models",
+      "The regex pre-split, the byte-level BPE design, and the vocabulary size of 50,257",
+      "The tokenizer's private held-out test set together with its benchmark compression scores"
+    ],
+    "answer_index": 2,
+    "explanation": "The GPT-2 regex, byte-level BPE design, and vocabulary size 50,257 are publicly documented in the GPT-2 paper and OpenAI's released code. The precise merge lists of proprietary newer models are generally not documented."
+  },
+  {
+    "id": "04.2-052",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "What is safe to say about the tokenizer of a proprietary GPT-4-class model?",
+    "options": [
+      "It uses exactly the GPT-2 vocabulary of 50,257 tokens, unchanged since 2019 for backward compatibility",
+      "Same byte-level-BPE-with-regex-presplit family, but its exact merge list is generally undocumented",
+      "It is a word-level tokenizer with a very large vocabulary and an <unk> fallback for rare words",
+      "Its full merge list is published alongside the model weights, so anyone can reproduce it exactly"
+    ],
+    "answer_index": 1,
+    "explanation": "Following the honesty rule, you should not assume a specific vocabulary for GPT-4-class models — their precise merge lists are generally not documented. What is safe to say is they use the same byte-level BPE with regex pre-split family."
+  },
+  {
+    "id": "04.2-053",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "8. GPT-2's byte-level BPE and the regex pre-split",
+    "question": "Which paper introduced byte-level BPE with a regex pre-tokenization split, and why did it go byte-level?",
+    "options": [
+      "BERT (Devlin et al., 2018), so masked language modeling could predict any byte, including rare ones",
+      "GPT-2 (Radford et al., 2019), to guarantee no out-of-vocabulary inputs while keeping the vocabulary modest",
+      "Attention Is All You Need (Vaswani et al., 2017), to shorten sequences and cut the quadratic attention cost",
+      "GPT-3 (Brown et al., 2020), so in-context learning prompts could contain arbitrary Unicode text"
+    ],
+    "answer_index": 1,
+    "explanation": "Byte-level BPE with a regex pre-split is introduced in the GPT-2 paper by Radford et al., 2019. Its section 2.2 explains that going byte-level guarantees no out-of-vocabulary inputs while keeping the vocabulary modest."
+  },
+  {
+    "id": "04.2-054",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "9. A unit test that pins the behavior down",
+    "question": "What does the BPE test test_roundtrip_unicode_emoji_and_accents check?",
+    "options": [
+      "decode(encode(s)) == s for emoji, accents, and unseen scripts, plus the empty and one-char strings",
+      "That every emoji is mapped to one dedicated <emoji> special token instead of being kept as raw bytes",
+      "That the tokenizer raises a ValueError when asked to encode any character never seen in training",
+      "That every accented character in the French-ish corpus becomes exactly one merged token"
+    ],
+    "answer_index": 0,
+    "explanation": "The test trains on a small French-ish corpus and asserts exact round-trip on strings including 😀, 🚀, 日本語, accents, \"\" and \"a\". This holds thanks to the byte fallback — unseen characters stay as bytes."
+  },
+  {
+    "id": "04.2-055",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "9. A unit test that pins the behavior down",
+    "question": "What does the BPE test test_training_creates_merges_and_compresses assert?",
+    "options": [
+      "Training learns exactly 20 merges and the encoded corpus is at most half its raw byte length",
+      "Every distinct word in the training corpus becomes a single token after training finishes",
+      "The final vocabulary size equals the number of distinct words found in the training corpus",
+      "Training learns at least one merge and the encoded corpus is shorter than its raw byte count"
+    ],
+    "answer_index": 3,
+    "explanation": "It checks len(tok.merges) > 0 (training actually learned merges) and len(tok.encode(corpus)) < raw byte length (it shortened the corpus). It does not require an exact merge count or one token per word."
+  },
+  {
+    "id": "04.2-056",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "9. A unit test that pins the behavior down",
+    "question": "What invariant does test_vocab_size_is_256_plus_num_merges assert for the BPE tokenizer?",
+    "options": [
+      "tok.vocab_size == len(tok.merges)",
+      "tok.vocab_size == 2 * len(tok.merges)",
+      "tok.vocab_size == 256 + len(tok.merges)",
+      "tok.vocab_size == 256 * len(tok.merges)"
+    ],
+    "answer_index": 2,
+    "explanation": "The vocabulary is the 256 base bytes plus one entry per learned merge, so vocab_size must equal 256 + number of merges. The other formulas ignore the base bytes or assume merges add more than one entry each."
+  },
+  {
+    "id": "04.2-057",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Exercise",
+    "question": "To save and load a trained BPE tokenizer, what is the minimal state you must persist?",
+    "options": [
+      "Only the id→bytes vocabulary; the ordered merges can always be recomputed from it on load",
+      "The full training corpus, so the tokenizer can be retrained deterministically each time it is loaded",
+      "Only the ordered merge list; the vocab is rebuilt by replaying merges over the 256 base bytes",
+      "Both the vocab and a frequency count for every pair, so encode can rank pairs by count"
+    ],
+    "answer_index": 2,
+    "explanation": "decode needs vocab and encode needs merges, but vocab is derivable: replay the merges in order, concatenating child bytes, exactly as train does. So the ordered merge list is the entire learned state. This is essentially the format of GPT-2's released merges.txt."
+  },
+  {
+    "id": "04.2-058",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Exercise",
+    "question": "When loading a BPE tokenizer saved as one 'a b' line per merge, how is each merge's new id determined?",
+    "options": [
+      "new_id is stored explicitly as a third column on each 'a b' line",
+      "new_id = 256 + line number, because merges were written in learned order",
+      "new_id = a + b, the sum of the two child ids, which is always unique",
+      "new_id is chosen at random on load and recorded in a separate id-map file"
+    ],
+    "answer_index": 1,
+    "explanation": "The save routine writes merges sorted by their id, one pair per line, so the i-th line's merge has id 256 + i. On load, vocab is reset to the 256 bytes and each merge's bytes are rebuilt as vocab[a] + vocab[b]."
+  },
+  {
+    "id": "04.2-059",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Exercise",
+    "question": "Which released GPT-2 file uses essentially the 'one ordered merge per line' format?",
+    "options": [
+      "merges.txt",
+      "vocab.json",
+      "config.json",
+      "pytorch_model.bin"
+    ],
+    "answer_index": 0,
+    "explanation": "Persisting just the ordered merge list, one pair per line, is essentially the format of GPT-2's released merges.txt. The vocabulary is a derived cache that can be rebuilt from it."
+  },
+  {
+    "id": "04.2-060",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "A buggy BPE encode() picks the pair with max(stats, key=stats.get), copied from train(). What is wrong?",
+    "options": [
+      "It should use min(stats, key=stats.get) instead, so the rarest pair in the input is fused first",
+      "max cannot be applied to a dict keyed by tuples, so it raises a TypeError at runtime",
+      "It merges the chosen pair twice per step, producing duplicate ids in the output list",
+      "It picks pairs by frequency in the input instead of by how early training learned them"
+    ],
+    "answer_index": 3,
+    "explanation": "In train, picking the most frequent pair is how a merge gets learned. In encode the merges are fixed, and the correct question is which present pair has the smallest merge id. The fix is pair = min(stats, key=lambda p: self.merges.get(p, float(\"inf\")))."
+  },
+  {
+    "id": "04.2-061",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "When several keys tie in Python's max(stats, key=stats.get), which one does max return?",
+    "options": [
+      "The last one it encounters",
+      "A random one among the tied keys",
+      "The one with the largest key value",
+      "The first one it encounters"
+    ],
+    "answer_index": 3,
+    "explanation": "max returns the first maximal element it sees when keys tie. In the buggy BPE encode on 'newest', all five pair counts are 1, so max returns the first pair (110, 101), 'n e'."
+  },
+  {
+    "id": "04.2-062",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Why does the buggy max-frequency BPE encode() return raw bytes for 'newest' even though (e, s) was learned?",
+    "options": [
+      "merge() silently fails on pairs that appear only once, so every fusion in 'newest' is a no-op",
+      "The learned pair (e, s) is skipped because encode only ever fuses pairs at the start or the end of a word",
+      "max returns the unlearned pair (n, e), so the 'if pair not in self.merges: break' guard fires at once",
+      "get_stats only counts pairs made of two consonants, so the vowel-containing (e, s) is never seen"
+    ],
+    "answer_index": 2,
+    "explanation": "All pairs tie at count 1, so max returns (110, 101) = n e, which was never learned. The guard breaks on the first round, so the learned pair (e, s) in the same sequence is never reached and nothing is merged — 6 tokens instead of 4."
+  },
+  {
+    "id": "04.2-063",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Debugging exercise",
+    "question": "Why is the 'if pair not in self.merges: break' guard correct in the proper BPE encode() but harmful in the max-frequency version?",
+    "options": [
+      "The guard is harmful in both versions; a correct encoder must keep scanning past unlearned pairs until the whole string ends",
+      "With the merge-id key min prefers learned pairs, so break means none apply; with max it fires when the top pair is unlearned",
+      "In the proper version the guard is never reached, because min only ever returns pairs from the merge table",
+      "With max, the guard raises a KeyError instead of breaking, because self.merges is indexed before the check"
+    ],
+    "answer_index": 1,
+    "explanation": "In the correct loop, min with the merge-id key always picks a learned pair if one exists, so breaking means no merge applies. In the buggy loop, the most frequent pair in new text (like 'z z' or 'n e') is often unlearned, so it breaks early while learned pairs remain."
+  },
+  {
+    "id": "04.2-064",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why is 'the BPE vocabulary' of a corpus not unique, and what does that imply for shipping a model?",
+    "options": [
+      "Greedy tie-breaking is a free choice, so implementations learn different merges; the exact list must ship",
+      "BPE is randomized on every run, so each user must retrain the tokenizer and fine-tune the model to match",
+      "The vocabulary depends on the GPU type used in training, so models ship one tokenizer per supported device family",
+      "Vocabularies are unique for a given corpus, so only the corpus name and vocabulary size need to ship"
+    ],
+    "answer_index": 0,
+    "explanation": "Two tokenizers trained on the same corpus with different tie-breaks are both valid but encode text into different id sequences. A model's embeddings are tied to specific ids, so you must ship the exact merge list with it."
+  },
+  {
+    "id": "04.2-065",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Check yourself",
+    "question": "With the three-merge tokenizer (e,s)→256, (es,t)→257, (est,space)→258, what is the encoding of 'widest'?",
+    "options": [
+      "[119, 105, 100, 257] — w, i, d, est (4 tokens)",
+      "[119, 105, 100, 258] — w, i, d, 'est ' (4 tokens)",
+      "[119, 105, 100, 256, 116] — w, i, d, es, t (5 tokens)",
+      "[257] — a single token"
+    ],
+    "answer_index": 0,
+    "explanation": "widest is w i d e s t. Merge 0 fuses e s → es, merge 1 fuses es t → est. There is no trailing space, so merge 2 does not fire. Result: 4 tokens, sharing suffix token 257 with newest and lowest."
+  },
+  {
+    "id": "04.2-066",
+    "chapter": "04.2",
+    "chapter_name": "Byte-Pair Encoding from scratch",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-02.md",
+    "section": "Check yourself",
+    "question": "On real text, why do later BPE merges shorten sequences less than early merges?",
+    "options": [
+      "Later merges produce longer tokens that the encoder must split again whenever they happen to cross a regex chunk boundary",
+      "Later merges are only applied near the end of each document, where the remaining byte pairs are concentrated",
+      "Early merges are applied twice during encoding, once on the raw bytes and once on the merged sequence",
+      "Early merges fuse the most frequent pairs and fire across the corpus; later ones fuse rarer pairs and fire less"
+    ],
+    "answer_index": 3,
+    "explanation": "Early merges fuse very common pairs and remove many symbols; later merges fuse progressively rarer pairs that occur on less text. Sequence length falls fast then flattens, so beyond the tens of thousands extra rows cost parameters and gradient sparsity for little gain."
+  }
+]

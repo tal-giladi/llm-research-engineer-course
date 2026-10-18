@@ -1,0 +1,2126 @@
+[
+  {
+    "id": "01.4-001",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "What exact objective does a language model minimize during pretraining?",
+    "options": [
+      "The KL divergence from the model's softmax distribution to the uniform distribution",
+      "The mean squared error between the predicted token ids and the true next-token ids",
+      "The mean cross-entropy between the model's softmax distribution and the true next token",
+      "The entropy of the model's softmax distribution, averaged over every position"
+    ],
+    "answer_index": 2,
+    "explanation": "Pretraining minimizes the average over positions of $-\\log q_i(t_i)$, the cross-entropy against one-hot true tokens. Token ids are categories, not numbers, so squared error is meaningless. Minimizing the model's own entropy or distance to uniform is not the objective."
+  },
+  {
+    "id": "01.4-002",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How is perplexity defined in terms of the cross-entropy loss $\\mathcal{L}$ in nats?",
+    "options": [
+      "$1/\\mathcal{L}$",
+      "$2^{\\mathcal{L}}$",
+      "$\\exp(\\mathcal{L})$",
+      "$\\log(\\mathcal{L})$"
+    ],
+    "answer_index": 2,
+    "explanation": "Perplexity is the exponential of the mean cross-entropy. With the loss in nats, the base is $e$; $2^{\\mathcal{L}}$ applies only if the loss is in bits. Taking the log or reciprocal does not give perplexity."
+  },
+  {
+    "id": "01.4-003",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Prerequisites / You will learn / Why this matters",
+    "question": "How is training progress for language models commonly reported?",
+    "options": [
+      "As the mean absolute logit over the vocabulary",
+      "As classification accuracy on the vocabulary",
+      "As the number of parameters updated per step",
+      "As perplexity (or the loss it exponentiates)"
+    ],
+    "answer_index": 3,
+    "explanation": "Every pretraining run minimizes the cross-entropy loss, and progress is reported as perplexity, its human-readable exponential. Accuracy, parameter counts, and logit magnitudes are not the standard objective-tracking metric."
+  },
+  {
+    "id": "01.4-004",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "1. Intuition: next-token prediction is classification over the vocabulary",
+    "question": "What kind of machine learning problem is next-token prediction at a single position?",
+    "options": [
+      "A $V$-way classification problem, one class per vocabulary token",
+      "A clustering problem over the vocabulary",
+      "A regression problem predicting the token id as a real number",
+      "A binary classification of whether the next token is a word"
+    ],
+    "answer_index": 0,
+    "explanation": "Given the prefix $x_{<i}$, the model must pick the next token from $V$ possibilities, a $V$-way classification (with $V$ maybe 50257). Token ids are labels, so regression on them is wrong; it is not binary or unsupervised clustering."
+  },
+  {
+    "id": "01.4-005",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "1. Intuition: next-token prediction is classification over the vocabulary",
+    "question": "What is the order of the four-step pipeline that turns a model's output at one position into its loss?",
+    "options": [
+      "Logits → take $-\\log$ of each logit → softmax over the results → pick the true token",
+      "Logits → softmax distribution $q$ → pick true token probability $q(t)$ → take $-\\log$",
+      "Pick the true token's logit → softmax over that one value → take $-\\log$ of the result",
+      "Softmax over the raw targets → produce logits → take $-\\log$ → pick the true token"
+    ],
+    "answer_index": 1,
+    "explanation": "Raw scores (logits) become a distribution via softmax, then the probability of the true token is read off, then $-\\log$ gives the loss. Applying softmax to a single selected value would always give 1."
+  },
+  {
+    "id": "01.4-006",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "2. From logits to a distribution: softmax",
+    "question": "What are logits in a language model?",
+    "options": [
+      "Log-probabilities, one per token, that are always negative and sum to 1 after exponentiating",
+      "Unbounded real-valued scores, one per token, that do not form a probability distribution",
+      "Probabilities over the vocabulary that are non-negative and already sum to exactly 1",
+      "Integer token ids predicted by the model, one per position, before decoding to text"
+    ],
+    "answer_index": 1,
+    "explanation": "Logits are raw scores: they can be negative, positive, and do not sum to 1. Softmax turns them into probabilities. They are not ids, and they are not log-probabilities (log-softmax produces those)."
+  },
+  {
+    "id": "01.4-007",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "2. From logits to a distribution: softmax",
+    "question": "What is the softmax formula for converting logits $\\mathbf{z}$ to probabilities?",
+    "options": [
+      "$q_i = \\frac{1}{1 + \\exp(-z_i)}$ for each $i = 1, \\dots, V$",
+      "$q_i = \\frac{\\exp(z_i)}{\\max_{j \\le V} \\exp(z_j)}$",
+      "$q_i = \\frac{z_i}{\\sum_{j=1}^{V} z_j}$, normalized directly",
+      "$q_i = \\frac{\\exp(z_i)}{\\sum_{j=1}^{V} \\exp(z_j)}$"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax exponentiates each logit and divides by the sum of all exponentials. Dividing raw logits fails because they can be negative. Dividing by the max does not sum to 1, and the logistic sigmoid treats each token independently."
+  },
+  {
+    "id": "01.4-008",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "2. From logits to a distribution: softmax",
+    "question": "In softmax, which step ensures non-negativity, and which ensures the outputs sum to 1?",
+    "options": [
+      "Dividing by the sum ensures positivity; exponentiation of each logit ensures normalization",
+      "Exponentiation ensures positivity; dividing by the sum of exponentials ensures normalization",
+      "Subtracting the max ensures positivity; clipping negatives to zero ensures normalization",
+      "Taking the log ensures positivity; adding a constant to every logit ensures normalization"
+    ],
+    "answer_index": 1,
+    "explanation": "$\\exp(z_i)$ is always positive, fixing non-negativity, and dividing by $\\sum_j \\exp(z_j)$ forces the results to sum to 1. Subtracting the max is a numerical-stability step, not part of the definition."
+  },
+  {
+    "id": "01.4-009",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "2. From logits to a distribution: softmax",
+    "question": "How does softmax treat a logit that is larger than another?",
+    "options": [
+      "Larger logits get exponentially more probability",
+      "All logits get equal probability unless they differ by more than 1",
+      "Larger logits get linearly more probability",
+      "Larger logits get less probability"
+    ],
+    "answer_index": 0,
+    "explanation": "Because softmax exponentiates, the ratio of two tokens' probabilities is $e^{z_i - z_j}$: a 1-unit logit gap means a factor of $e \\approx 2.718$. The growth is exponential, not linear."
+  },
+  {
+    "id": "01.4-010",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "2.1 Worked example: a 4-token vocabulary",
+    "question": "For logits $(2, 1, 0, -1)$, softmax gives $(0.6439, 0.2369, 0.0871, 0.0321)$. What property of the ordering does this illustrate?",
+    "options": [
+      "The probabilities are equally spaced like the logits",
+      "The ordering of probabilities follows the ordering of the logits",
+      "The ordering is random and unrelated to the logits",
+      "The token with the lowest logit gets the highest probability"
+    ],
+    "answer_index": 1,
+    "explanation": "Softmax is monotone: the highest logit gives the highest probability, and so on. Equally spaced logits give probabilities in a constant ratio ($e$), not equal spacing."
+  },
+  {
+    "id": "01.4-011",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "Why is the per-token loss $-\\log q(t)$ for a one-hot true token, rather than a sum over all tokens?",
+    "options": [
+      "Because the loss only uses the largest probability the model assigns",
+      "Cross-entropy against a one-hot target keeps only the true token's term",
+      "Because the other tokens always receive equal probability from softmax",
+      "Because the other tokens' logits are discarded before the softmax step runs"
+    ],
+    "answer_index": 1,
+    "explanation": "With $p$ one-hot on $t$, $-\\sum_x p(x)\\log q(x)$ collapses to $-\\log q(t)$. The other logits are still used by softmax (in the denominator); they just don't get their own loss term."
+  },
+  {
+    "id": "01.4-012",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "What is the per-token loss if the model gives the correct token probability 1?",
+    "options": [
+      "$+\\infty$ nats",
+      "$\\log V$ nats",
+      "1 nat",
+      "0 nats"
+    ],
+    "answer_index": 3,
+    "explanation": "$-\\ln 1 = 0$: a fully confident correct prediction costs nothing. Infinite loss happens as the probability on the correct token goes to 0. $\\log V$ is the loss of a uniform model."
+  },
+  {
+    "id": "01.4-013",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "What happens to the per-token loss as the probability assigned to the true token approaches 0?",
+    "options": [
+      "It rises toward $+\\infty$",
+      "It falls toward 0 nats",
+      "It levels off at 1 nat",
+      "It approaches $\\log V$ nats"
+    ],
+    "answer_index": 0,
+    "explanation": "$-\\log q(t)$ grows without bound as $q(t)\\to 0$. Lower loss means more probability on the right token, and a near-zero probability on the truth is penalized enormously."
+  },
+  {
+    "id": "01.4-014",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "The per-token loss depends on which two things?",
+    "options": [
+      "The true token and the sequence length only, not the model's prediction",
+      "The model's entropy and the batch size, averaged over the whole batch",
+      "The model's predicted distribution $q$ and which token $t$ actually came next",
+      "The model's logits and the vocabulary size only, not which token occurred"
+    ],
+    "answer_index": 2,
+    "explanation": "Keep $q$ fixed and change the true token, and the loss changes: the loss is $-\\ln q(t)$, a lookup of whichever token occurred. Vocabulary size, sequence length or batch size do not determine a single position's loss."
+  },
+  {
+    "id": "01.4-015",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "With $q = (0.6439, 0.2369, 0.0871, 0.0321)$, the loss is 0.44 nats if token 0 is true but 3.44 nats if token 3 is true. Why?",
+    "options": [
+      "Because the model was retrained between the two examples, which shifted all of its probabilities",
+      "The model was confidently wrong: it put little probability on token 3, so $-\\ln q(3)$ is large",
+      "Because the per-token loss is proportional to the token's index, so token 3 costs about 3 more nats",
+      "Because token 3 has a larger vocabulary id, and larger ids carry a larger fixed penalty in the loss"
+    ],
+    "answer_index": 1,
+    "explanation": "The loss reads only $q(t)$. Token 3 got about 3% while token 0 got 64%, so the penalty is about 8 times larger. Token ids have no numeric meaning in the loss, and the model is unchanged."
+  },
+  {
+    "id": "01.4-016",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "For logits that step down by exactly 1 per token, the per-token losses for each possible true token step up by exactly 1 nat. Why?",
+    "options": [
+      "Because softmax probabilities are equally spaced when the logits are, so each loss rises by 1",
+      "Because $-\\ln q(t) = \\log\\sum_j e^{z_j} - z_t$, so each 1-unit drop in the true logit adds 1 nat",
+      "Because the natural log of consecutive integers always differs by exactly 1 nat",
+      "Because the loss is linear in the probability, so equal logit steps give equal loss steps"
+    ],
+    "answer_index": 1,
+    "explanation": "The log-sum-exp term is shared by the whole row, so the loss varies only through $-z_t$. A logit lower by 1 means a loss higher by exactly 1 nat. The probabilities themselves are in constant ratio, not equally spaced."
+  },
+  {
+    "id": "01.4-017",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "3. The per-token loss: negative log-probability of the true token",
+    "question": "In the per-token loss, how are the probabilities of the wrong tokens pushed down during training?",
+    "options": [
+      "A separate regularizer in the loss pushes each wrong token's probability toward 0",
+      "They are not affected by training at all, because their gradients are always exactly zero",
+      "Through softmax: raising $q(t)$ forces the others to shrink because they must sum to 1",
+      "Each wrong token has its own $-\\log(1-q(x))$ term in the loss that pushes it down"
+    ],
+    "answer_index": 2,
+    "explanation": "The loss formula contains only $q(t)$. But softmax couples all probabilities: increasing the true token's share necessarily lowers the others. Categorical cross-entropy has no per-wrong-token terms."
+  },
+  {
+    "id": "01.4-018",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4. The full objective: mean cross-entropy over all positions",
+    "question": "What is the full language-modeling objective $\\mathcal{L}$ over $N$ predicted positions?",
+    "options": [
+      "$\\mathcal{L} = -\\frac{1}{N}\\sum_{i=1}^{N} \\log q_i(t_i)$",
+      "$\\mathcal{L} = -\\log \\frac{1}{N}\\sum_{i=1}^{N} q_i(t_i)$",
+      "$\\mathcal{L} = -\\sum_{i=1}^{N} \\log q_i(t_i)$ without averaging",
+      "$\\mathcal{L} = \\frac{1}{N}\\sum_{i=1}^{N} (1 - q_i(t_i))$"
+    ],
+    "answer_index": 0,
+    "explanation": "The objective is the mean of per-token negative log-probabilities. The sum is the sequence NLL, but the reported loss is averaged. Log of the average probability is a different quantity, and $1 - q$ is not a log loss."
+  },
+  {
+    "id": "01.4-019",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4. The full objective: mean cross-entropy over all positions",
+    "question": "Why does minimizing the mean per-token loss $\\mathcal{L}$ amount to maximizing the likelihood of the training text?",
+    "options": [
+      "Because each token is assumed independent of the others, so their log-probabilities add up",
+      "Because likelihood and loss are both bounded between 0 and 1, so one is one minus the other",
+      "By the chain rule, $\\sum_i \\log q_i(t_i)$ is the log-probability of the whole sequence",
+      "Because the mean loss equals the probability of the sequence, divided by its length"
+    ],
+    "answer_index": 2,
+    "explanation": "The chain rule factorizes the sequence probability into a product of conditionals, so its log is the sum of per-token log-probabilities. No independence assumption is needed, since each $q_i$ conditions on the prefix. The loss is a negative log, not a probability."
+  },
+  {
+    "id": "01.4-020",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4. The full objective: mean cross-entropy over all positions",
+    "question": "Why is the language-modeling loss averaged over positions rather than summed?",
+    "options": [
+      "Because averaging makes the loss independent of the model's parameters and their scale",
+      "Because summing would give the wrong gradient direction for long sequences",
+      "So it is a per-token quantity comparable across sequence lengths and batch sizes",
+      "Because the sum is always infinite for sequences longer than the context window"
+    ],
+    "answer_index": 2,
+    "explanation": "The sum grows with the number of tokens even when quality per token is unchanged; the mean stays on the same scale. Both point gradients in the same direction (the mean just rescales). The sum is finite."
+  },
+  {
+    "id": "01.4-021",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4. The full objective: mean cross-entropy over all positions",
+    "question": "In what unit is the averaged language-modeling loss expressed when natural logs are used?",
+    "options": [
+      "Bits per sequence",
+      "Nats per token",
+      "Tokens per nat",
+      "Nats per batch"
+    ],
+    "answer_index": 1,
+    "explanation": "Natural logs give nats, and averaging over predicted positions makes it per token. Bits would require $\\log_2$, and per-batch or per-sequence totals are what averaging removes."
+  },
+  {
+    "id": "01.4-022",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4.1 Worked example: the loss of `the cat sat`",
+    "question": "How does the sum of per-token losses for a sentence relate to the sentence's likelihood?",
+    "options": [
+      "The sum equals the negative log of the likelihood (the product of the per-token probabilities)",
+      "The sum equals one minus the likelihood (the product of the per-token probabilities)",
+      "The sum equals the likelihood itself, i.e. the product of all the per-token probabilities",
+      "The sum equals the log of the likelihood (the sum of the per-token log-probabilities)"
+    ],
+    "answer_index": 0,
+    "explanation": "For example, true-token probabilities $0.2, 0.5, 0.6$ give likelihood $0.06$ and $\\ln 0.06 \\approx -2.8134$, while the losses sum to $2.8133$. The sum is the negative log-likelihood; dividing by the number of tokens gives $\\mathcal{L}$."
+  },
+  {
+    "id": "01.4-023",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4.1 Worked example: the loss of `the cat sat`",
+    "question": "A text is repeated twice and the model is equally good at every position. What happens to the summed loss and the mean loss?",
+    "options": [
+      "The sum doubles while the mean stays the same",
+      "The mean doubles while the sum stays the same",
+      "Both stay the same, since the text is unchanged",
+      "Both double, since there are twice as many tokens"
+    ],
+    "answer_index": 0,
+    "explanation": "With the same per-position losses repeated, the total doubles but so does the count, so the mean is unchanged. The sum would wrongly suggest the model got worse; the mean correctly reports the same per-token quality."
+  },
+  {
+    "id": "01.4-024",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "4.1 Worked example: the loss of `the cat sat`",
+    "question": "Two models are compared on the same sentence. The one with higher mean loss has what likelihood relative to the other?",
+    "options": [
+      "Higher likelihood, since a higher loss means the model assigns more mass",
+      "Lower likelihood, giving the same ranking as maximum likelihood estimation",
+      "It cannot be determined from the loss without knowing the vocabulary size",
+      "The same likelihood, since the mean loss does not depend on the likelihood at all"
+    ],
+    "answer_index": 1,
+    "explanation": "Loss is negative log-likelihood (per token), so higher loss means lower likelihood. For instance, a model with true-token probabilities $0.2, 0.1, 0.3$ has mean loss 1.7053 and likelihood 0.006, worse than one with $0.2, 0.5, 0.6$ (loss 0.9378, likelihood 0.06)."
+  },
+  {
+    "id": "01.4-025",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "In a real model, what are the shape, dtype and device of the logits tensor?",
+    "options": [
+      "Shape `(V, B, T)`, float16 (often int8 in training), on the CPU host",
+      "Shape `(B, T)`, int64 token ids (one per position), on the GPU",
+      "Shape `(B, V)`, float32 (one row per sequence), on the CPU",
+      "Shape `(B, T, V)`, float32 (often bf16 in training), on the GPU"
+    ],
+    "answer_index": 3,
+    "explanation": "Logits hold one length-$V$ score vector for each of $T$ positions in each of $B$ sequences: `(B, T, V)`, floating point, on the accelerator. `(B, T)` is the shape of the targets, and ids are int64."
+  },
+  {
+    "id": "01.4-026",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "What are the shape and dtype of the targets tensor for language-model training?",
+    "options": [
+      "Shape `(B,)`, dtype `int64`, one token index per sequence in $[0, V)$",
+      "Shape `(B, T)`, dtype `float32`, each entry a probability in $[0, 1]$",
+      "Shape `(B, T, V)`, dtype `float32`, each row a one-hot vector over $V$",
+      "Shape `(B, T)`, dtype `int64` (long), each entry a token index in $[0, V)$"
+    ],
+    "answer_index": 3,
+    "explanation": "Targets are integer indices of the true next token at each position, one per (sequence, position): `(B, T)` int64 on the same device as the logits. They are not one-hot float tensors."
+  },
+  {
+    "id": "01.4-027",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "Before computing the loss, how are logits `(B, T, V)` and targets `(B, T)` reshaped?",
+    "options": [
+      "Logits to `(B*T, V)` and targets to `(B*T,)`",
+      "Logits to `(V, B*T)` and targets to `(B, T)`",
+      "Logits to `(B*T*V,)` and targets to `(B*T*V,)`",
+      "Logits to `(B, T*V)` and targets to `(B*T,)`"
+    ],
+    "answer_index": 0,
+    "explanation": "Flattening the first two axes makes each (sequence, position) an independent $V$-way classification example: one row of $V$ logits with one target index. Flattening $T$ and $V$ together would destroy the vocabulary axis."
+  },
+  {
+    "id": "01.4-028",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "What is the shape of the final language-modeling loss?",
+    "options": [
+      "`(B, T)`, one loss per position",
+      "`(B,)`, one loss per sequence",
+      "A scalar, shape `()`",
+      "`(V,)`, one loss per vocabulary token"
+    ],
+    "answer_index": 2,
+    "explanation": "One cross-entropy is computed per row of the `(B*T, V)` logits and then averaged to a single scalar of shape `()`. Per-position losses `(B*T,)` exist only as an intermediate before the mean."
+  },
+  {
+    "id": "01.4-029",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "Which axis of the logits does softmax normalize over, and which axis does the target index select from?",
+    "options": [
+      "Softmax over `B`, target selects from `T`",
+      "Softmax over `T`, target selects from `V`",
+      "The vocabulary axis `V` for both",
+      "The time axis `T` for both"
+    ],
+    "answer_index": 2,
+    "explanation": "At each position, softmax normalizes over the $V$ token scores, and the true token index picks one of those $V$ entries. Normalizing over time or batch would mix different predictions."
+  },
+  {
+    "id": "01.4-030",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5. Tensor shapes: what this looks like in a real model",
+    "question": "Why is it valid to flatten `(B, T, V)` logits into `(B*T, V)` and average the per-row losses?",
+    "options": [
+      "Because positions within a sequence never depend on each other inside the model, so their order can safely be discarded entirely",
+      "Because flattening removes the causal mask, letting every row be scored against the full sequence at once",
+      "Each (sequence, position) is an independent classification example, and the chain rule makes averaging log-losses correct",
+      "Because the batch dimension is always 1 in practice, so flattening only drops a size-1 axis and changes nothing"
+    ],
+    "answer_index": 2,
+    "explanation": "The sequence log-likelihood is a sum of conditional log-probabilities, so treating each position as its own example and averaging is exactly the right objective. The model still conditions each position on its prefix; flattening only concerns the loss computation."
+  },
+  {
+    "id": "01.4-031",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "Given a batch `tokens` of shape `(B, T+1)`, how are model inputs and targets formed for next-token prediction?",
+    "options": [
+      "`inputs = tokens[:, :-1]` and `targets = tokens[:, :-1]`",
+      "`inputs = tokens[:, :-1]` and `targets = tokens[:, 1:]`",
+      "`inputs = tokens` and `targets = tokens`",
+      "`inputs = tokens[:, 1:]` and `targets = tokens[:, :-1]`"
+    ],
+    "answer_index": 1,
+    "explanation": "Inputs drop the last column and targets are the tokens shifted left by one, so the target at position $i$ is token $i+1$. Using the same slice for both would let the model learn to copy its input."
+  },
+  {
+    "id": "01.4-032",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "For the sequence `[1, 0, 2]` with inputs `[1, 0]`, what are the targets?",
+    "options": [
+      "`[0, 2]`: after `1` predict `0`; after `1, 0` predict `2`",
+      "`[2, 0]`: the reversed sequence, read from right to left",
+      "`[0]`: only the last position is trained, so one target",
+      "`[1, 0]`: each position predicts itself, copying the input"
+    ],
+    "answer_index": 0,
+    "explanation": "Targets are `tokens[:, 1:]`. Each input position predicts the following token, so a sequence of $T+1$ tokens yields $T$ predictions."
+  },
+  {
+    "id": "01.4-033",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "In a real language model, where do the logits at each input position come from?",
+    "options": [
+      "They are the input token ids converted to floats and broadcast to $V$ entries per position",
+      "They are computed by applying softmax to the targets, giving $V$ scores per position",
+      "A neural network (embeddings plus transformer) maps the inputs to $V$ scores per position",
+      "They are counted from corpus bigram statistics at training time, $V$ counts per position"
+    ],
+    "answer_index": 2,
+    "explanation": "At every input position the model outputs $V$ numbers, one score per vocabulary token meaning 'how much I think this token comes next'. They are produced by the network, not by ids, counts, or the targets."
+  },
+  {
+    "id": "01.4-034",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "Why do logits `[2, 1, 0]` and `[12, 11, 10]` produce the same loss?",
+    "options": [
+      "Only differences between logits matter; softmax is invariant to adding a constant",
+      "Because the loss is clipped at large logit values, so both rows saturate to the same value",
+      "Because both rows have the same maximum after rounding, which is all the loss reads",
+      "They produce different losses; larger logits mean more confidence and so a lower loss"
+    ],
+    "answer_index": 0,
+    "explanation": "Adding 10 to every logit multiplies numerator and denominator of softmax by $e^{10}$, which cancels. The probabilities and hence the loss are identical. Confidence depends on gaps between logits, not their absolute level."
+  },
+  {
+    "id": "01.4-035",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "All three logits at a position are equal, `[0, 0, 0]`. What does that mean, and what loss results for any true token?",
+    "options": [
+      "The logits are invalid because they are all zero, so the loss is left undefined",
+      "The model has no preference (uniform); it pays $\\ln 3 \\approx 1.0986$ nats",
+      "The model is certain of every token at once, so the loss is 0 nats",
+      "The model is maximally wrong about every token, so the loss is $+\\infty$"
+    ],
+    "answer_index": 1,
+    "explanation": "Equal logits give a uniform softmax, $1/3$ each, so the loss is $-\\ln(1/3) = \\ln 3$ regardless of the true token. That is the 'model shrugs' case, not certainty or invalidity."
+  },
+  {
+    "id": "01.4-036",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "At position 0 of input `[1, 0]` (true next token `0`), why must the model not look at the input token at position 1?",
+    "options": [
+      "Because only the very first token of each sequence is ever used as context for any prediction",
+      "Because position 1 has not been embedded yet when position 0's prediction is computed",
+      "Because tokens to the right of a position are always padding and carry no information",
+      "That token is exactly position 0's answer, so looking at it would let the model copy the target"
+    ],
+    "answer_index": 3,
+    "explanation": "The input at position 1 equals position 0's target. If position 0 could see it, it would get near-zero loss by copying and learn nothing. Each position may use only itself and what is to its left."
+  },
+  {
+    "id": "01.4-037",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "In a training sequence, which roles does a token (other than the first and last) play?",
+    "options": [
+      "It is only context for later positions and is never used as a target",
+      "It is the target for every position in the sequence, both before and after it",
+      "It is the target for the position before it and context for the positions after it",
+      "It is only a target for the position before it and is never used as context"
+    ],
+    "answer_index": 2,
+    "explanation": "Every token except the first is the target for the position before it, and every token except the last is context for later positions. The first token is never a target and the last is never context."
+  },
+  {
+    "id": "01.4-038",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "In a batch built with `inputs = tokens[:, :-1]`, which token of a sequence is never seen by the model at all?",
+    "options": [
+      "The last token, since nothing comes after it to use it as context",
+      "The middle token, since the causal mask hides it from every position",
+      "The first token, since it is never a target and so never enters the loss",
+      "None; every token in the sequence is seen as input at some position"
+    ],
+    "answer_index": 0,
+    "explanation": "The last token is only ever a target. It is not included in the inputs because no later position needs it as context. The first token is seen as input but is never a target."
+  },
+  {
+    "id": "01.4-039",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "Does predicting the thousandth token of a sequence differ in kind from predicting the second?",
+    "options": [
+      "Yes; only the last position of a sequence contributes to the loss, the rest are context",
+      "Yes; early positions are excluded from the loss because they have too little context",
+      "No; every position does the same job: given everything to its left, score what comes next",
+      "Yes; later positions use a different, length-normalized loss function than early ones"
+    ],
+    "answer_index": 2,
+    "explanation": "Every position contributes one row to the loss and performs the same task with its own prefix. There is nothing special about any position in the objective."
+  },
+  {
+    "id": "01.4-040",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "What does the causal mask enforce inside the model?",
+    "options": [
+      "Position $i$ may only see itself, never mixing in information from any other position",
+      "Position $i$ may only mix in information from positions to its right, never from its own left",
+      "Padding tokens are removed from the loss so they never contribute any gradient at all",
+      "Position $i$ may only mix in information from positions $0 \\dots i$, never from its right"
+    ],
+    "answer_index": 3,
+    "explanation": "The causal mask restricts each position's information mixing to itself and the past. It is a lower-triangular yes/no matrix. It is not about padding and does allow access to earlier positions."
+  },
+  {
+    "id": "01.4-041",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "How is the causal mask applied to attention scores?",
+    "options": [
+      "Disallowed slots get score 0 after softmax and the rest are renormalized by hand",
+      "Disallowed slots get score $+\\infty$ before softmax, so they dominate the weights",
+      "Disallowed slots are multiplied by a small epsilon after softmax to shrink them",
+      "Disallowed slots get score $-\\infty$ before softmax, so their weight becomes exactly 0"
+    ],
+    "answer_index": 3,
+    "explanation": "Setting a score to $-\\infty$ makes $e^{-\\infty} = 0$, so after softmax the future positions get exactly zero weight and no information flows from them. $+\\infty$ would do the opposite."
+  },
+  {
+    "id": "01.4-042",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "What is the shape of the causal mask over a length-2 input, in terms of 'yes/no' access?",
+    "options": [
+      "Diagonal: pos 0 reads pos 0 only; pos 1 reads pos 1 only",
+      "Upper-triangular: pos 0 reads pos 0 and pos 1; pos 1 reads only pos 1 itself",
+      "Full: pos 0 reads pos 0 and pos 1; pos 1 reads pos 0 and pos 1",
+      "Lower-triangular: pos 0 reads pos 0 only; pos 1 reads pos 0 and pos 1"
+    ],
+    "answer_index": 3,
+    "explanation": "The causal mask is lower-triangular: row $i$ allows columns $0..i$. Upper-triangular would let early positions see the future, which is exactly what the mask forbids."
+  },
+  {
+    "id": "01.4-043",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "What would happen to training without the causal mask?",
+    "options": [
+      "Positions could copy the next token from the input, reach near-zero loss, and learn nothing",
+      "The loss would become infinite immediately, because attention weights could not be normalized",
+      "The model would train more slowly but end up learning exactly the same next-token predictor",
+      "Nothing would change; the mask only matters at inference time, when future tokens are absent"
+    ],
+    "answer_index": 0,
+    "explanation": "Without the mask, a position could see the token to its right, which is its own target, and simply copy it. The loss collapses toward 0 but the model learns no real next-token prediction."
+  },
+  {
+    "id": "01.4-044",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "What efficiency payoff does the causal mask provide?",
+    "options": [
+      "It halves the number of attention parameters, since only the lower triangle is ever stored",
+      "One forward pass over a length-$T$ row trains $T$ predictions at once, each using only its past",
+      "It lets the model skip the loss on half the positions, which halves the backward-pass cost",
+      "It removes the need for a softmax in attention, since masked scores are already normalized"
+    ],
+    "answer_index": 1,
+    "explanation": "Because each position is prevented from seeing its future, all $T$ predictions can be computed in parallel in one pass. Without it you would need $T$ separate runs on growing prefixes."
+  },
+  {
+    "id": "01.4-045",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.1 Worked example: B = 2, T = 2, V = 3",
+    "question": "In the shape trail `(2, 2, 3)` logits → `(4, 3)` → `(4,)` → `()`, at which steps do the vocabulary and position axes disappear?",
+    "options": [
+      "The vocabulary axis at the 'pick the target entry' step; the position axis at the mean",
+      "The vocabulary axis at the softmax step; the position axis at the reshape to `(4, 3)`",
+      "The position axis at the 'pick the target entry' step; the vocabulary axis at the final mean",
+      "Both the vocabulary and position axes disappear together at the reshape step"
+    ],
+    "answer_index": 0,
+    "explanation": "Softmax keeps the shape `(4, 3)`. Selecting the target's entry reduces each row to one number, removing $V$; averaging over the 4 rows removes the $B\\cdot T$ axis, leaving a scalar."
+  },
+  {
+    "id": "01.4-046",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "When `F.cross_entropy` receives logits `(N, V)` and targets `(N,)`, how does it interpret the axes?",
+    "options": [
+      "It infers the vocabulary axis from whichever logits axis is larger, then indexes it",
+      "The second axis of the logits is the vocabulary; each target is an index into it",
+      "The targets are treated as one-hot vectors aligned element-wise with the logits rows",
+      "The first axis of the logits is the vocabulary; each target indexes one of the rows"
+    ],
+    "answer_index": 1,
+    "explanation": "`F.cross_entropy` always treats dimension 1 of the logits as the class (vocabulary) axis and the integer target as an index into it. It does not guess based on size and does not expect one-hot targets."
+  },
+  {
+    "id": "01.4-047",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "Why do reshaped logits row `r` and `targets[r]` still describe the same (sequence, position) slot?",
+    "options": [
+      "Because targets are sorted by token id before reshaping",
+      "Because the batch size is always 1, so no reordering ever occurs",
+      "Because `F.cross_entropy` re-sorts the rows internally",
+      "`reshape` flattens both tensors in the same row-major order"
+    ],
+    "answer_index": 3,
+    "explanation": "Both tensors are flattened in the same order: (seq 0, pos 0), (seq 0, pos 1), (seq 1, pos 0), ... so the pairing is preserved. No sorting is involved."
+  },
+  {
+    "id": "01.4-048",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "In the step $\\log q_j = z_j - \\log(\\sum_k e^{z_k})$, what two identities convert 'softmax then log' into this form?",
+    "options": [
+      "$e^{a+b} = e^a + e^b$ and $\\log(e^x) = x$",
+      "$\\log(a/b) = \\log a - \\log b$ and $\\log(e^{x}) = x$",
+      "$\\log(ab) = \\log a \\cdot \\log b$ and $\\log 1 = 0$",
+      "$\\log(a+b) = \\log a + \\log b$ and $e^{\\log x} = x$"
+    ],
+    "answer_index": 1,
+    "explanation": "Taking the log of the softmax fraction turns the division into a subtraction, and the log undoes the exponential on top, leaving the raw logit $z_j$. The other listed 'identities' are false in general."
+  },
+  {
+    "id": "01.4-049",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "What numerical advantage does computing $\\log q_j = z_j - \\log\\sum_k e^{z_k}$ have over computing $q_j$ and then taking its log?",
+    "options": [
+      "It never forms the tiny probability $q_j$, so it cannot underflow to 0 and give $-\\infty$",
+      "It makes the probabilities sum to exactly 1, which the two-step version only approximates",
+      "It avoids having to know the true token, so the loss can be computed before targets arrive",
+      "It uses fewer exponentials, one per row instead of one per vocabulary entry, saving compute"
+    ],
+    "answer_index": 0,
+    "explanation": "If $q_j$ were about $10^{-50}$ it would round to 0 in float32 and $\\log 0 = -\\infty$. The one-step formula subtracts two ordinary numbers and returns a finite value like $-115$. Exponential counts are similar either way."
+  },
+  {
+    "id": "01.4-050",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "In cross-entropy over a single row with a one-hot target, why does PyTorch take an integer index instead of a one-hot vector?",
+    "options": [
+      "Because integer indices give a different and more accurate loss value than the one-hot vectors would give",
+      "Because one-hot vectors cannot be differentiated, so no gradients would ever flow back to the logits through them",
+      "Only the term at the target index survives (others are multiplied by 0), so it reads that one entry directly",
+      "Because one-hot vectors would require a second softmax over the targets before the product"
+    ],
+    "answer_index": 2,
+    "explanation": "With $p$ one-hot, $-\\sum_x p(x)\\log q(x)$ keeps only $-\\log q_t$. Reading `log_q[r, t[r]]` gives the same number without multiplying by zeros. The result is identical, not more accurate."
+  },
+  {
+    "id": "01.4-051",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "What does the sum of the per-row losses (before dividing by $N$) represent?",
+    "options": [
+      "The negative log-likelihood of all $N$ predictions together",
+      "The entropy of the true next-token distribution over the batch",
+      "The average loss per token, already normalized by the length",
+      "The perplexity of the batch, before exponentiating it"
+    ],
+    "answer_index": 0,
+    "explanation": "Log of a product is a sum of logs, so the summed $-\\log q_i(t_i)$ is the NLL of all predictions jointly. Dividing by $N$ gives the per-token average; perplexity is its exponential."
+  },
+  {
+    "id": "01.4-052",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "In PyTorch, what does `log_q[torch.arange(N), t]` select from a `(N, V)` tensor?",
+    "options": [
+      "The entire column `t` for every row of `log_q`",
+      "One entry per row: row $r$, column `t[r]`",
+      "The diagonal of `log_q`, one entry per row",
+      "The rows of `log_q` indexed by `t`, all columns"
+    ],
+    "answer_index": 1,
+    "explanation": "Advanced indexing with two index tensors pairs them elementwise: `(0, t[0]), (1, t[1]), ...`, yielding a `(N,)` tensor of the true-token log-probabilities."
+  },
+  {
+    "id": "01.4-053",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "Which one-hot expression gives the same per-row losses as `-log_q[torch.arange(N), t]`, only less efficiently?",
+    "options": [
+      "`-(F.one_hot(t, V) + log_q).sum(dim=1)`",
+      "`-(F.one_hot(t, V) @ log_q).mean()`",
+      "`-(F.one_hot(t, V) * log_q).sum(dim=0)`",
+      "`-(F.one_hot(t, V) * log_q).sum(dim=1)`"
+    ],
+    "answer_index": 3,
+    "explanation": "Multiplying by the one-hot and summing over the vocabulary axis (dim 1) keeps exactly the true-token term in each row. Summing over dim 0 mixes rows, adding is wrong, and the matmul has the wrong semantics."
+  },
+  {
+    "id": "01.4-054",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "5.2 What that one line does, step by step",
+    "question": "What is the full chain of operations performed by one call `F.cross_entropy(logits.reshape(-1, V), targets.reshape(-1))`?",
+    "options": [
+      "Logits → elementwise log → softmax over the vocabulary → sum over rows",
+      "Logits → softmax → mean over the vocabulary axis → negate the result per row",
+      "Logits → log-softmax → pick $-\\log q(\\text{true token})$ per row → mean over rows",
+      "Logits → argmax per row → compare with targets → mean of the mismatches"
+    ],
+    "answer_index": 2,
+    "explanation": "The call pairs rows with targets, computes stable log-softmax per row, picks and negates the true token's log-probability, and averages. Argmax would give accuracy, not cross-entropy."
+  },
+  {
+    "id": "01.4-055",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6. From-scratch: the loss in llmre.evaluation.metrics",
+    "question": "Why does the `llmre.evaluation.metrics` code implement cross-entropy from scratch rather than calling the framework?",
+    "options": [
+      "So every step (stable log-softmax, gather, mean) is visible and understood",
+      "Because the framework version does not support batched `(B*T, V)` inputs at all",
+      "Because PyTorch's version cannot run on the GPU, only on the CPU",
+      "Because PyTorch's `cross_entropy` gives a slightly different answer"
+    ],
+    "answer_index": 0,
+    "explanation": "The from-scratch version exists to make each step explicit; it agrees with `F.cross_entropy` to within $10^{-5}$. PyTorch's version is correct, GPU-capable and batched."
+  },
+  {
+    "id": "01.4-056",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6. From-scratch: the loss in llmre.evaluation.metrics",
+    "question": "In the from-scratch `log_softmax`, what is the first operation applied to each row of logits?",
+    "options": [
+      "Compute the row max `m = logits.max(dim=-1, keepdim=True).values`",
+      "Compute `logits.exp()` directly on the raw, unshifted row values",
+      "Subtract the row mean `logits.mean(dim=-1, keepdim=True)`",
+      "Divide by the row sum `logits.sum(dim=-1, keepdim=True)`"
+    ],
+    "answer_index": 0,
+    "explanation": "The code first finds the per-row max, then subtracts it before exponentiating, for numerical stability. Exponentiating unshifted logits risks overflow; the mean does not guarantee non-positive exponents."
+  },
+  {
+    "id": "01.4-057",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6. From-scratch: the loss in llmre.evaluation.metrics",
+    "question": "In the from-scratch `cross_entropy`, how is the true-token log-probability gathered?",
+    "options": [
+      "`logp.max(dim=-1).values`, the best entry per row",
+      "`logp[targets]` with `targets` of shape `(N,)`",
+      "`logp[rows, targets]` with `rows = torch.arange(N)`",
+      "`logp.sum(dim=-1)` over the vocabulary axis"
+    ],
+    "answer_index": 2,
+    "explanation": "Pairing a row index with each target picks one entry per row. `logp[targets]` would select whole rows, `max` picks the model's top guess rather than the truth, and the sum over the vocabulary is not the loss."
+  },
+  {
+    "id": "01.4-058",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6. From-scratch: the loss in llmre.evaluation.metrics",
+    "question": "How is perplexity computed in `llmre.evaluation.metrics`?",
+    "options": [
+      "As `1 / cross_entropy(logits, targets)`",
+      "As `2 ** cross_entropy(logits, targets)`",
+      "As `cross_entropy(logits, targets).log()`",
+      "As `cross_entropy(logits, targets).exp()`"
+    ],
+    "answer_index": 3,
+    "explanation": "Perplexity is the exponential of the mean cross-entropy in nats, so `.exp()` is correct. `2 **` would be right only for a loss in bits."
+  },
+  {
+    "id": "01.4-059",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6. From-scratch: the loss in llmre.evaluation.metrics",
+    "question": "In `cross_entropy`, why is `rows` created with `device=logits.device`?",
+    "options": [
+      "So that gradients can flow back through the row indices into the logits tensor",
+      "So that it is placed on the CPU, where integer indexing is faster",
+      "So that it uses the same float32 dtype as the logits it indexes",
+      "So the index tensor lives on the same device as the logits for indexing"
+    ],
+    "answer_index": 3,
+    "explanation": "Indexing a GPU tensor with indices on a different device fails or forces a transfer; creating `rows` on the logits' device avoids that. Indices are integers and do not carry gradients."
+  },
+  {
+    "id": "01.4-060",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Which equation is the 'fundamental equation' of log-softmax?",
+    "options": [
+      "$\\log q_i = e^{z_i} - \\sum_j e^{z_j}$",
+      "$\\log q_i = z_i - \\log\\sum_j e^{z_j}$",
+      "$\\log q_i = \\log z_i - \\log\\sum_j z_j$",
+      "$\\log q_i = z_i / \\sum_j e^{z_j}$"
+    ],
+    "answer_index": 1,
+    "explanation": "Taking the log of softmax turns the division into subtraction and undoes the exponential on top, leaving the logit minus the log of the normalizer. The other options misuse logs on raw logits or confuse division and subtraction."
+  },
+  {
+    "id": "01.4-061",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "What is $\\operatorname{logsumexp}(z)$?",
+    "options": [
+      "$\\max_j z_j$ exactly, the largest logit in the row $z$",
+      "$\\sum_j \\log e^{z_j}$, which equals $\\sum_j z_j$",
+      "$e^{\\sum_j \\log z_j}$: take logs, sum, exponentiate",
+      "$\\log\\sum_j e^{z_j}$: exponentiate, sum, take the log"
+    ],
+    "answer_index": 3,
+    "explanation": "Logsumexp is literally 'exponentiate, sum, log'. It is the log of the softmax normalization denominator. It is close to the max when one logit dominates, but not equal to it in general."
+  },
+  {
+    "id": "01.4-062",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "In words, what does $\\log\\operatorname{softmax}(z) = z - \\operatorname{logsumexp}(z)$ say?",
+    "options": [
+      "Each token's log-probability is the log of its own score, computed independently",
+      "Each token's log-probability is its score divided by one number, the row's max",
+      "Each token's log-probability depends only on its own logit, not on the rest of the row",
+      "Each token's log-probability is its score minus one number shared by the whole row"
+    ],
+    "answer_index": 3,
+    "explanation": "The shared term is the log of the normalization denominator; subtracting it normalizes in log space. Because it is shared, the gaps between log-probabilities equal the gaps between logits. The log-probability depends on all logits through that shared term."
+  },
+  {
+    "id": "01.4-063",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Why can a log-softmax implementation end with `return logits - logsumexp` and never divide?",
+    "options": [
+      "Because dividing would change the result once the logits are shifted",
+      "Because division in probability space becomes subtraction in log space",
+      "Because the logits are already normalized, so the sum is always 1",
+      "Because the division is done later, inside the loss's mean over rows"
+    ],
+    "answer_index": 1,
+    "explanation": "Normalizing by the sum is division in probability space, which corresponds to subtracting its log in log space. Logits are not normalized, and the loss does no further division beyond averaging over rows."
+  },
+  {
+    "id": "01.4-064",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "If the formula $\\log q_i = z_i - \\log\\sum_j e^{z_j}$ is mathematically correct, why does the code subtract the max first?",
+    "options": [
+      "For floating point (overflow and $\\log 0$), not mathematics; mathematically the shift changes nothing",
+      "Because gradients cannot be computed through logsumexp unless the max is subtracted first",
+      "Because the max must be removed for the probabilities to sum to 1 after exponentiating",
+      "Because the formula is only an approximation without the shift, accurate to about float32 precision"
+    ],
+    "answer_index": 0,
+    "explanation": "The max shift is a numerical-stability measure. It provably leaves the result unchanged in exact arithmetic. Without it the formula is still exact on paper and still normalized, but $e^{z}$ may overflow in float32."
+  },
+  {
+    "id": "01.4-065",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "For any constant $c$, what is $\\operatorname{softmax}(z - c)$ compared with $\\operatorname{softmax}(z)$?",
+    "options": [
+      "Equal only if $c$ is the max logit",
+      "Equal only approximately, within float tolerance",
+      "Exactly equal",
+      "Smaller by a factor $e^{-c}$"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax is exactly invariant to shifting all logits by the same constant: $e^{-c}$ appears on top and in every term of the bottom and cancels. Any $c$ works mathematically; the max is chosen for numerical safety."
+  },
+  {
+    "id": "01.4-066",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "In the proof that $\\operatorname{softmax}(z - c) = \\operatorname{softmax}(z)$, why can $e^{-c}$ be pulled out of the sum in the denominator?",
+    "options": [
+      "Because $e^{-c}$ is always equal to 1 for any real constant $c$",
+      "Because $e^{-c}$ does not depend on the summation index $j$",
+      "Because $c$ is always the max logit, so $e^{-c}$ is the largest term",
+      "Because $\\log$ is linear, so constants pass through the sum"
+    ],
+    "answer_index": 1,
+    "explanation": "A factor that is the same in every term of a sum factors out. Then it appears once on top and once on the bottom and cancels since it is positive. It is not equal to 1 in general."
+  },
+  {
+    "id": "01.4-067",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Which identity is used to rewrite $e^{z_i - c}$ in the shift-invariance proof?",
+    "options": [
+      "$e^{a-b} = e^{a} - e^{b}$",
+      "$e^{a-b} = e^{a}/e^{-b}$",
+      "$e^{a-b} = (e^{a})^{-b}$",
+      "$e^{a-b} = e^{a}\\,e^{-b}$"
+    ],
+    "answer_index": 3,
+    "explanation": "Exponent of a difference is a product: $e^{z_i - c} = e^{z_i} e^{-c}$. The other forms are incorrect algebra."
+  },
+  {
+    "id": "01.4-068",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Does subtracting a constant from the logits make softmax more accurate or approximate it?",
+    "options": [
+      "It changes the result to a temperature-scaled softmax, with temperature set by the constant",
+      "It approximates softmax to save compute, trading a tiny error for fewer large exponentials",
+      "It makes softmax more accurate by removing a bias that large logits introduce into the normalized result",
+      "Neither: it changes which numbers pass through `exp`, while leaving the result exactly unchanged"
+    ],
+    "answer_index": 3,
+    "explanation": "The shift changes the representation of the computation, not the mathematical result. Temperature scaling divides logits, which does change the distribution; subtracting a constant does not."
+  },
+  {
+    "id": "01.4-069",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Why is $c = \\max_j z_j$ chosen as the shift in a stable softmax?",
+    "options": [
+      "It minimizes the number of exponentials needed, since the max term can be skipped entirely",
+      "It makes all shifted logits positive, so every exponential is at least 1 and none underflow",
+      "It makes the largest shifted value 0 and all others negative, so every exponential is at most 1",
+      "It is the only constant that keeps softmax unchanged; any other shift would alter the probabilities"
+    ],
+    "answer_index": 2,
+    "explanation": "Any constant leaves softmax unchanged; the max is the one that makes it safe. After the shift, $z_i - m \\le 0$, so $e^{z_i - m} \\le 1$, which prevents overflow."
+  },
+  {
+    "id": "01.4-070",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Without max-subtraction, what happens to a logit of 90 in float32 softmax?",
+    "options": [
+      "$e^{90} \\approx 1.2\\times 10^{39}$ exceeds float32's max ($\\approx 3.4\\times 10^{38}$), becomes `inf`, and `inf/inf = nan`",
+      "It is silently rounded down to the float32 maximum ($\\approx 3.4\\times 10^{38}$), so the softmax comes out only slightly wrong",
+      "It underflows to 0, since $e^{90}$ is below float32's smallest normal value ($\\approx 1.2\\times 10^{-38}$)",
+      "Nothing goes wrong; float32 handles exponents up to about $e^{1000}$ before it overflows to `inf`"
+    ],
+    "answer_index": 0,
+    "explanation": "Float32 overflows to `inf` above about $3.4\\times 10^{38}$, and $e^{90}$ exceeds that. A ratio of infinities is `nan`, which ruins training. With the shift, $90 - 90 = 0$ and $e^0 = 1$."
+  },
+  {
+    "id": "01.4-071",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Apart from preventing overflow, what second guarantee does subtracting the max provide for $\\sum_j e^{z_j - m}$?",
+    "options": [
+      "The sum is at least 1 (it contains $e^0 = 1$), so its log is never $-\\infty$",
+      "The sum equals the vocabulary size $V$, so its log is always $\\log V$",
+      "The sum is always less than 1, so its log is always negative and finite",
+      "The sum is exactly 1, so the log-sum-exp term vanishes from the formula"
+    ],
+    "answer_index": 0,
+    "explanation": "The max entry becomes $e^0 = 1$ and the rest are positive, so the sum is $\\ge 1$ and its log is $\\ge 0$. It equals 1 only when one logit dominates completely; it equals $V$ only for equal logits."
+  },
+  {
+    "id": "01.4-072",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "What is the relationship $\\log\\sum_j e^{z_j} = m + \\log\\sum_j e^{z_j - m}$ called in words?",
+    "options": [
+      "The logsumexp of the shifted row is always zero, so the original row's lse equals its max",
+      "The logsumexp is the sum of the logs of the exponentials, shifted by the max",
+      "The logsumexp of the row equals the max of the row times the number of entries",
+      "The logsumexp of the original row equals the max plus the logsumexp of the shifted row"
+    ],
+    "answer_index": 3,
+    "explanation": "Factoring $e^m$ out of the sum and splitting the log of the product gives this exact identity. It is not an approximation (logsumexp $\\approx$ max) and the shifted logsumexp is $\\ge 0$, not necessarily 0."
+  },
+  {
+    "id": "01.4-073",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "After substituting the shifted logsumexp into $\\log q_i = z_i - \\log\\sum_j e^{z_j}$, what happens to $m$?",
+    "options": [
+      "The $+m$ and $-m$ cancel, leaving $\\log q_i = z'_i - \\log\\sum_j e^{z'_j}$",
+      "$m$ remains as an additive correction term, $\\log q_i = z'_i - \\log\\sum_j e^{z'_j} + m$",
+      "$m$ is added to every log-probability, shifting the whole row up by the max",
+      "$m$ multiplies the final result, scaling every log-probability by the max"
+    ],
+    "answer_index": 0,
+    "explanation": "With $z_i = z'_i + m$ and $\\log\\sum e^{z_j} = m + \\log\\sum e^{z'_j}$, the $m$'s cancel. The shifted formula is the same log-softmax formula applied to $z'$, not a corrected approximation."
+  },
+  {
+    "id": "01.4-074",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "In the from-scratch `log_softmax`, what does `shifted.exp().sum(dim=-1, keepdim=True).log()` compute?",
+    "options": [
+      "The softmax probabilities $e^{z'_j} / \\sum_k e^{z'_k}$, shape `(N, V)`",
+      "The row max $m = \\max_j z_j$ used for the shift, shape `(N, 1)`",
+      "$\\log\\sum_j e^{z'_j}$ (the logsumexp of the shifted row), shape `(N, 1)`",
+      "The log-probability of the true token in each row, shape `(N,)`"
+    ],
+    "answer_index": 2,
+    "explanation": "It exponentiates the shifted logits, sums each row, and takes the log: the logsumexp of the shifted row, kept as a column by `keepdim=True`. Subtracting it from `shifted` gives log-probabilities."
+  },
+  {
+    "id": "01.4-075",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Why does the from-scratch `log_softmax` use `keepdim=True` for `m` and `lse`?",
+    "options": [
+      "To reduce memory usage, since keeping the reduced dimension avoids allocating a new `(N, V)` buffer",
+      "So they stay `(N, 1)` columns that broadcast row-wise, subtracting each row's own value from every entry in it",
+      "To stop gradients from flowing back through the max and the lse, which would otherwise break the whole backward pass",
+      "To make the final output a scalar, so that it can be passed directly to the loss's mean over rows"
+    ],
+    "answer_index": 1,
+    "explanation": "A `(N, 1)` column broadcasts across the `V` columns, subtracting each row's own statistic. Without it, an `(N,)` vector would broadcast along the last axis, either failing or silently subtracting per column."
+  },
+  {
+    "id": "01.4-076",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "For row $z = [2, 1, 0]$, $\\log(e^2 + e^1 + e^0) = 2.4076$ but the shifted lse is $0.4076$. How are they related?",
+    "options": [
+      "They are unrelated; one of the two was computed incorrectly and should be discarded",
+      "$2.4076 \\approx 2 \\times 0.4076 \\times 3$: the shifted lse is scaled by the max and $V$",
+      "$2.4076 = 2 + 0.4076$: the unshifted logsumexp equals the max plus the shifted logsumexp",
+      "$0.4076 = 2.4076 / 2$: the shifted lse is the unshifted one divided by the max"
+    ],
+    "answer_index": 2,
+    "explanation": "The shifted route subtracts the max (2) first and then the remaining 0.4076; the unshifted route subtracts 2.4076 at once. Both give log-probabilities $[-0.4076, -1.4076, -2.4076]$."
+  },
+  {
+    "id": "01.4-077",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Why is computing `log(softmax(z))` worse than computing log-softmax directly?",
+    "options": [
+      "`log(softmax(z))` cannot be differentiated, because autograd has no rule for the composition",
+      "`log(softmax(z))` requires knowing the target token before the probabilities are formed",
+      "`log(softmax(z))` is mathematically a different function from log-softmax, not just less stable",
+      "The intermediate probabilities can underflow to exactly 0, making `log` return $-\\infty$"
+    ],
+    "answer_index": 3,
+    "explanation": "Mathematically they are identical, but the two-step version materializes $q$, and a tiny $q$ like $e^{-200}$ rounds to 0 in float32. The direct formula only subtracts ordinary-size numbers, returning about $-200$."
+  },
+  {
+    "id": "01.4-078",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "Where else in the LLM stack does the same max-subtraction trick reappear?",
+    "options": [
+      "In the tokenizer's BPE merge-rule scoring",
+      "In weight initialization of the embeddings",
+      "In the cosine learning-rate warmup schedule",
+      "In attention softmax and in FlashAttention"
+    ],
+    "answer_index": 3,
+    "explanation": "Attention computes a softmax over scores, so it uses the same max-shift for stability, and FlashAttention relies on running maxes to compute softmax in tiles. Tokenizers, schedules and initialization do not use it."
+  },
+  {
+    "id": "01.4-079",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.1 Why these four lines compute exactly log-softmax",
+    "question": "What does each row of `log_softmax` output satisfy?",
+    "options": [
+      "Exponentiating its entries gives probabilities that sum to 1",
+      "Its maximum entry is always exactly 0, like the shifted logits",
+      "Its entries sum to 1, like the probabilities they came from",
+      "Its entries sum to 0, since the shared lse term cancels out"
+    ],
+    "answer_index": 0,
+    "explanation": "Log-softmax returns log-probabilities, so $\\sum_i e^{\\log q_i} = 1$. The log-probabilities themselves sum to a negative number, and the max entry is $-$(shifted logsumexp), which is 0 only if the max token has probability 1."
+  },
+  {
+    "id": "01.4-080",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.2 Tracing both functions with numbers",
+    "question": "In tracing `log_softmax` on logits with a row `[0, 0, 0]`, what are the shifted logits and the lse?",
+    "options": [
+      "Shifted `[-1, -1, -1]`, lse $= 3 e^{-1} \\approx 1.10$",
+      "Shifted `[0, 0, 0]`, lse $= \\ln 3 \\approx 1.0986$",
+      "Shifted `[0, 0, 0]`, lse $= \\ln 1 = 0$ exactly",
+      "Shifted `[0, 0, 0]`, lse $= 3$, one per entry"
+    ],
+    "answer_index": 1,
+    "explanation": "The max is 0, so the shift changes nothing. Each exponential is 1, the sum is 3, and its log is $\\ln 3$. The log-probabilities are then all $-1.0986$."
+  },
+  {
+    "id": "01.4-081",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.2 Tracing both functions with numbers",
+    "question": "Why is no value larger than 1 ever produced by `shifted.exp()` in the stable log-softmax?",
+    "options": [
+      "Every shifted logit is $\\le 0$, so every exponential is $\\le e^0 = 1$",
+      "Because the logits are first normalized into $[0, 1]$ before exponentiating",
+      "Because the shift divides each logit by the row max, so all are $\\le 1$",
+      "Because `exp` is clipped at 1 in PyTorch to prevent overflow in softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "Subtracting the row max makes all entries non-positive, so the exponentials lie in $(0, 1]$. There is no clipping or division."
+  },
+  {
+    "id": "01.4-082",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.3 Verify the by-hand loss against PyTorch",
+    "question": "The by-hand loss $-\\ln 0.6439$, `llmre`'s `cross_entropy` and `F.cross_entropy` are compared on logits $(2, 1, 0, -1)$, target 0. What is found?",
+    "options": [
+      "The by-hand value is larger because it skips the shift",
+      "All three agree at about 0.4402 nats",
+      "The from-scratch code differs because it subtracts the max",
+      "PyTorch's value is in bits and differs by $\\ln 2$"
+    ],
+    "answer_index": 1,
+    "explanation": "All are in nats and all compute the same mathematical quantity; the max shift does not change the result. They agree to the shown precision."
+  },
+  {
+    "id": "01.4-083",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.3 Verify the by-hand loss against PyTorch",
+    "question": "What does `F.cross_entropy` do with its inputs by default?",
+    "options": [
+      "Expects probabilities with one-hot targets, takes their log, and returns per-row losses in nats",
+      "Fuses log-softmax and the gather on logits with integer targets and returns the mean over the batch in nats",
+      "Expects one-hot float targets, applies softmax, and returns the batch perplexity rather than a loss",
+      "Applies softmax to the logits, takes the log, and returns the sum over the batch measured in bits"
+    ],
+    "answer_index": 1,
+    "explanation": "`F.cross_entropy` takes raw logits and integer class indices, fuses log-softmax with the gather, and by default averages ('mean' reduction). The result is in nats, matching the from-scratch version."
+  },
+  {
+    "id": "01.4-084",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.3 Verify the by-hand loss against PyTorch",
+    "question": "What do the unit tests for the from-scratch metrics assert?",
+    "options": [
+      "That cross-entropy is symmetric in logits and targets, and that the perplexity of uniform logits over $V$ equals $\\log V$",
+      "That perplexity is always an integer, and that the loss matches `F.cross_entropy` only in float64",
+      "That the loss is always below $\\ln 2$ on a random batch, and that perplexity of one-hot logits equals $V$",
+      "Equality with `F.cross_entropy` to `1e-5` on a random batch, and that perplexity of uniform logits over $V$ equals $V$"
+    ],
+    "answer_index": 3,
+    "explanation": "The tests check agreement with the framework on random `(8, 10)` logits and the uniform-model property PPL $= V$. The loss is not bounded by $\\ln 2$, perplexity is generally non-integer, and logits/targets are different kinds of inputs."
+  },
+  {
+    "id": "01.4-085",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.3 Verify the by-hand loss against PyTorch",
+    "question": "What happens if you apply softmax and pass probabilities to `F.cross_entropy`?",
+    "options": [
+      "Softmax is applied twice, giving a wrong, too-flat loss",
+      "The loss is identical, because softmax is idempotent",
+      "PyTorch detects the probabilities and raises an error",
+      "The loss becomes exactly 0, since the inputs sum to 1"
+    ],
+    "answer_index": 0,
+    "explanation": "`F.cross_entropy` applies log-softmax internally, so probabilities get softmaxed again. Softmax is not idempotent: probabilities in $[0,1]$ have small gaps, so the second softmax is near-uniform. No error is raised because shapes and dtypes are legal."
+  },
+  {
+    "id": "01.4-086",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "6.3 Verify the by-hand loss against PyTorch",
+    "question": "What form must the target argument to `F.cross_entropy` take for language modeling?",
+    "options": [
+      "A float tensor of probabilities of shape `(N,)`",
+      "A `long` tensor of shape `(N, V)`",
+      "A `long` tensor of class indices of shape `(N,)`",
+      "A float one-hot matrix of shape `(N, V)`"
+    ],
+    "answer_index": 2,
+    "explanation": "For standard usage the targets are integer indices into the vocabulary, one per row. One-hot float matrices are not the expected form here."
+  },
+  {
+    "id": "01.4-087",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "Why is perplexity reported in addition to cross-entropy loss?",
+    "options": [
+      "Cross-entropy in nats is hard to interpret; perplexity exponentiates it into an intuitive scale",
+      "Perplexity is what the optimizer actually minimizes; cross-entropy is only logged for reference",
+      "Perplexity contains information about the model that the cross-entropy loss does not capture",
+      "Perplexity is independent of the model's predictions, so it gives a fixed baseline for the dataset itself"
+    ],
+    "answer_index": 0,
+    "explanation": "Perplexity carries the same information as the loss (it is a monotone function of it) but reads as an effective branching factor. Optimizers minimize the loss, not perplexity directly."
+  },
+  {
+    "id": "01.4-088",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "If a language model's loss were measured in bits instead of nats, how would perplexity be computed?",
+    "options": [
+      "$e^{\\mathcal{L}}$",
+      "$10^{\\mathcal{L}}$",
+      "$\\log_2 \\mathcal{L}$",
+      "$2^{\\mathcal{L}}$"
+    ],
+    "answer_index": 3,
+    "explanation": "Perplexity uses the base that matches the log used for the loss: $e$ for nats, 2 for bits. Both give the same perplexity number for the same model."
+  },
+  {
+    "id": "01.4-089",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "What does a perplexity of 20 mean for a language model?",
+    "options": [
+      "The model's average loss is 20 nats per token, summed over the whole validation set",
+      "The model considers exactly 20 tokens possible and assigns exactly zero probability to the rest",
+      "On average the model is as uncertain as choosing uniformly among 20 equally likely tokens",
+      "The model is correct on 20% of tokens, measured by argmax accuracy on the validation set"
+    ],
+    "answer_index": 2,
+    "explanation": "Perplexity is the effective branching factor: 'as confused as a fair 20-sided die at each step'. It is not accuracy, and the loss would be $\\ln 20 \\approx 3.0$ nats. The model still assigns probability to all tokens."
+  },
+  {
+    "id": "01.4-090",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "What are the best and the uniform-guessing values of perplexity for a vocabulary of size $V$?",
+    "options": [
+      "Best is $V$ (the full vocabulary is covered); uniform guessing gives 1",
+      "Best is 0 (the loss is zero); uniform guessing gives 1",
+      "Best is 1 (always knows the next token); uniform guessing gives $V$",
+      "Best is 1 (always knows the next token); uniform gives $\\log V$"
+    ],
+    "answer_index": 2,
+    "explanation": "A perfect model has loss 0 and perplexity $e^0 = 1$. A uniform model has loss $\\ln V$ and perplexity $V$. $\\log V$ is the uniform loss, not its perplexity."
+  },
+  {
+    "id": "01.4-091",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "Is lower or higher perplexity better?",
+    "options": [
+      "Lower is better",
+      "Closer to $V/2$ is better",
+      "Higher is better",
+      "It depends on the vocabulary size"
+    ],
+    "answer_index": 0,
+    "explanation": "Lower perplexity means lower loss, i.e., more probability on the correct tokens. The minimum is 1 for a perfect model."
+  },
+  {
+    "id": "01.4-092",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7.1 Worked example: uniform over 4 gives perplexity 4",
+    "question": "A model outputs uniform logits over $V = 4$ tokens. What are its loss and perplexity, regardless of the true token?",
+    "options": [
+      "Loss 0 nats, perplexity 1, since all logits are equal",
+      "Loss 4 nats, perplexity $e^4 \\approx 54.6$",
+      "Loss $\\ln 4 \\approx 1.386$ nats, perplexity 4",
+      "Loss $\\ln 4$ nats, perplexity $\\ln 4 \\approx 1.386$"
+    ],
+    "answer_index": 2,
+    "explanation": "Every token gets $q = 0.25$, so the loss is $-\\ln 0.25 = \\ln 4$ for any true token and the perplexity is $e^{\\ln 4} = 4$, exactly the vocabulary size."
+  },
+  {
+    "id": "01.4-093",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7.1 Worked example: uniform over 4 gives perplexity 4",
+    "question": "A model achieves loss 0.4402 nats on a 4-token vocabulary, giving perplexity about 1.553. How is this interpreted?",
+    "options": [
+      "The model considers exactly one or two tokens possible and the rest impossible",
+      "The model is correct about 55% of the time, measured by top-1 accuracy",
+      "The model has narrowed 4 options down to roughly 1.5 effective live choices",
+      "The model is worse than uniform guessing, which would give perplexity 1"
+    ],
+    "answer_index": 2,
+    "explanation": "Perplexity 1.553 means the model is as uncertain as a uniform choice among about 1.5 tokens, much better than the uniform ceiling of 4. It is not an accuracy, and the other tokens still have nonzero probability."
+  },
+  {
+    "id": "01.4-094",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7.1 Worked example: uniform over 4 gives perplexity 4",
+    "question": "Why is $V$ described as the perplexity ceiling for a sane model?",
+    "options": [
+      "Because $V$ is the perplexity of a perfect model that always puts all mass on the true token",
+      "A uniform model scores exactly $V$, and any model that has learned anything scores below it",
+      "Because perplexity is clipped at $V$ in PyTorch so that it never exceeds the vocabulary size",
+      "Because perplexity is defined as $V$ minus the loss, so it can only fall below $V$"
+    ],
+    "answer_index": 1,
+    "explanation": "Uniform guessing is the 'learned nothing' baseline at perplexity $V$. It marks 'learned nothing about which token comes next'; a perfect model scores 1."
+  },
+  {
+    "id": "01.4-095",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "7. Perplexity: the effective branching factor",
+    "question": "Why do papers and leaderboards report perplexity?",
+    "options": [
+      "It carries the same information as the loss but on a scale humans can reason about",
+      "It is unaffected by the choice of tokenizer, so models with different vocabularies compare directly",
+      "It is the only metric that is differentiable, so it can double as the training objective",
+      "It measures generation speed in tokens per second, which leaderboards rank models by"
+    ],
+    "answer_index": 0,
+    "explanation": "Perplexity is just the exponentiated loss, interpretable as an effective number of choices. It is not tokenizer-independent and is unrelated to speed."
+  },
+  {
+    "id": "01.4-096",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "For logits of shape `(B, T, V)` with $B = 8$, $T = 1024$, $V = 50257$ in float32, roughly how large is the logits tensor?",
+    "options": [
+      "About 1.6 GB",
+      "About 16 GB",
+      "About 16 MB",
+      "About 160 MB"
+    ],
+    "answer_index": 0,
+    "explanation": "$8 \\cdot 1024 \\cdot 50257 \\cdot 4$ bytes $\\approx 1.6$ GB. It is often the largest single activation in the forward pass, which is why the vocabulary projection and loss are a memory concern."
+  },
+  {
+    "id": "01.4-097",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "Why is the logits tensor often the largest activation in a language model's forward pass?",
+    "options": [
+      "Because logits are stored in float64 for the loss, doubling their size versus activations",
+      "Its size scales with the vocabulary $V$, which is much larger than the model width",
+      "Because logits are kept for every layer, not just the last one, for the backward pass",
+      "Because the batch is duplicated for the loss computation, once per target token"
+    ],
+    "answer_index": 1,
+    "explanation": "The tensor is $B \\cdot T \\cdot V$, and $V$ (e.g. 50257) dwarfs hidden widths like 768. It is not stored in float64 or per layer."
+  },
+  {
+    "id": "01.4-098",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "Which technique addresses the memory cost of the vocabulary projection and loss?",
+    "options": [
+      "Larger learning rates",
+      "Increasing the vocabulary size",
+      "Removing the causal mask",
+      "Fused cross-entropy kernels"
+    ],
+    "answer_index": 3,
+    "explanation": "Fused cross-entropy kernels avoid materializing and repeatedly reading the full logits tensor. Learning rate, masking and larger vocabularies do not reduce this memory."
+  },
+  {
+    "id": "01.4-099",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "What usually dominates the compute of the loss side of a language model?",
+    "options": [
+      "The softmax and log over the logits, $O(B\\cdot T\\cdot V)$, done in float32",
+      "The mean over positions, which needs a reduction across the whole $(B, T)$ grid",
+      "Gathering the true-token log-probability, a random-access read for each of $B\\cdot T$ rows",
+      "The output projection matmul $O(B\\cdot T\\cdot C\\cdot V)$ that produces the logits"
+    ],
+    "answer_index": 3,
+    "explanation": "The projection does $2C$ FLOPs per logit, while softmax+loss does a handful per logit with no factor of $C$. Averaging and gathering are negligible."
+  },
+  {
+    "id": "01.4-100",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "What is the gradient of the cross-entropy loss with respect to the logits $z_i$?",
+    "options": [
+      "$-\\log q_i$: the per-token loss itself, evaluated at each logit",
+      "$q_i(1 - q_i)$: the diagonal of the softmax Jacobian, per logit",
+      "$q_i - p_i$: the predicted distribution minus the one-hot target",
+      "$p_i - q_i$: the one-hot target minus the predicted distribution $q$"
+    ],
+    "answer_index": 2,
+    "explanation": "The elegant closed form is $\\partial\\mathcal{L}/\\partial z_i = q_i - p_i$. The sign matters: with $p_i - q_i$ the descent direction would reverse. $q_i(1-q_i)$ is the diagonal of the softmax Jacobian, not the loss gradient."
+  },
+  {
+    "id": "01.4-101",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8. Under the hood: cost of the loss at scale",
+    "question": "With softmax $(0.6439, 0.2369, 0.0871, 0.0321)$ and true token 0, what does gradient descent do to the logits?",
+    "options": [
+      "Lowers the true token's logit (gradient $+0.3561$) and raises the others (gradients $-q_i$)",
+      "Raises all four logits equally, since the gradient is the same $-0.25$ for each of them",
+      "Leaves the true token's logit unchanged (gradient 0) and lowers only the others (gradients $+q_i$)",
+      "Raises the true token's logit (gradient $-0.3561$) and lowers the others (gradients $+q_i$)"
+    ],
+    "answer_index": 3,
+    "explanation": "Gradient descent subtracts the gradient. The true token has negative gradient $0.6439 - 1$, so its logit goes up; wrong tokens have positive gradient $q_i$, so their logits go down, in proportion to the probability they wrongly took."
+  },
+  {
+    "id": "01.4-102",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "In a language model's output layer, what does the weight matrix $W$ of shape `(C, V)` do?",
+    "options": [
+      "It computes attention scores between all pairs of positions, $QK^\\top$",
+      "It normalizes the logits into probabilities by dividing by their sum",
+      "It maps token ids to embeddings of width $V$ by a lookup into its rows",
+      "It maps the hidden vector $h$ of width $C$ to $V$ logits via $z = hW$"
+    ],
+    "answer_index": 3,
+    "explanation": "Each logit $z_j = \\sum_k h_k W_{kj}$ is a dot product of the hidden vector with one column of $W$. Embedding lookup, softmax normalization and attention are separate operations."
+  },
+  {
+    "id": "01.4-103",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "How many FLOPs does the output projection cost per position, by the $2C$-per-dot-product convention?",
+    "options": [
+      "$2C^2$",
+      "$5V$",
+      "$2CV$",
+      "$CV$"
+    ],
+    "answer_index": 2,
+    "explanation": "Each of the $V$ logits is a length-$C$ dot product, about $C$ multiplies and $C$ adds, counted as $2C$ FLOPs. That gives $2CV$ per position and $2BTCV$ for the batch. $5V$ is the rough softmax+loss cost."
+  },
+  {
+    "id": "01.4-104",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "Roughly how many FLOPs does softmax+loss cost for a `(B, T, V)` logits tensor?",
+    "options": [
+      "About $B\\cdot T\\cdot V^2$, one pass per vocabulary pair",
+      "About $5\\cdot B\\cdot T\\cdot V$, with no factor of $C$",
+      "About $2\\cdot B\\cdot T\\cdot C\\cdot V$, same as the matmul",
+      "About $5\\cdot B\\cdot T\\cdot C$, with no factor of $V$"
+    ],
+    "answer_index": 1,
+    "explanation": "Per logit there are a handful of ops (subtract max, exp, add to sum, subtract lse); the exact constant doesn't matter. What matters is that there is no factor of the model width $C$."
+  },
+  {
+    "id": "01.4-105",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "What is the ratio of output-projection FLOPs to softmax+loss FLOPs?",
+    "options": [
+      "About $2C/5$, so the wider the model, the more the matmul dominates",
+      "About $V/C$, so a larger vocabulary makes the matmul dominate",
+      "About 1, independent of width, so both cost about the same",
+      "About $5/(2C)$, so wider models are increasingly dominated by softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "$2BTCV / 5BTV = 2C/5$. For GPT-2 small ($C = 768$) that is about 307. Only at tiny widths like $C = 2$ are the two comparable."
+  },
+  {
+    "id": "01.4-106",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "What rule of thumb estimates the FLOPs of a whole forward pass of a transformer language model?",
+    "options": [
+      "About $(\\text{parameters})^2$, independent of the token count",
+      "About $2 \\times (\\text{parameters}) \\times (\\text{tokens})$",
+      "About $(\\text{parameters}) / (\\text{tokens})$ per batch",
+      "About $V \\times (\\text{tokens})$, set by the vocabulary"
+    ],
+    "answer_index": 1,
+    "explanation": "A forward pass costs roughly $2N$ FLOPs per token for $N$ parameters (REASONABLE INDUSTRY PRACTICE). For GPT-2 small's 124M parameters on 8192 tokens that is about $2\\times 10^{12}$."
+  },
+  {
+    "id": "01.4-107",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "Why is the output projection a large fraction (about 30%) of GPT-2 small's forward-pass FLOPs?",
+    "options": [
+      "Because the output projection is applied once per layer rather than once per pass",
+      "Because the vocabulary $V = 50257$ is very large relative to the model width",
+      "Because softmax requires a second $C \\times V$ matmul to normalize the logits",
+      "Because GPT-2 small has no attention layers, so only the MLPs compete"
+    ],
+    "answer_index": 1,
+    "explanation": "The projection costs $2BTCV$, and with $V = 50257$ that is a big chunk compared with the rest of a 124M-parameter model. It is applied once at the end, not per layer."
+  },
+  {
+    "id": "01.4-108",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "If softmax+loss is about 300 times cheaper in FLOPs than the projection, why is it still a performance concern?",
+    "options": [
+      "Because exp is a very expensive instruction that dominates the FLOP count once it is counted properly",
+      "It is memory-bound: it reads and writes the huge logits tensor several times with few FLOPs per byte",
+      "Because it must be computed in float64 to stay stable, which runs far slower on the GPU",
+      "Because it cannot run on the GPU, so the logits must be copied to the CPU every step"
+    ],
+    "answer_index": 1,
+    "explanation": "Softmax passes over the $B\\cdot T\\cdot V$ tensor multiple times (max, exp-and-sum, subtract) doing little arithmetic per number moved. GPUs compute far faster than they move bytes, so runtime is set by memory traffic."
+  },
+  {
+    "id": "01.4-109",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "8.1 Compute, step by step",
+    "question": "What distinguishes a compute-bound operation from a memory-bound one, in the context of the language-model loss?",
+    "options": [
+      "Compute-bound (matmul) does many FLOPs per number loaded; memory-bound (softmax) does few, so bytes moved set runtime",
+      "Compute-bound ops (softmax) run on the CPU cores; memory-bound ops (matmul) run on the GPU's memory controllers",
+      "Compute-bound ops (matmul) use float32 throughout; memory-bound ops (softmax) use bf16, which halves their bytes",
+      "Memory-bound ops (softmax) require more parameters to be stored, so their weights dominate the bytes moved"
+    ],
+    "answer_index": 0,
+    "explanation": "A matmul does hundreds of FLOPs per loaded number, so arithmetic throughput limits it. Softmax does a few per number, so memory bandwidth limits it. This distinction drives fused cross-entropy kernels and FlashAttention."
+  },
+  {
+    "id": "01.4-110",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Research connection",
+    "question": "What is the key equation of the GPT-2 training objective?",
+    "options": [
+      "Minimize $\\mathrm{KL}(\\text{uniform} \\parallel p)$",
+      "Minimize $\\sum_i (x_i - \\hat{x}_i)^2$ over tokens",
+      "Maximize $\\sum_i \\log p(x_i \\mid x_{<i})$",
+      "Maximize $\\sum_i \\log p(x_{<i} \\mid x_i)$"
+    ],
+    "answer_index": 2,
+    "explanation": "GPT-2 maximizes the sum of log next-token probabilities, exactly the negative of the summed cross-entropy loss. The reversed conditional and squared error are not the objective."
+  },
+  {
+    "id": "01.4-111",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Research connection",
+    "question": "Between GPT-2 and later models like GPT-3, LLaMA and DeepSeek, what changes and what stays the same in pretraining?",
+    "options": [
+      "The objective changes to reinforcement learning from the start; scale and data stay similar",
+      "Everything stays the same except the tokenizer, which grows to a larger vocabulary",
+      "Scale, data and architecture change; the next-token cross-entropy objective stays the same",
+      "The objective changes to masked-token prediction like BERT; scale stays the same"
+    ],
+    "answer_index": 2,
+    "explanation": "All of these models pretrain on the same next-token cross-entropy loss; progress comes from scale, data and architectural changes, not a new pretraining objective."
+  },
+  {
+    "id": "01.4-112",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "A validation loss computed with `F.cross_entropy(F.softmax(logits, -1).view(-1, V), targets.view(-1))` looks suspicious. What is the bug?",
+    "options": [
+      "Targets must be one-hot float vectors for `F.cross_entropy`, so the integer `targets.view(-1)` is misread",
+      "Softmax should be over dim 0, the batch axis, not dim -1, so it normalizes the wrong axis of the logits",
+      "`view` should be `reshape`, since the softmax output is non-contiguous and `view` silently scrambles rows",
+      "Softmax is applied before `F.cross_entropy`, which applies log-softmax again, so it is softmaxed twice"
+    ],
+    "answer_index": 3,
+    "explanation": "`F.cross_entropy` expects raw logits. Passing probabilities double-softmaxes, squashing toward uniform and distorting the loss. The fix is to pass `logits` directly."
+  },
+  {
+    "id": "01.4-113",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "Why does double softmax (softmax, then `F.cross_entropy`) push the distribution toward uniform?",
+    "options": [
+      "Because softmax always outputs uniform probabilities when its inputs already sum to exactly 1",
+      "Because the exponentials overflow on the second pass, and `inf/inf` is replaced by $1/V$",
+      "Because the second softmax divides every entry by $V$ before exponentiating, which flattens the whole row",
+      "Probabilities lie in $[0, 1]$, so they differ little, and softmax of nearly equal values is near uniform"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax depends on differences between inputs. After the first softmax all values are in $[0,1]$, so gaps are at most 1, and the second softmax is nearly flat. No overflow is involved."
+  },
+  {
+    "id": "01.4-114",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "If probabilities are needed for something other than the loss, what is the correct practice with `F.cross_entropy`?",
+    "options": [
+      "Feed probabilities to the loss and raw logits to everything else downstream",
+      "Feed the probabilities multiplied by $V$ so they look like logits",
+      "Take the log of the probabilities and feed those as logits",
+      "Compute probabilities separately, and still feed raw logits to the loss"
+    ],
+    "answer_index": 3,
+    "explanation": "Never call softmax before `cross_entropy`. If you need probabilities, compute them on the side; the loss must receive logits so it can apply its stable log-softmax exactly once."
+  },
+  {
+    "id": "01.4-115",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why must logits, not probabilities, be passed to `F.cross_entropy` and `llmre`'s `cross_entropy`?",
+    "options": [
+      "Both apply log-softmax internally (with max-subtraction), so passing probabilities applies softmax twice",
+      "Because probabilities have a different shape than logits, `(N,)` instead of `(N, V)`, and fail to broadcast",
+      "Because logits are integer-valued scores, and both functions index them directly as class ids",
+      "Because probabilities make the loss negative, since their logs are below zero and the sign flips"
+    ],
+    "answer_index": 0,
+    "explanation": "The functions handle normalization themselves for stability and to avoid $\\log 0$. Probabilities have the same shape as logits; the problem is the repeated softmax, which yields a wrong, too-flat loss."
+  },
+  {
+    "id": "01.4-116",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Check yourself",
+    "question": "A model has loss 1.386 nats on a 4-token vocabulary. What does that say about the model?",
+    "options": [
+      "Perplexity is 1.386, just above 1, so the model is nearly perfect",
+      "Perplexity is 4 = $V$, the uniform ceiling: it has effectively learned nothing",
+      "Perplexity is 2, so the model narrows each choice to two tokens",
+      "The loss is impossible on a 4-token vocabulary, since it exceeds the 1-nat maximum"
+    ],
+    "answer_index": 1,
+    "explanation": "$e^{1.386} = 4.0 = V$, the perplexity of uniform guessing, as uncertain as a fair 4-sided die. Any useful model would score below 4."
+  },
+  {
+    "id": "01.4-117",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why is the per-token gradient on a wrong token's logit, $q_i - 0 = q_i$, always positive?",
+    "options": [
+      "It is not always positive; it turns negative whenever a wrong token's logit exceeds the true token's logit",
+      "Because the loss includes a separate positive penalty term for each wrong token, proportional to that token's probability",
+      "Because softmax probabilities are positive, so descent lowers each wrong token's logit in proportion to its probability",
+      "Because wrong tokens always have larger logits than the true token, so their gradients are positive"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax outputs are strictly positive, so $q_i > 0$ and the gradient on every wrong token's logit is positive. A descent step lowers each wrong logit, more for tokens that took more probability."
+  },
+  {
+    "id": "01.4-118",
+    "chapter": "01.4",
+    "chapter_name": "The language-modeling objective & perplexity",
+    "module": "1",
+    "module_name": "Probability & language modeling",
+    "source": "lessons/module-01/lesson-04.md",
+    "section": "Check yourself",
+    "question": "When does the gradient $q - p$ of the cross-entropy loss become zero?",
+    "options": [
+      "When the loss equals $\\log V$, i.e., the model is uniform",
+      "When $q = p$, i.e., the model's distribution matches the target",
+      "When the true token has the highest logit, i.e., the argmax is right",
+      "When all logits are equal, so softmax is exactly uniform"
+    ],
+    "answer_index": 1,
+    "explanation": "The gradient vanishes exactly when predictions match the target, at which point training stops pushing. Having the top logit on the true token is not enough unless its probability is 1 (for one-hot targets)."
+  }
+]

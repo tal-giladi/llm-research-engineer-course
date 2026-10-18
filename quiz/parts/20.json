@@ -1,0 +1,1820 @@
+[
+  {
+    "id": "20-001",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "In the 'Mini Frontier LLM' capstone of an LLM research engineer course, what is a research engineer said to be judged on?",
+    "options": [
+      "The size of the largest model they have personally pretrained end to end",
+      "Mastery of a single component, such as attention kernels or tokenizers",
+      "How many production frameworks they can configure without reading the code",
+      "Making the whole pipeline run, produce a number, and be reproduced"
+    ],
+    "answer_index": 3,
+    "explanation": "The capstone frames the job as end-to-end: make the whole pipeline run, get a reproducible number out of it, and let others reproduce it. Knowing one component in depth is not enough if the pieces can't be wired together. Model size and framework familiarity are not the criteria."
+  },
+  {
+    "id": "20-002",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What sequence of artifacts does the 'Mini Frontier LLM' capstone pipeline produce, starting from raw text?",
+    "options": [
+      "GPT, tokenizer, pretrained model, preference-aligned model, evaluation number, instruction-tuned model, reasoning policy",
+      "Tokenizer, GPT, pretrained model, eval number, instruction-tuned model, preference-aligned model, RLVR reasoning policy",
+      "Tokenizer, reward model, pretrained model, reasoning policy, instruction-tuned model, evaluation number, aligned model",
+      "Pretrained model, tokenizer, instruction-tuned model, evaluation number, GPT, preference-aligned model, reasoning policy"
+    ],
+    "answer_index": 1,
+    "explanation": "The order follows the data dependencies: you need a tokenizer before a GPT can see ids, a pretrained model before you can evaluate or fine-tune it, SFT before preference alignment, and the RLVR reasoning stage on top. Each module solves a problem created by the one before it. The scrambled orders break those dependencies (e.g. a GPT cannot be built before its vocabulary is fixed)."
+  },
+  {
+    "id": "20-003",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "On what hardware is the tiny end-to-end version of the 'Mini Frontier LLM' capstone designed to run?",
+    "options": [
+      "A free cloud TPU, in about ten minutes",
+      "An 8-GPU node, in roughly a day",
+      "A single A100 GPU, in about an hour",
+      "A laptop CPU, in roughly 20 seconds"
+    ],
+    "answer_index": 3,
+    "explanation": "The driver code/scripts/capstone.py runs a tiny version of the pipeline on CPU in under about 20 seconds with less than 1 GB of RAM and 0 GPU-hours. The point is to see every stage work on hardware you already own; the GPU-scale numbers are for scaling each stage up later."
+  },
+  {
+    "id": "20-004",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "In the capstone pipeline diagram, which stage feeds the held-out perplexity measurement?",
+    "options": [
+      "The evaluation harness, applied to the pretrained model",
+      "The DPO stage, applied to the chosen/rejected preference pairs",
+      "The GRPO stage, applied to the verifiable arithmetic rewards",
+      "The BPE tokenizer, applied to the raw held-out corpus"
+    ],
+    "answer_index": 0,
+    "explanation": "Held-out perplexity comes from the evaluation harness run on the model coming out of the pretraining loop. It is the pretraining metric. DPO and GRPO are later post-training stages, and the tokenizer only produces ids; none of them yields perplexity."
+  },
+  {
+    "id": "20-005",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "Which optimizer setup does the capstone's pretraining loop use?",
+    "options": [
+      "SGD with Nesterov momentum and a step-decay learning-rate schedule",
+      "AdamW with a cosine learning-rate schedule and gradient clipping",
+      "Lion with linear warmup, EMA weight averaging, and no clipping",
+      "Adafactor with a constant learning rate and no gradient clipping"
+    ],
+    "answer_index": 1,
+    "explanation": "The pipeline diagram labels the pretraining loop 'AdamW + cosine LR + clip': a cosine-warmup learning rate, AdamW steps, and global gradient-norm clipping. These are the components built in the optimization modules (llmre.optim.adamw, schedule, clip). The other optimizers are not part of the llmre pretraining loop."
+  },
+  {
+    "id": "20-006",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "In the capstone pipeline, what comes after SFT on the path to alignment?",
+    "options": [
+      "LoRA, then preference data, then DPO or reward-model-plus-PPO",
+      "Perplexity evaluation, then MinHash deduplication of the SFT data",
+      "Tokenizer retraining on chat data, then pretraining from scratch",
+      "Tool use, then new BPE merges, then ablations on the merged vocab"
+    ],
+    "answer_index": 0,
+    "explanation": "After response-masked SFT, the pipeline adds LoRA for cheap fine-tuning, then preference data, then either DPO or the classic reward-model + PPO route. Only after that comes GRPO + RLVR, reasoning, tool use and agents. Retraining the tokenizer or re-pretraining are not post-SFT steps."
+  },
+  {
+    "id": "20-007",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "What is the final deliverable at the bottom of the capstone pipeline diagram?",
+    "options": [
+      "A deployed chat endpoint serving the model",
+      "A leaderboard submission on a public benchmark",
+      "A merged LoRA checkpoint uploaded to a model hub",
+      "Ablations leading to a written experiment report"
+    ],
+    "answer_index": 3,
+    "explanation": "The diagram ends with 'ablations -> a written experiment report'. The course stresses that the deliverable is not the model itself but a report a colleague can reproduce. Deployment, leaderboards and checkpoint uploads are not part of the capstone pipeline."
+  },
+  {
+    "id": "20-008",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "Where does the code for the 'Mini Frontier LLM' capstone live?",
+    "options": [
+      "In a set of independent notebooks, one per module, with no shared package between them",
+      "In one coherent package under code/src/llmre/, built up across earlier modules",
+      "Inside Hugging Face Transformers, configured entirely through YAML files",
+      "In a fresh standalone repository written from scratch only for the capstone"
+    ],
+    "answer_index": 1,
+    "explanation": "The whole codebase is one package, llmre, under code/src/llmre/. The capstone is a guided tour of that package as a project, not new code written from scratch. It does not rely on HF Transformers or disconnected notebooks."
+  },
+  {
+    "id": "20-009",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "Which script runs the tiny end-to-end capstone pipeline and writes a filled-in experiment report?",
+    "options": [
+      "code/scripts/bench_attention.py",
+      "code/experiments/scaling_sweep.py",
+      "code/tests/test_capstone.py",
+      "code/scripts/capstone.py"
+    ],
+    "answer_index": 3,
+    "explanation": "code/scripts/capstone.py is the driver: it runs a tiny version of the stages on CPU and writes code/reports/capstone_report.md. scaling_sweep.py is the scaling/ablation experiment, bench_attention.py benchmarks attention, and test_capstone.py is the smoke test that asserts the learning signals."
+  },
+  {
+    "id": "20-010",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "1. What we are building",
+    "question": "What is the main point of the capstone, given that it is built from code written in Modules 0-19?",
+    "options": [
+      "To see the existing code work end to end and know how each stage scales",
+      "To replace the earlier from-scratch modules with optimized kernels",
+      "To rewrite every component from scratch with production frameworks",
+      "To introduce a new architecture not covered in earlier modules"
+    ],
+    "answer_index": 0,
+    "explanation": "The capstone is explicitly not new code you must write from scratch; it assembles what you already wrote and runs it as one pipeline. The goal is to watch it work end to end and understand how each stage scales up. It does not replace or rewrite the earlier modules."
+  },
+  {
+    "id": "20-011",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(1) Train a BPE tokenizer",
+    "question": "In byte-level BPE training, what is the starting vocabulary before any merges?",
+    "options": [
+      "The 26 lowercase letters plus punctuation",
+      "The 50,257 tokens of the GPT-2 vocabulary",
+      "All Unicode code points that appear in the corpus",
+      "The 256 raw byte values"
+    ],
+    "answer_index": 3,
+    "explanation": "Byte-level BPE starts from the 256 possible byte values and repeatedly merges the most frequent adjacent pair into a new id. Because any string is a sequence of bytes, nothing is ever out-of-vocabulary. Starting from Unicode code points or letters would leave unseen characters unrepresentable."
+  },
+  {
+    "id": "20-012",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(1) Train a BPE tokenizer",
+    "question": "Why is nothing ever out-of-vocabulary for a byte-level BPE tokenizer?",
+    "options": [
+      "Unknown words are mapped to a special <unk> token that is added during BPE training",
+      "Every string is a sequence of bytes, and all 256 byte values are in the base vocab",
+      "Rare characters are dropped before encoding, so only symbols seen in training remain",
+      "The tokenizer retrains its merges on any new text it sees at encode time"
+    ],
+    "answer_index": 1,
+    "explanation": "Since the base vocabulary contains all 256 bytes, any input can always fall back to single-byte tokens. That is also why decode(encode(s)) == s holds exactly. An <unk> token or dropping characters would break that round-trip, and BPE does not retrain at encode time."
+  },
+  {
+    "id": "20-013",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(1) Train a BPE tokenizer",
+    "question": "Which round-trip property should a byte-level BPE tokenizer satisfy for any string s?",
+    "options": [
+      "encode(s) == sorted(encode(s))",
+      "decode(encode(s)) == s",
+      "encode(decode(s)) == s",
+      "len(encode(s)) == len(s)"
+    ],
+    "answer_index": 1,
+    "explanation": "Byte-level BPE is lossless: encoding a string and decoding the ids gives back exactly the same string. Token count is generally smaller than character count after merges, so the length equality is false. encode(decode(s)) mixes up types (s is a string, decode takes ids)."
+  },
+  {
+    "id": "20-014",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(1) Train a BPE tokenizer",
+    "question": "In llmre's BPETokenizer, what is described as 'the whole subtlety' of encoding?",
+    "options": [
+      "Applying merges in random order to regularize the tokenizer",
+      "Applying the learned merges in the order they were learned",
+      "Applying the longest available merge first, regardless of order",
+      "Applying merges in alphabetical order of the byte pairs"
+    ],
+    "answer_index": 1,
+    "explanation": "The merges are stored as an ordered dict of (a, b) -> new_id, and encode must apply them in learned order. Later merges may depend on tokens created by earlier ones, so reordering produces different (wrong) tokenizations. Alphabetical, longest-first or random orders do not reproduce training."
+  },
+  {
+    "id": "20-015",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(1) Train a BPE tokenizer",
+    "question": "How does llmre's BPETokenizer store its learned merges?",
+    "options": [
+      "As an ordered dict mapping a pair (a, b) to a new id",
+      "As a set of strings with no ordering",
+      "As a trie of whole words learned from the corpus",
+      "As a matrix of pair frequencies recomputed on each encode"
+    ],
+    "answer_index": 0,
+    "explanation": "merges is an ordered dict of (a, b) -> new_id. The ordering matters because encode applies merges in the order they were learned. A set would lose that order, and recomputing frequencies at encode time is not how BPE encoding works."
+  },
+  {
+    "id": "20-016",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(2) Build a GPT",
+    "question": "What are the main components of the decoder-only GPT in llmre.model.gpt.GPT?",
+    "options": [
+      "Token + positional embeddings, pre-norm blocks (causal attention + MLP), a final norm, a tied lm_head",
+      "An encoder stack, a decoder stack with cross-attention to the encoder output, and an untied output layer",
+      "Only token embeddings, a single shared attention layer, and a separate classifier per position",
+      "Convolutional embeddings, post-norm blocks with bidirectional attention, and a softmax output head"
+    ],
+    "answer_index": 0,
+    "explanation": "The capstone GPT is decoder-only: token and positional embeddings, a stack of pre-norm blocks each containing causal multi-head attention and an MLP, a final norm, and an lm_head tied to the token embedding. There is no encoder or cross-attention, and attention is causal, not bidirectional."
+  },
+  {
+    "id": "20-017",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(2) Build a GPT",
+    "question": "In llmre's GPT, what does forward(idx, targets) return?",
+    "options": [
+      "Only the loss as a scalar",
+      "Only the sampled next token ids",
+      "A tuple (hidden_states, attention_weights)",
+      "A tuple (logits, loss)"
+    ],
+    "answer_index": 3,
+    "explanation": "forward(idx, targets) returns both the logits and the cross-entropy loss. Sampling is done separately by generate(...). Returning hidden states or attention weights is not the interface described."
+  },
+  {
+    "id": "20-018",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(2) Build a GPT",
+    "question": "What does weight tying mean in llmre's GPT?",
+    "options": [
+      "The token embedding matrix and the lm_head weight are the same tensor",
+      "Every transformer block shares one set of attention and MLP weights",
+      "The query and key projections share a single weight matrix in each head",
+      "The positional and token embeddings are summed into one shared table"
+    ],
+    "answer_index": 0,
+    "explanation": "Weight tying means transformer.wte.weight is lm_head.weight: the same parameter maps ids to vectors at the input and vectors to logits at the output. It saves vocab_size x n_embd parameters. Sharing weights across blocks or between Q and K is a different (and not used) idea."
+  },
+  {
+    "id": "20-019",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(2) Build a GPT",
+    "question": "What scaled residual initialization standard deviation does llmre's GPT use for residual projections?",
+    "options": [
+      "0.02 * sqrt(2 * n_layer)",
+      "1 / sqrt(n_embd * n_layer)",
+      "0.02 / (2 * n_head)",
+      "0.02 / sqrt(2 * n_layer)"
+    ],
+    "answer_index": 3,
+    "explanation": "Residual projections are initialized with std 0.02 / sqrt(2 * n_layer). Each block adds two residual contributions (attention and MLP), so there are 2 * n_layer additions; scaling by 1/sqrt of that keeps the residual stream's variance from growing with depth. Multiplying by sqrt(n_layer) would do the opposite."
+  },
+  {
+    "id": "20-020",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(2) Build a GPT",
+    "question": "In llmre's GPT, which object fixes every tensor shape of the model?",
+    "options": [
+      "The training loop's TrainConfig",
+      "The tokenizer's merges dictionary",
+      "The GPTConfig dataclass",
+      "The capstone report template"
+    ],
+    "answer_index": 2,
+    "explanation": "GPTConfig (llmre.model.config) holds n_layer, n_head, n_embd, block_size, vocab_size and so on, which determine every tensor shape. TrainConfig controls the optimization loop, not model shapes. The tokenizer influences vocab_size only indirectly by being passed into the config."
+  },
+  {
+    "id": "20-021",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(3) Pretrain on a toy corpus",
+    "question": "What objective does the capstone's pretraining stage minimize?",
+    "options": [
+      "Binary cross-entropy of a real-vs-fake classifier",
+      "Mean squared error between embeddings of adjacent tokens",
+      "Negative reward from a learned reward model",
+      "Cross-entropy of the true next token at each position"
+    ],
+    "answer_index": 3,
+    "explanation": "Pretraining is next-token prediction: for each position, minimize the cross-entropy of the actual next token under the model's predicted distribution. MSE on embeddings or discriminator losses are not language-model pretraining objectives, and reward models belong to post-training."
+  },
+  {
+    "id": "20-022",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(3) Pretrain on a toy corpus",
+    "question": "In what order does the llmre pretraining loop's inner step act?",
+    "options": [
+      "Forward/backward, AdamW step, then clip the gradients after the update has already been applied to the weights",
+      "Set the LR from the cosine-warmup schedule, forward/backward, clip the global grad norm, AdamW step",
+      "AdamW step, then forward/backward, then clip the grad norm, then set the LR for the next step",
+      "Clip the grad norm, set the LR from the schedule, AdamW step, then forward/backward last"
+    ],
+    "answer_index": 1,
+    "explanation": "The loop writes the learning rate for the current step, runs forward and backward to get gradients, clips the global gradient norm, then takes the AdamW step. Clipping must happen after backward and before the optimizer step; clipping after the step has no effect on that update."
+  },
+  {
+    "id": "20-023",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(3) Pretrain on a toy corpus",
+    "question": "What does gradient accumulation let the llmre pretraining loop do?",
+    "options": [
+      "Reach a large effective batch size while fitting in small memory",
+      "Store the AdamW moment buffers in lower precision to save memory",
+      "Skip the backward pass on most micro-batches to save compute",
+      "Use a much higher learning rate safely without any warmup phase"
+    ],
+    "answer_index": 0,
+    "explanation": "Gradient accumulation sums gradients over several micro-batches before one optimizer step, so the effective batch is large while each forward/backward only holds one micro-batch in memory. It still requires a backward pass on every micro-batch, and it is unrelated to warmup or optimizer precision."
+  },
+  {
+    "id": "20-024",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(3) Pretrain on a toy corpus",
+    "question": "Which llmre modules does the training loop llmre.training.loop.train build on?",
+    "options": [
+      "llmre.tools.registry.ToolRegistry, llmre.agents.react.run_react and llmre.reasoning.cot.cot_prompt",
+      "llmre.data.minhash, llmre.data.contamination and llmre.data.quality, applied per training batch",
+      "llmre.optim.adamw.AdamW, llmre.optim.schedule.cosine_warmup_lr and llmre.optim.clip.clip_grad_norm_",
+      "llmre.sft.lora.LoRALinear, llmre.preference.dpo.dpo_loss and llmre.rl.grpo.grpo_advantages"
+    ],
+    "answer_index": 2,
+    "explanation": "The pretraining loop is assembled from the from-scratch optimizer (AdamW), learning-rate schedule (cosine warmup) and gradient-norm clipping. LoRA/DPO/GRPO are post-training, tools/agents are later modules, and the data-quality modules feed the corpus rather than the loop."
+  },
+  {
+    "id": "20-025",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(4) The data pipeline",
+    "question": "How does the llmre data pipeline turn documents into training data?",
+    "options": [
+      "Re-tokenize a random document at every step, truncate it to block_size, and pad shorter ones",
+      "Encode each document once, concatenate into one id stream with end-of-text ids, cut random (x, y) windows",
+      "Pad every document to the longest one in the corpus and train on each padded document separately",
+      "Shuffle all tokens globally across documents and sample them independently for each batch"
+    ],
+    "answer_index": 1,
+    "explanation": "pack_documents encodes everything once into a single id stream with end-of-text separators, and get_batch cuts random fixed-length windows. Packing avoids padding waste. Re-tokenizing every step wastes compute, and globally shuffling tokens destroys the sequences the model must learn."
+  },
+  {
+    "id": "20-026",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(4) The data pipeline",
+    "question": "In llmre's get_batch, how is the target window y related to the input window x?",
+    "options": [
+      "y is x with 15% of tokens masked",
+      "y is x shifted left by one position",
+      "y is x reversed along the time axis",
+      "y is the same as x, position by position"
+    ],
+    "answer_index": 1,
+    "explanation": "Each target is the next token of the input at the same position, so y is x shifted by one. That single shift is the whole supervision signal for next-token prediction. Masking is BERT-style pretraining, and y == x would teach the model to copy its input."
+  },
+  {
+    "id": "20-027",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(4) The data pipeline",
+    "question": "Besides packing and batching, what must a data pipeline do at real scale?",
+    "options": [
+      "Remove every repeated token within each document",
+      "Filter, deduplicate and decontaminate the corpus",
+      "Translate all documents into a single language",
+      "Sort the documents alphabetically before packing"
+    ],
+    "answer_index": 1,
+    "explanation": "At real scale the data pipeline is also where you filter low-quality text, deduplicate (e.g. with MinHash) and decontaminate against evaluation sets (llmre.data.quality, minhash, contamination). Translation, alphabetical sorting or removing repeated tokens are not standard pipeline steps."
+  },
+  {
+    "id": "20-028",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(4) The data pipeline",
+    "question": "What does the llmre.data.contamination module address in the data pipeline?",
+    "options": [
+      "Balancing the mix of code, prose, and math in the training corpus by domain weights",
+      "Fixing invalid UTF-8 byte sequences so the byte-level tokenizer does not fail on them",
+      "Removing eval-set content from the training corpus so benchmark scores are not inflated",
+      "Detecting malware and phishing pages embedded in web-crawled documents before training starts"
+    ],
+    "answer_index": 2,
+    "explanation": "Decontamination removes overlap between the training corpus and evaluation benchmarks; otherwise the model may have seen test items and score artificially high. It sits next to quality filtering and MinHash deduplication in the data-quality tooling. It is not about malware, encoding or domain mixing."
+  },
+  {
+    "id": "20-029",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(5) GPU and profiling notes",
+    "question": "How does the memory of standard (non-Flash) attention grow with sequence length T?",
+    "options": [
+      "As T^2, because it materializes a T x T score matrix per head",
+      "As T^3, because of the cost of the T x T by T x d matrix multiply",
+      "Linearly in T, because each token stores one key and one value vector",
+      "Logarithmically in T, because softmax normalization compresses the scores"
+    ],
+    "answer_index": 0,
+    "explanation": "Standard attention builds the full T x T score matrix per head, so memory grows quadratically with T. FlashAttention computes the same result in tiles without ever storing that matrix. The matmul cost is T^2 times head dimension, not T^3."
+  },
+  {
+    "id": "20-030",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(5) GPU and profiling notes",
+    "question": "What does FlashAttention change relative to standard attention?",
+    "options": [
+      "It drops the softmax so that attention becomes linear in sequence length",
+      "It only attends to a fixed window of nearby tokens, skipping distant ones",
+      "It approximates attention with a low-rank projection of the keys and the values",
+      "It computes the same result without storing the full T x T attention matrix"
+    ],
+    "answer_index": 3,
+    "explanation": "FlashAttention is exact: it tiles the computation and uses an online softmax so the T x T matrix is never materialized in slow memory. The output is the same as standard attention. Low-rank, linear or sliding-window attention are approximations that change the result."
+  },
+  {
+    "id": "20-031",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(5) GPU and profiling notes",
+    "question": "Which two quantities does llmre.training.metrics use to track training throughput?",
+    "options": [
+      "Vocabulary size and the number of BPE merges per second",
+      "Held-out perplexity and BLEU score per wall-clock hour",
+      "The 6N FLOPs-per-token rule and MFU (model FLOPs utilization)",
+      "Global gradient norm and learning rate logged at each step"
+    ],
+    "answer_index": 2,
+    "explanation": "llmre.training.metrics provides model_flops_per_token (about 6N for N parameters), tokens_per_step and mfu. MFU compares achieved FLOPs to the hardware's peak. Perplexity and BLEU are quality metrics; gradient norm and LR are optimization diagnostics, not throughput."
+  },
+  {
+    "id": "20-032",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(5) GPU and profiling notes",
+    "question": "Which llmre function is the tiled (FlashAttention-style) attention reference?",
+    "options": [
+      "llmre.attention.flash.flash_attention_reference",
+      "llmre.evaluation.harness.evaluate_perplexity",
+      "llmre.attention.attention.scaled_dot_product_attention",
+      "llmre.training.metrics.model_flops_per_token"
+    ],
+    "answer_index": 0,
+    "explanation": "flash_attention_reference in llmre.attention.flash is the from-scratch tiled attention implementation, benchmarked by code/scripts/bench_attention.py. scaled_dot_product_attention is the standard attention that materializes the full score matrix, model_flops_per_token counts FLOPs for throughput, and evaluate_perplexity computes a metric."
+  },
+  {
+    "id": "20-033",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(6) A scaling mini-experiment",
+    "question": "What do scaling laws say about language-model loss?",
+    "options": [
+      "It rises after a fixed number of parameters due to overfitting",
+      "It is independent of model size once data is fixed",
+      "It falls linearly with the number of parameters without limit",
+      "It falls predictably with model size, data and compute"
+    ],
+    "answer_index": 3,
+    "explanation": "Scaling laws describe a predictable, power-law decrease of loss as you scale model size, data and compute. It is not linear and does not ignore model size. Even on CPU you can see the shape of the curve by sweeping a size knob."
+  },
+  {
+    "id": "20-034",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(6) A scaling mini-experiment",
+    "question": "In the capstone's CPU scaling mini-experiment, which knob is swept to see the scaling curve?",
+    "options": [
+      "The tokenizer's vocabulary size",
+      "The learning-rate warmup length",
+      "The random seed, over many runs",
+      "n_embd, over a few model sizes"
+    ],
+    "answer_index": 3,
+    "explanation": "code/experiments/scaling_sweep.py sweeps n_embd over a few sizes and plots final loss, keeping corpus, steps and seed fixed. Sweeping seeds measures noise, not scaling, and vocab size or warmup are not model-size knobs."
+  },
+  {
+    "id": "20-035",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(6) A scaling mini-experiment",
+    "question": "In the capstone scaling sweep, what is the trade-off of a bigger model at a fixed number of steps?",
+    "options": [
+      "It always overfits and must be stopped earlier",
+      "It reaches a lower loss but costs more compute per step",
+      "It reaches a higher loss and costs less per step",
+      "It reaches the same loss at the same cost per step"
+    ],
+    "answer_index": 1,
+    "explanation": "With the same steps, a bigger model reaches lower loss, but by the 6ND compute bookkeeping each step costs more (more parameters per token). That is the core scaling trade-off. The other options contradict the observed curve."
+  },
+  {
+    "id": "20-036",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(7) Evaluation",
+    "question": "How is perplexity defined for a held-out set?",
+    "options": [
+      "log(mean cross-entropy) on held-out text",
+      "mean(exp(cross-entropy)) over training batches",
+      "exp(mean cross-entropy) on held-out text",
+      "The fraction of next tokens predicted exactly"
+    ],
+    "answer_index": 2,
+    "explanation": "Perplexity is the exponential of the token-averaged cross-entropy on held-out text. It reads as an effective branching factor: a uniform model over V tokens has perplexity V. Accuracy or log of the loss are different quantities, and the measurement must be on held-out data."
+  },
+  {
+    "id": "20-037",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(7) Evaluation",
+    "question": "How does llmre's multiple_choice_score grade a multiple-choice benchmark?",
+    "options": [
+      "By likelihood scoring: comparing length-normalized log-likelihoods of each answer, no weight updates",
+      "By fine-tuning the model on the benchmark's training split, then measuring accuracy on the test split",
+      "By asking a separate judge model which answer is best, then counting agreement with the gold label",
+      "By generating free text for each question and matching the chosen letter with a regular expression"
+    ],
+    "answer_index": 0,
+    "explanation": "Likelihood scoring computes the log-likelihood of each candidate answer given the prompt, length-normalized so longer answers are not unfairly penalized, and picks the highest. It requires no training. Fine-tuning on the benchmark would contaminate it; generation-plus-regex and LLM judges are different evaluation styles."
+  },
+  {
+    "id": "20-038",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(7) Evaluation",
+    "question": "Why does llmre's multiple_choice_score use length-normalized log-likelihood?",
+    "options": [
+      "Because normalizing by length converts the log-likelihood into perplexity exactly",
+      "Because summed log-likelihood underflows and cannot be computed in float32",
+      "Because raw summed log-likelihood penalizes longer answers just for having more tokens",
+      "Because longer answers are always correct in multiple-choice benchmarks, so it rewards them"
+    ],
+    "answer_index": 2,
+    "explanation": "Each extra token adds a negative log-prob, so summing favors short answers regardless of correctness. Normalizing by length compares answers on a per-token basis. It is not about length being correct, not exactly perplexity, and not a numerical precision issue."
+  },
+  {
+    "id": "20-039",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(7) Evaluation",
+    "question": "What kind of mean does llmre's evaluate_perplexity compute over the cross-entropy?",
+    "options": [
+      "The median of per-token losses across all held-out batches",
+      "The maximum per-batch loss, as a worst-case estimate",
+      "An unweighted mean of per-batch losses, regardless of how many tokens each batch has",
+      "A token-weighted mean, so every token counts equally regardless of batch"
+    ],
+    "answer_index": 3,
+    "explanation": "evaluate_perplexity averages cross-entropy weighted by tokens, so batches with more tokens count more and the result equals the true per-token mean. Averaging per-batch means would bias toward small batches. Median or max are not the definition of perplexity."
+  },
+  {
+    "id": "20-040",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(8) SFT (supervised fine-tuning)",
+    "question": "In response-masked SFT, which tokens contribute to the loss?",
+    "options": [
+      "Only the user prompt tokens",
+      "Only the special role-delimiter tokens",
+      "Only the assistant response tokens",
+      "All tokens in the conversation equally"
+    ],
+    "answer_index": 2,
+    "explanation": "SFT teaches the model to answer, so the loss is computed on the assistant response only; prompt positions are ignored. Training on the prompt would reward echoing the user. Delimiters alone carry too little signal, though the assistant's closing delimiter is part of the response."
+  },
+  {
+    "id": "20-041",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(8) SFT (supervised fine-tuning)",
+    "question": "In llmre's SFT, what does build_labels write into the prompt positions?",
+    "options": [
+      "0, so those positions predict the padding token",
+      "ignore_index, i.e. -100, so cross-entropy skips them",
+      "The end-of-text id, so the model learns to stop",
+      "A copy of the input ids, so the prompt is reconstructed"
+    ],
+    "answer_index": 1,
+    "explanation": "build_labels sets labels at prompt positions to the sentinel -100 (ignore_index), and masked_cross_entropy drops those positions. Writing 0 or end-of-text would actively train the model to predict those tokens, and copying inputs would train on the prompt."
+  },
+  {
+    "id": "20-042",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(8) SFT (supervised fine-tuning)",
+    "question": "What does a chat template do in llmre's SFT stage?",
+    "options": [
+      "Translates the conversation into a fixed set of intents and slot values for training",
+      "Flattens role-tagged messages into one string with delimiters and produces a response mask",
+      "Removes the system prompt so that the model sees only the user turns and the assistant replies",
+      "Compresses the conversation by summarizing earlier turns so it fits in the context"
+    ],
+    "answer_index": 1,
+    "explanation": "render_with_response_mask flattens messages with roles into a single string using delimiters and marks which tokens belong to the assistant response. That mask drives build_labels. It does not translate, drop system prompts, or summarize."
+  },
+  {
+    "id": "20-043",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(8) SFT (supervised fine-tuning)",
+    "question": "Why is the assistant's <|end|> closing delimiter treated as a response token in SFT?",
+    "options": [
+      "So the loss is lower and training converges faster on short replies",
+      "So the model learns to stop generating at the end of its answer",
+      "So the prompt length can be recovered later from the label tensor",
+      "Because special tokens cannot be masked with -100 in cross-entropy"
+    ],
+    "answer_index": 1,
+    "explanation": "Including the closer in the trained response tokens teaches the model to emit it, which is how it learns when to stop. If it were masked, the model would never be trained to end its turn and could ramble. Special tokens can be masked; the choice is deliberate."
+  },
+  {
+    "id": "20-044",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Check yourself",
+    "question": "In the capstone's SFT stage, 21 prompt tokens are ignored and 11 response tokens are trained. What would go wrong if all 32 were trained on?",
+    "options": [
+      "The loss would become undefined, because the mean over trained positions divides by zero",
+      "The model would be rewarded for echoing the user's prompt, wasting capacity and blurring turns",
+      "Nothing would change, because training on all tokens is mathematically equivalent to masking them",
+      "The tokenizer would have to be retrained on the prompts so their tokens get their own merges"
+    ],
+    "answer_index": 1,
+    "explanation": "Training on prompt tokens rewards the model for echoing the user, wasting capacity on learning to repeat inputs and blurring the 'when is it my turn' signal the chat template teaches. The mechanism that avoids this is ignore_index = -100 in build_labels plus masked_cross_entropy. It is not a numerical issue and is not equivalent to masking."
+  },
+  {
+    "id": "20-045",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(9) LoRA",
+    "question": "Why is full fine-tuning memory-heavy compared with LoRA?",
+    "options": [
+      "It stores a full copy of the training data in GPU memory",
+      "It needs a separate frozen reference model for every single layer",
+      "It updates every weight and keeps two AdamW moments per parameter",
+      "It recomputes the tokenizer's merges and embeddings at every training step"
+    ],
+    "answer_index": 2,
+    "explanation": "Full fine-tuning has gradients and two AdamW moment buffers for every parameter. LoRA freezes the base weights, so only the small adapters carry gradients and optimizer state. Tokenizers and data copies are not the main memory cost."
+  },
+  {
+    "id": "20-046",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(9) LoRA",
+    "question": "What is the LoRA forward computation for a wrapped linear layer?",
+    "options": [
+      "y = B(A(Wx)), with all three matrices trained",
+      "y = (W + A) x, with A trained to full rank",
+      "y = alpha * W x + r * B x, with W trained",
+      "y = Wx + (alpha/r) * B(Ax), with W frozen"
+    ],
+    "answer_index": 3,
+    "explanation": "LoRA keeps the pretrained W frozen and adds a low-rank update B(Ax) scaled by alpha/r. A projects down to rank r and B projects back up. A full-rank additive update or training W defeats the purpose; chaining the matrices multiplicatively changes the base function."
+  },
+  {
+    "id": "20-047",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(9) LoRA",
+    "question": "How is LoRA's B matrix initialized, and why?",
+    "options": [
+      "To zeros, so the wrapped layer starts identical to the base layer",
+      "To the pretrained weights, so the update starts at W",
+      "To random normal, so the adapter starts with useful features",
+      "To the identity, so the layer doubles its output at init"
+    ],
+    "answer_index": 0,
+    "explanation": "With B = 0, the update (alpha/r) * B(Ax) is exactly zero at init, so forward(x) == base(x) and training starts from the pretrained model rather than a perturbed one. The capstone checks this ('identical-to-base at init: True'). A random B would perturb the model immediately."
+  },
+  {
+    "id": "20-048",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(9) LoRA",
+    "question": "For a LoRA adapter of rank r on a linear layer with input size in and output size out, how many trainable parameters are there?",
+    "options": [
+      "r * in * out",
+      "in * out",
+      "r * (in + out)",
+      "r^2 + in + out"
+    ],
+    "answer_index": 2,
+    "explanation": "A has shape (r, in) and B has shape (out, r), giving r*in + r*out = r*(in + out) trainable parameters. in*out is the frozen base weight. For a 64x64 linear at rank 4 that is 4*(64+64) = 512."
+  },
+  {
+    "id": "20-049",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Check yourself",
+    "question": "A LoRA rank-4 adapter on a 64x64 linear reports 512 trainable of 4608 parameters. Where does the 4608 come from?",
+    "options": [
+      "Twice the 512 adapter count plus the 64-dim bias vectors",
+      "4096 frozen base weights plus 512 bias and norm terms",
+      "512 adapter parameters plus the 4096 frozen base weights (64 x 64)",
+      "512 adapter parameters times 9 wrapped linear layers in total"
+    ],
+    "answer_index": 2,
+    "explanation": "A is (4, 64) = 256 and B is (64, 4) = 256, so 512 trainable. The frozen base weight is 64*64 = 4096. 512 + 4096 = 4608, so about 11.1% of the parameters are trainable."
+  },
+  {
+    "id": "20-050",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(9) LoRA",
+    "question": "What does LoRALinear.merge do in llmre?",
+    "options": [
+      "Merges two different LoRA adapters into one by averaging their A and B matrices elementwise",
+      "Combines the A and B matrices into a single rank-1 vector to reduce memory",
+      "Unfreezes the base weight so that full fine-tuning can resume from the adapter",
+      "Folds the low-rank update into the base weight so inference needs no extra compute"
+    ],
+    "answer_index": 3,
+    "explanation": "Merging computes W + (alpha/r) * B A and stores it as the layer weight, so the merged layer behaves the same with a single matmul. It does not average adapters, reduce rank, or unfreeze anything. mark_only_lora_trainable is the function that controls which parameters train."
+  },
+  {
+    "id": "20-051",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(10) Preference data + DPO",
+    "question": "What form does preference data take for DPO?",
+    "options": [
+      "For each prompt, a single response with a scalar human rating",
+      "For each prompt, a gold answer and a programmatic verifier function",
+      "For each prompt, a chosen response y_w and a rejected response y_l",
+      "For each response, a list of token-level corrections from annotators"
+    ],
+    "answer_index": 2,
+    "explanation": "Alignment starts from pairs: a prompt with a chosen (winning) response y_w and a rejected (losing) response y_l. DPO optimizes directly on these pairs. Scalar ratings or verifiers belong to other setups (reward regression, RLVR)."
+  },
+  {
+    "id": "20-052",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(10) Preference data + DPO",
+    "question": "What does DPO avoid compared with the classic RLHF pipeline?",
+    "options": [
+      "Using preference pairs, replacing them with scalar ratings",
+      "Using a frozen reference model to anchor the policy's KL",
+      "Training a separate reward model and sampling from the policy",
+      "Computing sequence log-probabilities under the current policy"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO optimizes the policy against preference pairs directly, with no reward model and no sampling. It still uses a frozen reference model and sequence log-probs (sequence_logprob), and it still needs preference pairs."
+  },
+  {
+    "id": "20-053",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(10) Preference data + DPO",
+    "question": "In the DPO derivation, why does the beta * log Z(x) term disappear?",
+    "options": [
+      "It depends only on the prompt, so it cancels in the chosen-minus-rejected difference",
+      "It is absorbed into the learning rate, since both scale the gradient by a constant",
+      "It is set to zero by choosing beta = 0, which removes the KL term from the objective",
+      "It is estimated by sampling completions from the reference and then subtracted out"
+    ],
+    "answer_index": 0,
+    "explanation": "The partition-function term beta*log Z(x) is the same for both responses of the same prompt, so it cancels in r(y_w) - r(y_l). That leaves a loss with only the policy and a frozen reference. beta = 0 would remove the KL constraint, and Z is never estimated by sampling."
+  },
+  {
+    "id": "20-054",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(11) A reward model and PPO",
+    "question": "In the classic RLHF path, which loss trains the reward model on preference pairs?",
+    "options": [
+      "The PPO clipped surrogate objective with a KL penalty to the reference",
+      "Cross-entropy of the next token on chosen responses only, as in SFT",
+      "The Bradley-Terry loss: P(y_w beats y_l) = sigmoid(r(x,y_w) - r(x,y_l))",
+      "Mean squared error between the predicted reward and a human 1-10 score"
+    ],
+    "answer_index": 2,
+    "explanation": "The reward model is trained with the Bradley-Terry link: the probability that the chosen response wins is the sigmoid of the reward difference, and the loss is its negative log. PPO's clipped objective is used afterwards to train the policy, not the reward model."
+  },
+  {
+    "id": "20-055",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(11) A reward model and PPO",
+    "question": "In RLHF with PPO, what keeps the policy from drifting too far from the reference model?",
+    "options": [
+      "Removing the clipping from PPO's surrogate objective",
+      "A KL penalty to the reference, entering through the reward",
+      "Lowering the reward model's learning rate during PPO updates",
+      "Freezing the policy's attention layers and training only MLPs"
+    ],
+    "answer_index": 1,
+    "explanation": "PPO-based RLHF adds a KL penalty between the policy and the frozen reference, which enters the reward. Together with the clipped objective it limits drift. Freezing layers or adjusting the reward model's LR are not the mechanism, and removing clipping would make updates less stable."
+  },
+  {
+    "id": "20-056",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(11) A reward model and PPO",
+    "question": "How does DPO relate to the reward-model + PPO path?",
+    "options": [
+      "DPO is a preprocessing step that filters the preference pairs before PPO runs on them",
+      "DPO is PPO applied to a verifiable reward, with the critic replaced by a group-mean baseline",
+      "DPO short-circuits it, optimizing the policy on preference pairs with no reward model or PPO",
+      "DPO trains the reward model from the preference pairs, and PPO then trains the policy against it"
+    ],
+    "answer_index": 2,
+    "explanation": "The reward model + PPO route is the classic RLHF path that DPO short-circuits: DPO uses the closed-form link between reward and policy/reference log-ratio to skip both the reward model and RL sampling. It is not a PPO preprocessing step, and it does not use verifiable rewards."
+  },
+  {
+    "id": "20-057",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(12) GRPO + RLVR on a verifiable task",
+    "question": "What does GRPO drop compared with PPO?",
+    "options": [
+      "The learned critic (value function), using the group's mean reward as baseline",
+      "The policy model itself, replacing it with a table of sampled completions per prompt",
+      "Sampling multiple completions, scoring a single greedy completion per prompt instead",
+      "The clipped importance ratio, taking plain REINFORCE steps on the advantage"
+    ],
+    "answer_index": 0,
+    "explanation": "GRPO removes PPO's critic: it samples a group of completions per prompt and uses the group mean reward as the baseline. It keeps a clipped ratio and, by design, relies on sampling multiple completions per prompt."
+  },
+  {
+    "id": "20-058",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(12) GRPO + RLVR on a verifiable task",
+    "question": "What is the GRPO advantage for completion i in a group?",
+    "options": [
+      "A_i = (r_i - mean(r)) / std(r)",
+      "A_i = r_i - V(x), with V a learned critic",
+      "A_i = r_i / max(r)",
+      "A_i = log r_i - log mean(r)"
+    ],
+    "answer_index": 0,
+    "explanation": "GRPO standardizes rewards within the group: subtract the group mean and divide by the group standard deviation. A learned critic V(x) is PPO's baseline, which GRPO removes. Dividing by the max or taking logs is not the GRPO formula."
+  },
+  {
+    "id": "20-059",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(12) GRPO + RLVR on a verifiable task",
+    "question": "Why is a verifiable reward harder to hack than a learned reward model?",
+    "options": [
+      "It uses a larger neural network than the policy, so it is harder to fool",
+      "It is evaluated by human raters at every step, who catch gaming quickly",
+      "It is a rule that checks the answer (e.g. exact-match), not a learned proxy",
+      "It is trained on more preference data than a typical RLHF reward model"
+    ],
+    "answer_index": 2,
+    "explanation": "RLVR uses a programmatic check, such as exact-match on arithmetic, so the policy cannot exploit quirks of a learned proxy. A learned reward model can be gamed because it is only an approximation. Verifiers are not trained on preferences and are not human-in-the-loop."
+  },
+  {
+    "id": "20-060",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(12) GRPO + RLVR on a verifiable task",
+    "question": "In the capstone's RLVR stage, which verifier is used?",
+    "options": [
+      "llmre.reasoning.verifiers.arithmetic_verifier, exact-match on arithmetic answers",
+      "A perplexity threshold on the generated answer under the pretrained capstone GPT",
+      "An LLM judge that scores each answer's fluency and correctness on a 1-10 scale",
+      "A Bradley-Terry reward model trained on the capstone's DPO preference pairs"
+    ],
+    "answer_index": 0,
+    "explanation": "The capstone's RLVR uses arithmetic_verifier, which returns reward based on whether the arithmetic answer exactly matches. That is a rule-based verifiable reward. A reward model or LLM judge would be a learned proxy, and perplexity does not check correctness."
+  },
+  {
+    "id": "20-061",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(12) GRPO + RLVR on a verifiable task",
+    "question": "What should you look at in llmre's run_rlvr history to see RL working?",
+    "options": [
+      "The number of LoRA parameters increasing",
+      "The correct-rate rising over GRPO steps",
+      "The tokenizer's vocabulary size growing",
+      "The perplexity on the pretraining corpus rising"
+    ],
+    "answer_index": 1,
+    "explanation": "run_rlvr records a history whose key signal is the correct-rate climbing as GRPO updates the policy. In the capstone run it goes from 0.062 to 1.000 over 80 steps. Vocabulary size and LoRA counts don't change, and pretraining perplexity is not the RL signal."
+  },
+  {
+    "id": "20-062",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(13) A reasoning task",
+    "question": "What is self-consistency in reasoning?",
+    "options": [
+      "Running the same chain of thought twice with greedy decoding and comparing the two outputs",
+      "Checking that the final answer is consistent with the grammar and wording of the prompt",
+      "Sampling several chains of thought and taking a majority vote over their final answers",
+      "Training the model to agree with its own previous outputs on rephrased versions of a task"
+    ],
+    "answer_index": 2,
+    "explanation": "Self-consistency samples multiple reasoning chains and picks the most common final answer. Greedy decoding twice gives identical outputs and no voting benefit. It is an inference-time method, not training the model to agree with itself."
+  },
+  {
+    "id": "20-063",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(13) A reasoning task",
+    "question": "What two-stage loop does llmre's mini_r1 implement, following the R1 recipe?",
+    "options": [
+      "Pretraining, then distillation into a smaller tokenizer",
+      "DPO first, then tokenizer retraining",
+      "RL first, then pretraining from scratch",
+      "SFT first, then RL with verifiable rewards"
+    ],
+    "answer_index": 3,
+    "explanation": "mini_r1 does an SFT stage then an RL stage with verifiable rewards, mirroring the R1 recipe that trains chain-of-thought behavior in with RLVR. The other orders mix in stages unrelated to the R1 pipeline."
+  },
+  {
+    "id": "20-064",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(13) A reasoning task",
+    "question": "In llmre's self_consistency, what property of the majority vote should you look at?",
+    "options": [
+      "Its weighting by answer length",
+      "Its random tie-break for diversity",
+      "Its deterministic tie-break",
+      "Its use of a learned voting network"
+    ],
+    "answer_index": 2,
+    "explanation": "The capstone points at the deterministic majority-vote tie-break: when two answers have the same count, the result must not depend on randomness, so runs are reproducible. A learned voter or length weighting are not part of self_consistency."
+  },
+  {
+    "id": "20-065",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(13) A reasoning task",
+    "question": "What is chain-of-thought prompting?",
+    "options": [
+      "Chaining several models so each refines the previous output",
+      "Feeding the model's answer back as the next prompt until it stops changing",
+      "Making the model show its intermediate steps before giving the final answer",
+      "Concatenating many examples into one long prompt without instructions"
+    ],
+    "answer_index": 2,
+    "explanation": "Chain-of-thought elicits reasoning by having the model write out its steps before the answer (cot_prompt), and extract_answer pulls the final answer out. It is not model chaining or iterative re-prompting."
+  },
+  {
+    "id": "20-066",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(14) Tool use",
+    "question": "How does a model use a tool in llmre's tool-use stage?",
+    "options": [
+      "It executes Python directly inside the model's forward pass via special tokens",
+      "It sends free-text requests to a human operator, who pastes the results back in",
+      "It emits a structured call; a runtime runs the real function and feeds the result back",
+      "It memorizes tool outputs during pretraining and reproduces them later whenever they are needed"
+    ],
+    "answer_index": 2,
+    "explanation": "The model emits a structured tool call, which parse_tool_call parses; the ToolRegistry executes the real function and the result is fed back into the context (run_tool_loop). The model never executes code itself."
+  },
+  {
+    "id": "20-067",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(14) Tool use",
+    "question": "What does llmre's ToolRegistry do when a tool call raises an exception?",
+    "options": [
+      "Silently retries the call with the same arguments until it eventually succeeds",
+      "Crashes the loop on purpose so that the bug is noticed immediately",
+      "Turns the exception into a structured error result instead of crashing",
+      "Returns an empty string as if the call succeeded, so the model continues"
+    ],
+    "answer_index": 2,
+    "explanation": "The registry runs the call and converts any exception into a structured error that is fed back to the model, so the loop keeps going and the model can react. Crashing would kill the agent; silent retries or empty results hide the failure."
+  },
+  {
+    "id": "20-068",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(14) Tool use",
+    "question": "What does llmre's ToolRegistry advertise to the model about available tools?",
+    "options": [
+      "The Python source code of each tool",
+      "Nothing; tools are discovered by trial and error",
+      "JSON schemas describing each tool",
+      "Example outputs only, without argument descriptions"
+    ],
+    "answer_index": 2,
+    "explanation": "The registry advertises JSON schemas for each tool (name, arguments and types), so the model knows how to form a valid call. It does not ship source code or rely on trial and error."
+  },
+  {
+    "id": "20-069",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(14) Tool use",
+    "question": "How is llmre's built-in calculator tool made safe?",
+    "options": [
+      "It runs Python's eval inside a try/except block that catches every error",
+      "It blocks a list of known dangerous function names such as exec and open",
+      "It vets the expression's AST against an allow-list of permitted operations",
+      "It only accepts expressions shorter than a fixed length with no letters"
+    ],
+    "answer_index": 2,
+    "explanation": "The calculator parses the expression and checks the AST against an allow-list, so only explicitly permitted nodes run. A block-list can always miss something dangerous, and wrapping eval in try/except gives no security. Length limits do not prevent malicious code."
+  },
+  {
+    "id": "20-070",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(15) A simple agent",
+    "question": "What loop does a ReAct agent run?",
+    "options": [
+      "Action -> Reward -> Gradient step, repeated on every turn until the reward converges",
+      "Thought -> Action -> Observation, until a final answer or the step budget runs out",
+      "Plan -> Execute all steps -> Report, with no observations read between the steps",
+      "Retrieve -> Generate -> Rerank, for a fixed three steps per question and no tools"
+    ],
+    "answer_index": 1,
+    "explanation": "ReAct interleaves reasoning (Thought), tool calls (Action) and results (Observation) until a final answer or the step budget runs out. Planning everything without observations loses feedback; retrieve-generate-rerank is RAG; reward-gradient loops are RL training."
+  },
+  {
+    "id": "20-071",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(15) A simple agent",
+    "question": "What turns llmre's ReAct loop into a mini SWE-agent?",
+    "options": [
+      "Training it with DPO on code preferences",
+      "Removing the step budget so it can run indefinitely",
+      "Replacing the model with a larger pretrained checkpoint",
+      "Wrapping it with a small file view/edit/run interface"
+    ],
+    "answer_index": 3,
+    "explanation": "llmre.agents.swe_agent.solve wraps the ReAct loop with tools to view, edit and run files, which makes it a mini software-engineering agent. Model size, DPO, or removing the step budget do not give it the file interface."
+  },
+  {
+    "id": "20-072",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(15) A simple agent",
+    "question": "Why is llmre's run_react described as tool-registry-agnostic?",
+    "options": [
+      "It hard-codes a fixed calculator and search tool",
+      "It ignores tool results and only uses the model's thoughts",
+      "Tools are injected into it, never imported by it",
+      "It can only call tools defined in the same file"
+    ],
+    "answer_index": 2,
+    "explanation": "run_react receives its tools as an argument (dependency injection), so any registry can be plugged in. Hard-coding or importing specific tools would couple it to one setup. It does use tool results as Observations."
+  },
+  {
+    "id": "20-073",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(16) Ablations",
+    "question": "To claim a change caused an improvement, what must an ablation do?",
+    "options": [
+      "Vary several things at once to save compute",
+      "Vary exactly one thing and hold everything else fixed",
+      "Change the seed along with the change to average out noise",
+      "Compare against a published number from a different setup"
+    ],
+    "answer_index": 1,
+    "explanation": "Attribution requires one independent variable with everything else as controls. If two things change, you cannot tell which one caused the effect. Comparing to a different setup confounds harness, data and budget differences."
+  },
+  {
+    "id": "20-074",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(16) Ablations",
+    "question": "In the capstone's scaling sweep used as an ablation template, what is held fixed?",
+    "options": [
+      "Only the seed; the corpus and step count vary with the model size",
+      "The corpus, the number of steps and the seed; only n_embd changes",
+      "Only n_embd; the corpus, steps and seed are randomized per run",
+      "Nothing; all knobs change together to explore the whole space"
+    ],
+    "answer_index": 1,
+    "explanation": "The scaling sweep keeps the same corpus, same steps and same seed and changes only n_embd. That is the 'one independent variable, everything else a control' pattern. Letting other knobs vary would confound the comparison."
+  },
+  {
+    "id": "20-075",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(16) Ablations",
+    "question": "Where are the reproducible knobs of the capstone run stored?",
+    "options": [
+      "Hard-coded inside the GPT class",
+      "In code/configs/capstone.yaml",
+      "In environment variables set by the shell",
+      "In code/reports/capstone_report.md"
+    ],
+    "answer_index": 1,
+    "explanation": "The driver reads code/configs/capstone.yaml (model size, steps, LR, seed) so the run is reproducible. The report is the output, not the config, and hard-coding or environment variables would make the run harder to reproduce."
+  },
+  {
+    "id": "20-076",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Check yourself",
+    "question": "You want to claim 'RMSNorm lowers final loss vs LayerNorm.' What must be true of the runs?",
+    "options": [
+      "Both runs use a single seed each and identical settings, and whichever reaches the lower loss wins",
+      "Only the norm changes, everything else is fixed, with mean +/- std over seeds compared to seed noise",
+      "The RMSNorm run gets more steps and a retuned learning rate to compensate for being the newer method",
+      "Each run uses whichever learning rate gives it the lowest loss, with the other knobs left free to vary"
+    ],
+    "answer_index": 1,
+    "explanation": "Change exactly one thing (the norm), hold corpus, tokens, steps, seeds, size, optimizer and LR schedule fixed, and run several seeds. Report mean +/- std and check whether confidence intervals overlap. A single seed cannot separate effect from noise, and giving one run extra steps confounds the result."
+  },
+  {
+    "id": "20-077",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(17) A research report",
+    "question": "What is the deliverable of a research experiment, according to the capstone?",
+    "options": [
+      "A slide deck summarizing the best results across all runs",
+      "The trained model checkpoint, uploaded with its config file",
+      "A loss-curve screenshot comparing the final runs side by side",
+      "A report a colleague can reproduce, not the model itself"
+    ],
+    "answer_index": 3,
+    "explanation": "The capstone states the deliverable is a report someone else can reproduce: QUESTION, HYPOTHESIS, METHOD, BASELINE, VARIABLES, RESULTS, ANALYSIS, LIMITATIONS, CONCLUSION, NEXT. A checkpoint or chart without method, baseline and limitations is not reproducible evidence."
+  },
+  {
+    "id": "20-078",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(17) A research report",
+    "question": "Which sections make up the llmre experiment report template?",
+    "options": [
+      "SUMMARY / CONTEXT / METRICS / LEADERBOARD / DISCUSSION / RISKS / ROADMAP / OWNERS / TIMELINE",
+      "QUESTION / HYPOTHESIS / METHOD / BASELINE / VARIABLES / RESULTS / ANALYSIS / LIMITATIONS / CONCLUSION / NEXT",
+      "GOAL / SETUP / CODE / DATA / OUTPUT / METRICS / ISSUES / FIXES / DONE",
+      "ABSTRACT / INTRODUCTION / RELATED WORK / METHOD / EXPERIMENTS / DISCUSSION / CONCLUSION / REFERENCES"
+    ],
+    "answer_index": 1,
+    "explanation": "code/reports/EXPERIMENT_TEMPLATE.md has QUESTION, HYPOTHESIS, METHOD, BASELINE, VARIABLES, RESULTS, ANALYSIS, LIMITATIONS, CONCLUSION and NEXT. That structure forces a falsifiable question, a baseline and stated limitations. Paper-style sections lack the baseline and variables discipline."
+  },
+  {
+    "id": "20-079",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "(17) A research report",
+    "question": "Where does the capstone driver write its filled-in experiment report?",
+    "options": [
+      "code/reports/capstone_report.md",
+      "code/tests/test_capstone.py",
+      "code/configs/capstone.yaml",
+      "code/reports/EXPERIMENT_TEMPLATE.md"
+    ],
+    "answer_index": 0,
+    "explanation": "The driver fills in the template and writes code/reports/capstone_report.md. EXPERIMENT_TEMPLATE.md is the blank template, capstone.yaml is the input config, and test_capstone.py is the smoke test."
+  },
+  {
+    "id": "20-080",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "Which stages does the capstone driver code/scripts/capstone.py actually run?",
+    "options": [
+      "A tiny version of stages (1)-(9) and (12): tokenizer through LoRA, plus GRPO/RLVR",
+      "Only the post-training stages (SFT, LoRA, DPO, PPO, GRPO) on a downloaded checkpoint",
+      "Only pretraining and evaluation, leaving every post-training stage to separate scripts",
+      "All 17 stages at full scale, including PPO, tool use, ReAct agents and the SWE-agent"
+    ],
+    "answer_index": 0,
+    "explanation": "The driver runs a tiny end-to-end version of stages 1-9 (tokenizer, GPT, pretraining, data, profiling notes, scaling, eval, SFT, LoRA) and stage 12 (GRPO + RLVR), then writes the report. Stages like PPO, tool use and agents are covered by their own entry points but not run by the driver."
+  },
+  {
+    "id": "20-081",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "In the capstone run, pretraining loss falls from 5.935 to 0.067 nats and held-out perplexity is 1.07. What does that indicate?",
+    "options": [
+      "The model generalizes far beyond GPT-2 quality on this held-out text",
+      "The tiny model memorized the tiny corpus, the expected smoke-test outcome",
+      "The loss is miscomputed, because perplexity can never fall below 2",
+      "The tokenizer collapsed so that every document maps to a single token"
+    ],
+    "answer_index": 1,
+    "explanation": "The corpus is a dozen repeated sentences, so a tiny model memorizes it and perplexity drops near 1. That proves the pipeline learns but says nothing about quality. Perplexity can be any value at least 1, and nothing indicates tokenizer collapse."
+  },
+  {
+    "id": "20-082",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "In the capstone run, what is the uniform-baseline perplexity that the 1.07 result is compared to?",
+    "options": [
+      "About 256, the byte count",
+      "About 374, the vocabulary size",
+      "About 1.0, the minimum possible",
+      "About 2.72, the value of e"
+    ],
+    "answer_index": 1,
+    "explanation": "A uniform model over V tokens has perplexity V, and the capstone vocabulary is about 373-374 tokens (256 bytes + 117 merges plus specials), so the baseline is about 374. Perplexity 1 is the floor, and 256 is only the byte base."
+  },
+  {
+    "id": "20-083",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "In the capstone run, RLVR lifts the arithmetic correct-rate from 0.062 to 1.000. Why is 0.062 described as near chance?",
+    "options": [
+      "It is the fraction of prompt tokens in each RL batch",
+      "It equals 1/16, the reciprocal of the GRPO group size",
+      "It is close to the ~1/10 expected from a 10-way answer space",
+      "It equals the learning rate used for the GRPO policy updates"
+    ],
+    "answer_index": 2,
+    "explanation": "With about 10 possible answers, a random policy would be right about 1/10 of the time, so 0.062 is near chance before training. RL then drives it to 1.000. It is not a group size, token fraction or learning rate."
+  },
+  {
+    "id": "20-084",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "What do the capstone's two learning signals, which a smoke test exists to check, consist of?",
+    "options": [
+      "Loss going down and correct-rate going up",
+      "Vocabulary size going up and merge count going down",
+      "Learning rate going up and gradient norm going down",
+      "Throughput going up and memory going down"
+    ],
+    "answer_index": 0,
+    "explanation": "A smoke test checks that the pipeline actually learns: pretraining/SFT loss decreases and the RLVR correct-rate increases. code/tests/test_capstone.py asserts exactly this at even smaller size. Throughput or vocabulary changes say nothing about learning."
+  },
+  {
+    "id": "20-085",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "What does code/tests/test_capstone.py assert?",
+    "options": [
+      "That loss falls and correct-rate rises, at even smaller size than the driver",
+      "That the whole run finishes in under one second on a single GPU",
+      "That held-out perplexity matches GPT-2 small's published value on WikiText",
+      "That every module's output is bit-identical to a stored reference tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "test_capstone.py checks the two learning signals (loss down, correct-rate up) on an even smaller configuration. It does not compare against GPT-2, timing, or bit-exact references."
+  },
+  {
+    "id": "20-086",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "3. Run it yourself",
+    "question": "Why should a memorization perplexity like 1.07 never be quoted as a quality result?",
+    "options": [
+      "Because perplexity is only well defined for runs done on GPU hardware",
+      "It only shows the pipeline can learn a repeated tiny corpus, not that it generalizes",
+      "Because the value is below the theoretical minimum perplexity of 2 for any model",
+      "Because perplexity is not a valid language-model metric for byte-level tokenizers"
+    ],
+    "answer_index": 1,
+    "explanation": "The low value comes from memorizing a dozen repeated sentences. It is a correct smoke-test outcome and a deliberate limitation stated in the report, but quality claims need a large, varied corpus and genuinely held-out data. Perplexity is a valid metric, its minimum is 1, and it is hardware independent."
+  },
+  {
+    "id": "20-087",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does the capstone use a categorical policy table for RLVR instead of the pretrained GPT?",
+    "options": [
+      "Because GRPO cannot be applied to transformer policies, only to tabular ones",
+      "Because the pretrained GPT has no output distribution over the possible answers",
+      "Speed and clarity on CPU: the GRPO update is identical; the table isolates RL from generation",
+      "Because verifiable rewards only work with tabular policies that enumerate every answer"
+    ],
+    "answer_index": 2,
+    "explanation": "GRPO's algorithm (sample a group, standardize rewards, clipped policy-gradient step) is the same for a lookup table or a GPT emitting answer tokens. The table makes the correct-rate visibly climb in under a second. Swapping in the GPT changes the engineering (sampling token sequences), not the update rule, which is why it is the report's next experiment."
+  },
+  {
+    "id": "20-088",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "What hardware does a real GPT-2 small (124M) pretrain need, per the capstone's hardware track?",
+    "options": [
+      "1x A100/H100 (40-80 GB), tens of GPU-hours for a few billion tokens; CPU-only is not feasible",
+      "A cluster of 1,000 H100 GPUs for about a month, the same as a frontier pretraining run",
+      "A single 8 GB consumer GPU for about ten minutes, using LoRA instead of full training",
+      "A laptop CPU for about an hour, since 124M parameters fit easily in system memory"
+    ],
+    "answer_index": 0,
+    "explanation": "A GPT-2 small pretrain is estimated at tens of GPU-hours on one A100/H100, using about 15-30 GB with mixed precision and gradient accumulation. CPU-only is not feasible. A month on 1,000 GPUs is frontier scale, not 124M."
+  },
+  {
+    "id": "20-089",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "Why can LoRA fit a 7B model on a single 24 GB consumer GPU while full SFT of the same model needs multiple 40-80 GB GPUs?",
+    "options": [
+      "LoRA quantizes the activations and gradients to one bit, so memory falls by roughly 16x overall",
+      "LoRA trains on far fewer tokens than full SFT, so it needs a much smaller activation buffer",
+      "LoRA skips the forward pass through frozen layers, so their activations are never stored",
+      "With LoRA, optimizer state covers only the small adapters; full SFT keeps it for every weight"
+    ],
+    "answer_index": 3,
+    "explanation": "LoRA's frozen base needs no gradients or optimizer moments, so only the adapters carry that state. Full SFT stores gradients plus two AdamW moments for all 7B parameters. LoRA still runs the full forward pass and does not inherently change token count or quantize activations."
+  },
+  {
+    "id": "20-090",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "How does the compute cost of DPO compare to SFT?",
+    "options": [
+      "Roughly the same as SFT: two forward passes, the policy and a frozen reference",
+      "Identical to PPO, because both train a critic alongside the policy each step",
+      "Much cheaper, because DPO skips the backward pass and only scores pairs",
+      "Far heavier, because DPO samples fresh completions from the policy every step"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO costs about the same as SFT, plus a forward pass through the frozen reference, and needs no sampling. PPO/GRPO are far heavier because they generate completions every step. DPO does train with backward passes and does not use a critic."
+  },
+  {
+    "id": "20-091",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "In PPO/GRPO with real generation, what usually dominates cost?",
+    "options": [
+      "Generating (sampling) completions, not the gradient step",
+      "Writing full optimizer-state checkpoints to disk each step",
+      "The KL penalty computation over the full vocabulary",
+      "The tokenizer's encode step on every sampled completion"
+    ],
+    "answer_index": 0,
+    "explanation": "Generation-based RL samples completions every step, so sampling dominates cost. Budget several GPUs and hours-to-days even for a small model. Tokenization and KL computation are cheap, and checkpointing is not the bottleneck."
+  },
+  {
+    "id": "20-092",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "What makes frontier reasoning RL runs cost thousands of GPU-hours?",
+    "options": [
+      "Long chains of thought make each rollout long, so sampling at scale is costly; same mechanism as the toy",
+      "They must retrain the tokenizer on every RL step, as the vocabulary drifts with the reasoning traces",
+      "They require a full pretraining pass between RL steps to keep the policy from forgetting language",
+      "They use a completely different algorithm from GRPO, which needs a learned critic per token"
+    ],
+    "answer_index": 0,
+    "explanation": "The mechanism is identical to the toy loop; only the scale of sampling changes. Long chain-of-thought rollouts make each sample expensive. It is not a different algorithm, and no tokenizer retraining or re-pretraining is involved."
+  },
+  {
+    "id": "20-093",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "What is the Chinchilla rule of thumb for a compute-optimal pretrain?",
+    "options": [
+      "About 1 token per parameter",
+      "About 20 tokens per parameter",
+      "About 200 tokens per parameter",
+      "About 2 tokens per FLOP"
+    ],
+    "answer_index": 1,
+    "explanation": "The Chinchilla rule of thumb (reasonable industry practice) is about 20 training tokens per parameter for compute-optimal pretraining. 1 or 200 tokens per parameter would be badly under- or over-trained for compute optimality, and tokens per FLOP is not a meaningful ratio here."
+  },
+  {
+    "id": "20-094",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "How should the tokenizer's vocabulary size be scaled up from the toy capstone driver?",
+    "options": [
+      "Toward 32k-50k tokens",
+      "Toward 256 tokens, the byte count",
+      "Toward 1 million tokens",
+      "It should stay at the toy size of about 373"
+    ],
+    "answer_index": 0,
+    "explanation": "To grow the tokenizer stage, raise tokenizer.vocab_size toward 32k-50k, typical of GPT-2-class models. 256 would be bytes only, 1M would bloat embeddings, and the toy size is only for the smoke test."
+  },
+  {
+    "id": "20-095",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "Which of these is part of scaling up the capstone pipeline from the toy driver?",
+    "options": [
+      "Disable gradient clipping so that larger models are not slowed down by small updates",
+      "Replace the BPE tokenizer with a character-level one so that the vocabulary stays small",
+      "Use a real filtered, decontaminated corpus and move to a GPU with mixed precision and FlashAttention",
+      "Keep the toy corpus but train for millions of steps, so the model sees every sentence many times"
+    ],
+    "answer_index": 2,
+    "explanation": "Scaling up means a real corpus (filtered and decontaminated, Module 11), a bigger model toward GPT-2 sizes, and GPU training with mixed precision and FlashAttention (Module 8). Training longer on the toy corpus just memorizes it further; dropping clipping or BPE are not recommended steps."
+  },
+  {
+    "id": "20-096",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "4. Scaling each stage up",
+    "question": "What does the capstone report name as the next experiment for the RLVR stage?",
+    "options": [
+      "Replacing the arithmetic verifier with a learned reward model trained on preferences",
+      "Removing the group sampling so that each GRPO step needs only one completion",
+      "Replacing the categorical RLVR policy with the GPT itself emitting answer tokens",
+      "Replacing GRPO with supervised fine-tuning on the correct arithmetic answers"
+    ],
+    "answer_index": 2,
+    "explanation": "The natural next step is to have the pretrained GPT generate answer tokens as the RLVR policy, instead of the categorical lookup table. That changes the engineering, not the GRPO update. A learned reward model would reintroduce hackability, and removing group sampling breaks GRPO's baseline."
+  },
+  {
+    "id": "20-097",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "5. Where you are now",
+    "question": "According to the course's readiness matrix, when is a skill rated 'Advanced'?",
+    "options": [
+      "When you have read the relevant paper once and can summarize its main contribution",
+      "When you have used it in a production framework such as HF, TRL or DeepSpeed at work",
+      "When you can explain, derive, implement, test, benchmark, debug and relate it to a paper",
+      "When you can run the provided script without errors and reproduce its printed numbers"
+    ],
+    "answer_index": 2,
+    "explanation": "Advanced means the full chain: explain -> derive -> implement -> test -> benchmark -> debug -> relate-to-a-paper, from memory. Reading or running something once, or using a framework, covers only part of that chain."
+  },
+  {
+    "id": "20-098",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "5. Where you are now",
+    "question": "What should a write-up of your own experiment contain, following the capstone report's model?",
+    "options": [
+      "One falsifiable question, real numbers with a baseline, and stated limitations",
+      "Several open-ended questions and qualitative impressions of how the runs went",
+      "Only the best result across all runs and seeds, presented without a baseline",
+      "A detailed description of the code changes, without any measured numbers"
+    ],
+    "answer_index": 0,
+    "explanation": "One report, one falsifiable question, real numbers compared to a baseline, and stated limitations, just like code/reports/capstone_report.md. Cherry-picking the best result or omitting numbers makes the report non-reproducible and non-falsifiable."
+  },
+  {
+    "id": "20-099",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Next: keep going",
+    "question": "Why is OLMo 2 suggested as a strong first paper after finishing the course?",
+    "options": [
+      "It is the largest open model ever trained, so it defines the current frontier",
+      "It uses no transformer components, so it contrasts well with what you built",
+      "It requires no GPU to reproduce, so you can rerun its full training run on a laptop",
+      "Its data, code and checkpoints are fully open, so you can reproduce and ablate it"
+    ],
+    "answer_index": 3,
+    "explanation": "OLMo 2 is fully open (data, code, checkpoints), so you can reproduce it and ablate it against your own llmre implementation. It is not the largest model, it is a transformer, and reproducing it still needs serious GPUs."
+  },
+  {
+    "id": "20-100",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Next: keep going",
+    "question": "What loop is described as 'the job' of a research engineer at the end of the course?",
+    "options": [
+      "Download, fine-tune, deploy, repeat",
+      "Brainstorm, prototype, ship, market",
+      "Read, implement, test, measure, write",
+      "Benchmark, tweak hyperparameters, publish the best seed"
+    ],
+    "answer_index": 2,
+    "explanation": "After reading a paper with the nine-question method, implement its change inside llmre, wire it into the capstone, measure, and write it up with the experiment template. Publishing the best seed is the anti-pattern the ablation discipline warns against."
+  },
+  {
+    "id": "20-101",
+    "chapter": "20",
+    "chapter_name": "Mini frontier LLM",
+    "module": "20",
+    "module_name": "Capstone",
+    "source": "lessons/module-20/lesson-01.md",
+    "section": "Next: keep going",
+    "question": "When reading a new paper after the course, what should you do with the one thing it changes?",
+    "options": [
+      "Implement it in llmre, wire it into code/scripts/capstone.py, and write it up with the template",
+      "Download the authors' released checkpoint and report their numbers alongside your baseline",
+      "Summarize it in a blog post with its key equations, without running any code yourself",
+      "Add it to every stage of the pipeline at once, so its full effect is measured in one run"
+    ],
+    "answer_index": 0,
+    "explanation": "The suggested workflow is to implement the paper's single change inside llmre, run it through the capstone driver, and write a report. Re-reporting authors' numbers is not reproduction, and changing every stage at once would break the one-variable ablation discipline."
+  }
+]

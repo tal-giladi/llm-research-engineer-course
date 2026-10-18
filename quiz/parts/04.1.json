@@ -1,0 +1,938 @@
+[
+  {
+    "id": "04.1-001",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "In a language model, what does the size of the vocabulary determine about the model's prediction at each position?",
+    "options": [
+      "The number of choices the softmax next-token distribution is spread over",
+      "The maximum number of tokens the model can read in one context window",
+      "The number of attention heads used in each Transformer layer",
+      "The number of training steps needed before the loss converges"
+    ],
+    "answer_index": 0,
+    "explanation": "A language model puts a softmax distribution over a fixed set of next-token choices and is scored by the cross-entropy of the true token. That fixed set is the vocabulary, so its size V is the number of outcomes in the distribution. Context length is a separate quantity (sequence length T), not the vocabulary size."
+  },
+  {
+    "id": "04.1-002",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "Why is the tokenizer described as the first design decision in an LLM pipeline?",
+    "options": [
+      "It is the only component whose parameters are updated by gradient descent during pretraining",
+      "It decides the learning-rate schedule and the optimizer settings used for pretraining",
+      "It sets how many GPUs the training run can use in parallel, since shards follow token ids",
+      "Context length, dataset size, compute and API price are all counted in tokens"
+    ],
+    "answer_index": 3,
+    "explanation": "The tokenizer defines what a 'token' is, and context length, training-set size, the cost of a forward pass, and the price of an API call are all measured in tokens. A bad choice either blows up sequence length or cripples the model on unseen text. The tokenizer is not trained by gradient descent and has nothing to do with the optimizer."
+  },
+  {
+    "id": "04.1-003",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Prerequisites / Why this matters for ML",
+    "question": "What does the vocab_size field of a GPT model configuration (GPTConfig) control in the network?",
+    "options": [
+      "The hidden dimension C of every Transformer block in the stack",
+      "The number of Transformer layers stacked between input and output",
+      "The size of the input embedding table and of the output layer",
+      "The maximum context length block_size the model can attend over"
+    ],
+    "answer_index": 2,
+    "explanation": "vocab_size is the number of rows in the input embedding table and the number of logits the output layer produces. It is independent of the hidden size C, depth, and context length. Changing the tokenizer therefore changes the shape of the first and last layers."
+  },
+  {
+    "id": "04.1-004",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "What basic property must the rule that converts text to integers for a language model have?",
+    "options": [
+      "It must be learned jointly with the model weights during pretraining",
+      "It must be fixed and invertible: string to integers and back",
+      "It must map each whole string to a single integer hash value",
+      "It must be lossy so that rare characters are removed before training"
+    ],
+    "answer_index": 1,
+    "explanation": "A neural network only multiplies matrices of numbers, so text must become integers via a fixed, invertible encode/decode rule. 'Invertible' means decode(encode(s)) returns s. The tokenizer is chosen and frozen before training, not learned jointly with the weights, and it produces a list of ids, not one hash."
+  },
+  {
+    "id": "04.1-005",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "In a language model, what is a vocabulary?",
+    "options": [
+      "A dictionary of English words with their definitions, used to score generated text",
+      "A numbered list of the units the model knows; each id indexes into it",
+      "The set of all training documents after deduplication, each assigned an integer id",
+      "The list of hidden-layer sizes used in each Transformer block, indexed by layer number"
+    ],
+    "answer_index": 1,
+    "explanation": "Each token id is an index into the vocabulary, a numbered list of the atomic units (bytes, subwords, words) the model knows. The embedding table has one row per vocabulary entry and the output layer one logit per entry. It is not a human dictionary or a set of documents."
+  },
+  {
+    "id": "04.1-006",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "If a language model's vocabulary has V entries, how are its input embedding table and final output layer sized?",
+    "options": [
+      "The embedding table has V rows and the output layer produces V logits per position",
+      "The embedding table has V columns and the output layer produces one logit per position",
+      "The embedding table has sqrt(V) rows and the output layer produces V^2 logits",
+      "Both layers are sized by the sequence length T, independent of V"
+    ],
+    "answer_index": 0,
+    "explanation": "The input embedding table has one row per vocabulary entry, and the final output layer produces one logit per vocabulary entry, so at every position the model predicts a distribution over exactly V choices. With hidden size C the embedding is V x C. Sequence length T does not set either layer's width."
+  },
+  {
+    "id": "04.1-007",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "Which two quantities are in tension when choosing the units of a tokenizer?",
+    "options": [
+      "Learning rate and batch size",
+      "Number of layers and number of attention heads",
+      "Dropout rate and weight decay",
+      "Vocabulary size V and sequence length T"
+    ],
+    "answer_index": 3,
+    "explanation": "Picking units trades vocabulary size V (width of the embedding and output layers) against sequence length T (how many units a text becomes). Coarser units shrink T but grow V; finer units shrink V but grow T. The other pairs are optimization or architecture hyperparameters unrelated to tokenization."
+  },
+  {
+    "id": "04.1-008",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "Why does sequence length T matter so much for the cost of a Transformer?",
+    "options": [
+      "The embedding table has T rows, so its memory grows linearly with T",
+      "The output layer produces T logits, so its cost grows like T^3",
+      "Attention compares every position with every other: cost ~ T^2",
+      "The number of parameters in each layer grows linearly with T"
+    ],
+    "answer_index": 2,
+    "explanation": "Self-attention compares every position with every other position, so compute and memory grow with T^2. That is why sequence length is the most expensive knob in a Transformer. The embedding table and parameter count depend on V and C, not on T."
+  },
+  {
+    "id": "04.1-009",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "How do word, character, and byte units relate to the vocabulary-size versus sequence-length trade-off?",
+    "options": [
+      "All three keep both V and T small, so the choice between them is arbitrary",
+      "Words minimize both V and T, while characters and bytes maximize both",
+      "Each pushes one of V or T to an extreme, and subword tokenization balances them",
+      "Bytes give the shortest sequences and words give the smallest vocabulary"
+    ],
+    "answer_index": 2,
+    "explanation": "Words give short sequences but a huge vocabulary; characters and bytes give a tiny vocabulary but long sequences. Each extreme sacrifices one quantity. Subword tokenization (BPE) is the balance between them. Bytes give the longest sequences, not the shortest."
+  },
+  {
+    "id": "04.1-010",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "1. The problem: text is not numbers, but the model only eats numbers",
+    "question": "When is a tokenizer chosen relative to model training?",
+    "options": [
+      "It is re-learned at the start of every epoch",
+      "It is chosen and frozen before training begins",
+      "It is chosen after training by inspecting the learned embeddings",
+      "It is updated by backpropagation together with the embedding table"
+    ],
+    "answer_index": 1,
+    "explanation": "A tokenizer is a fixed string-to-list-of-int codec chosen and frozen before training. Its vocabulary size becomes the model's input/output width, so changing it later would change the shape of those layers. It is not trained by backpropagation."
+  },
+  {
+    "id": "04.1-011",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "What is the appeal of using whole words as tokens?",
+    "options": [
+      "Sequences stay short and each token is meaningful",
+      "The vocabulary is small and bounded for every language",
+      "Every possible input string is guaranteed to have an id",
+      "Related word forms automatically share embeddings"
+    ],
+    "answer_index": 0,
+    "explanation": "Splitting on spaces and giving each word an id keeps sequences short ('the cat sat' is three tokens) and each token carries meaning. But word vocabularies are huge and unbounded, have an out-of-vocabulary problem, and give unrelated ids to related forms, so the other options are exactly what words fail at."
+  },
+  {
+    "id": "04.1-012",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "What is the out-of-vocabulary (OOV) problem of a word-level tokenizer?",
+    "options": [
+      "Words that appear too often overflow the numeric range of the embedding table",
+      "The tokenizer cannot handle any word longer than the model's context window",
+      "Common words get split into too many pieces at inference time, inflating T",
+      "A word missing from the fixed vocabulary, like a new name or typo, has no id"
+    ],
+    "answer_index": 3,
+    "explanation": "A word vocabulary is fixed at training time, so a word never seen — a new product name, a typo, a rare surname — has no id. The model cannot represent it. Frequency, word length, and over-splitting are not the OOV issue."
+  },
+  {
+    "id": "04.1-013",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "What happens when a word-level tokenizer uses a catch-all <unk> token for unseen words?",
+    "options": [
+      "Each unseen word gets a fresh id appended to the end of the vocabulary at inference time",
+      "The unseen word is spelled out character by character automatically by the tokenizer",
+      "The model is forced to stop generating as soon as an <unk> appears in its context",
+      "Every unseen word maps to one id, so they cannot be told apart or reproduced"
+    ],
+    "answer_index": 3,
+    "explanation": "With <unk>, all unseen words map to one id, so the model literally cannot tell them apart or reproduce them in output. For a model that must generate fluent text and handle arbitrary user input, discarding every novel word is fatal. <unk> does not add ids or fall back to characters."
+  },
+  {
+    "id": "04.1-014",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "Why does the <unk> token break a tokenizer's round-trip property?",
+    "options": [
+      "encode(decode(ids)) produces a longer list than the original ids",
+      "The <unk> id is larger than the vocabulary size and overflows",
+      "decode(encode(s)) no longer equals s whenever s contains an unseen word",
+      "Decoding becomes nondeterministic and returns different strings each time"
+    ],
+    "answer_index": 2,
+    "explanation": "Once an unseen word becomes <unk>, its original spelling is lost, so decoding returns '<unk>' instead of the original word and decode(encode(s)) != s. A tokenizer that cannot reproduce its input is unusable for generation, which is why the course insists on exact round-tripping."
+  },
+  {
+    "id": "04.1-015",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "Why would a word vocabulary covering most English need to be enormous?",
+    "options": [
+      "Each English word needs several ids, one per possible capitalization and font",
+      "Word forms number in the hundreds of thousands, and with code and URLs are unbounded",
+      "The vocabulary must include every distinct sentence seen in the training corpus",
+      "Word tokenizers must store a separate id for each position in the context window"
+    ],
+    "answer_index": 1,
+    "explanation": "There are hundreds of thousands of English word forms, and adding other languages, code, URLs and numbers makes the set effectively unbounded. Covering even most English requires a vocabulary in the hundreds of thousands, which makes the embedding and output layers gigantic."
+  },
+  {
+    "id": "04.1-016",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "With hidden size C and vocabulary size V, how many parameters does the input embedding matrix alone have?",
+    "options": [
+      "V x C",
+      "V + C",
+      "V^2 x C",
+      "C^2"
+    ],
+    "answer_index": 0,
+    "explanation": "The embedding matrix has one row of length C for each of the V vocabulary entries, so it holds V x C parameters. At V = 500,000 and C = 768 that is about 3.8 x 10^8 parameters just for lookups. It does not scale as V^2 or C^2."
+  },
+  {
+    "id": "04.1-017",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "Besides raw size, why are most rows of a huge word-level embedding table wasted capacity?",
+    "options": [
+      "Most rows are rare words seen a few times, so they get too little gradient",
+      "Rows for common words are frozen after the first epoch and stop learning entirely",
+      "Rows beyond the first 65,536 cannot be indexed by PyTorch's int16 embedding lookup",
+      "Each row is shared between many words, so their gradients cancel each other out"
+    ],
+    "answer_index": 0,
+    "explanation": "In a gigantic word vocabulary, most entries are rare words that appear a handful of times. Their embedding rows receive very few gradient updates and stay under-trained, so they are sparse, wasted parameters. Nothing freezes common rows, and indexing is not limited to 65,536."
+  },
+  {
+    "id": "04.1-018",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "2. Why not a word vocabulary?",
+    "question": "What is the 'no morphology' problem of word-level vocabularies?",
+    "options": [
+      "Words with the same spelling but different meanings get merged into one id and one embedding",
+      "The tokenizer cannot represent words that contain capital letters without a separate case id",
+      "Plural and singular forms are mapped to the same id, so the model loses grammatical number",
+      "run, runs, running, runner get unrelated ids, so the shared stem is invisible"
+    ],
+    "answer_index": 3,
+    "explanation": "Words are built from reusable parts, but a word vocabulary gives run, runs, running and runner four unrelated integers with four independent embeddings, so the model cannot see the shared stem (same for nation/national/nationalize). A good tokenizer lets the model reuse the piece 'run' across forms."
+  },
+  {
+    "id": "04.1-019",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "What does switching from word units to character units fix?",
+    "options": [
+      "Sequences become shorter and attention becomes cheaper per document",
+      "Each token becomes more meaningful, so the model needs fewer layers",
+      "A tiny vocabulary, no OOV for those characters, and shared letters",
+      "The embedding table grows much larger, giving the model more capacity"
+    ],
+    "answer_index": 2,
+    "explanation": "With characters the vocabulary is roughly 100 symbols for English, every word is a sequence of known characters (no OOV for them), and 'run'/'running' share letters. Characters fix everything words got wrong. The price is much longer sequences, so attention becomes more expensive, not cheaper."
+  },
+  {
+    "id": "04.1-020",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "What is the main price of using individual characters as tokens?",
+    "options": [
+      "The vocabulary grows to hundreds of thousands of entries, one per character variant",
+      "Much longer sequences: 1,000 words become roughly 6,000 tokens",
+      "Unseen words must all be mapped to a single unknown id, as with word tokenizers",
+      "The round-trip decode(encode(s)) = s no longer holds for accented characters"
+    ],
+    "answer_index": 1,
+    "explanation": "A 1,000-word passage is about 6,000 characters, so character tokenization makes the model process a length-6,000 sequence for content a word tokenizer covers in 1,000 tokens. The vocabulary is tiny and there is no OOV, so the other options describe word-level problems, not character-level ones."
+  },
+  {
+    "id": "04.1-021",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "If character tokenization makes a text six times longer than word tokenization, roughly how much does attention compute and memory grow?",
+    "options": [
+      "About 6 times, because attention cost scales linearly with T",
+      "About 36 times, because attention cost scales like T^2",
+      "About 216 times, because attention cost scales like T^3",
+      "It does not change, because attention cost depends only on V"
+    ],
+    "answer_index": 1,
+    "explanation": "Each attention layer compares every position with every other, so work grows like T^2. Six times the length gives roughly 6^2 = 36 times the attention compute and memory for the same text. That is why sequence length is the single most expensive knob in a Transformer."
+  },
+  {
+    "id": "04.1-022",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "Besides attention cost, what capacity is wasted when a model uses character units?",
+    "options": [
+      "Effort learning to spell, re-deriving that t-h-e spells 'the'",
+      "Storing a separate embedding for every word it has ever seen in training",
+      "Its output layer must predict whole sentences at once instead of single units",
+      "It can no longer use positional information once sequences exceed the context"
+    ],
+    "answer_index": 0,
+    "explanation": "With character units, a large share of the model's effort goes into reassembling common words from letters — structure a coarser unit would provide for free. Compute spent learning to spell is compute not spent on meaning. Storing per-word embeddings is the word-level problem."
+  },
+  {
+    "id": "04.1-023",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "Why is a 'character' an imprecise unit for a universal tokenizer?",
+    "options": [
+      "Characters cannot be converted to integers in most programming languages without a lookup table",
+      "Every character occupies exactly four bytes in memory, wasting space for plain ASCII text",
+      "Characters are defined only for the Latin alphabet, so other scripts have no character unit",
+      "Accents, emoji modifiers and combining marks make 'one character' ambiguous"
+    ],
+    "answer_index": 3,
+    "explanation": "Across the world's scripts, accents, emoji modifiers and combining marks make it ambiguous what counts as one character. A tokenizer needs a unit that is precise and universal, which is what bytes provide. Characters do have integer code points, and UTF-8 uses one to four bytes per character, not always four."
+  },
+  {
+    "id": "04.1-024",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "3. Why not pure characters?",
+    "question": "Which combination of properties is the subword compromise trying to achieve?",
+    "options": [
+      "The longest possible sequences with the smallest possible vocabulary",
+      "One token per word with an unbounded vocabulary",
+      "Short-ish sequences, a bounded vocabulary, and no out-of-vocabulary inputs",
+      "One token per character with an <unk> fallback for rare symbols"
+    ],
+    "answer_index": 2,
+    "explanation": "Words give short sequences but an unbounded, sparse vocabulary with an OOV cliff; characters give a tiny vocabulary with no OOV but explosive T^2 cost. The goal is short-ish sequences and a bounded vocabulary and no OOV simultaneously — the subword compromise."
+  },
+  {
+    "id": "04.1-025",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "What is a Unicode code point?",
+    "options": [
+      "A byte value between 0 and 255, the range defined by ASCII",
+      "The position of a character within a particular string",
+      "An integer id assigned to each character in every script",
+      "A token id produced by a byte-level BPE tokenizer for a character"
+    ],
+    "answer_index": 2,
+    "explanation": "Every character in every script — Latin, Chinese, Arabic, emoji — has a Unicode code point, an integer identifier. For example A is U+0041 (65) and 😀 is U+1F600 (128,512). Code points can be far larger than 255, so they are not bytes, and they are independent of any tokenizer."
+  },
+  {
+    "id": "04.1-026",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "Why not use Unicode code points directly as a model's vocabulary?",
+    "options": [
+      "Code points change between operating systems, so the ids would be unstable across machines",
+      "~150,000 assigned code points (room for 1M+) bring back the huge vocabulary",
+      "Code points cannot represent emoji or non-Latin scripts, so many inputs would be lost",
+      "Code points are floating-point values and cannot be used to index an embedding table"
+    ],
+    "answer_index": 1,
+    "explanation": "Unicode has about 150,000 assigned code points and room for over a million. Using them as the vocabulary would recreate the huge, sparse embedding-table problem of word vocabularies. Code points are stable integers that cover all scripts including emoji."
+  },
+  {
+    "id": "04.1-027",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "What does UTF-8 do?",
+    "options": [
+      "It maps each Unicode code point to one to four bytes",
+      "It maps each word to a unique 32-bit integer id",
+      "It compresses text by merging frequent byte pairs",
+      "It maps each code point to exactly two bytes, always"
+    ],
+    "answer_index": 0,
+    "explanation": "UTF-8 is the standard encoding that turns each code point into one to four bytes, where a byte is an integer in 0..255. ASCII characters take one byte; other characters take two, three, or four. Merging frequent pairs is BPE, not UTF-8."
+  },
+  {
+    "id": "04.1-028",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "How are ASCII characters represented in UTF-8?",
+    "options": [
+      "As two bytes, a marker byte followed by the code point",
+      "As four bytes padded with zeros",
+      "As a variable number of bytes depending on their frequency",
+      "As a single byte equal to their code point"
+    ],
+    "answer_index": 3,
+    "explanation": "ASCII characters (the common English set, code points 0–127) are encoded as a single byte whose value equals the code point; for example A (U+0041) is the byte 65. Only non-ASCII characters expand to two, three, or four bytes. Byte length never depends on frequency."
+  },
+  {
+    "id": "04.1-029",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "Why is a byte-level alphabet guaranteed to have no out-of-vocabulary symbols?",
+    "options": [
+      "The tokenizer adds a new byte value whenever it meets an unseen character in the input",
+      "Rare characters are replaced with the closest ASCII equivalent before tokenizing",
+      "UTF-8 supports only the characters seen during tokenizer training, so none are unseen",
+      "Any string in any language is a sequence over the 256 byte values"
+    ],
+    "answer_index": 3,
+    "explanation": "Because UTF-8 represents any string in any language as bytes, every input is a sequence from a fixed alphabet of exactly 256 symbols. There is no such thing as an out-of-vocabulary byte. Nothing is added or substituted at encoding time."
+  },
+  {
+    "id": "04.1-030",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "In UTF-8, how many bytes encode the character é (U+00E9), and what are they?",
+    "options": [
+      "One byte, [233]",
+      "Three bytes, [228, 184, 150]",
+      "Two bytes, [195, 169]",
+      "Four bytes, [240, 159, 152, 128]"
+    ],
+    "answer_index": 2,
+    "explanation": "é is not ASCII, so UTF-8 encodes it as two bytes, 195 and 169. Its code point value 233 never appears, because UTF-8 does not store non-ASCII code points directly; it uses a multi-byte pattern. [228, 184, 150] is 世 and [240, 159, 152, 128] is 😀."
+  },
+  {
+    "id": "04.1-031",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "Why doesn't the byte 233 appear in the UTF-8 encoding of é, even though its code point is U+00E9 = 233?",
+    "options": [
+      "UTF-8 subtracts 38 from every code point above 127 so it fits into fewer bits",
+      "Only code points 0–127 are a raw byte; 128 and above use a multi-byte pattern",
+      "Byte 233 is reserved in UTF-8 as a special end-of-text marker and cannot appear",
+      "Python reverses the byte order of non-ASCII characters when it encodes a string"
+    ],
+    "answer_index": 1,
+    "explanation": "Only ASCII code points (0–127) are stored as their own single byte. Any code point of 128 or above, including U+00E9, is encoded with a multi-byte pattern where the leading byte signals the length and continuation bytes carry the rest. So é becomes 195, 169 rather than 233."
+  },
+  {
+    "id": "04.1-032",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "How many UTF-8 bytes do the characters 世 (U+4E16) and 😀 (U+1F600) take?",
+    "options": [
+      "世 takes three bytes and 😀 takes four bytes",
+      "Both take one byte each, like ASCII characters",
+      "世 takes two bytes and 😀 takes three bytes",
+      "Both take four bytes each, the UTF-8 maximum"
+    ],
+    "answer_index": 0,
+    "explanation": "UTF-8 uses more bytes for larger code points: 世 (U+4E16) becomes three bytes [228, 184, 150], and the emoji 😀 (U+1F600) becomes four bytes [240, 159, 152, 128]. Only ASCII characters fit in one byte."
+  },
+  {
+    "id": "04.1-033",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "In Python, how do you get the UTF-8 bytes of a string and turn them back into the string?",
+    "options": [
+      "s.encode(\"utf-8\") gives the bytes; b.decode(\"utf-8\") inverts it exactly",
+      "ord(s) produces the bytes of the whole string and chr(b) inverts it exactly",
+      "bytes(s) produces the UTF-8 bytes directly and str(b) inverts it exactly",
+      "s.split() produces the bytes and \"\".join(b) inverts it exactly"
+    ],
+    "answer_index": 0,
+    "explanation": "str.encode(\"utf-8\") returns a bytes object holding the UTF-8 bytes, and bytes.decode(\"utf-8\") turns it back into exactly the original string. ord gives a single character's code point, not its UTF-8 bytes. Wrapping the bytes in list(...) gives the integer values."
+  },
+  {
+    "id": "04.1-034",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "How many UTF-8 bytes does the string \"café\" occupy, and why?",
+    "options": [
+      "Four: UTF-8 stores one byte per character, accents included",
+      "Eight: UTF-8 uses two bytes for every character in the string",
+      "Six: one byte per character plus a two-byte terminator",
+      "Five: c, a, f are one byte each and é is two bytes"
+    ],
+    "answer_index": 3,
+    "explanation": "\"café\" is four characters but five bytes, [99, 97, 102, 195, 169]: the ASCII letters c, a, f take one byte each and é takes the two bytes 195, 169. This length inflation is the one downside of bytes, which BPE claws back."
+  },
+  {
+    "id": "04.1-035",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4. UTF-8: a universal 256-symbol alphabet",
+    "question": "What Python type and dtype do the integers from list(\"café\".encode(\"utf-8\")) have?",
+    "options": [
+      "A torch.long tensor on the CPU, one entry per byte",
+      "A torch.uint8 tensor on the current default device",
+      "Plain Python ints in 0..255; no tensor, dtype or device",
+      "A NumPy array of dtype uint16, one entry per character"
+    ],
+    "answer_index": 2,
+    "explanation": "encode returns a Python bytes object, and list(...) of it gives ordinary Python ints in 0..255. There are no tensors, dtypes or devices at this stage. Token ids only become a torch.long tensor later, when the data loader hands batches to the model."
+  },
+  {
+    "id": "04.1-036",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4.1 Bytes as our safety net",
+    "question": "What two properties make raw bytes a good base alphabet for a tokenizer?",
+    "options": [
+      "Sequences are shorter than word-level ones and every token is meaningful",
+      "The vocabulary is exactly 256 symbols and nothing is ever out of vocabulary",
+      "Bytes align with word boundaries and preserve morphology",
+      "Bytes are learned from data, so they adapt to each language"
+    ],
+    "answer_index": 1,
+    "explanation": "Byte units give a tiny, bounded vocabulary of exactly 256 and no OOV, because every string is by definition a sequence of bytes. As a result decode(encode(s)) = s for every string. Bytes do not shorten sequences or align with words, and they are fixed, not learned."
+  },
+  {
+    "id": "04.1-037",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4.1 Bytes as our safety net",
+    "question": "Why are raw bytes alone not a satisfactory tokenizer?",
+    "options": [
+      "Some strings cannot be represented as bytes and must fall back to an <unk> token",
+      "Sequences are long, even a bit longer than the character count",
+      "The vocabulary of 256 is too large for the embedding table of a small model",
+      "Decoding bytes back into text is lossy for non-English scripts such as Chinese"
+    ],
+    "answer_index": 1,
+    "explanation": "Byte tokenization has the same drawback as characters: long sequences, slightly longer than the character count because non-ASCII characters take several bytes. Representation, round-trip, and vocabulary size are all fine. So bytes serve as the floor on which larger units are learned."
+  },
+  {
+    "id": "04.1-038",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "4.1 Bytes as our safety net",
+    "question": "What role do bytes play in byte-level BPE?",
+    "options": [
+      "They are the base alphabet that can spell anything; larger units build on top",
+      "They are a fallback used only when the corpus contains emoji or rare scripts",
+      "They are discarded once training finishes, leaving only the merged tokens behind",
+      "They are used only for decoding, while encoding works on whole words instead"
+    ],
+    "answer_index": 0,
+    "explanation": "Bytes are the perfect floor: a base alphabet that can spell anything with no OOV. Byte-level BPE keeps all 256 bytes in the vocabulary and learns larger, more efficient units on top of them. Bytes are never discarded, which is what keeps the no-OOV guarantee."
+  },
+  {
+    "id": "04.1-039",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "How does Byte-Pair Encoding (BPE) build its vocabulary?",
+    "options": [
+      "Starting from all words, it repeatedly splits the rarest word into two halves",
+      "It assigns ids to the most frequent whole words and maps the rest to <unk>",
+      "It trains a small neural network to predict word boundaries and uses its outputs",
+      "From the 256 bytes, it repeatedly merges the most frequent adjacent pair"
+    ],
+    "answer_index": 3,
+    "explanation": "BPE starts from the 256 bytes and learns merges: it repeatedly finds the most frequent adjacent pair of symbols in a training corpus and fuses it into a new symbol. Running this a few thousand times produces a vocabulary in the sweet spot. It does not split words top-down or use <unk>."
+  },
+  {
+    "id": "04.1-040",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "In a trained BPE vocabulary, what happens to very common words such as 'the', 'and', ' of'?",
+    "options": [
+      "They are removed from the vocabulary as stop words before the merges are learned",
+      "They are always split into individual bytes to save vocabulary space for rarer words",
+      "Their bytes are merged early into one token, so frequent text is short",
+      "They are all mapped to the same id to reduce the vocabulary size"
+    ],
+    "answer_index": 2,
+    "explanation": "Common words occur constantly, so the pairs inside them are among the most frequent and get merged early into one unit. Frequent text therefore becomes short. Note ' of' includes its leading space, since spaces are ordinary bytes."
+  },
+  {
+    "id": "04.1-041",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "How does a BPE tokenizer handle a rare word like 'tokenization'?",
+    "options": [
+      "It maps the whole word to a single <unk> id reserved for rare words",
+      "It adds the word as a new vocabulary entry at encoding time",
+      "It splits it into known pieces such as 'token' + 'ization'",
+      "It drops the word from the input entirely and encodes the rest"
+    ],
+    "answer_index": 2,
+    "explanation": "Rare words split into a few subword pieces, like 'token' + 'ization', reusing pieces the model already knows. Related forms share stems — the morphology sharing word vocabularies lacked. BPE never uses <unk> and does not grow the vocabulary at encoding time."
+  },
+  {
+    "id": "04.1-042",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "Why can a byte-level BPE tokenizer never have an out-of-vocabulary input?",
+    "options": [
+      "Its merges are trained on every possible string in every language, so all inputs are covered",
+      "Its vocabulary keeps all 256 bytes, so anything unmerged falls back to bytes",
+      "It maps unseen inputs to the nearest learned token by edit distance before encoding",
+      "It refuses to encode strings containing characters it has not seen, so none reach the model"
+    ],
+    "answer_index": 1,
+    "explanation": "Because the BPE vocabulary keeps all 256 bytes as its foundation, any string the merges do not cover — a never-seen emoji, a random hash — is representable as its raw bytes. The exact round-trip survives. No nearest-neighbour substitution is involved."
+  },
+  {
+    "id": "04.1-043",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "In BPE, what does adding one more merge do to vocabulary size V and sequence length T?",
+    "options": [
+      "It grows V by one and shrinks T for text that uses that merge",
+      "It shrinks V by one and grows T for all text, since a pair is removed",
+      "It grows V by one and leaves T unchanged for every input text",
+      "It doubles V and halves T for every input, whatever its content"
+    ],
+    "answer_index": 0,
+    "explanation": "Each merge adds one new symbol to the vocabulary (V + 1) and fuses a pair into one token wherever it occurs, shortening sequences that contain that pair. This is how BPE deliberately controls the V-vs-T trade-off."
+  },
+  {
+    "id": "04.1-044",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "What is the downside of training a BPE tokenizer with very many merges (a large V)?",
+    "options": [
+      "Sequences become as long as raw byte sequences, losing the benefit of merging",
+      "The tokenizer loses the ability to round-trip arbitrary strings exactly",
+      "Common words are split into more pieces than before, lengthening sequences",
+      "A big embedding table with many rare, under-trained rows"
+    ],
+    "answer_index": 3,
+    "explanation": "Many merges make frequent words single tokens and sequences short, but the vocabulary becomes large: a big embedding table and many rare tokens whose rows get little gradient signal. That is the word-vocabulary problem returning. Round-tripping still holds thanks to the byte fallback."
+  },
+  {
+    "id": "04.1-045",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "What happens with very few BPE merges (a small V)?",
+    "options": [
+      "The tokenizer is close to word-level: short sequences but a huge vocabulary",
+      "The tokenizer can no longer encode non-ASCII text",
+      "The embedding table becomes larger than the output layer",
+      "The tokenizer is close to byte-level: a short vocabulary but long sequences"
+    ],
+    "answer_index": 3,
+    "explanation": "With few merges, almost all text stays as raw bytes, so the vocabulary is small but sequences are long, like a byte-level tokenizer. Non-ASCII text still encodes as bytes, and the embedding and output layers both have V rows."
+  },
+  {
+    "id": "04.1-046",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "5. The subword compromise BPE strikes",
+    "question": "What vocabulary size does GPT-2 use, and where do modern models mostly sit?",
+    "options": [
+      "GPT-2 uses 256; the field mostly sits between about 1k and 4k",
+      "GPT-2 uses 500,000; the field mostly sits above one million",
+      "GPT-2 uses 50,257; the field mostly sits at about 32k to 128k",
+      "GPT-2 uses 32,000; the field mostly sits between about 4k and 16k"
+    ],
+    "answer_index": 2,
+    "explanation": "GPT-2's vocabulary has V = 50,257 entries, and real models mostly pick between about 32k and 128k. GPTConfig.vocab_size defaults to 50257 because it matches the GPT-2 tokenizer. 256 is just the byte base, and 500,000 would be a word-level-sized table."
+  },
+  {
+    "id": "04.1-047",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "How many characters and how many UTF-8 bytes is the string \"世\"?",
+    "options": [
+      "One character and one byte, since it is a single code point",
+      "One character (code point U+4E16) but three UTF-8 bytes",
+      "Three characters and three bytes, one per UTF-8 byte",
+      "One character and two bytes, like any non-ASCII character"
+    ],
+    "answer_index": 1,
+    "explanation": "\"世\" is a single character with a single code point, U+4E16, but UTF-8 encodes it as three bytes. Confusing characters, code points and bytes is a common mistake. Byte-level tokenizers count in bytes, so their lengths follow the byte count."
+  },
+  {
+    "id": "04.1-048",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "In Python, what are len(\"café\") and len(\"café\".encode(\"utf-8\"))?",
+    "options": [
+      "4 and 5",
+      "4 and 4",
+      "5 and 5",
+      "5 and 4"
+    ],
+    "answer_index": 0,
+    "explanation": "len on the str counts characters, giving 4. len on the encoded bytes counts UTF-8 bytes, giving 5, because é takes two bytes. Byte-level tokenizers' sequence lengths are driven by the byte count, not the character count."
+  },
+  {
+    "id": "04.1-049",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to estimate a subword model's cost by counting words?",
+    "options": [
+      "A token is only roughly a word for common English; code, numbers and other languages take several",
+      "Subword tokenizers produce exactly two tokens per word, so word counts are off by a constant factor",
+      "Token counts are always smaller than word counts, so a word-based estimate is consistently too high",
+      "Cost depends only on the number of characters, so neither words nor tokens predict it"
+    ],
+    "answer_index": 0,
+    "explanation": "For a subword tokenizer, one token per word is only roughly true for common English. Rare words, code, non-English text and numbers can each become several tokens. Since everything is billed and computed in tokens, count tokens, never words."
+  },
+  {
+    "id": "04.1-050",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Common mistakes",
+    "question": "Why can ' the' (with a leading space) and 'the' (at the start of a line) be different tokens in byte-level BPE?",
+    "options": [
+      "The tokenizer lowercases words differently depending on their position in the line",
+      "Tokens at the start of a line get a special positional prefix id added to them",
+      "BPE assigns a new id to every repeated occurrence of a word to avoid collisions",
+      "The space is an ordinary byte of the data, so the byte sequences differ"
+    ],
+    "answer_index": 3,
+    "explanation": "Byte-level BPE treats the space as just another byte, so ' the' and 'the' are different byte sequences and can be learned as different tokens. Forgetting the leading space is a common mistake. No lowercasing or positional prefixes are involved."
+  },
+  {
+    "id": "04.1-051",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Check yourself",
+    "question": "Why does a pure word-level vocabulary force a choice between an <unk> token and an impractically large table?",
+    "options": [
+      "Word embeddings cannot be learned for words shorter than three letters, so many need <unk>",
+      "The softmax over words becomes numerically unstable above a few thousand entries",
+      "Possible words are unbounded, so a fixed table must omit rare ones or balloon",
+      "Words must be sorted alphabetically, which requires reserving ids for words not yet seen"
+    ],
+    "answer_index": 2,
+    "explanation": "New names, typos, code and other languages make the word set effectively unbounded. A fixed table must either omit rare words, collapsing them to <unk> (losing information and exact reconstruction), or include them, growing to hundreds of thousands of mostly under-trained rows. Neither gives faithful round-tripping with a manageable table."
+  },
+  {
+    "id": "04.1-052",
+    "chapter": "04.1",
+    "chapter_name": "Characters, bytes, Unicode, the vocab problem",
+    "module": "4",
+    "module_name": "Tokenization & data representation",
+    "source": "lessons/module-04/lesson-01.md",
+    "section": "Check yourself",
+    "question": "You increase a BPE vocabulary from 8k to 64k merges. Which pair correctly names one improvement and one cost?",
+    "options": [
+      "Better: a smaller embedding table and output layer; worse: longer sequences per document",
+      "Better: shorter sequences; worse: wider embedding/output layers, rarer rows",
+      "Better: exact round-tripping becomes possible; worse: unseen emoji now become <unk>",
+      "Better: faster tokenizer training; worse: common words are split into more pieces"
+    ],
+    "answer_index": 1,
+    "explanation": "More merges turn more frequent words and pieces into single tokens, so the same text takes fewer positions and attention is cheaper. But V grows, so the embedding table and output layer cost more parameters and memory, and the extra tokens are rarer, receiving less gradient signal. Round-tripping holds at any vocabulary size."
+  }
+]

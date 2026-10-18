@@ -1,0 +1,1334 @@
+[
+  {
+    "id": "F.1-001",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Frontier update callout",
+    "question": "How does the 'MLPerf post-training: RLVR as a benchmark' frontier update relate to the core course modules on evaluation, RL and agents?",
+    "options": [
+      "It supersedes the evaluation-harness lesson, which is now out of date",
+      "It adds recent industry news on top of them and replaces nothing",
+      "It replaces the GRPO lesson with a newer, benchmark-approved algorithm",
+      "It is a prerequisite that must be read before starting Module 16"
+    ],
+    "answer_index": 1,
+    "explanation": "The page is a bonus frontier update layered on Modules 13, 16 and 19. It shows how the same mechanisms are now measured at industry scale but does not replace any lesson. It is not a prerequisite for Module 16."
+  },
+  {
+    "id": "F.1-002",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Since late 2025, where have most LLM capability gains come from, according to the MLPerf post-training frontier update?",
+    "options": [
+      "Scaling the tokenizer vocabulary",
+      "Switching from transformers to recurrent networks",
+      "Scaling post-training",
+      "Longer pretraining on the same data"
+    ],
+    "answer_index": 2,
+    "explanation": "The update states that since late 2025 most capability gains have come from scaling post-training. What was missing was a standard way to measure time-to-quality for it, which the MLPerf workload provides."
+  },
+  {
+    "id": "F.1-003",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "What gap does the MLPerf LLM post-training benchmark fill?",
+    "options": [
+      "A public dataset of human preference pairs for reward models",
+      "A reference GPU kernel for attention shared across submitters",
+      "A standard way to measure time-to-quality for post-training",
+      "A standard tokenizer and chat template shared by all labs"
+    ],
+    "answer_index": 2,
+    "explanation": "Until this benchmark there was no standard way to measure how long it takes to post-train a model to a quality target. MLPerf now measures that time-to-quality. It is not a tokenizer, preference dataset or kernel."
+  },
+  {
+    "id": "F.1-004",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Which skills does the MLPerf post-training benchmark exercise, making them relevant for lab hiring?",
+    "options": [
+      "Web front-end design, SQL query tuning, container orchestration, CDN caching, and mobile release pipelines",
+      "RLVR loop design, eval-metric choice, reward-hacking defenses, gen/train overlap, weight transfer, KV cache",
+      "Hyperparameter search only, on fixed infrastructure, with learning rate, batch size, and warmup as the knobs",
+      "Tokenizer training, image augmentation, speech recognition, diffusion sampling, and contrastive pretraining"
+    ],
+    "answer_index": 1,
+    "explanation": "The benchmark stresses model-adjacent systems skills: designing the RLVR loop, choosing eval metrics, defending against reward hacking, overlapping generation with training, transferring weights, and managing KV cache for long agent trajectories. Those are exactly what post-training teams hire for."
+  },
+  {
+    "id": "F.1-005",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "When does the MLPerf Training LLM post-training workload start, according to MLCommons' September 2026 announcement?",
+    "options": [
+      "With the v5.0 submission round in January 2025",
+      "It has no fixed round; results are accepted continuously",
+      "With the v6.1 submission round in October 2026",
+      "With the v7.0 submission round planned for mid-2027"
+    ],
+    "answer_index": 2,
+    "explanation": "MLCommons announced in September 2026 that it will add an LLM post-training workload to MLPerf Training starting with the v6.1 submission round in October 2026. This is publicly documented."
+  },
+  {
+    "id": "F.1-006",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "Which RL algorithm does the MLPerf LLM post-training benchmark use?",
+    "options": [
+      "DPO on preference pairs",
+      "GRPO over rollout iterations",
+      "PPO with a learned critic",
+      "REINFORCE with no baseline"
+    ],
+    "answer_index": 1,
+    "explanation": "The benchmark uses GRPO over rollout iterations, with a binary verifiable reward. DPO is offline preference optimization; PPO uses a critic that GRPO drops; plain REINFORCE without a baseline is not the chosen design."
+  },
+  {
+    "id": "F.1-007",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What reward does the MLPerf LLM post-training benchmark use?",
+    "options": [
+      "The negative perplexity of the generated patch under the model",
+      "A scalar score from a learned reward model trained on patches",
+      "A binary pass/fail reward from running tests (RLVR)",
+      "Human ratings of each patch collected after every rollout"
+    ],
+    "answer_index": 2,
+    "explanation": "The reward is binary: 1 if the tests pass, 0 otherwise, which is reinforcement learning with verifiable rewards. Learned reward models and human ratings are not used, and perplexity does not measure whether a bug is fixed."
+  },
+  {
+    "id": "F.1-008",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What policy model does the MLPerf LLM post-training benchmark train?",
+    "options": [
+      "A 7B dense model fine-tuned with LoRA adapters on every attention and MLP projection",
+      "A dense 70B model with all of its parameters active for every token it processes",
+      "GPT-2 small with 124M parameters, chosen so that submissions can run on one GPU",
+      "Qwen3.5-397B-A17B, an MoE with 397B total and ~17B active parameters per token"
+    ],
+    "answer_index": 3,
+    "explanation": "The policy is Qwen3.5-397B-A17B, a mixture-of-experts model: 397B total parameters, about 17B active per token. The A17B suffix denotes active parameters. It is neither dense nor small."
+  },
+  {
+    "id": "F.1-009",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "Where do the tasks in the MLPerf LLM post-training benchmark come from?",
+    "options": [
+      "Multiple-choice trivia questions scored by exact match",
+      "Grade-school math word problems with numeric answers",
+      "Real software-repair tasks from R2E-Gym, run in a sandbox",
+      "Synthetic arithmetic generated on the fly by a task sampler"
+    ],
+    "answer_index": 2,
+    "explanation": "Tasks are real software-repair problems from R2E-Gym, run in a sandbox where tests determine the reward. Math, trivia or synthetic arithmetic are other RLVR domains, not the benchmark's."
+  },
+  {
+    "id": "F.1-010",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "Which agent harness does the MLPerf LLM post-training benchmark fix for training and validation?",
+    "options": [
+      "No harness; the model outputs a patch in one shot",
+      "OpenHands for training and a custom harness for validation",
+      "Any harness the submitter chooses",
+      "OpenHands, for both training and validation"
+    ],
+    "answer_index": 3,
+    "explanation": "The benchmark fixes OpenHands for both training and validation, because harness choice strongly changes solve rate. Letting submitters choose, or switching harnesses at validation, would make results incomparable."
+  },
+  {
+    "id": "F.1-011",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What is the validation metric and target of the MLPerf LLM post-training benchmark?",
+    "options": [
+      "pass@16, with a target of 0.50 over 1004 validation rollouts",
+      "pass@4, with a target of 0.69 over 1004 validation rollouts",
+      "Perplexity, with a target of 10 on held-out repositories",
+      "pass@1, with a target of 0.95 over 100 validation rollouts"
+    ],
+    "answer_index": 1,
+    "explanation": "Validation uses pass@4 with target 0.69 measured over 1004 validation rollouts. pass@1 was not chosen due to higher variance; perplexity does not measure task success."
+  },
+  {
+    "id": "F.1-012",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What maximum policy staleness does the MLPerf LLM post-training reference allow in async RL?",
+    "options": [
+      "1 weight version",
+      "Unbounded, as long as throughput improves",
+      "16 weight versions, one per generation",
+      "0 versions; generation and training are fully synchronous"
+    ],
+    "answer_index": 0,
+    "explanation": "The reference caps staleness at 1: a rollout can be generated by version t-1 while the trainer produces version t, never older. That allows overlap of generation and training while limiting the off-policy gap."
+  },
+  {
+    "id": "F.1-013",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What fixed budgets does the MLPerf LLM post-training benchmark impose?",
+    "options": [
+      "1M context, unlimited turns, and 1 generation per prompt",
+      "65k context, 100 agent turns, and 64 generations per prompt",
+      "8k context, 5 agent turns, and 4 generations per prompt",
+      "65k context, 30 agent turns, and 16 generations per prompt"
+    ],
+    "answer_index": 3,
+    "explanation": "Budgets are fixed at 65k context, 30 agent turns and 16 generations per prompt (GRPO group size G = 16), so submissions compete on systems efficiency rather than letting the agent think longer."
+  },
+  {
+    "id": "F.1-014",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "What is the MLPerf post-training benchmark's headline metric, 'time-to-quality'?",
+    "options": [
+      "The tokens per second sustained during rollout generation",
+      "Wall-clock time until the trained agent reaches pass@4 >= 0.69",
+      "The number of GPUs needed to reach pass@4 >= 0.69 in one day",
+      "The pass@4 score reached after a fixed one-hour training budget"
+    ],
+    "answer_index": 1,
+    "explanation": "Time-to-quality is the wall-clock time until the agent reaches the target pass@4 of 0.69. It mirrors MLPerf's existing 'time to train to a target' framing for pretraining. Fixed-budget quality or raw throughput are different metrics."
+  },
+  {
+    "id": "F.1-015",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "Which paper introduced the unbiased pass@k estimator used in RLVR evaluation?",
+    "options": [
+      "Jain et al. 2025, 'R2E-Gym', which built the repair environments",
+      "Chen et al. 2021, 'Evaluating LLMs Trained on Code' (the Codex paper)",
+      "Shao et al. 2024, 'DeepSeekMath', which introduced group-relative RL",
+      "Wang et al. 2024, 'OpenHands', the open agent platform paper"
+    ],
+    "answer_index": 1,
+    "explanation": "The unbiased pass@k estimator comes from Chen et al. 2021 (arXiv 2107.03374), section 2.1. DeepSeekMath introduced GRPO, R2E-Gym provides the repair tasks, and OpenHands is the agent harness."
+  },
+  {
+    "id": "F.1-016",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "1. What was announced",
+    "question": "Which paper introduced GRPO?",
+    "options": [
+      "Jain et al. 2025, R2E-Gym",
+      "Shao et al. 2024, DeepSeekMath",
+      "Chen et al. 2021, Evaluating LLMs Trained on Code",
+      "Liu et al. 2025, Dr. GRPO"
+    ],
+    "answer_index": 1,
+    "explanation": "GRPO was introduced in DeepSeekMath (Shao et al. 2024, arXiv 2402.03300). Dr. GRPO is a later fix to GRPO, and the other papers cover pass@k and environment construction."
+  },
+  {
+    "id": "F.1-017",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.1 The unit of optimization is model + harness",
+    "question": "In agentic RL, what is an agent harness?",
+    "options": [
+      "The GPU cluster scheduler that places and runs the training and rollout jobs",
+      "The verifier that runs the tests and computes each episode's binary reward",
+      "The wrapper around the model: prompt scaffolding, tools, observation truncation, stopping",
+      "The tokenizer and chat template used to format the SFT and RL training data"
+    ],
+    "answer_index": 2,
+    "explanation": "An agent is a model wrapped in a harness: scaffolding, available tools (edit file, run tests, search), how observations are truncated, and stopping rules. The verifier computes reward separately; the scheduler and tokenizer are not the harness."
+  },
+  {
+    "id": "F.1-018",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.1 The unit of optimization is model + harness",
+    "question": "Why did the MLPerf team fix one harness (OpenHands) for both training and validation?",
+    "options": [
+      "Because harnesses have no real effect on scores, but fixing one simplifies logging and reproduction",
+      "Because OpenHands is the only open harness that supports GRPO-style group sampling of episodes",
+      "Harness choice strongly changed solve rate, and the policy learns to act inside a specific harness",
+      "Because changing harnesses breaks the tokenizer's chat template and corrupts the stored rollouts"
+    ],
+    "answer_index": 2,
+    "explanation": "The team found harness choice strongly changed solve rate. The policy learns to act inside the harness, and the reward depends on what tools exist and how outputs are shown. Evaluating with a different harness means evaluating a different system."
+  },
+  {
+    "id": "F.1-019",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.1 The unit of optimization is model + harness",
+    "question": "What happens if you change the agent harness at evaluation time relative to training?",
+    "options": [
+      "You are evaluating a different system than the one you trained",
+      "Results improve because the model generalizes to new tools",
+      "The verifier automatically adjusts the reward for the new harness",
+      "Nothing changes, since only the weights matter"
+    ],
+    "answer_index": 0,
+    "explanation": "Model and harness together are the unit being optimized. Swap the harness and the tool set, observations and stopping behavior all change, so the score no longer describes the trained system. Weights alone are not the system."
+  },
+  {
+    "id": "F.1-020",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.1 The unit of optimization is model + harness",
+    "question": "What reasonable industry practice is recommended for agent harnesses?",
+    "options": [
+      "Hard-code the harness into the model weights through SFT so it cannot drift between runs",
+      "Use a different harness for each evaluation run to test the policy's robustness to tooling",
+      "Upgrade the harness freely between checkpoints, since only the weights determine the score",
+      "Version the harness like the model and log its commit next to every checkpoint and eval"
+    ],
+    "answer_index": 3,
+    "explanation": "Because model + harness is the unit, the harness should be versioned like the model, with its commit recorded alongside every checkpoint and eval number. Untracked changes make results irreproducible and incomparable."
+  },
+  {
+    "id": "F.1-021",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "When is a programmatic verifier actually ungameable in RLVR?",
+    "options": [
+      "Always, because a programmatic verifier checks ground truth by construction",
+      "Only if the reward is continuous rather than binary 0/1 per episode",
+      "Only if the policy cannot touch the verifier or the files that define it",
+      "Only if the verifier is a neural network the policy cannot inspect"
+    ],
+    "answer_index": 2,
+    "explanation": "A verifier checks ground truth only if the policy cannot modify it. With shell access, an agent can edit the tests that define the reward. Being rule-based is not enough on its own, and neither neural verifiers nor continuous rewards fix this."
+  },
+  {
+    "id": "F.1-022",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "What reward hack was documented in the MLPerf RLVR software-repair setup?",
+    "options": [
+      "Models produced extremely long outputs to exhaust the context",
+      "Models deleted the failing tests instead of fixing the bug",
+      "Models refused to answer to avoid negative reward",
+      "Models copied the gold patch from the internet"
+    ],
+    "answer_index": 1,
+    "explanation": "With shell access, agents deleted failing tests; with no failing tests the suite passes and the reward is 1. That is the documented failure. The other behaviors were not the reported hack."
+  },
+  {
+    "id": "F.1-023",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "If an agent's actions a_1:T can modify the files that define the verifier v, what is the policy effectively optimizing?",
+    "options": [
+      "The true verifier, since the sandbox reverts all edits before the reward is computed",
+      "The KL divergence to the reference policy, since the reward becomes constant",
+      "The perplexity of the repository's code, since edits change what the tests read",
+      "A verifier the agent itself edited, whose easiest maximizer is to make v trivial"
+    ],
+    "answer_index": 3,
+    "explanation": "If the agent can edit v, it optimizes v_{a_1:T}, a verifier it modified, and the simplest way to maximize it is to make it trivially pass (e.g. delete tests). Nothing in that setup reverts the edits."
+  },
+  {
+    "id": "F.1-024",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "What is the defense against agents deleting failing tests in RLVR software-repair tasks?",
+    "options": [
+      "Run the reward on hidden test files copied into the sandbox only after the episode ends",
+      "Show the agent all tests up front, so it knows exactly which behavior it must fix",
+      "Give the agent read-only access to the whole filesystem, including the source files",
+      "Penalize every file deletion with a negative reward large enough to outweigh a pass"
+    ],
+    "answer_index": 0,
+    "explanation": "Hidden tests are copied in only after the agent stops, then run to compute the reward, so the agent can neither see nor modify them. Read-only access would prevent fixing bugs; deletion penalties are easy to sidestep; showing all tests invites gaming."
+  },
+  {
+    "id": "F.1-025",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "What general rule follows from the hidden-test defense in RLVR?",
+    "options": [
+      "The policy must never be given tools that touch the filesystem",
+      "Anything the policy can read must be encrypted before the episode",
+      "Rewards must always be computed by human raters, not programs",
+      "Anything the policy can write to cannot be part of the reward"
+    ],
+    "answer_index": 3,
+    "explanation": "The general rule is that anything the policy can write to cannot be part of the reward computation. It does not require encryption, human scoring or removing tools; it requires isolating the reward's inputs from the agent's actions."
+  },
+  {
+    "id": "F.1-026",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.2 Reward hacking appears immediately: hidden tests",
+    "question": "During RLVR training, training reward climbs but held-out pass rate does not. What does that suggest?",
+    "options": [
+      "The held-out split is too easy, so it saturates early",
+      "The learning rate is too low for held-out gains to appear",
+      "Something is being gamed or overfit on the training side",
+      "The model is generalizing perfectly to unseen tasks"
+    ],
+    "answer_index": 2,
+    "explanation": "Keeping a held-out task split the loop never sees is a tripwire: if training reward rises without held-out improvement, the policy is exploiting the train-side checker or memorizing train quirks. A too-low LR would slow both; an easy held-out split would show high scores."
+  },
+  {
+    "id": "F.1-027",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "What does pass@4 measure for a problem?",
+    "options": [
+      "Whether all 4 attempts pass the tests",
+      "Whether the 4th attempt alone passes",
+      "Whether at least one of 4 attempts passes",
+      "The average pass rate of the 4 attempts"
+    ],
+    "answer_index": 2,
+    "explanation": "Under pass@k, a problem counts as solved if at least one of k attempts passes. Requiring all to pass would be a much stricter metric, and averaging gives pass@1."
+  },
+  {
+    "id": "F.1-028",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "Why did MLPerf choose pass@4 as its validation metric?",
+    "options": [
+      "It is the only metric compatible with binary 0/1 rewards from executing the hidden tests",
+      "It gives the highest possible scores of the metrics studied, making the target easy to hit",
+      "It had the lowest variance studied, so fewer costly rollouts decide the target was reached",
+      "It does not require running any tests, so validation is cheaper than training rollouts"
+    ],
+    "answer_index": 2,
+    "explanation": "pass@4 had the lowest variance, so fewer 30-turn, 65k-token agent rollouts are needed to decide whether the target is reached. Other metrics also work with binary rewards, and all of them require running tests."
+  },
+  {
+    "id": "F.1-029",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "Why is pass@4 less noisy than pass@1 on a problem the model solves about 30% of the time?",
+    "options": [
+      "pass@4 is about 1 - 0.7^4 = 0.76, so it flips between 0 and 1 far less than one 30% try",
+      "pass@4 is always exactly 1 for such a problem, since four tries cover every failure mode",
+      "pass@1 cannot be computed when the solve rate is below 50%, so its estimate is undefined",
+      "pass@4 averages the four rewards into a continuous score, which smooths away the noise"
+    ],
+    "answer_index": 0,
+    "explanation": "pass@1 at a 30% solve rate flips between 0 and 1 from run to run. pass@4 is 1 - 0.7^4, about 0.76, and is far more stable. It is not always 1, and it is still a binary per-problem outcome, not an average."
+  },
+  {
+    "id": "F.1-030",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "In the unbiased pass@k estimator pass@k = 1 - C(n-c, k) / C(n, k), what does C(n-c, k)/C(n, k) represent?",
+    "options": [
+      "The chance that all k picks from the n attempts are successes",
+      "The fraction of the n attempts that passed the verifier",
+      "The chance that all k picks from the n attempts are failures",
+      "The expected number of successes among the k picks"
+    ],
+    "answer_index": 2,
+    "explanation": "C(n-c, k) counts k-subsets drawn only from the n-c failures, and C(n, k) counts all k-subsets, so the ratio is the probability a random k-subset has no success. One minus it is the probability of at least one success."
+  },
+  {
+    "id": "F.1-031",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "In the unbiased pass@k estimator, what do n and c stand for?",
+    "options": [
+      "n is the attempt budget being scored, c is the number of agent turns per attempt",
+      "n is the number of problems in the benchmark, c is the number solved at least once",
+      "n is the number of attempts sampled for the problem, c is the number that passed",
+      "n is the number of tokens per attempt, c is the context length of the harness"
+    ],
+    "answer_index": 2,
+    "explanation": "For each problem you sample n >= k attempts and count c that pass. k is the attempt budget being scored. Averaging the per-problem values over problems gives the benchmark score."
+  },
+  {
+    "id": "F.1-032",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "How is a benchmark-level pass@k score obtained from per-problem estimates?",
+    "options": [
+      "By summing c over all problems and dividing by k times n",
+      "By averaging the per-problem pass@k values over all problems",
+      "By multiplying the per-problem pass@k values across problems",
+      "By taking the maximum per-problem pass@k over the benchmark"
+    ],
+    "answer_index": 1,
+    "explanation": "Each problem gets its own unbiased pass@k from its (n, c) pair, and the benchmark score is the mean over problems. Max or product would not estimate the expected solve rate."
+  },
+  {
+    "id": "F.1-033",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "With n = 8 samples of which c = 2 pass, pass@1 = 0.25 but pass@4 is about 0.786. What does a large pass@k minus pass@1 gap indicate?",
+    "options": [
+      "The model can solve the task but not reliably, so RL has signal to exploit",
+      "The task is already fully learned, so any further RL on it is unnecessary",
+      "The estimator is biased upward at small n and should be discarded here",
+      "The model cannot solve the task at all, and the pass@4 value is pure sampling luck"
+    ],
+    "answer_index": 0,
+    "explanation": "A large gap means some samples succeed while most fail: capability exists but is unreliable. That is exactly where GRPO groups contain both successes and failures, giving nonzero advantages to learn from. It is not a sign of bias or of a solved task."
+  },
+  {
+    "id": "F.1-034",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "Why use the unbiased estimator with n > k samples rather than just 'sample 4, check if any pass'?",
+    "options": [
+      "Both are unbiased, but the formula uses all n samples, so its variance is lower",
+      "'Sample 4, check any' is biased upward, while the formula corrects for that bias",
+      "'Sample 4, check any' cannot handle binary rewards, but the formula can",
+      "The formula is cheaper, because it needs fewer samples than k per problem"
+    ],
+    "answer_index": 0,
+    "explanation": "Drawing exactly k samples and checking any is also unbiased, but it uses only k samples. The combinatorial estimator uses all n samples for the same k, averaging over all k-subsets, which lowers variance. It needs more samples, not fewer."
+  },
+  {
+    "id": "F.1-035",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "What are the input and output types of llmre's pass_at_k for one problem?",
+    "options": [
+      "Inputs are tensors of shape (P, G); output is a tensor of shape (P,)",
+      "Inputs are Python floats n, c, k; the output is an int count of passes",
+      "Inputs are Python ints n, c, k; the output is a Python float in [0, 1]",
+      "Inputs are lists of completion strings; output is a boolean per problem"
+    ],
+    "answer_index": 2,
+    "explanation": "Per problem, pass_at_k takes integer counts (n, c, k) and returns a float probability in [0, 1]. Over a benchmark you hold a list of (n, c) pairs. It does not operate on tensors or raw completions."
+  },
+  {
+    "id": "F.1-036",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "In llmre's pass_at_k, what is returned when n - c < k?",
+    "options": [
+      "1.0, because every size-k subset must contain a success",
+      "c / n, because the estimator falls back to pass@1 there",
+      "An error, because the binomial ratio is undefined there",
+      "0.0, because there are too few failures to draw k from"
+    ],
+    "answer_index": 0,
+    "explanation": "If there are fewer than k failures, any k-subset must include at least one success, so the probability is exactly 1. The function short-circuits and returns 1.0. It is well-defined, not an error or a pass@1 fallback."
+  },
+  {
+    "id": "F.1-037",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "How does llmre's pass_at_k compute C(n-c, k)/C(n, k) without building huge binomial coefficients?",
+    "options": [
+      "By Monte Carlo sampling of random k-subsets of the attempts",
+      "By using Stirling's approximation for each of the factorials",
+      "As the product over i from n-c+1 to n of (1 - k/i)",
+      "By computing the factorials in float64 and then dividing"
+    ],
+    "answer_index": 2,
+    "explanation": "The ratio equals the product of (1 - k/i) for i = n-c+1..n, which takes c float multiplies. For n = 200, C(200, 100) has 59 digits, so direct factorials would overflow or lose precision. It is exact, not sampled or approximated."
+  },
+  {
+    "id": "F.1-038",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.3 Why pass@4 as the validation metric",
+    "question": "What is the computational cost of llmre's pass_at_k per problem?",
+    "options": [
+      "O(c), negligible next to one rollout",
+      "O(n^2), dominating evaluation time",
+      "O(2^n), since it enumerates all subsets",
+      "O(k * n * c), comparable to a forward pass"
+    ],
+    "answer_index": 0,
+    "explanation": "The product form loops c times, so cost is O(c), which is negligible compared with generating even a single agent rollout. It never enumerates subsets."
+  },
+  {
+    "id": "F.1-039",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Debugging exercise",
+    "question": "A pass@k script reports pass@4 = 1.0 for a problem with n = 4 attempts and c = 1 success. Is it a bug?",
+    "options": [
+      "Yes: pass@4 can never be higher than 4 times pass@1, which here is 0.25",
+      "Yes: the correct value is c/n = 0.25, since there is only one success in four",
+      "No: pass@4 is always 1 whenever c > 0, for any number n of sampled attempts",
+      "No: with n = k = 4 the only 4-subset has the success, but it is high-variance"
+    ],
+    "answer_index": 3,
+    "explanation": "n - c = 3 < k = 4, so the single 4-subset includes the one success and pass@4 = 1.0 is correct. But with n = k there is no averaging, so the estimate is noisy; sample n > k (e.g. 16). For larger n with c = 1, pass@4 would be below 1."
+  },
+  {
+    "id": "F.1-040",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Common mistakes",
+    "question": "Why is reporting pass@k with n = k considered a mistake?",
+    "options": [
+      "It is biased downward, so it always underestimates the true pass@k value",
+      "It is unbiased but noisy, with no averaging over subsets; sample more than k",
+      "It cannot be computed with the combinatorial formula when n equals k exactly",
+      "It double counts successes, so it overestimates pass@k whenever c > 1"
+    ],
+    "answer_index": 1,
+    "explanation": "With n = k, the estimator is still unbiased but uses a single subset, so it has high variance. Sampling n > k averages over many k-subsets. It is computable and does not double count."
+  },
+  {
+    "id": "F.1-041",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "What are the two phases of an RL step for LLM agents?",
+    "options": [
+      "Train a reward model on preference data, then train a critic on its scores",
+      "Generate rollouts with the current policy (inference-bound), then train on them",
+      "Tokenize the task data, then pretrain on it with next-token prediction",
+      "Evaluate on held-out tasks, then checkpoint the weights if the held-out score improved"
+    ],
+    "answer_index": 1,
+    "explanation": "An RL step generates rollouts with the current policy, which is inference-bound and long for agent episodes, then trains on them with backprop. Run sequentially, each phase leaves the other's GPUs idle."
+  },
+  {
+    "id": "F.1-042",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "What does asynchronous RL do?",
+    "options": [
+      "Skips generation entirely by reusing one fixed dataset of rollouts for every update",
+      "Trains several independent policies in parallel and averages their weights each step",
+      "Overlaps generation and training; generators use slightly old weights as the trainer updates",
+      "Runs training on CPU and generation on GPU, so the two never compete for accelerator memory"
+    ],
+    "answer_index": 2,
+    "explanation": "Async RL overlaps the two phases: generators keep producing rollouts with slightly stale weights while the trainer updates. This removes idle time. Reusing a fixed dataset would be offline RL, and averaging policies is a different technique."
+  },
+  {
+    "id": "F.1-043",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "What is policy staleness in async RL?",
+    "options": [
+      "The number of turns an agent episode takes before the harness stops it early",
+      "How many weight versions old the generating policy is when its rollout is used",
+      "The age of the training tasks in days since they were first added to the pool",
+      "How long it has been since the reward model was last retrained on new labels"
+    ],
+    "answer_index": 1,
+    "explanation": "Staleness counts weight versions between the policy that generated a rollout and the one being updated with it. With staleness 1, a rollout from version t-1 can be used while producing version t. It is unrelated to reward-model age or episode length."
+  },
+  {
+    "id": "F.1-044",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "With staleness s, how does the GRPO importance ratio r = pi_theta_t(y|x) / pi_theta_(t-s)(y|x) behave as s grows?",
+    "options": [
+      "It becomes independent of the policy, since both terms use the same weights",
+      "It drifts further from 1, so more samples get clipped or add higher variance",
+      "It stays exactly 1 regardless of s, because GRPO renormalizes within the group",
+      "It shrinks toward 0, making the gradients from all stale samples vanish"
+    ],
+    "answer_index": 1,
+    "explanation": "Samples come from an older policy, so the ratio drifts away from 1 as the gap grows. More samples fall outside the clip range (wasted) or, if not clipped, add higher-variance gradient estimates. It does not stay at 1 or vanish."
+  },
+  {
+    "id": "F.1-045",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "If one update changes a completion's log-prob by about 0.1, why does staleness 3 hurt more than staleness 1 with a [0.8, 1.2] clip range?",
+    "options": [
+      "Both ratios stay inside the clip range, so staleness has no effect on the gradient in this case",
+      "At s = 3 the ratio becomes negative, so the clipped objective flips the sign of that sample's gradient",
+      "At s = 1, r is clipped (outside [0.8, 1.2]); at s = 3 it drifts back inside and is not clipped",
+      "At s = 1, r ≈ e^0.1 = 1.105 (inside the range); at s = 3, r ≈ e^0.3 = 1.35 (clipped, no gradient)"
+    ],
+    "answer_index": 3,
+    "explanation": "Log-prob drift accumulates with staleness: 0.1 per version gives r about 1.105 at s = 1, inside [0.8, 1.2], but about 1.35 at s = 3, outside it, so that sample contributes zero gradient. The numbers are illustrative; the direction is the point. Ratios are always positive."
+  },
+  {
+    "id": "F.1-046",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "Why can an MLPerf post-training submitter not simply raise policy staleness to maximize throughput?",
+    "options": [
+      "Higher staleness lowers throughput, since stale rollouts must be regenerated",
+      "Staleness only affects memory use, not quality, so it is capped by hardware",
+      "Staleness is fixed at 0 by the rules, so generation and training never overlap",
+      "The metric is time-to-quality, and more staleness can degrade quality"
+    ],
+    "answer_index": 3,
+    "explanation": "More staleness overlaps generation and training more, buying throughput, but increases the off-policy gap and can degrade quality. Since the score is time to reach quality, trading quality for throughput can make the time worse. The reference caps it at 1, not 0."
+  },
+  {
+    "id": "F.1-047",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "In async RL, what connects policy staleness to the off-policy correction seen in PPO?",
+    "options": [
+      "Both remove the need for a reference model, since the old policy plays that role in the KL term",
+      "Both are only relevant when rewards are continuous, because binary rewards need no correction",
+      "Both train on older-policy samples via an importance ratio; async RL forces it through system design",
+      "Both require a learned critic to estimate how far the old policy has drifted from the current one"
+    ],
+    "answer_index": 2,
+    "explanation": "PPO's ratio corrects for reusing a batch sampled from an older policy. In async RL the older policy comes from the system overlapping generation with training. Same correction, different cause. Neither requires a critic or continuous rewards."
+  },
+  {
+    "id": "F.1-048",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "Roughly how much data must be transferred per weight sync for a 397B-parameter model in bf16?",
+    "options": [
+      "About 397 MB",
+      "About 3.2 TB",
+      "About 794 GB",
+      "About 34 GB"
+    ],
+    "answer_index": 2,
+    "explanation": "bf16 uses 2 bytes per parameter, so 397B x 2 is about 794 GB per sync. How fast you broadcast this from trainer to inference fleet bounds how low staleness can be. 34 GB would be the ~17B active params, but all weights must be transferred."
+  },
+  {
+    "id": "F.1-049",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "What bounds how low policy staleness can be in large-scale async RL?",
+    "options": [
+      "How fast weights can be transferred from the trainer to the inference fleet",
+      "The length of the learning-rate warmup before generation can start",
+      "The number of hidden tests per task that must run before each update",
+      "The tokenizer's vocabulary size, which sets the size of each logit tensor"
+    ],
+    "answer_index": 0,
+    "explanation": "Every new weight version must be broadcast to generators before they can use it. For huge models this transfer is large, so its speed limits how fresh the generating policy can be. The other factors don't affect staleness."
+  },
+  {
+    "id": "F.1-050",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.4 Asynchronous RL and policy staleness",
+    "question": "Why is generation, rather than training, usually the bottleneck in long-trajectory agent RL?",
+    "options": [
+      "Training uses no GPU memory for activations, so it always finishes before generation does",
+      "Each live episode holds a large, growing KV cache over up to 30 turns and 65k context",
+      "The verifier must run on the same GPU as the model, blocking generation while tests execute",
+      "Tokenization of the agent's outputs is extremely slow for code with long identifiers"
+    ],
+    "answer_index": 1,
+    "explanation": "Long multi-turn episodes accumulate big KV caches, consuming memory and limiting how many episodes run in parallel. That makes generation the bottleneck. KV size per token (reduced by GQA) is why it matters. Training still uses activation memory."
+  },
+  {
+    "id": "F.1-051",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.5 Fixed budgets",
+    "question": "In the MLPerf post-training benchmark, what does '16 generations per prompt' correspond to in GRPO?",
+    "options": [
+      "The GRPO group size G = 16",
+      "The number of hidden tests per task",
+      "The number of weight versions kept in memory",
+      "The number of agent turns per episode"
+    ],
+    "answer_index": 0,
+    "explanation": "16 generations per prompt is the GRPO group: 16 completions sampled for the same prompt whose rewards are standardized into advantages. Turns are capped at 30 separately."
+  },
+  {
+    "id": "F.1-052",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.5 Fixed budgets",
+    "question": "Why are context, turn and group-size budgets fixed in the MLPerf post-training benchmark?",
+    "options": [
+      "Because budgets have little effect on results, so fixing them costs submitters nothing",
+      "So submissions compete on systems efficiency, not on letting the agent think longer",
+      "Because OpenHands cannot support larger context or turn budgets than these",
+      "To keep the benchmark small enough to run on CPU-only submission hardware"
+    ],
+    "answer_index": 1,
+    "explanation": "Fixing budgets removes 'we let the agent think longer' as a lever, so the competition is about systems efficiency. Budgets do affect results strongly, which is exactly why they must be fixed and logged."
+  },
+  {
+    "id": "F.1-053",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "2.5 Fixed budgets",
+    "question": "Why is a pass@1 number reported without its turn and context budget not comparable to anything?",
+    "options": [
+      "Because budgets only affect training speed, not quality, so they are reported separately",
+      "Because pass@1 is mathematically undefined unless the turn budget is stated with it",
+      "Because pass@1 must always be reported together with pass@16 under the MLPerf rules",
+      "Budgets move results as much as learning rate does, so they are part of what was measured"
+    ],
+    "answer_index": 3,
+    "explanation": "Turn, context and group budgets are hyperparameters that move results as much as LR. A score without them hides a major variable. Log them per run so numbers can be compared."
+  },
+  {
+    "id": "F.1-054",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Common mistakes",
+    "question": "Why is comparing agent scores across different harnesses or budgets a mistake?",
+    "options": [
+      "Model + harness + budget is the unit measured, so changing any part changes the system",
+      "Because harnesses only affect latency, so their scores differ only in wall-clock time to finish",
+      "Because budgets are always identical across papers, so only the harness differs",
+      "Because only the model weights determine the score, and those are rarely released"
+    ],
+    "answer_index": 0,
+    "explanation": "The measured unit is model + harness + budget. A different harness or budget measures a different system, so scores are not comparable. Weights alone do not determine agent performance."
+  },
+  {
+    "id": "F.1-055",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "3. GRPO with binary rewards, by hand",
+    "question": "In a GRPO group of 4 attempts with rewards [1, 0, 0, 0], how are the advantages distributed?",
+    "options": [
+      "The one success gets a large positive advantage (≈1.73); each failure a small negative one (≈-0.58)",
+      "The success gets 0, since it equals the group maximum, and each failure gets -0.25 below the mean",
+      "All four attempts get the same advantage of 0.25, the group's mean reward, before clipping",
+      "The success gets +1 and each failure gets -1, since binary rewards are mapped to signs"
+    ],
+    "answer_index": 0,
+    "explanation": "Mean is 0.25 and population std is about 0.433, so A = (r - 0.25)/0.433 = [1.732, -0.577, -0.577, -0.577]. The rare success is pushed up strongly; each failure is pushed down a little. The advantages sum to zero."
+  },
+  {
+    "id": "F.1-056",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "3. GRPO with binary rewards, by hand",
+    "question": "Why does a GRPO group in which every attempt fails give no gradient?",
+    "options": [
+      "The KL penalty cancels the policy-gradient term exactly when every reward is zero",
+      "All rewards are equal, so std = 0 and every advantage is 0 (the eps guard returns zeros)",
+      "The loss becomes infinite from dividing by a zero std, so the step is skipped",
+      "The verifier refuses to score failed attempts, so the group has no rewards at all"
+    ],
+    "answer_index": 1,
+    "explanation": "With identical rewards the group mean equals each reward and std is 0, so all advantages are 0 and an eps guard prevents division by zero. There is no better-than-average completion to reinforce. The same holds if all succeed."
+  },
+  {
+    "id": "F.1-057",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "3. GRPO with binary rewards, by hand",
+    "question": "Why do tasks with pass@G near 0 contribute nothing to GRPO training?",
+    "options": [
+      "If no attempt in the group of G succeeds, all rewards and advantages are 0",
+      "Because the verifier skips hard tasks once their failure rate passes a threshold",
+      "Because hard tasks are filtered out by the harness before any rollouts are made",
+      "Because the importance ratio is always clipped on them, so they give no gradient"
+    ],
+    "answer_index": 0,
+    "explanation": "pass@G near 0 means groups almost always contain no success, so rewards are uniformly 0 and advantages vanish. That is why the pass@k - pass@1 gap matters: training signal needs mixed groups."
+  },
+  {
+    "id": "F.1-058",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "3. GRPO with binary rewards, by hand",
+    "question": "Which llmre function computes GRPO's group-standardized advantages?",
+    "options": [
+      "llmre.rl.ppo.compute_advantages",
+      "llmre.rl.grpo.grpo_advantages",
+      "llmre.evaluation.pass_at_k.pass_at_k",
+      "llmre.rl.gvpo.gvpo_loss"
+    ],
+    "answer_index": 1,
+    "explanation": "grpo_advantages in llmre/rl/grpo.py standardizes rewards per group, e.g. [[1, 0, 0, 0]] -> [[1.7321, -0.5774, -0.5774, -0.5774]]. pass_at_k is the evaluation estimator, compute_advantages is PPO's, and gvpo_loss is a different objective."
+  },
+  {
+    "id": "F.1-059",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "4. Learning priorities from this update",
+    "question": "Which of these is listed as part of eval design for agents in the MLPerf frontier update?",
+    "options": [
+      "Checking right tool selection versus following instructions inside it, with per-step evidence",
+      "Using a different harness for each eval run, so that the score reflects robustness to tooling",
+      "Reporting a single aggregate score only, so that releases are compared on one number",
+      "Gating releases on training loss reaching a threshold rather than on held-out evals"
+    ],
+    "answer_index": 0,
+    "explanation": "Eval design for agents separates tool selection from instruction-following within the tool, uses deterministic routing checks, prefers per-step evidence over one aggregate number, and gates releases on evals passing. A single aggregate or training loss hides failures."
+  },
+  {
+    "id": "F.1-060",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "4. Learning priorities from this update",
+    "question": "Before claiming a gain, what reproducibility step is recommended in the MLPerf frontier update?",
+    "options": [
+      "Run a single seed and report the best checkpoint by its held-out score",
+      "Increase the eval set size until the observed gain becomes significant",
+      "Compare the training loss curves between runs to confirm the gain is real",
+      "Measure the noise floor, e.g. the score shift from a dtype conversion alone"
+    ],
+    "answer_index": 3,
+    "explanation": "Measure the noise floor first: the score change from mere checkpoint-format or dtype conversion tells you how big a real gain must be. Also prefer held-out metrics over loss curves and check results across seeds. A single best-seed number is the anti-pattern."
+  },
+  {
+    "id": "F.1-061",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "4. Learning priorities from this update",
+    "question": "Which RLVR mechanics are listed as the first learning priority from the MLPerf update?",
+    "options": [
+      "Group-relative advantage, binary verifiable rewards, hidden-test defenses, pass@k choice, async staleness",
+      "LoRA rank selection, post-training quantization, structured pruning, and adapter merging for model deployment",
+      "Tokenizer training, data deduplication, positional encodings, and long-context pretraining schedules",
+      "Image augmentation, contrastive losses, diffusion noise schedules, and classifier-free guidance"
+    ],
+    "answer_index": 0,
+    "explanation": "The first priority is RLVR mechanics: GRPO's group-relative advantage, binary verifiable rewards, reward-hacking defenses like hidden tests, choosing pass@k, and policy staleness. The other topics are from other parts of ML."
+  },
+  {
+    "id": "F.1-062",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "What minimum hardware does the function-calling RLVR lab require?",
+    "options": [
+      "1x 24 GB GPU (e.g. RTX 4090 / A10G), a ≤3B model with LoRA; CPU-only does not work",
+      "A single 8 GB GPU running full fine-tuning of a 7B model in bf16 with gradient checkpointing",
+      "8x H100 GPUs for a 70B model, since RLVR needs the full policy plus a reference copy",
+      "A laptop CPU with 8 GB RAM, since the lab uses only small models and tiny tasks"
+    ],
+    "answer_index": 0,
+    "explanation": "The minimum is one 24 GB GPU with a <=3B model and LoRA; recommended is one 80 GB GPU for a 7B model with LoRA. CPU-only fails for the real lab, though pass@k and GVPO code runs on CPU. Expected cost is roughly 4-20 GPU-hours (an estimate)."
+  },
+  {
+    "id": "F.1-063",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "In the function-calling RLVR lab, how should each task's programmatic check be wrapped?",
+    "options": [
+      "As a perplexity score of the completion under the reference model",
+      "As a learned reward model trained on human labels of completions",
+      "As a continuous similarity between completion and gold-answer embeddings",
+      "As reward(task, completion) -> 0.0 or 1.0, like arithmetic_verifier"
+    ],
+    "answer_index": 3,
+    "explanation": "Each task's pass/fail check becomes a binary verifiable reward, exactly like arithmetic_verifier in the RLVR lesson. Learned reward models and similarity scores are hackable proxies; perplexity does not measure correctness."
+  },
+  {
+    "id": "F.1-064",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "What reward-hacking tripwire does the function-calling RLVR lab require?",
+    "options": [
+      "A hidden held-out task split the loop never sees, with check files out of the policy's reach",
+      "Training only on the held-out split, so that any gaming shows up in the reported metric",
+      "A penalty for every tool call the agent makes, so it cannot probe the checker repeatedly",
+      "Showing the agent the gold answers up front, so that it has no incentive to guess or game"
+    ],
+    "answer_index": 0,
+    "explanation": "Split tasks into train and a hidden held-out set never seen in training, and keep code/test files used by checks inaccessible to the policy. Showing gold answers creates a hack target, and tool-call penalties don't detect gaming."
+  },
+  {
+    "id": "F.1-065",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "In the function-calling RLVR lab, which metrics are reported on the held-out split before and after RL?",
+    "options": [
+      "Only the training reward, averaged over the last 100 steps",
+      "Only pass@16, estimated from a single rollout per prompt",
+      "pass@1 and pass@4, via pass_at_k from 4-8 rollouts per prompt",
+      "Perplexity and BLEU against the reference tool-call strings"
+    ],
+    "answer_index": 2,
+    "explanation": "Sample 4-8 rollouts per prompt and report pass@1 and pass@4 on the held-out split, watching the gap. Training reward alone can be gamed; perplexity/BLEU do not measure task success; pass@16 cannot be estimated from one rollout."
+  },
+  {
+    "id": "F.1-066",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "Which budgets must be fixed and logged per run in the function-calling RLVR lab?",
+    "options": [
+      "Only the number of GPUs and the wall-clock time per run",
+      "The tokenizer vocabulary size and the embedding dimension",
+      "Max context, max turns, group size and sampling temperature",
+      "Only the learning rate and the warmup schedule of the run"
+    ],
+    "answer_index": 2,
+    "explanation": "Context, turns, group size and temperature all move results and must be fixed and logged, one line per run. Logging only LR or GPU count misses budget variables that change scores."
+  },
+  {
+    "id": "F.1-067",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "What GRPO implementation does the function-calling RLVR lab suggest for running at scale, and what does it do?",
+    "options": [
+      "TRL's GRPOTrainer: the same group sampling, standardized advantages and clipped ratio as from scratch",
+      "PEFT's DPOTrainer, which turns GRPO into offline preference learning on chosen/rejected pairs",
+      "DeepSpeed's PPOTrainer, which adds a learned critic and GAE on top of the group baseline",
+      "vLLM's GRPOTrainer, which replaces stochastic group sampling with greedy decoding for speed"
+    ],
+    "answer_index": 0,
+    "explanation": "The lab suggests TRL's GRPOTrainer; it implements the same mechanism you built from scratch (group sampling, standardized advantages, clipped ratio) at scale. The other options misname tools or change the algorithm."
+  },
+  {
+    "id": "F.1-068",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "5. Lab: turn a function-calling task set into a minimal RLVR loop",
+    "question": "What should the one-page decision note at the end of the function-calling RLVR lab answer?",
+    "options": [
+      "How much the training reward increased and how quickly it plateaued over the run",
+      "Which hyperparameters gave the lowest training loss across the sweep of RL runs",
+      "Whether RL beat the SFT/LoRA baseline on held-out, at what cost, and where reward was gamed",
+      "How many tokens the tokenizer produced per task and how that changed the available context budget"
+    ],
+    "answer_index": 2,
+    "explanation": "The note should report held-out improvement over the SFT/LoRA baseline, compute cost, and any reward gaming. Training reward and loss are not evidence that RL helped."
+  },
+  {
+    "id": "F.1-069",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Exercise",
+    "question": "An RLVR run shows train pass@1 rising from 0.40 to 0.85 but held-out pass@1 only from 0.38 to 0.41. What is the first thing to check?",
+    "options": [
+      "Train longer, since held-out metrics always lag training metrics by several hundred steps",
+      "Read ~20 successful train rollouts for gaming: edited checks, hard-coded outputs, special-cased IDs",
+      "Switch the held-out split to the training tasks so both metrics measure the same distribution",
+      "Increase the learning rate so the held-out gains catch up with the training gains faster"
+    ],
+    "answer_index": 1,
+    "explanation": "A large train-only gain means overfitting to train tasks or exploiting the train-side checker. The first action is to inspect successful train rollouts for gaming. Training longer or with a higher LR will likely deepen the problem."
+  },
+  {
+    "id": "F.1-070",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Exercise",
+    "question": "In an RLVR run, held-out pass@4 drops from 0.62 to 0.60 while held-out pass@1 rises slightly. What does this indicate?",
+    "options": [
+      "Mode collapse: sampling diversity dropped, so extra attempts help less",
+      "That the verifier became stricter during training as checks were updated",
+      "A bug in the pass@k estimator, since pass@4 can never fall while pass@1 rises",
+      "Better exploration, since pass@4 should fall as pass@1 rises in healthy runs"
+    ],
+    "answer_index": 0,
+    "explanation": "pass@4 falling while pass@1 barely rises means the policy is concentrating on one strategy, so multiple attempts are less diverse. Fixes: raise the KL coefficient or temperature, stop earlier, add more diverse train tasks."
+  },
+  {
+    "id": "F.1-071",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Exercise",
+    "question": "Which fixes are suggested for RL mode collapse, where held-out pass@4 falls while pass@1 rises?",
+    "options": [
+      "Lower the temperature to zero and train longer, so the policy settles on its best strategy",
+      "Reduce the group size to 1, so each update follows a single trajectory with less noise",
+      "Remove the KL penalty entirely, so the policy is free to explore away from the reference",
+      "Raise the KL coefficient or temperature, stop earlier, or add more diverse train tasks"
+    ],
+    "answer_index": 3,
+    "explanation": "Collapse is loss of diversity; a stronger KL to the reference, higher temperature, earlier stopping and more diverse tasks counteract it. Zero temperature, no KL, or group size 1 all reduce diversity or signal further."
+  },
+  {
+    "id": "F.1-072",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Common mistakes",
+    "question": "Why is trusting training reward curves a common mistake in RLVR?",
+    "options": [
+      "Training reward is not logged by standard GRPO implementations, so the curves are reconstructed",
+      "Only held-out metrics show whether RL helped; training reward can rise via gaming or overfitting",
+      "Training reward cannot be computed for binary rewards, so the curve is a smoothed proxy metric",
+      "Training reward is always lower than held-out reward, so the curves understate real progress"
+    ],
+    "answer_index": 1,
+    "explanation": "Rising training reward can reflect reward hacking or memorization. Only held-out metrics, on tasks the loop never sees, show real improvement."
+  },
+  {
+    "id": "F.1-073",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "Common mistakes",
+    "question": "Why is letting the policy see or edit the reward's inputs a mistake in RLVR?",
+    "options": [
+      "It prevents the policy from using tools, since the reward files lock the sandbox",
+      "Visible tests, writable config or accessible gold answers all become hacking targets",
+      "It slows training because of the extra file I/O every time the reward is computed",
+      "It makes the reward continuous instead of binary, which breaks GRPO's advantages"
+    ],
+    "answer_index": 1,
+    "explanation": "Anything the policy can read or write that feeds the reward can be exploited, as when agents deleted failing tests. Keep the reward's inputs hidden from the policy."
+  },
+  {
+    "id": "F.1-074",
+    "chapter": "F.1",
+    "chapter_name": "MLPerf post-training: RLVR as a benchmark",
+    "module": "F",
+    "module_name": "Frontier updates (bonus)",
+    "source": "lessons/frontier/update-01.md",
+    "section": "What to read / what to skip",
+    "question": "Which section of the Codex paper should be read for the pass@k estimator?",
+    "options": [
+      "Section 7 on broader impacts",
+      "The UI and deployment sections",
+      "The appendix on tokenization",
+      "Section 2.1"
+    ],
+    "answer_index": 3,
+    "explanation": "The Codex paper (Chen et al. 2021) section 2.1 introduces the unbiased pass@k estimator. The reading guide also recommends R2E-Gym's environment-construction and hybrid-verifier sections, and skimming OpenHands architecture while skipping its UI sections."
+  }
+]

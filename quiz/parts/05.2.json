@@ -1,0 +1,1046 @@
+[
+  {
+    "id": "05.2-001",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is attention described as the operation that makes a transformer a transformer?",
+    "options": [
+      "It is the only layer in the model with trainable parameters, so all learning happens inside attention",
+      "It is how each token pulls in information from other tokens; every GPT layer is attention plus an MLP",
+      "It converts the integer token ids into the dense vectors that the rest of the network operates on",
+      "It computes the final next-token probabilities, turning the last hidden state into a distribution over ids"
+    ],
+    "answer_index": 1,
+    "explanation": "Attention is the mechanism by which each position gathers information from other positions. Every GPT layer is attention plus a small MLP, so once you understand attention the rest is assembly. Converting ids to vectors is the embedding's job, and probabilities come from the output head."
+  },
+  {
+    "id": "05.2-002",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "Before attention, what does each position's C-vector in a GPT know about?",
+    "options": [
+      "The entire sequence",
+      "Only the previous token",
+      "Only its own token (and position)",
+      "The average of all tokens in the batch"
+    ],
+    "answer_index": 2,
+    "explanation": "Coming out of the embedding layer, each position's vector only encodes its own token plus its position. To predict the next word it needs information from other positions — e.g. the subject a verb agrees with or the noun a pronoun refers to — and attention is how it gathers that."
+  },
+  {
+    "id": "05.2-003",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "Which of these is an example of information a position needs from other positions, motivating attention?",
+    "options": [
+      "The vocabulary size",
+      "The learning rate schedule",
+      "The dtype of the embedding table",
+      "The noun a pronoun refers to"
+    ],
+    "answer_index": 3,
+    "explanation": "Predicting the next token requires context: the subject a verb agrees with, the noun a pronoun refers to, the opening bracket a closing one must match. Those live at other positions, so attention gathers them. Vocab size, dtype and learning rate are not per-sequence contextual information."
+  },
+  {
+    "id": "05.2-004",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "Why is attention described as a 'soft' dictionary lookup?",
+    "options": [
+      "Each query is compared to every key and gets a blend of all values, weighted by how well each key matched",
+      "It looks up the single key that exactly equals the query and returns that one value, like a hash map",
+      "It stores keys as floating-point vectors instead of strings, so lookups tolerate small rounding errors",
+      "Its keys are kept sorted, so a binary search over them returns the nearest value in logarithmic time"
+    ],
+    "answer_index": 0,
+    "explanation": "A normal dictionary returns exactly one value for one exact key. Attention instead does a fuzzy, weighted lookup: the query is matched against every key and the output is a weighted blend of all values. The 'soft' refers to this weighting, not to the data type."
+  },
+  {
+    "id": "05.2-005",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "In attention, what is the role of the query vector q?",
+    "options": [
+      "What a position hands over if another one attends to it",
+      "What the current position is looking for — its question",
+      "What a position advertises to all of the other positions",
+      "The position's integer index within the sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "The query is 'what I am looking for' — the current position's question. The key is 'what I offer' (an advertisement), and the value is 'what I hand over' if attended to."
+  },
+  {
+    "id": "05.2-006",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "In attention, what is the role of the key vector k?",
+    "options": [
+      "What a position hands over (its content) if another position attends to it",
+      "The normalizing constant of the softmax, shared by every query in the same row",
+      "What a position offers — an advertisement that queries are compared against",
+      "The final output of the head, after the weighted blend of values"
+    ],
+    "answer_index": 2,
+    "explanation": "Each position publishes a key, 'what I offer'. Queries are dotted against keys to decide how much to attend to each position. The value, not the key, is what actually gets blended into the output."
+  },
+  {
+    "id": "05.2-007",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "1. Intuition: a soft, learned dictionary lookup",
+    "question": "In attention, what is the role of the value vector v?",
+    "options": [
+      "The question that this position asks of all the others",
+      "The raw score between two positions, computed before the softmax",
+      "The causal mask entry for that position in its own row",
+      "What a position hands over (its content) when attended to"
+    ],
+    "answer_index": 3,
+    "explanation": "The value is 'what I hand over': once the query-key matches produce weights, the output is a weighted blend of the values. Keys decide how much to listen; values decide what is received."
+  },
+  {
+    "id": "05.2-008",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "How are the queries, keys and values computed from the input x of shape (B, T, C) in single-head attention?",
+    "options": [
+      "By three learned linear maps Q = x W_Q, K = x W_K, V = x W_V, each weight (C, d_h)",
+      "By splitting x into three equal chunks along the time axis T and using one chunk for each",
+      "By applying softmax to x three times with different temperatures, one for each of Q, K and V",
+      "Q, K and V are all set equal to x itself, so no extra parameters are needed in the head"
+    ],
+    "answer_index": 0,
+    "explanation": "Q, K and V come from three separate learned linear projections, each weight matrix of shape (C, d_h) in the single-head case. They are not chunks of the sequence and are not copies of x. Each result has shape (B, T, d_h)."
+  },
+  {
+    "id": "05.2-009",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "In single-head attention with input x of shape (B, T, C) and W_Q of shape (C, d_h), what is the shape of Q?",
+    "options": [
+      "(B, C, d_h)",
+      "(B, T, d_h)",
+      "(B, T, T)",
+      "(B, T, C, d_h)"
+    ],
+    "answer_index": 1,
+    "explanation": "Multiplying (B, T, C) by (C, d_h) contracts the C axis and gives (B, T, d_h): one d_h-vector per position. (B, T, T) is the shape of the score matrix, which comes later."
+  },
+  {
+    "id": "05.2-010",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "Why does attention learn three separate projections W_Q, W_K, W_V instead of one?",
+    "options": [
+      "To triple the number of attention heads without increasing the model's residual width C",
+      "To make the model permutation-invariant, so word order no longer affects the attention output",
+      "So one token can ask for one thing (query), advertise another (key) and contribute a third (value)",
+      "Because the softmax function requires three separate input tensors to compute a valid distribution"
+    ],
+    "answer_index": 2,
+    "explanation": "Separate projections let one token play three different roles: what it seeks, what it advertises, and what it hands over. Nothing forces q, k and v to be equal or related except training. It is unrelated to the number of heads."
+  },
+  {
+    "id": "05.2-011",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "Are a token's query, key and value vectors required to be related in any way?",
+    "options": [
+      "Yes — the key must equal the query so that each token can attend to itself",
+      "Yes — the value must be the average of the query and the key for each token",
+      "Yes — the three vectors must be mutually orthogonal to avoid redundancy",
+      "No — nothing forces them to be equal or related except through training"
+    ],
+    "answer_index": 3,
+    "explanation": "The three projections are independent learned matrices, so q, k and v can be completely different vectors for the same token. In a worked example, the same input row became query [2, 0], key [1, 1] and value [1, 0]. Only training shapes any relationship."
+  },
+  {
+    "id": "05.2-012",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "In the formula Attention(Q, K, V) = softmax(Q K^T / sqrt(d_h) + M) V, what does each part do?",
+    "options": [
+      "Q K^T gives raw scores, sqrt(d_h) scales them, M masks the future, softmax makes row weights, V is averaged",
+      "Q K^T is the causal mask, M is the output buffer, and multiplying by V normalizes the scores to sum to one",
+      "sqrt(d_h) is the number of heads, M is the learning rate, and softmax picks the single best-matching key",
+      "softmax is applied to V first, and the result is multiplied by Q K^T and rescaled by sqrt(d_h) at the end"
+    ],
+    "answer_index": 0,
+    "explanation": "The formula reads left to right as: raw query-key scores, scaled by 1/sqrt(d_h), causal mask added, softmax per row to turn scores into weights, then a weighted average of values. M is the mask, not the output, and softmax acts on scores, not on V."
+  },
+  {
+    "id": "05.2-013",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "2. Q, K, V are three learned linear projections",
+    "question": "In real GPT code, how is the Q/K/V projection typically implemented?",
+    "options": [
+      "As three softmax layers",
+      "As a single nn.Linear",
+      "As an nn.Embedding lookup",
+      "As a convolution over T"
+    ],
+    "answer_index": 1,
+    "explanation": "In practice the projection is a single nn.Linear (in the CausalSelfAttention module it produces Q, K and V together). It is a learned linear map, not an embedding lookup or softmax."
+  },
+  {
+    "id": "05.2-014",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "3. The setup for the worked example",
+    "question": "When computing Q = x W_Q by hand, what is an easy way to read row i of Q?",
+    "options": [
+      "As column i of W_Q, read off directly from the weight matrix W_Q",
+      "As the diagonal of x times W_Q, one entry for each of the input rows",
+      "As a mix of W_Q's rows, with the entries of x_i as the mixing amounts",
+      "As the sum of all entries of x, repeated across every column"
+    ],
+    "answer_index": 2,
+    "explanation": "Row i of x W_Q equals the sum over c of x_ic times row c of W_Q. So row i of Q is a weighted mix of W_Q's rows, with x_i's entries as the weights. This is equivalent to the dot-product-per-entry definition Q_ij = sum_c x_ic (W_Q)_cj."
+  },
+  {
+    "id": "05.2-015",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "3. The setup for the worked example",
+    "question": "In a hand-worked attention example, the input row x_1 = [1, 1, 0] became query [2, 0], key [1, 1] and value [1, 0]. What does this illustrate?",
+    "options": [
+      "That the three projection matrices are identical, since all three outputs came from one row",
+      "That attention ignores the input row and only uses the learned weights to build its vectors",
+      "That keys are always all-ones vectors, while queries and values vary from token to token",
+      "That the same input row produces three different vectors via the three learned projections"
+    ],
+    "answer_index": 3,
+    "explanation": "One input vector passed through W_Q, W_K and W_V gives three distinct vectors — the 'ask one thing, advertise another, hand over a third' idea made concrete. It shows the projections are different, not identical."
+  },
+  {
+    "id": "05.2-016",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "4. Step one — scores are dot products",
+    "question": "In attention, how is the score s_ij between query i and key j computed?",
+    "options": [
+      "As the dot product q_i · k_j = sum over m of q_im k_jm",
+      "As the Euclidean distance between q_i and k_j, negated",
+      "As the product of the norms of q_i and k_j alone",
+      "As the cosine of the angle between the values v_i and v_j"
+    ],
+    "answer_index": 0,
+    "explanation": "The score is the dot product of query i and key j, summed over the d_h dimensions. It is large and positive when the vectors point the same way, near zero when unrelated, and negative when opposed. Values do not enter the score."
+  },
+  {
+    "id": "05.2-017",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "4. Step one — scores are dot products",
+    "question": "What does a large positive dot product between a query and a key indicate in attention?",
+    "options": [
+      "The two positions are far apart in the sequence, so the key is stale",
+      "The query and key point in a similar direction — a strong match",
+      "The key belongs to a future position and should therefore be masked",
+      "The value vector for that key is zero, so the score has no effect"
+    ],
+    "answer_index": 1,
+    "explanation": "A dot product is large and positive when vectors point the same way, near zero when unrelated, and negative when opposed. So a large score means the query matches that key well and that position will get more attention weight."
+  },
+  {
+    "id": "05.2-018",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "4. Step one — scores are dot products",
+    "question": "Why does computing S = Q K^T produce all query-key dot products at once?",
+    "options": [
+      "Because the transpose sums K over its rows, collapsing all of the keys into one long vector",
+      "Because K^T has shape (T, d_h), the same as Q, so the product is taken elementwise",
+      "Transposing K makes its rows (keys) columns, so entry (i, j) of the product is q_i · k_j",
+      "Because Q and K are always square (T, T) matrices, so any product covers all pairs"
+    ],
+    "answer_index": 2,
+    "explanation": "K has keys as rows; K^T has them as columns. Multiplying Q (T, d_h) by K^T (d_h, T) gives a (T, T) matrix whose (i, j) entry is row i of Q dotted with column j of K^T, i.e. q_i · k_j. Q and K are generally not square."
+  },
+  {
+    "id": "05.2-019",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "4. Step one — scores are dot products",
+    "question": "For a single sequence with Q and K of shape (T, d_h), what is the shape of the score matrix S = Q K^T?",
+    "options": [
+      "(T, d_h)",
+      "(d_h, d_h)",
+      "(d_h, T)",
+      "(T, T)"
+    ],
+    "answer_index": 3,
+    "explanation": "(T, d_h) times (d_h, T) gives (T, T): one score for every (query position, key position) pair. The head dimension d_h is summed away by the dot product."
+  },
+  {
+    "id": "05.2-020",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "5. Step two — scale by 1/sqrt(d_h)",
+    "question": "In scaled dot-product attention, what are the raw scores divided by before the softmax?",
+    "options": [
+      "sqrt(d_h), the square root of the head dimension",
+      "d_h, the head dimension itself, without a root",
+      "T, the current sequence length of the batch",
+      "sqrt(T), the square root of the sequence length"
+    ],
+    "answer_index": 0,
+    "explanation": "The scores are divided by sqrt(d_h). With d_h = 2 the scale is about 0.7071; with d_h = 64 it is 1/8. It does not depend on sequence length."
+  },
+  {
+    "id": "05.2-021",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "5. Step two — scale by 1/sqrt(d_h)",
+    "question": "Why do raw attention scores tend to grow as the head dimension d_h grows?",
+    "options": [
+      "Because the softmax amplifies them, multiplying every score by d_h before it is normalized",
+      "A dot product over d_h dimensions sums d_h products, so its magnitude tends to grow with d_h",
+      "Because the causal mask adds d_h to every allowed score, inflating the larger heads more",
+      "Because the value vectors are multiplied in before the scores, adding d_h extra factors"
+    ],
+    "answer_index": 1,
+    "explanation": "A dot product sums d_h terms, so with more dimensions the sum tends to be larger in magnitude. Real models use d_h = 64, making unscaled scores large. Softmax and the mask come after the score computation."
+  },
+  {
+    "id": "05.2-022",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "5. Step two — scale by 1/sqrt(d_h)",
+    "question": "What goes wrong when softmax is applied to large-magnitude scores?",
+    "options": [
+      "It returns negative weights for the smaller scores, so the output subtracts some of the values",
+      "It produces weights that sum to more than 1, so the output grows larger with every layer",
+      "It saturates: nearly all weight goes to the top score (near one-hot) and the gradient goes flat",
+      "It becomes approximately linear in its inputs and loses the nonlinearity attention relies on"
+    ],
+    "answer_index": 2,
+    "explanation": "Large inputs push softmax into saturation: a near-one-hot distribution that acts as a hard pick instead of a soft blend, with a nearly flat gradient that stalls learning. Softmax weights stay non-negative and sum to 1 regardless."
+  },
+  {
+    "id": "05.2-023",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "5. Step two — scale by 1/sqrt(d_h)",
+    "question": "If the entries of q and k are independent with unit variance, what is the variance of q · k, and how does scaling fix it?",
+    "options": [
+      "Variance 1; scaling is unnecessary",
+      "Variance d_h squared; dividing by d_h restores unit variance",
+      "Variance sqrt(d_h); dividing by d_h restores unit variance",
+      "Variance d_h; dividing by sqrt(d_h) restores unit variance"
+    ],
+    "answer_index": 3,
+    "explanation": "Summing d_h independent unit-variance products gives variance d_h. Dividing by sqrt(d_h) divides the variance by d_h, restoring unit variance and keeping softmax in its sensitive regime regardless of head size."
+  },
+  {
+    "id": "05.2-024",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "6. Step three — the causal mask: no peeking at the future",
+    "question": "Why must GPT forbid position i from attending to positions after i during training?",
+    "options": [
+      "It is trained to predict the next token, and seeing future tokens is cheating that fails at generation",
+      "Because future positions have no positional embeddings yet, so their keys are undefined during training",
+      "Because attending to future positions doubles the memory cost of the score matrix at every layer",
+      "Because softmax cannot handle more than i entries in row i without overflowing in float32 arithmetic"
+    ],
+    "answer_index": 0,
+    "explanation": "GPT predicts the next token, so at position i it may use only positions 1..i. Attending to later positions would let it read the answer, making training a cheat that does not work at generation time, when the future is unavailable."
+  },
+  {
+    "id": "05.2-025",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "6. Step three — the causal mask: no peeking at the future",
+    "question": "How does the causal mask M enforce 'no peeking at the future' in attention?",
+    "options": [
+      "By setting every future value vector in V to zero, so future positions contribute nothing to the output",
+      "By adding −infinity to every future score (j > i) before softmax, leaving entries j ≤ i unchanged",
+      "By multiplying every future score by 0.5 before softmax, so the future is down-weighted but still visible",
+      "By removing the future tokens from the input sequence entirely before Q, K and V are ever computed"
+    ],
+    "answer_index": 1,
+    "explanation": "M has 0 on and below the diagonal and −infinity above it, and is added to the scaled scores before softmax. Allowed entries (j ≤ i) are untouched while future entries become −infinity. The input sequence itself is not modified."
+  },
+  {
+    "id": "05.2-026",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "6. Step three — the causal mask: no peeking at the future",
+    "question": "Why is the causal mask filled with −infinity rather than 0?",
+    "options": [
+      "Because a score of 0 would make the softmax undefined, dividing by zero in the normalizer",
+      "Because −infinity makes training faster by letting the kernel skip the masked entries",
+      "exp(−infinity) = 0, so a masked score gets exactly zero weight and the rest still sum to 1",
+      "Because the mask is multiplied with the scores, not added, so 0 would erase the allowed entries"
+    ],
+    "answer_index": 2,
+    "explanation": "Adding 0 would leave a score unchanged, so it would not mask anything. Adding −infinity makes exp(score) exactly 0, switching the future position off entirely; the remaining weights still sum to 1. The mask is added, not multiplied."
+  },
+  {
+    "id": "05.2-027",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "6. Step three — the causal mask: no peeking at the future",
+    "question": "What is the structure of the causal mask M for T = 3?",
+    "options": [
+      "All zeros, so every position can attend everywhere",
+      "−infinity on the diagonal and 0 elsewhere",
+      "0 above the diagonal and −infinity on and below it",
+      "0 on and below the diagonal, −infinity above it"
+    ],
+    "answer_index": 3,
+    "explanation": "Row i may attend to columns j ≤ i, so those entries are 0 and the upper-right (j > i) entries are −infinity. Putting −infinity on the diagonal would stop a position from attending to itself, which causal attention allows."
+  },
+  {
+    "id": "05.2-028",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "7. Step four — softmax turns each row into weights",
+    "question": "What does softmax do to each row of masked, scaled attention scores?",
+    "options": [
+      "It turns the row into non-negative weights that sum to 1 — how much to attend to each position",
+      "It sorts the row in descending order so the best-matching key always comes first in the output",
+      "It sets the maximum entry of the row to exactly 1 and every other entry to exactly 0, a hard argmax",
+      "It divides every entry of the row by the row's length, giving equal weight to all positions"
+    ],
+    "answer_index": 0,
+    "explanation": "softmax(r)_j = exp(r_j) / sum_k exp(r_k), giving non-negative weights summing to 1. It is a smooth weighting, not a hard argmax (that only happens when it saturates)."
+  },
+  {
+    "id": "05.2-029",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "7. Step four — softmax turns each row into weights",
+    "question": "Why is softmax applied independently to each row of the attention score matrix?",
+    "options": [
+      "Because each column is one key distributing its attention over the queries",
+      "Because each row is one query distributing its attention over the keys",
+      "Because each row must sum to zero for the output to stay centred",
+      "Because a softmax over the whole matrix at once is mathematically undefined"
+    ],
+    "answer_index": 1,
+    "explanation": "Row i holds query i's scores against every key, so normalizing across that row gives how query i distributes its attention. Normalizing columns would instead mix different queries."
+  },
+  {
+    "id": "05.2-030",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "7. Step four — softmax turns each row into weights",
+    "question": "In causal attention, what weight does the first position (row 1) always get?",
+    "options": [
+      "Uniform weights spread evenly over all T positions in the sequence",
+      "Zero weight everywhere, since the first row is fully masked out",
+      "All weight (1.0) on itself, since it is the only unmasked entry",
+      "Weight 0.5 on itself and 0.5 on the next position in the sequence"
+    ],
+    "answer_index": 2,
+    "explanation": "Row 1 can only see position 1 — every other entry is masked to −infinity. Softmax over a single live entry gives it weight 1, so the first position's output is just its own value vector."
+  },
+  {
+    "id": "05.2-031",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "7. Step four — softmax turns each row into weights",
+    "question": "If two unmasked scaled scores in an attention row are exactly equal and all others are masked, what weights does softmax give?",
+    "options": [
+      "The first gets 1, the second 0",
+      "Both get 1",
+      "Weights depend on the sequence length",
+      "0.5 and 0.5 — a tie"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax of two equal values gives equal weights, and because they must sum to 1 each gets 0.5. Masked entries contribute exp(−infinity) = 0. This is what happens when a query dots equally with two allowed keys."
+  },
+  {
+    "id": "05.2-032",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "7. Step four — softmax turns each row into weights",
+    "question": "What two sanity checks hold for a correct causal attention weight matrix A?",
+    "options": [
+      "Every row sums to 1, and the matrix is lower-triangular (future entries exactly zero)",
+      "Every column sums to 1, and the matrix is symmetric because scores are dot products",
+      "The diagonal is all zeros, since no token attends to itself, and every row sums to T",
+      "The matrix equals the identity, since each token attends only to itself under the mask"
+    ],
+    "answer_index": 0,
+    "explanation": "Each row is a probability distribution, so it sums to 1, and the causal mask makes everything above the diagonal exactly zero, giving a lower-triangular matrix. Columns do not in general sum to 1 and the matrix is not symmetric."
+  },
+  {
+    "id": "05.2-033",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "8. Step five — output is a weighted average of values",
+    "question": "How is the attention output for query i computed from the weights and values?",
+    "options": [
+      "As the elementwise maximum of the allowed value vectors",
+      "As the weighted sum of value vectors, sum_j A_ij v_j",
+      "As the dot product of the query q_i with its own value v_i",
+      "As the softmax of the value vectors, taken over the keys"
+    ],
+    "answer_index": 1,
+    "explanation": "Each query's output is the weighted average of the value vectors, using that row's attention weights. Stacking all queries, this is the matmul O = A V. Values are blended, not maximized or softmaxed."
+  },
+  {
+    "id": "05.2-034",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "8. Step five — output is a weighted average of values",
+    "question": "For a single sequence with A of shape (T, T) and V of shape (T, d_h), what is the shape of O = A V?",
+    "options": [
+      "(T, T)",
+      "(d_h, d_h)",
+      "(T, d_h)",
+      "(d_h, T)"
+    ],
+    "answer_index": 2,
+    "explanation": "(T, T) times (T, d_h) gives (T, d_h): one d_h-dimensional output per query position, the same shape as V."
+  },
+  {
+    "id": "05.2-035",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "8. Step five — output is a weighted average of values",
+    "question": "What is the order of operations in scaled dot-product attention?",
+    "options": [
+      "mask (+M) → scores (Q K^T) → softmax per row → scale (/sqrt(d_h)) → output (A @ V)",
+      "softmax per row → scores (Q K^T) → scale (/sqrt(d_h)) → mask (+M) → output (A V)",
+      "scale (/sqrt(d_h)) → output (A V) → scores (Q K^T) → mask (+M) → softmax per row",
+      "scores (Q K^T) → scale (/sqrt(d_h)) → mask (+M) → softmax per row → output (A V)"
+    ],
+    "answer_index": 3,
+    "explanation": "The pipeline is scores, then scale, then add the mask, then softmax each row, then multiply by V. The mask must come before softmax so masked entries get exactly zero weight."
+  },
+  {
+    "id": "05.2-036",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "9. From scratch in PyTorch — and matching the fused kernel",
+    "question": "Why does attention code write `Q @ K.transpose(-2, -1)` rather than `Q @ K.T`?",
+    "options": [
+      "Swapping only the last two axes stays correct when there are leading batch/head axes",
+      "Because .T is not differentiable, so autograd would drop the gradient flowing into K",
+      "Because transpose(-2, -1) also applies the 1/sqrt(d_h) scale as part of the operation",
+      "Because .T would silently apply the causal mask, zeroing the upper triangle of the scores"
+    ],
+    "answer_index": 0,
+    "explanation": "transpose(-2, -1) swaps only the last two axes, so the same line works for (T, d_h), (B, T, d_h) or (B, nh, T, d_h). It is purely a shape choice — it does not scale or mask."
+  },
+  {
+    "id": "05.2-037",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "9. From scratch in PyTorch — and matching the fused kernel",
+    "question": "What does `scores.masked_fill(mask == 0, float('-inf'))` do when mask = torch.tril(torch.ones(T, T))?",
+    "options": [
+      "It zeroes out the lower-triangular scores, leaving only the future positions with their values",
+      "It writes −infinity into the future (upper-triangular) positions where the tril mask is 0",
+      "It multiplies all the scores elementwise by the mask, so future positions become exactly zero",
+      "It replaces every score in the matrix with −infinity, so the softmax output becomes uniform"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.tril(ones) is 1 on and below the diagonal and 0 above it. masked_fill writes −infinity wherever the mask is 0 — the future positions — leaving the allowed scores unchanged. A later softmax then gives those positions zero weight."
+  },
+  {
+    "id": "05.2-038",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "9. From scratch in PyTorch — and matching the fused kernel",
+    "question": "In attention code, why is softmax called with dim=-1 on the (T, T) score matrix?",
+    "options": [
+      "dim=-1 normalizes down each column, over all the queries for that key",
+      "dim=-1 normalizes the whole (T, T) matrix so that all entries sum to 1",
+      "dim=-1 normalizes along each row, so each query's weights over keys sum to 1",
+      "dim=-1 is simply required by PyTorch whenever softmax gets a 2-D tensor"
+    ],
+    "answer_index": 2,
+    "explanation": "The last axis indexes keys, so dim=-1 normalizes across keys within each query's row. That makes each query's attention a distribution summing to 1. dim=-2 would normalize over queries, which is wrong."
+  },
+  {
+    "id": "05.2-039",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "9. From scratch in PyTorch — and matching the fused kernel",
+    "question": "What does `F.scaled_dot_product_attention(Q, K, V, is_causal=True)` compute relative to a hand-written scale/mask/softmax/matmul?",
+    "options": [
+      "A faster approximation of attention that differs noticeably from the hand-written version on long inputs",
+      "Non-causal attention that silently ignores the mask unless an explicit attn_mask tensor is also passed",
+      "Only the (T, T) attention weights, leaving the final multiplication by V to be done by the caller",
+      "The same math with different bookkeeping — it matches the from-scratch result to float tolerance"
+    ],
+    "answer_index": 3,
+    "explanation": "PyTorch's fused kernel with is_causal=True computes identical causal scaled dot-product attention; torch.allclose with the from-scratch output returns True. The difference is implementation efficiency, not the math."
+  },
+  {
+    "id": "05.2-040",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "9. From scratch in PyTorch — and matching the fused kernel",
+    "question": "Why is `Q[None, None]` used when passing a (T, d_h) tensor to F.scaled_dot_product_attention?",
+    "options": [
+      "To add leading batch and head axes, giving shape (1, 1, T, d_h)",
+      "To detach Q from the autograd graph before the fused call",
+      "To cast Q to float16, which the fused kernel requires",
+      "To transpose Q so its last two axes are swapped for the call"
+    ],
+    "answer_index": 0,
+    "explanation": "Indexing with None inserts new axes of length 1, giving (1, 1, T, d_h) — a batch of 1 with 1 head — matching the (B, nh, T, d_h) layout the fused function expects. It does not change dtype or gradients."
+  },
+  {
+    "id": "05.2-041",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "10. Tensor shapes: where the T x T comes from",
+    "question": "In multi-head attention with n_h heads, what is the shape of the attention weight tensor A?",
+    "options": [
+      "(B, T, n_h, d_h)",
+      "(B, n_h, T, T)",
+      "(B, T, T, n_h)",
+      "(n_h, T, d_h)"
+    ],
+    "answer_index": 1,
+    "explanation": "Each head has its own Q, K, V and therefore its own T x T grid, and the head axis goes right after the batch axis: (B, n_h, T, T). Q, K, V and O are (B, n_h, T, d_h)."
+  },
+  {
+    "id": "05.2-042",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "10. Tensor shapes: where the T x T comes from",
+    "question": "For B = 2, n_h = 3, T = 4, how many separate T x T attention weight grids are there?",
+    "options": [
+      "3",
+      "4",
+      "6",
+      "24"
+    ],
+    "answer_index": 2,
+    "explanation": "There is one T x T grid per sequence per head: 2 × 3 = 6 grids of 4 × 4, i.e. 96 numbers in an A tensor of shape (2, 3, 4, 4)."
+  },
+  {
+    "id": "05.2-043",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "10. Tensor shapes: where the T x T comes from",
+    "question": "Why do `transpose(-2, -1)` and `softmax(dim=-1)` work unchanged when a head axis is added to attention tensors?",
+    "options": [
+      "Because the heads are processed one at a time in a Python loop, so each call sees only 2-D tensors",
+      "Because the head axis is always placed last, so transpose and softmax never touch the (T, T) grid",
+      "Because PyTorch silently ignores any extra axes beyond the first two when a tensor has rank four",
+      "The head axis is just another leading batch-like axis; attention only acts on the last two axes"
+    ],
+    "answer_index": 3,
+    "explanation": "With shapes (B, n_h, T, d_h), the head axis is a leading batch-like axis. The math inside each (T, T) grid is exactly the single-head math, and negative-index axis operations address only the last two dimensions."
+  },
+  {
+    "id": "05.2-044",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "10. Tensor shapes: where the T x T comes from",
+    "question": "Why does it matter that attention's output has the same per-position width convention as its input?",
+    "options": [
+      "It lets attention slot into a stack of layers and preserves the residual-stream structure",
+      "It halves the activation memory, since the output can overwrite the input buffer fully in place",
+      "It makes attention permutation-invariant, so token order no longer changes the output",
+      "It removes the need for a causal mask, since output positions already line up with inputs"
+    ],
+    "answer_index": 0,
+    "explanation": "Because the output keeps the shape convention, attention can feed the next sub-layer and block, and its output can be added back to the residual stream. A layer changing the per-position width would break that structure."
+  },
+  {
+    "id": "05.2-045",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "10. Tensor shapes: where the T x T comes from",
+    "question": "What dtype and device does the attention output have?",
+    "options": [
+      "Always float64 on the CPU, for numerical stability in the softmax",
+      "Whatever x is (float32, or bfloat16 in mixed precision), on x's device",
+      "Always int64 on the GPU, since the weights are computed from token ids",
+      "Always float16, on whichever device currently has the most free memory"
+    ],
+    "answer_index": 1,
+    "explanation": "Attention is computed from x via matmuls and softmax, so its output follows x's dtype — float32, or bfloat16 under mixed precision — and stays on x's device."
+  },
+  {
+    "id": "05.2-046",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "How does the size of the attention score and weight matrices grow with sequence length T?",
+    "options": [
+      "Linearly, as T, one row per position",
+      "Logarithmically, as log T, via tiling",
+      "Quadratically, as T squared",
+      "It does not depend on T at all, only d_h"
+    ],
+    "answer_index": 2,
+    "explanation": "S and A are (B, n_h, T, T), so their size grows with T squared. At T = 1024 that is about a million entries per sequence per head; at T = 8192 it is about 67 million. This quadratic scaling is attention's defining cost."
+  },
+  {
+    "id": "05.2-047",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "Why can materializing the attention weight matrix be infeasible at long context, e.g. T = 8192, B = 8, n_h = 12 in float32?",
+    "options": [
+      "Because float32 cannot represent weights below about 1e-8, so long rows underflow to all zeros",
+      "Because softmax overflows at long context once a row has more than 4096 finite entries in it",
+      "Because the causal mask stops being triangular once T exceeds the model's block_size setting",
+      "The weights alone take about 8·12·8192²·4 bytes ≈ 26 GB — more than most GPUs, for one layer"
+    ],
+    "answer_index": 3,
+    "explanation": "The tensor has 8 × 12 × 8192² entries at 4 bytes each, about 26 GB for a single layer's attention weights. This dominates activation memory at long context. It is a memory-size problem, not a numerical one."
+  },
+  {
+    "id": "05.2-048",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "What is the compute cost of forming the attention scores S, and how does it scale with T?",
+    "options": [
+      "O(B · n_h · T² · d_h) multiply-adds, growing as T²",
+      "O(B · T · d_h), growing linearly with T",
+      "O(B · n_h · d_h²), independent of T entirely",
+      "O(B · n_h · T³), cubic in T because of softmax"
+    ],
+    "answer_index": 0,
+    "explanation": "Each of the B · n_h · T² scores is a d_h-length dot product, so forming S costs O(B · n_h · T² · d_h). The A V product costs the same order. Both grow quadratically with T."
+  },
+  {
+    "id": "05.2-049",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "How does FlashAttention compute attention without materializing the T x T weight matrix?",
+    "options": [
+      "By approximating the softmax with a linear kernel function, so the T x T matrix is never needed at all",
+      "It streams over the scores in tiles, keeping a running max and sum and accumulating A V on the fly",
+      "By skipping the 1/sqrt(d_h) scaling step, which removes the need to store the full score matrix in memory",
+      "By dropping half of the keys at random in each tile, which halves the memory needed for the weights"
+    ],
+    "answer_index": 1,
+    "explanation": "FlashAttention tiles the computation, maintains a running max and sum for the softmax, and accumulates the weighted sum of values incrementally, so A is never stored. The result is the same weighted average; only memory traffic changes. It is exact, not an approximation."
+  },
+  {
+    "id": "05.2-050",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "What is the one-line thesis of the FlashAttention paper (Dao et al., 2022)?",
+    "options": [
+      "Attention is bottlenecked by FLOPs, so a lower-precision kernel doing fewer multiplies is the main win",
+      "Attention should be replaced by long convolutions, which reach the same quality at linear cost in T",
+      "Attention is bottlenecked by memory reads/writes of the T x T matrix, so avoid materializing it",
+      "Attention needs no softmax at long context, since the weights become nearly uniform past a few thousand"
+    ],
+    "answer_index": 2,
+    "explanation": "FlashAttention argues the bottleneck is memory traffic for the T x T matrix, not the arithmetic. Avoiding materializing it — not reducing multiplies — is what speeds attention up."
+  },
+  {
+    "id": "05.2-051",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "11. Under the hood: the T x T matrix is the bottleneck",
+    "question": "During backpropagation through causal attention, what gradient reaches masked (−infinity) entries?",
+    "options": [
+      "A large gradient that pushes the masked scores back toward zero",
+      "The same gradient as the diagonal entries, scaled by the row length",
+      "A gradient equal to the learning rate, applied as a constant offset",
+      "Zero gradient, so no signal flows to forbidden positions"
+    ],
+    "answer_index": 3,
+    "explanation": "Masked entries have exactly zero softmax weight, and their gradient through softmax is zero, so no signal flows to future positions. Autograd's backward rules for @, softmax and masked_fill respect the causal structure in the backward pass too."
+  },
+  {
+    "id": "05.2-052",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Exercise",
+    "question": "With B = 4, T = 512 and a single head with d_h = 768, what is the shape of the score matrix S?",
+    "options": [
+      "(4, 512, 512), about one million entries",
+      "(4, 512, 768), one score per channel",
+      "(4, 768, 768), one score per channel pair",
+      "(512, 512, 768), shared across the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "S has one score per (query, key) pair per sequence: (B, T, T) = (4, 512, 512) = 1,048,576 entries. d_h does not appear in S's shape — it was summed away by the dot product. It controls the cost of each score, not the size of S."
+  },
+  {
+    "id": "05.2-053",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Exercise",
+    "question": "How does the head dimension d_h affect the attention score matrix S?",
+    "options": [
+      "It sets the number of columns of S, one column per channel of the head",
+      "It controls the cost of forming each score but not the size of S",
+      "It sets the number of rows of S, one per head dimension",
+      "It has no effect on either the cost or the size of S"
+    ],
+    "answer_index": 1,
+    "explanation": "Each score is a dot product over d_h dimensions, so d_h determines the cost per score. But d_h is summed away, so S's shape is (B, T, T) regardless of d_h."
+  },
+  {
+    "id": "05.2-054",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What is the typical symptom of forgetting to divide attention scores by sqrt(d_h) at realistic head sizes like d_h = 64?",
+    "options": [
+      "Attention weights become nearly uniform across all positions, so every token averages its context",
+      "The causal mask stops working, so future tokens leak into the attention output during training",
+      "Attention weights collapse to near one-hot almost immediately and training stalls or diverges",
+      "The output shape changes from (B, T, d_h) to (B, T, T), breaking the next layer's matmul"
+    ],
+    "answer_index": 2,
+    "explanation": "Without the scale, scores are large and softmax saturates, producing near-one-hot weights and tiny gradients. Training stalls or diverges. Uniform weights would come from scores that are too small, the opposite problem."
+  },
+  {
+    "id": "05.2-055",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is it wrong to apply the causal mask by zeroing future weights after softmax?",
+    "options": [
+      "Because zeroing weights after softmax is much slower than adding −infinity before it on a GPU",
+      "Because zeroing after softmax changes the output shape from (T, d_h) to a (T, T) weight matrix",
+      "Because zeroing after softmax makes the model attend to the future even more than before",
+      "The surviving weights then sum to less than 1, breaking the weighted-average interpretation"
+    ],
+    "answer_index": 3,
+    "explanation": "Softmax already distributed weight over future positions; zeroing them afterward leaves the remaining weights summing to less than 1. Adding −infinity before softmax excludes those positions from both numerator and normalizer, so the surviving weights still sum to 1."
+  },
+  {
+    "id": "05.2-056",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if attention uses F.softmax(scores, dim=-2) instead of dim=-1?",
+    "options": [
+      "It normalizes down columns over queries instead of across keys, so queries no longer distribute attention",
+      "It produces exactly the same result, because attention score matrices are always symmetric in i and j",
+      "It raises a dimension error, because softmax over dim=-2 is not defined for 2-D score tensors in PyTorch",
+      "It applies the causal mask a second time, so the lower triangle is also zeroed and every row is empty"
+    ],
+    "answer_index": 0,
+    "explanation": "dim=-2 normalizes along columns, i.e. over queries for each key. Each query must distribute its own attention over keys, which is a row-wise normalization, dim=-1. Scores are not symmetric in general, so the results differ."
+  },
+  {
+    "id": "05.2-057",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For B = 8 sequences, n_h = 12 heads and T = 1024, what is the shape of the attention-weight tensor?",
+    "options": [
+      "(8, 1024, 12, 64), heads after the time axis",
+      "(8, 12, 1024, 1024), over 100 million entries",
+      "(8, 12, 1024, 64), one row per query position",
+      "(12, 1024, 1024), shared by all 8 sequences"
+    ],
+    "answer_index": 1,
+    "explanation": "The weights are (B, n_h, T, T) = (8, 12, 1024, 1024), about 100 million entries. Because it grows as T squared, it dominates activation memory at long context. (8, 12, 1024, 64) would be the shape of Q, K, V or O with d_h = 64."
+  },
+  {
+    "id": "05.2-058",
+    "chapter": "05.2",
+    "chapter_name": "Q/K/V & scaled dot-product attention",
+    "module": "5",
+    "module_name": "Transformer from scratch",
+    "source": "lessons/module-05/lesson-02.md",
+    "section": "Check yourself",
+    "question": "In causal attention, a query's two allowed keys give equal scaled scores. Why does it get weights [0.5, 0.5, 0] over three positions?",
+    "options": [
+      "Because the third position has a zero value vector, so softmax gives it no weight at all",
+      "Because softmax always splits weight evenly across whichever positions are not masked out",
+      "The third position is masked to −infinity, and softmax of two equal values is [0.5, 0.5]",
+      "Because the 1/sqrt(d_h) scale factor halves every weight before the mask is applied"
+    ],
+    "answer_index": 2,
+    "explanation": "The third (future) position is masked, so it gets exactly zero weight. The two live scores are equal, and softmax of two equal values splits the weight evenly. Softmax only splits evenly when the scores are equal."
+  }
+]

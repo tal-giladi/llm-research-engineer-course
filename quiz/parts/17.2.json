@@ -1,0 +1,866 @@
+[
+  {
+    "id": "17.2-001",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Prerequisites / why it matters",
+    "question": "Why is reward granularity called the central design decision of a reasoning trainer?",
+    "options": [
+      "Because it fixes how many tokens the policy may generate per step, which sets the context length of every rollout",
+      "Because outcome rewards are cheap and scalable but noisy on long chains, while process rewards are precise but costly to label",
+      "Because step-level rewards are required to compute the KL penalty, so the choice decides whether a reference model can be used",
+      "Because process rewards are cheaper to collect than outcome rewards, while outcome rewards are more precise on long chains of steps"
+    ],
+    "answer_index": 1,
+    "explanation": "Choosing whether to score only the final answer (ORM) or every step (PRM) trades cost against signal quality. ORM is cheap and scalable but noisy on long chains; PRM is precise but needs expensive step-level labels. DeepSeekMath's answer is to skip the learned reward model entirely when the answer is checkable."
+  },
+  {
+    "id": "17.2-002",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "1. Intuition: grade the answer, or grade the working?",
+    "question": "A chain reasons perfectly for 29 steps and makes one arithmetic slip at the end. What reward does a final-answer-only signal give it?",
+    "options": [
+      "0, so the 29 good steps get no credit",
+      "29/30, proportional to correct steps",
+      "1, because most steps were right",
+      "0.5, a partial-credit default for long chains"
+    ],
+    "answer_index": 0,
+    "explanation": "A final-answer-only (outcome) signal is a single bit for the whole chain. The final answer is wrong, so the reward is 0 and the 29 correct steps receive no credit. This blindness to where the chain went right or wrong is what motivates process rewards."
+  },
+  {
+    "id": "17.2-003",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "1. Intuition: grade the answer, or grade the working?",
+    "question": "A chain makes an error in step 3, then a second error that cancels it, and reaches the right final number. What does an outcome-only reward do?",
+    "options": [
+      "Gives reward 0, because the checker detects that step 3 was wrong",
+      "Flags step 3 for relabelling and withholds reward until a human reviews it",
+      "Gives reward 1, rewarding the model for broken reasoning",
+      "Gives a negative reward proportional to the number of errors"
+    ],
+    "answer_index": 2,
+    "explanation": "An outcome reward only sees the final answer. Since the number is right, it gives reward 1, reinforcing reasoning that contained two errors. A process reward model could catch step 3."
+  },
+  {
+    "id": "17.2-004",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "1. Intuition: grade the answer, or grade the working?",
+    "question": "What does an Outcome Reward Model (ORM) score?",
+    "options": [
+      "Each individual reasoning step, giving one score per line",
+      "The fluency and coherence of the chain as a whole",
+      "The number of tokens the solution takes to finish",
+      "Only the final answer: one number per solution"
+    ],
+    "answer_index": 3,
+    "explanation": "An ORM scores only the final answer, giving one number per solution. It is cheap to label (you only need the gold answer) and cheap to compute, but it is blind to where a chain went right or wrong."
+  },
+  {
+    "id": "17.2-005",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "1. Intuition: grade the answer, or grade the working?",
+    "question": "What does a Process Reward Model (PRM) produce for a solution, and what is its main cost?",
+    "options": [
+      "A vector of per-step correctness signals; someone or something must label every step",
+      "A single scalar for the whole solution; it needs a gold final answer for every problem",
+      "A ranking over vocabulary tokens at each position; it needs a much larger vocabulary",
+      "A per-state value estimate; it needs a critic network as large as the policy itself"
+    ],
+    "answer_index": 0,
+    "explanation": "A PRM scores each step, producing a vector of per-step correctness signals, so it can tell that a chain broke at step 3. That is far more informative than an ORM but far more expensive, because training it requires step-level labels."
+  },
+  {
+    "id": "17.2-006",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "1. Intuition: grade the answer, or grade the working?",
+    "question": "Which phrase best captures the difference between ORM and PRM?",
+    "options": [
+      "ORM grades every turn of the journey; PRM grades only the destination",
+      "ORM grades the destination; PRM grades every turn of the journey",
+      "ORM is a hand-written program; PRM is a panel of human graders",
+      "ORM is used in training only; PRM is used at inference time only"
+    ],
+    "answer_index": 1,
+    "explanation": "ORM grades the destination (final answer); PRM grades every turn of the journey (each step). Both are learned networks and both can be used as verifiers at inference or as training rewards."
+  },
+  {
+    "id": "17.2-007",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "What dataset did Lightman et al. (2023) train their process reward model on?",
+    "options": [
+      "GSM8K final answers only, with each solution labelled correct or incorrect by a checker",
+      "Synthetic step rewards from a rule-based checker that re-executes each arithmetic step",
+      "PRM800K: about 800k human step-level labels marking each step good, neutral or bad",
+      "PRM800K: about 800k human preference pairs comparing two whole solutions to the same problem"
+    ],
+    "answer_index": 2,
+    "explanation": "PRM800K contains roughly 800k human step-level labels, each step marked good, neutral or bad. It was used to train the PRM on the hard MATH dataset, while the ORM was trained on final-answer correctness. Collecting it was a large, expensive human annotation effort."
+  },
+  {
+    "id": "17.2-008",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "How were the ORM and PRM compared in 'Let's Verify Step by Step'?",
+    "options": [
+      "By using each as the reward for PPO training and comparing the final policies on MATH",
+      "By measuring how quickly each reward model converges when trained on the same labels",
+      "By having human raters score the explanations produced by models trained with each",
+      "By using each as a verifier to rerank many sampled solutions (best-of-N) on MATH"
+    ],
+    "answer_index": 3,
+    "explanation": "Lightman et al. used each reward model as a verifier: sample many solutions per problem and pick the one the verifier scores highest. They compared the accuracy of the selected answers on the hard MATH dataset."
+  },
+  {
+    "id": "17.2-009",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "What was the headline result of Lightman et al. (2023) as the number of sampled candidate solutions N grows?",
+    "options": [
+      "The PRM-selected answer beats the ORM-selected answer by a widening margin",
+      "The ORM overtakes the PRM at large N, because the PRM overfits to the step labels",
+      "Both converge to the same accuracy once N is large enough to include a correct answer",
+      "The PRM only helps at N = 1; at larger N its advantage over the ORM disappears"
+    ],
+    "answer_index": 0,
+    "explanation": "As more candidates are sampled per problem, the PRM-selected answer outperforms the ORM-selected one by a growing margin. With more candidates, there are more lucky-guess or flawed solutions for the ORM to wrongly pick, which the PRM can reject."
+  },
+  {
+    "id": "17.2-010",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "Why does a PRM give better credit assignment than an ORM when reranking solutions?",
+    "options": [
+      "It averages the final answers of all samples, so a single wrong chain cannot dominate the vote",
+      "It can reject a solution the moment a step is wrong, even if the final answer looks plausible",
+      "It always prefers shorter solutions, which contain fewer steps where an error could occur",
+      "It compares each sample to the gold answer during reranking, so wrong answers are filtered out"
+    ],
+    "answer_index": 1,
+    "explanation": "The PRM looks inside the chain and can mark a specific step as wrong, rejecting the solution even if its final answer seems plausible. The ORM only sees the final answer and cannot see inside."
+  },
+  {
+    "id": "17.2-011",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "Why is a PRM more robust to 'lucky guesses' on hard problems?",
+    "options": [
+      "Lucky guesses almost always have a malformed final-answer format, so the PRM's format check rejects them before any step is scored",
+      "The PRM is trained only on easy problems, where guesses are rare, so it learns a prior that hard-problem answers are usually wrong",
+      "On hard problems many chains reach the right answer through flawed reasoning; the ORM rewards them, the PRM catches the broken step",
+      "The PRM refuses to score solutions whose final answer is correct, so lucky guesses are excluded from the reranking pool entirely"
+    ],
+    "answer_index": 2,
+    "explanation": "On hard problems, a meaningful fraction of sampled chains get the right answer through flawed reasoning. An ORM rewards these; a PRM detects the broken step and down-weights them."
+  },
+  {
+    "id": "17.2-012",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "What is the main cost of the process-supervision approach in 'Let's Verify Step by Step'?",
+    "options": [
+      "It needs a critic network the size of the policy, doubling training memory",
+      "It cannot be used at inference, so it only helps during the RL training phase",
+      "It requires gold final answers, which are rarely available for hard problems",
+      "Step-level labels: PRM800K is a large, expensive human annotation effort"
+    ],
+    "answer_index": 3,
+    "explanation": "The PRM needs step-level labels, and PRM800K was a large, expensive human annotation effort. By contrast an ORM only needs the gold final answer, which for math and code you often already have, making it essentially free."
+  },
+  {
+    "id": "17.2-013",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "When is an ORM often good enough compared with a PRM?",
+    "options": [
+      "For easy problems or small N, since the PRM's advantage grows with difficulty and N",
+      "For the hardest problems with very large N, where step labels become too noisy to help",
+      "Only when step labels are available, since the ORM is trained from the same step annotations",
+      "Never; the PRM is strictly better at every difficulty level and every sample budget N"
+    ],
+    "answer_index": 0,
+    "explanation": "The gap between PRM and ORM grows with problem difficulty and with the number of samples N. For easy problems or small N, the cheap ORM is often as good, so reward granularity is a cost/accuracy trade."
+  },
+  {
+    "id": "17.2-014",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "2. \"Let's Verify Step by Step\": process supervision wins on hard math",
+    "question": "What key question does DeepSeekMath answer, following 'Let's Verify Step by Step'?",
+    "options": [
+      "Whether PRMs need far more than 800k step labels before they beat ORMs on competition math",
+      "Whether a learned reward model (ORM or PRM) is needed at all when answers are automatically checkable",
+      "Whether chain-of-thought prompting helps math at all once a model is pretrained on enough math text",
+      "Whether a larger critic network makes PPO stable enough for long chain-of-thought math rollouts"
+    ],
+    "answer_index": 1,
+    "explanation": "Lightman showed PRMs help but cost human labels. DeepSeekMath asks whether, when the answer is automatically checkable, any learned reward model is needed, and answers no: use a rule-based verifiable reward with GRPO."
+  },
+  {
+    "id": "17.2-015",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3. Using a verifier: best-of-N reranking, worked by hand",
+    "question": "What is best-of-N (verifier-guided or rejection sampling) at inference?",
+    "options": [
+      "Train N separate models on the same data and average their output distributions",
+      "Sample one solution and have the model refine it N times, keeping the final draft",
+      "Sample N solutions, score each with a verifier, and keep the top-scoring one",
+      "Run N steps of gradient descent on the test question before producing an answer"
+    ],
+    "answer_index": 2,
+    "explanation": "Best-of-N samples N solutions, scores each with a verifier such as an ORM or PRM, and returns the highest-scoring one. It is the simplest way to use a reward model at inference and is a form of test-time scaling."
+  },
+  {
+    "id": "17.2-016",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3. Using a verifier: best-of-N reranking, worked by hand",
+    "question": "What does product aggregation of PRM per-step scores, prod_t s_t, estimate?",
+    "options": [
+      "The probability that at least one step is correct, assuming roughly independent steps",
+      "The average quality of a step, which normalises away differences in chain length",
+      "Exactly the weakest step's score, since a product always equals its smallest factor",
+      "The model's estimate that every step is correct, assuming roughly independent steps"
+    ],
+    "answer_index": 3,
+    "explanation": "Multiplying per-step correctness probabilities gives the probability that all steps are correct, under a rough independence assumption. Minimum aggregation instead keys on the single weakest step."
+  },
+  {
+    "id": "17.2-017",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3. Using a verifier: best-of-N reranking, worked by hand",
+    "question": "What does minimum aggregation, min_t s_t, of PRM per-step scores express?",
+    "options": [
+      "A solution is only as strong as its weakest step",
+      "A solution is as strong as its average step",
+      "A solution's strength is its final step's score",
+      "A solution's strength grows with the number of steps"
+    ],
+    "answer_index": 0,
+    "explanation": "Minimum aggregation scores a solution by its weakest step: one bad step dominates regardless of the others. It is more conservative about any single bad step than the product."
+  },
+  {
+    "id": "17.2-018",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.1 A worked example",
+    "question": "Two solutions give the same final answer; PRM step scores are A = [0.90, 0.80, 0.95] and B = [0.99, 0.40, 0.90]. How do an ORM and a PRM treat them?",
+    "options": [
+      "Both ORM and PRM prefer B, because its near-certain first step dominates both the product and the minimum",
+      "The ORM scores them the same and picks arbitrarily; the PRM ranks A above B under product and minimum",
+      "The ORM prefers A because its steps are steadier; the PRM prefers B because its step scores have a higher maximum",
+      "The PRM cannot compare them: with equal final answers both aggregations return the same score for A and B"
+    ],
+    "answer_index": 1,
+    "explanation": "With the same final answer, an ORM gives identical scores. The PRM's product gives A = 0.684 vs B = 0.3564, and minimum gives A = 0.80 vs B = 0.40, so A wins either way. B's shaky step 2 (0.40) suggests a wrong turn that recovered to a right-looking answer."
+  },
+  {
+    "id": "17.2-019",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.1 A worked example",
+    "question": "In a PRM comparison where solution B has step scores [0.99, 0.40, 0.90] and the same final answer as a steadier solution, what does B's low middle step suggest?",
+    "options": [
+      "B is the most reliable solution, because its near-certain first step anchors the whole chain",
+      "B has a formatting error in step 2 that the PRM penalises regardless of the reasoning",
+      "B probably took a wrong turn in the middle and merely recovered a right-looking answer",
+      "B was sampled at a high temperature, so the PRM discounts its middle step as random noise"
+    ],
+    "answer_index": 2,
+    "explanation": "A shaky middle step means the PRM suspects the reasoning broke there and the right-looking answer was recovered by luck or cancelling errors. This is exactly the case an ORM, seeing only the final answer, cannot detect."
+  },
+  {
+    "id": "17.2-020",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.1 A worked example",
+    "question": "How do product and minimum PRM aggregations differ in what they punish?",
+    "options": [
+      "Product ignores low steps as long as most are high; minimum ignores everything but the highest step",
+      "Both punish the same thing, since product and minimum always rank any two solutions identically",
+      "Product only looks at the first step's score; minimum only looks at the score of the final step",
+      "Product punishes many small doubts multiplicatively; minimum keys on the single weakest step"
+    ],
+    "answer_index": 3,
+    "explanation": "Product multiplies in every doubt, so several slightly uncertain steps add up. Minimum ignores everything except the single worst step. Product is the more common default; minimum is more conservative about any single bad step."
+  },
+  {
+    "id": "17.2-021",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.1 A worked example",
+    "question": "Which PRM aggregation is the more common default, and which is more conservative about a single bad step?",
+    "options": [
+      "Product is the more common default; minimum is more conservative about any single bad step",
+      "Minimum is the more common default; product is more conservative about any single bad step",
+      "Mean is the more common default; maximum is the more conservative about any single bad step",
+      "Both are equally common, and both are equally conservative about any single bad step"
+    ],
+    "answer_index": 0,
+    "explanation": "Product of per-step probabilities is the more common default. Minimum is more conservative because a single broken step alone determines the score."
+  },
+  {
+    "id": "17.2-022",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.2 Relation to self-consistency",
+    "question": "How does self-consistency relate to best-of-N with a verifier?",
+    "options": [
+      "Self-consistency is best-of-N with a learned PRM that scores each sample's reasoning steps",
+      "Self-consistency is best-of-N with a free verifier: how many other samples agree with you",
+      "Self-consistency trains the verifier from the majority votes, then uses it for best-of-N",
+      "They are unrelated: self-consistency is a training method, while best-of-N is used at inference"
+    ],
+    "answer_index": 1,
+    "explanation": "Self-consistency is best-of-N where the 'verifier' is free: agreement with the other samples. A trained ORM or PRM is a learned verifier. All of them spend more inference compute to pick a better answer."
+  },
+  {
+    "id": "17.2-023",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "3.2 Relation to self-consistency",
+    "question": "What is 'weighted self-consistency'?",
+    "options": [
+      "Sampling more chains for harder questions, weighted by estimated difficulty",
+      "Majority voting where the greedy chain's vote counts double the others",
+      "Majority voting where each vote is weighted by its verifier score",
+      "Majority voting where each chain's vote is weighted by its token length"
+    ],
+    "answer_index": 2,
+    "explanation": "Self-consistency and learned verifiers compose: you can majority-vote and weight each sample's vote by its ORM/PRM score. This combines agreement across samples with a learned judgement of each sample's quality."
+  },
+  {
+    "id": "17.2-024",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4. DeepSeekMath: verifiable reward + GRPO, no reward model",
+    "question": "What route did DeepSeekMath (Shao et al. 2024) take for tasks with machine-checkable answers?",
+    "options": [
+      "Collect several times more human step labels than PRM800K and train a larger process reward model",
+      "Train a larger outcome reward model on final-answer labels and optimise the policy against it with PPO",
+      "Use self-consistency voting at inference only, with no further RL training on the checkable answers",
+      "Drop the learned reward model entirely, use a rule-based verifiable reward, and optimize it with GRPO"
+    ],
+    "answer_index": 3,
+    "explanation": "DeepSeekMath took the cheaper route: no learned reward model at all. A rule-based verifiable reward checks the answer, and a new lightweight RL algorithm, GRPO, optimizes the policy against it."
+  },
+  {
+    "id": "17.2-025",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.1 The verifiable reward",
+    "question": "How is the verifiable reward computed for a math problem with a known gold answer in DeepSeekMath?",
+    "options": [
+      "Parse the final answer and compare it to the gold answer, with a format check; reward 1 if correct, else 0",
+      "A learned ORM reads the full solution and predicts the probability that the final answer matches the gold one",
+      "A PRM scores each step against the gold solution and the product of the step scores is used as the reward",
+      "A human grades a random sample of solutions and those grades are propagated to similar outputs in the batch"
+    ],
+    "answer_index": 0,
+    "explanation": "For a checkable problem you do not need a model to judge the solution: parse the final answer, compare to gold, and check the chain is well-formed. Reward 1 if correct, else 0. This is the RLVR idea: the reward is a deterministic program."
+  },
+  {
+    "id": "17.2-026",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.1 The verifiable reward",
+    "question": "Which of these is NOT an advantage of a rule-based verifiable reward over a learned reward model?",
+    "options": [
+      "It is free to run",
+      "It applies to open-ended writing tasks",
+      "It cannot be gamed by fooling a reward model",
+      "It has no reward-model training cost"
+    ],
+    "answer_index": 1,
+    "explanation": "A verifiable reward is a deterministic program: free to run, not gameable by fooling a reward network, with no training cost. Its price is that it only applies where answers are checkable, such as math, code with tests and formal proofs, not open-ended writing."
+  },
+  {
+    "id": "17.2-027",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.1 The verifiable reward",
+    "question": "Where can verifiable rewards be applied?",
+    "options": [
+      "Anywhere a human could state a preference between two outputs, including open-ended writing",
+      "Only to multiple-choice questions, where the answer can be matched against a fixed key",
+      "Where correctness is programmatically checkable: math, code with tests, formal proofs",
+      "Only to tasks without a gold answer, where a learned model must judge the output instead"
+    ],
+    "answer_index": 2,
+    "explanation": "Verifiable rewards require an automatic checker, so they work for math with gold answers, code with tests and formal proofs. Open-ended tasks like helpful writing still need a learned reward model."
+  },
+  {
+    "id": "17.2-028",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.2 GRPO recap: PPO without a critic",
+    "question": "What component does PPO need that GRPO removes?",
+    "options": [
+      "The KL penalty to the reference policy, which GRPO replaces with entropy regularisation",
+      "The clipped probability ratio, which GRPO replaces with an unclipped policy-gradient term",
+      "The reward function itself, since GRPO learns directly from relative log-probabilities",
+      "A learned value network (critic), as large as the policy, used as the advantage baseline"
+    ],
+    "answer_index": 3,
+    "explanation": "PPO uses a learned value network (critic), about the size of the policy, to estimate the baseline for the advantage, roughly doubling model memory. GRPO removes the critic; it keeps the clipped objective and the KL-to-reference penalty."
+  },
+  {
+    "id": "17.2-029",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.2 GRPO recap: PPO without a critic",
+    "question": "What replaces PPO's critic as the baseline in GRPO?",
+    "options": [
+      "The mean reward of a group of outputs sampled for the same prompt",
+      "A global running average of rewards across all prompts seen so far",
+      "The reward of the greedy (temperature-0) output for the same prompt",
+      "A fixed constant of 0.5, the midpoint of the binary reward range"
+    ],
+    "answer_index": 0,
+    "explanation": "For each prompt GRPO samples a group of outputs and uses the group's own mean reward as the baseline. This removes the critic and roughly halves memory. A global constant or batch-wide baseline would not be group-relative."
+  },
+  {
+    "id": "17.2-030",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.2 GRPO recap: PPO without a critic",
+    "question": "What is the GRPO advantage formula for output i in a group of G outputs with rewards r_1..r_G?",
+    "options": [
+      "A_i = (r_i - max(r_{1:G})) / std(r_{1:G})",
+      "A_i = (r_i - mean(r_{1:G})) / std(r_{1:G})",
+      "A_i = (r_i - mean(r_{1:G})) / sum(r_{1:G})",
+      "A_i = (r_i - V(s)) / std(r_{1:G}), V from a critic"
+    ],
+    "answer_index": 1,
+    "explanation": "GRPO standardises each reward within its group: subtract the group mean (the baseline replacing the critic) and divide by the group std (normalising the scale). The critic-based form r - V(s) is what GRPO removes."
+  },
+  {
+    "id": "17.2-031",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.2 GRPO recap: PPO without a critic",
+    "question": "In GRPO, what does a positive advantage for an output mean for the policy update?",
+    "options": [
+      "The output is above the batch-wide reward mean, so it is copied into the reference model",
+      "The KL penalty is switched off for that output so the policy can move freely toward it",
+      "The output did better than its group-mates, so the update pushes the policy toward it",
+      "The output's reward was exactly 1, since only fully correct outputs get positive advantages"
+    ],
+    "answer_index": 2,
+    "explanation": "A positive advantage means the output's reward was above the group mean, so the update raises its probability; below-average outputs get negative advantages and are pushed away. Advantage is relative to the group, not an absolute reward value."
+  },
+  {
+    "id": "17.2-032",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.2 GRPO recap: PPO without a critic",
+    "question": "Which objective do GRPO's group-relative advantages plug into?",
+    "options": [
+      "A plain cross-entropy loss on the positive-advantage outputs, with no clipping and no KL constraint",
+      "The DPO loss, treating the best and worst outputs in each group as a chosen/rejected preference pair",
+      "A Bradley-Terry loss that first fits a reward model to the group rankings, then runs PPO against it",
+      "PPO's clipped objective plus a KL-to-reference penalty, with the group baseline replacing the value net"
+    ],
+    "answer_index": 3,
+    "explanation": "GRPO keeps PPO's clipped surrogate objective and the KL penalty to the reference policy. The only change described is the baseline: the group mean replaces the learned value network."
+  },
+  {
+    "id": "17.2-033",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.3 A worked group",
+    "question": "A GRPO group of G = 4 has verifiable rewards [1, 1, 0, 0]. Using population std, what are the advantages?",
+    "options": [
+      "[+1, +1, -1, -1]",
+      "[+0.5, +0.5, -0.5, -0.5]",
+      "[1, 1, 0, 0] (raw rewards)",
+      "[+2, +2, -2, -2]"
+    ],
+    "answer_index": 0,
+    "explanation": "The mean is 0.5 and the population std is 0.5, so (r - 0.5)/0.5 gives [+1, +1, -1, -1]. Correct solutions are pushed up, wrong ones down, relative to this group, with no value network."
+  },
+  {
+    "id": "17.2-034",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.3 A worked group",
+    "question": "In GRPO, what happens when every output in a group is correct, e.g. rewards [1, 1, 1, 1]?",
+    "options": [
+      "All advantages are +1, so the update strongly reinforces every output for this fully solved prompt",
+      "Every r_i minus the mean is 0, so advantages are zero and the fully solved prompt produces no update",
+      "The std is 0, so the advantages become infinite and the KL penalty alone must absorb the update",
+      "The prompt is resampled until at least one output is wrong, so a nonzero baseline can be formed"
+    ],
+    "answer_index": 1,
+    "explanation": "If all rewards equal 1, the mean is 1 and every r_i - mean is 0, so the advantages are zero and there is no gradient from that prompt. This self-limiting behaviour keeps the miniature R1 from regressing on problems it has already learned. (The std is also 0, so implementations add a small epsilon.)"
+  },
+  {
+    "id": "17.2-035",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.3 A worked group",
+    "question": "Do the epsilon in GRPO's std denominator or the choice of biased vs unbiased std change the advantages' signs or ranking?",
+    "options": [
+      "Yes; unbiased std flips the signs of the advantages when the group is small",
+      "Yes; a large epsilon reverses the ranking of outputs in groups smaller than 8",
+      "No; they are implementation details that do not change the sign or ranking",
+      "Only when all rewards are 0, where they decide whether the update is positive"
+    ],
+    "answer_index": 2,
+    "explanation": "DeepSeekMath normalises by the group std. Adding a small epsilon to avoid division by zero, and choosing population vs sample std, only rescale the advantages; they do not change their sign or ordering."
+  },
+  {
+    "id": "17.2-036",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.4 The DeepSeekMath recipe end to end",
+    "question": "Which components does DeepSeekMath's reasoning-RL loop NOT use?",
+    "options": [
+      "A group of sampled chain-of-thought solutions per problem",
+      "A rule-based verifiable reward",
+      "A KL penalty to the reference policy",
+      "An ORM, a PRM, or a critic"
+    ],
+    "answer_index": 3,
+    "explanation": "The loop is: math-pretrained base, sample a group of CoT solutions, score with a rule-based reward (correct answer and valid format), compute group-relative advantages, take a GRPO clipped update with a KL penalty, repeat. No ORM, no PRM, no critic: just a checker and a group baseline."
+  },
+  {
+    "id": "17.2-037",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "4.4 The DeepSeekMath recipe end to end",
+    "question": "Why does DeepSeek-R1 build directly on the DeepSeekMath recipe?",
+    "options": [
+      "Because with only a checker and a group baseline it is cheap enough to run at scale",
+      "Because it reuses the largest human-labelled step reward dataset, which R1 then extends",
+      "Because it removes the need for any sampling, so each training step is a single forward pass",
+      "Because it trains a PRM that generalises from math to all other reasoning tasks"
+    ],
+    "answer_index": 0,
+    "explanation": "With no learned reward model and no critic, the recipe is cheap: a deterministic checker plus a group baseline. That cost profile is what lets DeepSeek-R1 run it at scale."
+  },
+  {
+    "id": "17.2-038",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Research connection",
+    "question": "Which paper introduces GRPO, and which introduces PRM800K?",
+    "options": [
+      "GRPO: InstructGPT (Ouyang et al. 2022); PRM800K: STaR (Zelikman et al. 2022)",
+      "GRPO: DeepSeekMath (Shao et al. 2024); PRM800K: Let's Verify Step by Step (Lightman et al. 2023)",
+      "GRPO: Let's Verify Step by Step (Lightman et al., 2023); PRM800K: DeepSeekMath (Shao et al., 2024)",
+      "GRPO: DeepSeek-R1 (DeepSeek-AI 2025); PRM800K: DeepSeek-R1, released with the same report"
+    ],
+    "answer_index": 1,
+    "explanation": "DeepSeekMath (Shao et al. 2024) introduces GRPO. Let's Verify Step by Step (Lightman et al. 2023) is the ORM-vs-PRM study that released PRM800K. Both are prerequisites for reading DeepSeek-R1."
+  },
+  {
+    "id": "17.2-039",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is it a mistake to think PRM is strictly better than ORM?",
+    "options": [
+      "PRMs cannot be used as verifiers at inference, so their step-level advantage only appears during RL training of the policy",
+      "ORMs also see every step, since they read the whole chain, so in practice both give identical credit assignment on any task",
+      "PRM wins on hard problems with many samples but needs costly step labels; on easy tasks or small N an ORM is often as good",
+      "PRMs overfit to PRM800K's annotation style, so outside that distribution they underperform a plain ORM on every benchmark"
+    ],
+    "answer_index": 2,
+    "explanation": "Reward granularity is a cost/accuracy trade, not a free lunch. PRMs shine on hard problems with large N, but their step labels are expensive; on easy tasks or small N the cheap ORM often matches them."
+  },
+  {
+    "id": "17.2-040",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What is the difference between a verifiable reward and a reward model?",
+    "options": [
+      "They are the same thing: a verifiable reward is just a reward model that was trained on gold answers instead of human labels",
+      "A verifiable reward is a learned network that predicts correctness; a reward model is a hand-written program that scores outputs",
+      "A verifiable reward is learned from human preference pairs; a reward model needs no human data because it compares to a gold answer",
+      "A verifiable reward is a program that checks correctness (1/0); a reward model (ORM/PRM) is a learned network predicting a score"
+    ],
+    "answer_index": 3,
+    "explanation": "A verifiable reward is a deterministic program that returns 1 or 0 by checking the answer. A reward model is a learned network that predicts a score. DeepSeekMath's point is to use the former and skip the latter where possible."
+  },
+  {
+    "id": "17.2-041",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "What breaks GRPO if the advantage is standardised across the whole batch instead of within each prompt's group?",
+    "options": [
+      "The baseline is no longer the mean of this prompt's group, so the method loses its group-relative meaning",
+      "The KL penalty turns negative, because batch statistics mix prompts whose reference log-probs differ",
+      "The policy can no longer sample new outputs, since batch normalisation requires a fixed, precomputed set of rollouts",
+      "Nothing; batch-level and group-level normalisation give identical advantages whenever G is the same"
+    ],
+    "answer_index": 0,
+    "explanation": "GRPO's baseline is the mean of the group sampled for the same prompt, not a global constant or a learned value. Normalising across the whole batch mixes easy and hard prompts and breaks the comparison of each output with its own group-mates."
+  },
+  {
+    "id": "17.2-042",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Common mistakes",
+    "question": "Why is assuming a correct final answer means correct reasoning a mistake?",
+    "options": [
+      "Because final answers are never checked in RL training, so a correct answer carries no reliable signal",
+      "Because cancelling errors and lucky guesses exist, which is the whole motivation for process supervision",
+      "Because correct answers almost always come from short chains, which skip the reasoning the PRM must grade",
+      "Because verifiable rewards are noisy, so a reported correct answer is often a mis-parsed wrong answer"
+    ],
+    "answer_index": 1,
+    "explanation": "A chain can reach the right answer through flawed reasoning, via cancelling errors or lucky guesses. That gap between outcome correctness and reasoning correctness is exactly why process supervision exists."
+  },
+  {
+    "id": "17.2-043",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Exercise",
+    "question": "Two solutions with the same final answer have PRM scores C = [0.95, 0.95, 0.30] and D = [0.7, 0.7, 0.7]. Which does each aggregation prefer?",
+    "options": [
+      "Product prefers C (0.903 vs 0.490); minimum prefers D (0.70 vs 0.30)",
+      "Product prefers D (0.343 vs 0.271); minimum prefers C (0.95 vs 0.70)",
+      "Both product (0.343 vs 0.271) and minimum (0.70 vs 0.30) prefer D",
+      "Both prefer C, because two near-perfect steps outweigh one weak one"
+    ],
+    "answer_index": 2,
+    "explanation": "Product: C = 0.95 x 0.95 x 0.30 = 0.27075, D = 0.7^3 = 0.343, so D. Minimum: C = 0.30, D = 0.70, so D. Both punish C's weak final step here."
+  },
+  {
+    "id": "17.2-044",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Exercise",
+    "question": "When should you choose product versus minimum aggregation for PRM scores?",
+    "options": [
+      "Product when a single broken step should be disqualifying; minimum when you care about overall chain reliability",
+      "Product for short chains and minimum for long chains, regardless of whether any one step is decisive",
+      "It does not matter: product and minimum always pick the same solution, so either is a safe default",
+      "Product when you care about overall chain reliability; minimum when one broken step should be disqualifying"
+    ],
+    "answer_index": 3,
+    "explanation": "Product multiplies in every doubt and rewards being consistently good, so a solution with one bad step but many near-perfect ones can still beat a uniformly mediocre one. Minimum ignores everything but the worst step. Use product for overall reliability and minimum when one broken step should disqualify."
+  },
+  {
+    "id": "17.2-045",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Check yourself",
+    "question": "For a GRPO group with rewards [1, 0, 0, 0] (population std), what are the approximate advantages?",
+    "options": [
+      "[+1.732, -0.577, -0.577, -0.577]",
+      "[+1, -1, -1, -1]",
+      "[+0.75, -0.25, -0.25, -0.25] (mean-centred only)",
+      "[+3, -1, -1, -1]"
+    ],
+    "answer_index": 0,
+    "explanation": "Mean = 0.25; population std = sqrt(0.1875) ~ 0.433. So (1 - 0.25)/0.433 ~ +1.732 and (0 - 0.25)/0.433 ~ -0.577 for each wrong sample. The single correct sample is strongly up-weighted while each wrong one gets a small negative push. [+0.75, -0.25, ...] forgets to divide by the std."
+  },
+  {
+    "id": "17.2-046",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Check yourself",
+    "question": "Why could DeepSeekMath skip a learned reward model where InstructGPT-style RLHF could not?",
+    "options": [
+      "DeepSeekMath used a far larger policy model, whose own log-probabilities are calibrated enough to serve directly as a reward",
+      "Math answers are machine-checkable, whereas open-ended helpfulness has no automatic checker and must be learned from preferences",
+      "RLHF never used explicit rewards; InstructGPT optimised human rankings directly, so a reward model was only a diagnostic",
+      "InstructGPT had gold answers for its prompts but no compute to check them, so it had to approximate the checker with a network"
+    ],
+    "answer_index": 1,
+    "explanation": "A program can parse a math answer and compare it to gold, giving an exact 1/0 reward. RLHF targets open-ended helpfulness and harmlessness, which has no automatic checker, so it must learn a Bradley-Terry reward model from human preferences."
+  },
+  {
+    "id": "17.2-047",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Check yourself",
+    "question": "How much memory does GRPO roughly save compared with PPO, and why?",
+    "options": [
+      "None at all, because GRPO still trains a critic and only changes how its output is normalised",
+      "About 10%, from dropping the KL penalty term and the reference model's stored log-probs",
+      "Roughly half, because there is no second large network (the critic) the size of the policy",
+      "About 90%, because GRPO needs no reference model and keeps only one group of rollouts"
+    ],
+    "answer_index": 2,
+    "explanation": "PPO's critic is roughly the same size as the policy, so removing it roughly halves memory. GRPO still uses a reference policy for the KL penalty; the saving comes from dropping the value network."
+  },
+  {
+    "id": "17.2-048",
+    "chapter": "17.2",
+    "chapter_name": "Process reward & DeepSeekMath",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-02.md",
+    "section": "Next",
+    "question": "Which two ingredients does DeepSeek-R1 run at scale?",
+    "options": [
+      "A learned process reward model (PRM800K-style) and PPO with a critic",
+      "Human preference pairs and DPO (no explicit reward model)",
+      "Self-consistency voting and beam search (no RL training)",
+      "A verifiable reward (no reward model) and GRPO (no critic)"
+    ],
+    "answer_index": 3,
+    "explanation": "DeepSeek-R1 combines a verifiable reward, which needs no learned reward model, with GRPO, which needs no critic. Together they make large-scale reasoning RL cheap."
+  }
+]

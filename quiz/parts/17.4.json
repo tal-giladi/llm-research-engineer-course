@@ -1,0 +1,1694 @@
+[
+  {
+    "id": "17.4-001",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Introduction",
+    "question": "Logit and on-policy distillation extend sequence-level distillation (sample teacher answers, then SFT the student) with which two knobs?",
+    "options": [
+      "How often the student is updated (the ratio of teacher samples to student gradient steps) and how large its batch is (tokens per step on the teacher's text)",
+      "What the student matches (the teacher's full next-token distribution, by forward or reverse KL) and where (teacher text or the student's own)",
+      "How wide and deep the student is (its hidden size and layer count relative to the teacher) and how many teacher layers it copies at initialisation",
+      "How many teachers are ensembled (averaging several models' sampled answers) and how many epochs the student is trained on each teacher's text"
+    ],
+    "answer_index": 1,
+    "explanation": "The two knobs are what is matched (the whole next-token distribution through a forward or reverse KL, not one sampled token) and where it is matched (prefixes written by the teacher, or by the student). Sequence-level distillation is still correct and used; these knobs are added on top."
+  },
+  {
+    "id": "17.4-002",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Prerequisites / why it matters",
+    "question": "How does the Qwen3 report describe training its small models?",
+    "options": [
+      "By RL from scratch with no teacher, using GRPO and a verifiable reward on each small model, which matched the flagship at a tenth of its GPU-hours",
+      "By pruning the flagship model's layers and experts down to each target size, then a short SFT pass to recover the quality lost in the pruning",
+      "By distillation from the flagships: off-policy on teacher responses, then on-policy logit (KL) matching, beating RL at ~1/10 the GPU-hours",
+      "By sequence-level distillation only: SFT on the flagship's sampled answers, which the report found beat on-policy logit matching at equal cost"
+    ],
+    "answer_index": 2,
+    "explanation": "Qwen3's small models are documented as distilled from the flagship models in two stages: off-policy on teacher responses, then on-policy logit (KL) matching. The report says this beat RL at about a tenth of the GPU-hours (a company claim)."
+  },
+  {
+    "id": "17.4-003",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Prerequisites / why it matters",
+    "question": "Why is choosing the divergence and the rollout policy in distillation a risky design decision?",
+    "options": [
+      "Because the wrong choice crashes training immediately with NaN losses",
+      "Because only one combination is mathematically valid for autoregressive models",
+      "Because it changes the tokenizer the student must share with its teacher",
+      "Because the wrong choice fails silently"
+    ],
+    "answer_index": 3,
+    "explanation": "Almost every small open-weight model is distilled from a bigger one, and the choice of divergence direction and rollout policy shapes what the student gives up. A bad choice still trains and produces a loss curve; it just yields a worse student, so the failure is silent."
+  },
+  {
+    "id": "17.4-004",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Hardware track",
+    "question": "What hardware do the toy logit-distillation experiments need, and what would real distillation of a 0.5B student from a 1.5B teacher need?",
+    "options": [
+      "Toys: CPU-only, about a second, a few MB; real: one GPU with 24 GB or more for both models plus generation",
+      "Toys: one 24 GB GPU for a few minutes; real: a multi-node cluster of 80 GB GPUs for both models plus generation",
+      "Toys: 8 GPUs, since both distributions are held in memory; real: CPU-only, because the teacher's log-probs are cached",
+      "Both need about 80 GB of GPU memory, since the full vocabulary distribution must be stored for every position"
+    ],
+    "answer_index": 0,
+    "explanation": "Both toy experiments are exact computations on a 20-bin and an 8-token problem; the test file runs in about a second on CPU with a few MB and 0 GPU-hours. The TRL quick-start shape (0.5B student, 1.5B teacher) needs one GPU with 24 GB or more."
+  },
+  {
+    "id": "17.4-005",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.1 The foundational technique (recap of 17.3)",
+    "question": "What is sequence-level knowledge distillation (Kim & Rush 2016), as used for DeepSeek-R1's small models?",
+    "options": [
+      "Matching the teacher's full next-token logits with a KL loss at every position of the teacher's own text",
+      "Generating text with the teacher and fine-tuning the student on it with ordinary SFT cross-entropy",
+      "Training the student with RL, using the teacher's log-probability of each answer as the reward model",
+      "Copying a subset of the teacher's layers into the student, then fine-tuning on the original SFT data"
+    ],
+    "answer_index": 1,
+    "explanation": "Sequence-level KD has the teacher generate outputs and fine-tunes the student on them with ordinary SFT cross-entropy. It is simple and works, as DeepSeek did with R1's traces."
+  },
+  {
+    "id": "17.4-006",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.1 The foundational technique (recap of 17.3)",
+    "question": "What is a practical advantage of sequence-level distillation over logit distillation?",
+    "options": [
+      "It gives a dense full-distribution signal at every token, so each position carries the teacher's dark knowledge",
+      "It fixes exposure bias, since the student is trained on the same prefixes it will see at inference time",
+      "It needs only the teacher's text, so you can distill from a model you can sample from but cannot inspect",
+      "It needs no student training run at all, since the teacher's sampled text is simply used as a retrieval cache"
+    ],
+    "answer_index": 2,
+    "explanation": "Sequence-level KD only needs the teacher's text, so it works with a model behind an API whose logits you cannot see. Logit distillation needs the teacher's log-probs."
+  },
+  {
+    "id": "17.4-007",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.2 The problem at modern scale",
+    "question": "Why does SFT on one sampled teacher token throw away information?",
+    "options": [
+      "Because the sampled token is usually wrong at high temperature, so SFT mostly trains the student on noise",
+      "Because SFT ignores the prompt tokens, so the student never sees the context the teacher conditioned on",
+      "Because the teacher's logits are quantised to 8 bits before sampling, which rounds away the low-probability tokens",
+      "Because the teacher has a full distribution over ~150K tokens at each position, and sampling keeps one token"
+    ],
+    "answer_index": 3,
+    "explanation": "At each position the teacher has a full next-token distribution. Sampling one token keeps just that token and tells the student everything else is wrong, discarding the teacher's relative preferences among other tokens."
+  },
+  {
+    "id": "17.4-008",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.2 The problem at modern scale",
+    "question": "After 'The answer is', a teacher puts 0.55 on '12', 0.40 on 'twelve' and 0.05 elsewhere. What does SFT on a single sample of '12' fail to convey?",
+    "options": [
+      "That 'twelve' is almost as good: so-called dark knowledge",
+      "That '12' is the correct answer the teacher prefers the most",
+      "That the prompt was a math question rather than free text",
+      "That the sequence should end right after the number token"
+    ],
+    "answer_index": 0,
+    "explanation": "SFT on '12' tells the student '12 is right, everything else is wrong'. The teacher knew 'twelve' is almost as good. This extra information in the soft distribution is called dark knowledge; matching full distributions passes it on."
+  },
+  {
+    "id": "17.4-009",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.2 The problem at modern scale",
+    "question": "Which paper originated the idea of matching soft teacher distributions ('dark knowledge')?",
+    "options": [
+      "Kim & Rush 2016, Sequence-Level Knowledge Distillation for neural machine translation",
+      "Hinton, Vinyals & Dean 2015, Distilling the Knowledge in a Neural Network",
+      "Agarwal et al. 2023, GKD: On-Policy Distillation of Language Models from Self-Generated Mistakes",
+      "Gu et al. 2023, MiniLLM: Knowledge Distillation of Large Language Models with reverse KL"
+    ],
+    "answer_index": 1,
+    "explanation": "Matching soft teacher distributions is the original knowledge-distillation idea of Hinton et al. (2015). Kim & Rush introduced sequence-level KD; GKD and MiniLLM are on-policy distillation methods."
+  },
+  {
+    "id": "17.4-010",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.2 The problem at modern scale",
+    "question": "Besides carrying dark knowledge, what training-signal benefit does matching the teacher's full distribution give?",
+    "options": [
+      "It removes the need for a teacher at training time, since the targets are cached",
+      "It eliminates the need for prompt masking, since every position gets a target",
+      "A dense training signal at every position",
+      "It makes the loss exactly zero for every token the student already predicts correctly"
+    ],
+    "answer_index": 2,
+    "explanation": "Matching the full distribution provides a full target at every position, a dense signal, rather than a single sampled token per position (or a single scalar per sequence in RL)."
+  },
+  {
+    "id": "17.4-011",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.2 The problem at modern scale",
+    "question": "What is exposure bias in distillation?",
+    "options": [
+      "The teacher has seen far more training data than the student, so its distribution over prefixes is biased toward text the student cannot generate",
+      "The student overfits to the prompt tokens, because the loss is computed on every position instead of only the completion, biasing it toward copying the prompt",
+      "The student trains on teacher-written prefixes but at inference continues its own, so after a mistake it is in states it never learned to recover from",
+      "The teacher is biased toward frequent tokens after temperature scaling, so the student learns to under-predict rare tokens it is later exposed to at inference"
+    ],
+    "answer_index": 2,
+    "explanation": "Training only on teacher-written prefixes (teacher forcing) means the student never sees its own mistakes. At inference a small student makes errors the teacher never makes, lands in unseen prefixes, cannot recover, and errors compound."
+  },
+  {
+    "id": "17.4-012",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.3 The modern technique",
+    "question": "What is logit distillation?",
+    "options": [
+      "At every position, minimising a divergence between the teacher's and the student's next-token distributions",
+      "Training the student with cross-entropy on the teacher's argmax token at every position of the teacher's text",
+      "Clipping the student's logits to the teacher's per-position range so that neither model is ever overconfident",
+      "Averaging the teacher's and student's weights layer by layer, with the teacher's logits used to choose the mix"
+    ],
+    "answer_index": 0,
+    "explanation": "Logit distillation minimizes a divergence (forward KL, reverse KL or a JSD) between full next-token distributions at every position, rather than training on one sampled token."
+  },
+  {
+    "id": "17.4-013",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.3 The modern technique",
+    "question": "What is on-policy distillation (GKD, 'learning from self-generated mistakes')?",
+    "options": [
+      "The teacher generates the text and the student copies its sampled tokens with ordinary cross-entropy",
+      "The student generates the prefixes and the teacher scores every token the student produced",
+      "The student and teacher take turns generating tokens, and each is scored by the other's log-probs",
+      "The teacher is fine-tuned on the student's outputs so that it learns to correct the student's mistakes"
+    ],
+    "answer_index": 1,
+    "explanation": "In on-policy distillation the student writes the prefixes, so it sees its own mistakes, and the teacher grades every token of them, telling the student token by token what to do there. Agarwal et al. (2023) call this GKD."
+  },
+  {
+    "id": "17.4-014",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.3 The modern technique",
+    "question": "How does on-policy distillation sit between SFT and RL?",
+    "options": [
+      "Its data is off-policy like SFT (prefixes written by the teacher) and its signal is sparse like RL (one scalar reward per sequence)",
+      "Like RL its data is on-policy; like SFT its signal is dense, a full target distribution at every token, not one scalar per sequence",
+      "It uses a learned reward model like RLHF, trained on teacher-versus-student comparisons, but optimises it with SFT on the winning samples",
+      "It is identical to RL with a KL penalty to the teacher: the teacher acts as the reference policy and the reward is the sequence's correctness"
+    ],
+    "answer_index": 1,
+    "explanation": "On-policy distillation takes RL's on-policy data (the student's own rollouts) and SFT's dense supervision (a full target distribution per token). RL gets only one scalar reward per sequence."
+  },
+  {
+    "id": "17.4-015",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "1.3 The modern technique",
+    "question": "In the unified view of distillation, what does SFT on teacher samples correspond to?",
+    "options": [
+      "Reverse KL, estimated exactly over the vocabulary, on the student's own prefixes",
+      "JSD with beta = 0.5, estimated on a mixture of teacher and student prefixes",
+      "An RL objective with a binary reward on whether the token matches the teacher",
+      "Forward KL, estimated with one sample per position, on the teacher's prefixes"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT on teacher samples is forward KL with one sample per position on the teacher's prefixes. Logit distillation removes the 'one sample'; on-policy distillation removes 'the teacher's prefixes'. The divergence direction decides what an imperfect student gives up."
+  },
+  {
+    "id": "17.4-016",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "What is the forward KL between teacher p_T and student p_S over vocabulary V?",
+    "options": [
+      "KL(p_T || p_S) = sum_v p_T(v) (log p_T(v) - log p_S(v))",
+      "KL(p_T || p_S) = sum_v p_S(v) (log p_S(v) - log p_T(v))",
+      "KL(p_T || p_S) = sum_v p_T(v) (log p_S(v) - log p_T(v))^2",
+      "KL(p_T || p_S) = max_v p_T(v) |log p_T(v) - log p_S(v)|"
+    ],
+    "answer_index": 0,
+    "explanation": "Forward KL sums over the vocabulary weighted by the teacher: sum_v p_T(v)(log p_T(v) - log p_S(v)). The second option is reverse KL, weighted by the student."
+  },
+  {
+    "id": "17.4-017",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "Under forward KL(p_T || p_S), what happens to a token the teacher likes but the student assigns near-zero probability?",
+    "options": [
+      "It costs nothing, because the student's near-zero mass makes its term p_S(v) log p_S(v) vanish",
+      "Its cost p_T(v)(-log p_S(v)) goes to infinity, so the student must put mass everywhere the teacher does",
+      "Its cost is clipped at log V, since forward KL is bounded by the entropy of a uniform distribution",
+      "It is ignored, since forward KL weights each token's log-ratio by the student's own small probability"
+    ],
+    "answer_index": 1,
+    "explanation": "Forward KL is teacher-weighted. If p_T(v) is large and p_S(v) -> 0, the term p_T(v)(-log p_S(v)) blows up. Tokens the student likes but the teacher ignores cost nothing directly. This forces mode covering."
+  },
+  {
+    "id": "17.4-018",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "What behaviour does forward KL induce in a student that cannot fit the teacher exactly?",
+    "options": [
+      "Mode seeking: commit to the single teacher mode it can fit well and drop the others",
+      "Mode collapse: put almost all of its mass onto the single most frequent token",
+      "Mode covering (mean seeking): put mass everywhere the teacher does, even between modes",
+      "Zero-forcing: put zero mass wherever the teacher is uncertain, to avoid any penalty"
+    ],
+    "answer_index": 2,
+    "explanation": "Because missing any teacher-supported token is infinitely costly under forward KL, the student spreads to cover all teacher modes. This is mode covering, also called mean seeking."
+  },
+  {
+    "id": "17.4-019",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "If the teacher is one-hot on the observed token y, what does forward KL(one-hot_y || p_S) reduce to?",
+    "options": [
+      "log p_S(y), the student's log-likelihood",
+      "1 - p_S(y), the student's error rate",
+      "Zero, since a one-hot target has no entropy",
+      "-log p_S(y), exactly the SFT cross-entropy"
+    ],
+    "answer_index": 3,
+    "explanation": "With p_T(y) = 1 the sum has one term and log p_T(y) = 0, leaving -log p_S(y): the cross-entropy loss. So SFT is the special case of forward KL with a one-hot teacher."
+  },
+  {
+    "id": "17.4-020",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "Averaging -log p_S(y) over samples y ~ p_T gives what quantity, and how does it compare with exact forward KL?",
+    "options": [
+      "KL(p_T || p_S) + H(p_T); H(p_T) is independent of the student, so the expected gradient matches, with much higher variance",
+      "KL(p_S || p_T) + H(p_S); sampling from the teacher turns the forward KL into the reverse KL, so the gradient points the other way",
+      "Exactly KL(p_T || p_S), with lower variance than the full sum because each sample concentrates on the teacher's top tokens",
+      "H(p_S), the student's own entropy, which is unrelated to either KL and only rewards the student for becoming more confident"
+    ],
+    "answer_index": 0,
+    "explanation": "E_{y~p_T}[-log p_S(y)] = KL(p_T||p_S) + H(p_T). Since H(p_T) is a constant with respect to the student, sequence-level distillation has the same expected gradient as forward KL, but as a one-sample Monte-Carlo estimate it is much noisier."
+  },
+  {
+    "id": "17.4-021",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.1 Forward KL: the student must cover the teacher",
+    "question": "What is the gradient of forward KL(p_T || p_S) with respect to the student logit z_v?",
+    "options": [
+      "p_T(v) - p_S(v)",
+      "p_S(v) - p_T(v)",
+      "p_S(v)(log p_S(v) - log p_T(v))",
+      "-p_T(v) log p_S(v)"
+    ],
+    "answer_index": 1,
+    "explanation": "d KL(p_T||p_S)/d z_v = p_S(v) - p_T(v): the same 'prediction minus target' as cross-entropy, but with the teacher's soft distribution as target."
+  },
+  {
+    "id": "17.4-022",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "What is the reverse KL between student and teacher, and whose probabilities weight the sum?",
+    "options": [
+      "sum_v p_T(v)(log p_T(v) - log p_S(v)); weighted by the teacher",
+      "sum_v p_T(v)(log p_S(v) - log p_T(v)); weighted by the teacher",
+      "sum_v p_S(v)(log p_S(v) - log p_T(v)); weighted by the student",
+      "sum_v p_S(v)(log p_T(v) - log p_S(v)); weighted by the student"
+    ],
+    "answer_index": 2,
+    "explanation": "Reverse KL(p_S || p_T) = sum_v p_S(v)(log p_S(v) - log p_T(v)) is weighted by the student. The teacher-weighted version is forward KL."
+  },
+  {
+    "id": "17.4-023",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "Under reverse KL(p_S || p_T), which kind of student error is infinitely costly?",
+    "options": [
+      "Ignoring a mode the teacher puts substantial probability on",
+      "Matching the teacher exactly on its highest-probability token",
+      "Having much lower entropy than the teacher at that position",
+      "Putting mass on a token the teacher assigns near-zero probability"
+    ],
+    "answer_index": 3,
+    "explanation": "If p_S(v) > 0 and p_T(v) -> 0, the term p_S(v)(-log p_T(v)) blows up. A teacher mode the student ignores costs nothing directly. So the student must not invent tokens the teacher would not produce."
+  },
+  {
+    "id": "17.4-024",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "What behaviour does reverse KL induce in a student that cannot fit everything?",
+    "options": [
+      "Mode seeking: pick the modes it can fit well and drop the rest",
+      "Mode covering: spread its mass over all of the teacher's modes",
+      "Uniform spreading of probability across the whole vocabulary",
+      "Copying the teacher's entropy exactly while shifting its modes"
+    ],
+    "answer_index": 0,
+    "explanation": "Because reverse KL only penalises student mass where the teacher has little, a limited student commits to the modes it can fit and ignores others. This is mode seeking."
+  },
+  {
+    "id": "17.4-025",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "Why does MiniLLM (Gu et al. 2023) argue reverse KL is the better default for generative language models?",
+    "options": [
+      "Because it is cheaper to compute than forward KL, needing only the student's top-k tokens per position",
+      "Because a student that puts mass where the teacher has none produces text the teacher would never write",
+      "Because it needs no teacher logits at all, only the teacher's sampled text, so closed models can be used",
+      "Because it is symmetric in teacher and student, so the student cannot be biased toward covering or seeking"
+    ],
+    "answer_index": 1,
+    "explanation": "MiniLLM argues that for generation, avoiding invented text matters most: forward KL's mode covering can make the student generate outputs the teacher would never produce, while reverse KL punishes exactly that."
+  },
+  {
+    "id": "17.4-026",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "With l_v = log p_S(v) - log p_T(v) and K = KL(p_S || p_T), what is the gradient of reverse KL with respect to student logit z_v?",
+    "options": [
+      "p_S(v) - p_T(v)",
+      "p_T(v)(l_v - K)",
+      "p_S(v)(l_v - K)",
+      "p_S(v) l_v + K"
+    ],
+    "answer_index": 2,
+    "explanation": "d KL(p_S||p_T)/d z_v = p_S(v)(l_v - K). It reads as a policy gradient where -l_v is the per-token reward and K the baseline."
+  },
+  {
+    "id": "17.4-027",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "How can the reverse-KL gradient p_S(v)(l_v - K) be read as a policy gradient?",
+    "options": [
+      "As a value-function regression target: l_v is the predicted return of token v and K is the observed return it is regressed onto",
+      "As a Bradley-Terry preference loss: each token v is compared with the average token, and K is the log-odds that v is preferred",
+      "As a cross-entropy against the teacher's argmax: l_v is the log-loss on that token and K normalises it by the vocabulary size",
+      "The per-token reward is -l_v (how much more the teacher likes v) and K is the baseline; worse tokens go down, better ones up"
+    ],
+    "answer_index": 3,
+    "explanation": "With reward -l_v and baseline K = E_{p_S}[l_v], tokens whose log-ratio is worse than average get pushed down and better ones up, exactly like REINFORCE with a baseline."
+  },
+  {
+    "id": "17.4-028",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.2 Reverse KL: the student must not invent",
+    "question": "When reverse KL is estimated by sampling one token v ~ p_S rather than summing over the vocabulary, what is l_v?",
+    "options": [
+      "Exactly the one-sample 'k1' KL estimator from PPO's KL penalty, now used as a per-token negative reward",
+      "A one-sample estimate of the forward KL, since the token was drawn from the student and scored by the teacher",
+      "A one-sample estimate of the teacher's entropy at that position, which the student is trained to match",
+      "The importance ratio p_T(v)/p_S(v), used to reweight the student's sample toward the teacher's distribution"
+    ],
+    "answer_index": 0,
+    "explanation": "l_v = log p_S(v) - log p_T(v) for a sampled v is the k1 KL estimator. Using -l_v as a per-token reward is how some on-policy distillation recipes plug into an RL trainer."
+  },
+  {
+    "id": "17.4-029",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.3 Generalized JSD: a dial between the two",
+    "question": "How does GKD's generalized JSD_beta between p_T and p_S work?",
+    "options": [
+      "It averages forward and reverse KL directly: beta KL(p_T||p_S) + (1-beta) KL(p_S||p_T), with no mixture involved",
+      "With M = (1-beta) p_S + beta p_T, JSD_beta = beta KL(p_T||M) + (1-beta) KL(p_S||M), for beta in [0, 1]",
+      "It computes beta times the squared difference of log-probabilities, sum_v (log p_T(v) - log p_S(v))^2, over the vocabulary",
+      "It is the KL from the teacher to a uniform distribution, scaled by beta and added to the student's cross-entropy loss"
+    ],
+    "answer_index": 1,
+    "explanation": "GKD forms a mixture M = (1-beta)p_S + beta p_T and computes beta KL(p_T||M) + (1-beta) KL(p_S||M). Each term compares a distribution to a mixture containing it."
+  },
+  {
+    "id": "17.4-030",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.3 Generalized JSD: a dial between the two",
+    "question": "Why is JSD_beta bounded, and what is its maximum at beta = 0.5?",
+    "options": [
+      "It is not bounded: like KL, it goes to infinity when one distribution puts mass where the other has none",
+      "It is bounded by 1, because each probability is at most 1 and so every log-ratio inside it is at most 1",
+      "Each term compares a distribution to a mixture containing it; at beta = 0.5 it is at most ln 2",
+      "It is bounded by log V, the vocabulary size, because that is the maximum entropy of any distribution"
+    ],
+    "answer_index": 2,
+    "explanation": "Because M contains both p_T and p_S, neither KL term can blow up, so JSD_beta is bounded by a constant. At beta = 0.5 the bound is ln 2."
+  },
+  {
+    "id": "17.4-031",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.3 Generalized JSD: a dial between the two",
+    "question": "Taken literally, JSD_beta equals 0 at beta = 0 and beta = 1. How does it relate to forward and reverse KL?",
+    "options": [
+      "They are unrelated at every beta, since a mixture divergence can never recover either KL as a limit",
+      "JSD_beta equals the forward KL exactly at beta = 0.5, and the reverse KL exactly at beta = 0 and 1",
+      "JSD_beta / beta -> reverse KL as beta -> 0, and JSD_beta / (1-beta) -> forward KL as beta -> 1",
+      "JSD_beta / beta -> KL(p_T||p_S) as beta -> 0; JSD_beta / (1-beta) -> KL(p_S||p_T) as beta -> 1"
+    ],
+    "answer_index": 3,
+    "explanation": "After rescaling, the endpoints recover the two KLs: forward KL in the beta -> 0 limit and reverse KL in the beta -> 1 limit. That is why TRL special-cases the ends."
+  },
+  {
+    "id": "17.4-032",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.3 Generalized JSD: a dial between the two",
+    "question": "In TRL's convention for the generalized JSD, what do beta = 0 and beta = 1 mean, and what is DistillationTrainer's default?",
+    "options": [
+      "beta = 0 is forward KL, beta = 1 is reverse KL; DistillationTrainer defaults to beta = 1.0 (reverse KL)",
+      "beta = 0 is reverse KL, beta = 1 is forward KL; DistillationTrainer defaults to beta = 0.5 (symmetric JSD)",
+      "beta = 0 is the symmetric JSD, beta = 1 is plain cross-entropy; DistillationTrainer defaults to beta = 0",
+      "beta only sets the softmax temperature, not the divergence; DistillationTrainer defaults to beta = 1.0"
+    ],
+    "answer_index": 0,
+    "explanation": "TRL's docs document beta = 0 as forward KL and beta = 1 as reverse KL, special-casing the endpoints. DistillationTrainer defaults to beta = 1.0, i.e. reverse KL."
+  },
+  {
+    "id": "17.4-033",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.4 On-policy vs off-policy: which prefixes the loss is averaged over",
+    "question": "What is the only difference between the off-policy and on-policy distillation losses L_off and L_on?",
+    "options": [
+      "The divergence D: forward KL for off-policy, reverse KL for on-policy, with prefixes from the same source",
+      "Where the prefixes come from: completions y ~ p_T for off-policy, y ~ sg[p_S] for on-policy",
+      "Whether the teacher is frozen: off-policy keeps it fixed, on-policy updates it alongside the student",
+      "How the loss is reduced: off-policy averages over tokens, on-policy sums over each whole sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "Both average a per-token divergence D over prefixes of completion y. Off-policy samples y from the teacher; on-policy samples y from the (stop-gradient) student. D can be forward KL, reverse KL or JSD_beta in either regime."
+  },
+  {
+    "id": "17.4-034",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.4 On-policy vs off-policy: which prefixes the loss is averaged over",
+    "question": "In GKD's on-policy loss, what does the stop-gradient sg[p_S] on the sampling distribution mean?",
+    "options": [
+      "The student receives no gradient at all from the on-policy batches, which only update the teacher",
+      "The teacher's parameters are frozen, so only the sampling temperature of the student is learned",
+      "The student's samples are treated as fixed data; gradients flow only through p_S inside D",
+      "Samples are drawn greedily at temperature 0, so the sampling step contributes no randomness"
+    ],
+    "answer_index": 2,
+    "explanation": "sg[.] means GKD does not differentiate through which completions the student sampled. Those rollouts are treated as data, and gradients flow only through p_S inside D."
+  },
+  {
+    "id": "17.4-035",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "2.4 On-policy vs off-policy: which prefixes the loss is averaged over",
+    "question": "What does GKD's lambda (TRL GKDTrainer's lmbda) control?",
+    "options": [
+      "The coefficient on a KL penalty to a frozen reference copy of the student",
+      "The learning-rate multiplier applied to the on-policy part of each batch",
+      "The interpolation weight between forward and reverse KL inside the loss",
+      "The fraction of on-policy batches mixed with off-policy ones"
+    ],
+    "answer_index": 3,
+    "explanation": "GKD mixes the two regimes with a fraction lambda of on-policy batches. TRL's experimental GKDTrainer exposes it as lmbda. The forward/reverse interpolation is beta, not lambda."
+  },
+  {
+    "id": "17.4-036",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "3. Numerical example by hand",
+    "question": "For teacher p_T = (0.6, 0.3, 0.1) and student p_S = (0.3, 0.3, 0.4), forward KL is 0.2773 nats and reverse KL is 0.3466 nats. What does this show?",
+    "options": [
+      "KL is asymmetric; reverse KL is larger because the student's biggest error (0.4 on token 3) is weighted by its own mass",
+      "Forward and reverse KL are always within about 10% of each other, so the choice between them rarely changes training",
+      "Reverse KL is always larger than forward KL for any pair of distributions, because the student is always less peaked than its teacher",
+      "The student is closer to the teacher under reverse KL, since a larger divergence means the student is a better fit"
+    ],
+    "answer_index": 0,
+    "explanation": "The two directions differ because KL is not symmetric. Reverse KL weights mistakes by student mass, and the student puts 0.4 on token 3 where the teacher has 0.1, giving the large 0.4 ln 4 term."
+  },
+  {
+    "id": "17.4-037",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "3. Numerical example by hand",
+    "question": "For p_T = (0.6, 0.3, 0.1) and p_S = (0.3, 0.3, 0.4), the forward-KL gradient on the student logits is (-0.3, 0, +0.3). What does gradient descent do?",
+    "options": [
+      "Lowers token 1, raises token 3, and leaves token 2 unchanged",
+      "Raises token 1, lowers token 3, and leaves token 2 unchanged",
+      "Raises all three tokens equally, so the softmax output is unchanged",
+      "Leaves token 1 unchanged, lowers token 2, and raises token 3"
+    ],
+    "answer_index": 1,
+    "explanation": "The forward gradient p_S - p_T = (-0.3, 0, +0.3). Descent moves opposite the gradient: token 1's logit rises, token 3's falls, token 2 (where p_S = p_T) is unchanged."
+  },
+  {
+    "id": "17.4-038",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "3. Numerical example by hand",
+    "question": "Under reverse KL with p_T = (0.6, 0.3, 0.1) and p_S = (0.3, 0.3, 0.4), why does token 2's logit move even though p_S(2) = p_T(2)?",
+    "options": [
+      "Because of floating-point rounding in log_softmax, which leaves a small nonzero log-ratio for token 2",
+      "Because the teacher distribution is not normalised, so token 2's equal probability gives a nonzero log-ratio",
+      "Its log-ratio 0 beats the average K = 0.3466, so p_S(2)(0 - K) = -0.1040 < 0 and descent raises it",
+      "Because reverse KL ignores tokens where the two distributions agree, so token 2 drifts with the softmax"
+    ],
+    "answer_index": 2,
+    "explanation": "The reverse gradient is p_S(v)(l_v - K). Token 2 has l_2 = 0 but K > 0, so the gradient is negative and descent raises its logit: relative to the student's average mistake, token 2 is a good token, so mass moves toward it and away from token 3."
+  },
+  {
+    "id": "17.4-039",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "3. Numerical example by hand",
+    "question": "What property do both the forward and reverse KL gradient vectors with respect to student logits share?",
+    "options": [
+      "They are both all-positive, since KL is non-negative everywhere",
+      "They are identical vectors whenever the two distributions differ",
+      "They both equal the teacher distribution minus a uniform vector",
+      "They both sum to zero, as any gradient through a softmax must"
+    ],
+    "answer_index": 3,
+    "explanation": "Adding a constant to all logits does not change a softmax, so any loss through a softmax has a logit gradient that sums to zero. (-0.3, 0, 0.3) and (-0.3119, -0.1040, 0.4159) both sum to zero."
+  },
+  {
+    "id": "17.4-040",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "What are the shapes of teacher_logits and student_logits in a logit-distillation loss, and which has gradient?",
+    "options": [
+      "Both (B, T, V); only student_logits has gradient; teacher_logits come from no_grad and are detached",
+      "Both (B, V), one row per sequence; both have gradient, so the teacher is fine-tuned along with the student",
+      "teacher (B, T) holding sampled token ids, student (B, T, V); the teacher has gradient through the ids",
+      "Both (T, V), with the batch flattened into time; neither has gradient, since the loss is only logged"
+    ],
+    "answer_index": 0,
+    "explanation": "Both are (B, T, V): batch, time, vocabulary. The teacher logits are computed under no_grad and detached inside the loss; the student logits are the only thing with gradient."
+  },
+  {
+    "id": "17.4-041",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In logit distillation, what is the shape and meaning of the mask?",
+    "options": [
+      "(B, T, V), float; 1 on the teacher's top-k tokens at each position, 0 on the rest",
+      "(B, T), bool/int; 1 on completion tokens, 0 on prompt and padding",
+      "(V,), bool; 1 on vocabulary tokens shared by teacher and student tokenizers",
+      "(B,), bool; 1 for sequences whose final answer the verifier accepts"
+    ],
+    "answer_index": 1,
+    "explanation": "The mask is the response mask from loss masking: shape (B, T), 1 on completion tokens and 0 on prompt and padding. The per-token divergence is (B, T) and the loss is its masked mean, a scalar."
+  },
+  {
+    "id": "17.4-042",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "What dtypes are used for logits and for the per-token divergence in distillation?",
+    "options": [
+      "Logits always float64 for exactness; the per-token divergence is stored as int64",
+      "Logits int8 to save memory; the per-token divergence in float16 for speed",
+      "Logits bf16 in production (float64 in tests); per-token divergence at least float32",
+      "Everything in bf16, including the per-token divergence and the reduced loss"
+    ],
+    "answer_index": 2,
+    "explanation": "Production logits are typically bf16, while the tests use float64 for exactness. The per-token divergence (B, T) and the scalar loss are kept in at least float32."
+  },
+  {
+    "id": "17.4-043",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "Why must teacher and student share a tokenizer for logit distillation?",
+    "options": [
+      "So they can share embedding weights, which logit distillation copies from teacher to student",
+      "So that generation is faster, since the teacher can reuse the student's KV cache directly",
+      "So the teacher can be served over HTTP, which requires both sides to agree on token ids",
+      "The KL sums over the same V token ids; mismatched vocabularies need extra alignment machinery"
+    ],
+    "answer_index": 3,
+    "explanation": "The divergence compares probabilities token id by token id. If id 1234 means different strings in the two models, the KL is meaningless even though it runs. Cross-tokenizer distillation needs alignment machinery."
+  },
+  {
+    "id": "17.4-044",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "4. Tensor shapes, dtype, device",
+    "question": "In larger distillation setups, how is the teacher often deployed?",
+    "options": [
+      "Served separately, returning log-probs (TRL has an async variant that queries a teacher over HTTP)",
+      "Merged into the student's weights at initialisation, so no separate teacher forward pass is needed",
+      "Run only once before training to dump every full distribution to disk, which the student then reads",
+      "Replaced by a learned reward model trained to predict the teacher's log-probs from the student's text"
+    ],
+    "answer_index": 0,
+    "explanation": "In a simple setup both models live on the training GPUs. In larger setups the teacher is served separately and returns log-probs; TRL has an async variant that queries the teacher over HTTP."
+  },
+  {
+    "id": "17.4-045",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "In llmre.reasoning.distill, how does forward_kl compute the divergence?",
+    "options": [
+      "kl = (log_ps.exp() * (log_ps - log_pt)).sum(-1), with teacher logits detached and both through log_softmax",
+      "kl = (log_pt.exp() * (log_pt - log_ps)).sum(-1), with teacher logits detached and both via log_softmax",
+      "kl = ((log_pt - log_ps) ** 2).mean(-1), a squared log-ratio averaged over the vocabulary dimension",
+      "kl = F.cross_entropy(student_logits, teacher_logits.argmax(-1)), using the teacher's top token as label"
+    ],
+    "answer_index": 1,
+    "explanation": "forward_kl computes log_softmax of the detached teacher logits and of the student logits, then sums p_T (log p_T - log p_S) over the vocabulary. The first option, weighted by the student's probabilities, is reverse_kl."
+  },
+  {
+    "id": "17.4-046",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "Why do the distillation divergences use log_softmax rather than log(softmax(...))?",
+    "options": [
+      "Because log_softmax runs faster on CPU, though on GPU the two are identical",
+      "Because log(softmax) is not differentiable at the largest logit of each row",
+      "So tiny probabilities do not underflow to log(0) = -inf",
+      "Because softmax needs an explicit temperature argument that log_softmax omits"
+    ],
+    "answer_index": 2,
+    "explanation": "Working in log space keeps tiny probabilities representable. log(softmax(z)) can underflow to 0 and give -inf, and then 0 * -inf = nan. generalized_jsd likewise computes log M with logsumexp."
+  },
+  {
+    "id": "17.4-047",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5. From-scratch PyTorch",
+    "question": "How does generalized_jsd compute log M for the mixture M = (1-beta) p_S + beta p_T stably?",
+    "options": [
+      "Compute M in probability space, then take log(M), which is safe because M is a mixture",
+      "Clamp M to a minimum of 1e-8 before taking the log, which keeps every term finite",
+      "Average log p_S and log p_T with weights (1-beta) and beta, which equals log M exactly",
+      "With a logsumexp of log(1-beta) + log p_S and log(beta) + log p_T"
+    ],
+    "answer_index": 3,
+    "explanation": "log M = logsumexp(log(1-beta) + log p_S, log beta + log p_T) stays in log space and avoids underflow. Averaging log-probs would compute a geometric, not arithmetic, mixture."
+  },
+  {
+    "id": "17.4-048",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.1 Experiment A: mode covering vs mode seeking",
+    "question": "In Experiment A, a 20-bin bimodal teacher (bumps at bins 4 and 15) is fit by a discretized-Gaussian student with two parameters. What problem does this model?",
+    "options": [
+      "The small-student problem: the student can make only one bump, so the divergence decides what it gives up",
+      "Exposure bias: the student is trained on teacher bins but sampled from its own, so it drifts into the empty gap",
+      "Tokenizer mismatch: the student's 20 bins do not line up with the teacher's, so the KL needs an alignment map",
+      "Reward hacking: the student finds a cheap bin the divergence under-penalises and piles all of its mass there"
+    ],
+    "answer_index": 0,
+    "explanation": "The student has only mu and log sigma, so it can make one bump and cannot copy the two-bump teacher. Which divergence you use decides what it sacrifices."
+  },
+  {
+    "id": "17.4-049",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.1 Experiment A: mode covering vs mode seeking",
+    "question": "In Experiment A, what does the forward-KL-fit student look like?",
+    "options": [
+      "It matches the bin-4 mode exactly (mu = 4, sigma = 1) and puts almost no mass on the bin-15 mode, since forward KL lets a student drop a mode",
+      "A wide flat bump between the modes (mu ~9, sigma ~14.6), with 26.8% of its mass on bins 7-11, where the teacher has 0.24%",
+      "It collapses onto the bin-15 mode with a very small sigma, because forward KL rewards the student for concentrating its mass",
+      "A uniform distribution over all 20 bins with zero loss, since a uniform student covers every bin the teacher uses"
+    ],
+    "answer_index": 1,
+    "explanation": "Forward KL makes missing a mode very costly, so the one-bump student spreads wide between them, putting 26.8% of its mass in the gap where the teacher has 0.24%. For an LM, that is generating text the teacher would essentially never produce."
+  },
+  {
+    "id": "17.4-050",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.1 Experiment A: mode covering vs mode seeking",
+    "question": "In Experiment A, what does the reverse-KL-fit student do, and what is its loss?",
+    "options": [
+      "Spreads its mass evenly across the gap between the two modes, reaching a loss of 0 once the bins are covered",
+      "Covers both modes with two separate bumps, since a reverse-KL fit always splits; loss ln 4 = 1.386",
+      "Moves onto the nearer mode and matches it exactly (mu = 4, sigma = 1); loss ln 2 = 0.693, with no mass in the gap",
+      "Diverges, with sigma growing without bound, because the student-weighted loss is infinite wherever the teacher is zero"
+    ],
+    "answer_index": 2,
+    "explanation": "Reverse KL locks onto one mode and matches it exactly. Its loss ln 2 reflects ignoring the other half of the teacher's mass. JSD_0.5 behaves like reverse KL in this experiment."
+  },
+  {
+    "id": "17.4-051",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.1 Experiment A: mode covering vs mode seeking",
+    "question": "When is forward KL the safer choice for distillation, and when is reverse KL?",
+    "options": [
+      "Forward when each sample must be good (precision, pass@1); reverse when the student must keep every teacher behaviour (diversity, coverage, pass@k)",
+      "Forward in every case, since it is the only divergence that matches SFT; reverse KL is only useful for analysis, never for training",
+      "Reverse for classification heads, where there is a single label; forward for generation, where the student must sample long sequences",
+      "Forward when the student must keep every teacher behaviour (diversity, coverage, pass@k); reverse when each sample must be good (pass@1)"
+    ],
+    "answer_index": 3,
+    "explanation": "Neither is correct in general. Forward KL keeps coverage, useful for diversity and pass@k. Reverse KL keeps each sample on a real teacher mode, useful for pass@1. Generation has mostly moved toward reverse KL or JSD."
+  },
+  {
+    "id": "17.4-052",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "Why is Experiment B's 'language model' a bigram chain?",
+    "options": [
+      "So on/off-policy is exact: visitation d_{t+1} = d_t P gives the expected loss over all rollouts as an exact weighted sum",
+      "Because a bigram model conditions on only one previous token, so it cannot suffer exposure bias and isolates the divergence choice",
+      "Because transformers cannot be distilled on a CPU in reasonable time, and a bigram table is the smallest model that still generates text",
+      "So the teacher and student can use different vocabularies, since each row of a bigram table can be aligned to the other model separately"
+    ],
+    "answer_index": 0,
+    "explanation": "A (V, V) table where row s is the next-token distribution after token s lets you compute the probability of being at each token exactly via d_{t+1} = d_t P (state_visitation). The expected loss is then an exact weighted sum; real systems sample but the expectation is the same."
+  },
+  {
+    "id": "17.4-053",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "In Experiment B, how do the teacher chain and the slipping student behave?",
+    "options": [
+      "The teacher wanders uniformly over all 8 tokens with no preferred route, while the student is deterministic and always follows the 0->1->2->3 cycle exactly",
+      "The teacher cycles 0->1->2->3->0 w.p. 0.9999, rarely going off-road (tokens 4-7) and returning to 0 from there w.p. 0.9; the student always slips 0.05 uniformly",
+      "Both start as exact copies of each other over the 8 tokens, and the student only begins to slip once training moves its rows away from the teacher's own",
+      "The student never leaves the road tokens 0-3 because its slip mass is masked out, while the teacher spends most of its time among the off-road tokens 4-7"
+    ],
+    "answer_index": 1,
+    "explanation": "The teacher knows how to recover from off-road tokens but its own text almost never shows it. The student can never be perfect: 5% of its mass is always uniform, standing in for limited capacity or temperature, so it sometimes steps off-road."
+  },
+  {
+    "id": "17.4-054",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "In Experiment B, how do off-policy and on-policy training of the bigram student differ?",
+    "options": [
+      "Off-policy uses reverse KL on each row and on-policy uses forward KL, with the rows weighted equally in both regimes",
+      "On-policy is given more steps and a higher learning rate, since its student-visited rows change between every update",
+      "Same steps and learning rate; off-policy weights each row by the teacher's visitation, on-policy by the student's, recomputed each step",
+      "Off-policy freezes the off-road rows the teacher never visits, while on-policy updates all eight rows of the table every step"
+    ],
+    "answer_index": 2,
+    "explanation": "distill_markov trains the same student twice with identical settings. The only difference is which visitation weights each row's divergence: the teacher's (off-policy) or the student's own, recomputed every step (on-policy)."
+  },
+  {
+    "id": "17.4-055",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "In Experiment B, why does off-policy distillation leave the student's recovery probability at chance (0.125)?",
+    "options": [
+      "Because the learning rate is too low for the off-road rows to move in the step budget given",
+      "Because reverse KL ignores rare tokens, so the off-road rows are never compared to the teacher",
+      "Because the teacher's own recovery probability is also 0.125, so off-policy copies it faithfully",
+      "Off-policy training never puts weight on the off-road rows, which the teacher almost never visits"
+    ],
+    "answer_index": 3,
+    "explanation": "Off-policy weighting follows the teacher's visitation, which essentially never reaches tokens 4-7, so those rows get almost no gradient and recovery stays at 1/8. On-policy weighting follows the slipping student, so those rows are trained and recovery reaches 0.75-0.77."
+  },
+  {
+    "id": "17.4-056",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "What were the headline results of on-policy versus off-policy training in Experiment B?",
+    "options": [
+      "On-policy learned to recover (0.75-0.77 vs 0.13), spent ~40% less time off-road, and had ~20% lower on-policy KL",
+      "Off-policy was better on every metric, since the teacher's rollouts gave cleaner targets than the student's own slipping rollouts",
+      "Both regimes ended identical on every metric, because the bigram chain is exact and the two losses share the same minimum",
+      "On-policy recovered perfectly (1.0 vs 0.13) but had about 20% higher on-policy KL, since it spent its capacity on off-road rows"
+    ],
+    "answer_index": 0,
+    "explanation": "On-policy training visits the rows the student actually visits, so it learns to recover. It spends about 40% less time lost and its reverse KL measured on its own rollouts is about 20% lower. Both fit the rows they train on; the difference is which rows."
+  },
+  {
+    "id": "17.4-057",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "In Experiment B, which metric reflects what a user of the student experiences?",
+    "options": [
+      "Reverse KL to the teacher measured on the teacher's own rollouts",
+      "Reverse KL to the teacher measured on the student's own rollouts",
+      "The training loss measured on the teacher-written prefixes it saw",
+      "The teacher's recovery probability from the off-road tokens 4-7"
+    ],
+    "answer_index": 1,
+    "explanation": "eval_on_policy_rkl measures reverse KL on the student's own rollouts, i.e. the states a user would actually see the student in. Loss on teacher prefixes misses exactly the states exposure bias creates."
+  },
+  {
+    "id": "17.4-058",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.2 Experiment B: on-policy vs off-policy",
+    "question": "When does on-policy distillation's advantage in the bigram toy close?",
+    "options": [
+      "When the teacher is noisier and visits off-road tokens often, so off-policy data already covers recovery",
+      "When forward KL is used instead of reverse KL, since forward KL is teacher-weighted in both regimes",
+      "When the student can copy the teacher exactly (slip = 0, trained long enough): both converge",
+      "Never: on-policy wins by the same fixed margin at every slip value, step count and learning rate"
+    ],
+    "answer_index": 2,
+    "explanation": "The toy is built to show the mechanism: a near-perfect teacher and an always-slipping student. With slip = 0 the student stops leaving the road, rarely needs to recover, and both regimes converge. On-policy helps when the student cannot be perfect, the usual case, but it is not a law."
+  },
+  {
+    "id": "17.4-059",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "5.3 Unit tests",
+    "question": "Which of these does test_distill.py NOT check?",
+    "options": [
+      "That forward KL with a one-hot teacher equals F.cross_entropy",
+      "That the teacher gets no gradient",
+      "Agreement with torch.nn.functional.kl_div",
+      "That on-policy distillation beats RL on AIME"
+    ],
+    "answer_index": 3,
+    "explanation": "The 12 tests check the hand-example values, agreement with F.kl_div, forward KL with one-hot teacher equals cross-entropy, both closed-form gradients vs autograd, no teacher gradient, JSD_beta endpoints and limits, prompt masking, and both experiments' qualitative results. AIME comparisons are from the Qwen3 report, not the tests."
+  },
+  {
+    "id": "17.4-060",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "What three things does TRL's DistillationTrainer do?",
+    "options": [
+      "Generate completions from the student (optionally with vLLM), score them with one teacher prefill pass, and compute a chunked generalized JSD on completions",
+      "Generate completions from the teacher with vLLM, SFT the student on them with cross-entropy, then run PPO with the teacher's log-probs as the reward model",
+      "Train a reward model from teacher-versus-student comparisons, run GRPO on the student against it, then merge the student and teacher weights",
+      "Store the teacher's top-k logits for the whole dataset once, train the student offline on those stored targets, then evaluate on held-out prompts"
+    ],
+    "answer_index": 0,
+    "explanation": "DistillationTrainer generates student completions like an online RL trainer, scores them with one teacher forward pass (prefill only, much cheaper than generating), and computes the generalized JSD (beta default 1.0 = reverse KL) over completion tokens in chunks."
+  },
+  {
+    "id": "17.4-061",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "Why is the teacher's scoring step in on-policy distillation relatively cheap?",
+    "options": [
+      "Because the teacher is a smaller model than the student in most on-policy setups",
+      "Because it is a prefill-only forward pass with no generation",
+      "Because teacher scores are cached and reused from previous training epochs",
+      "Because only the last token of each completion is scored by the teacher"
+    ],
+    "answer_index": 1,
+    "explanation": "The teacher does not generate; it runs a single forward pass over the student's completion (prefill) to get log-probs at every position. That is much cheaper than autoregressive generation."
+  },
+  {
+    "id": "17.4-062",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "With vocabulary V = 151,936 and a batch of 8 x 4096 tokens, roughly how large is one fp32 logits tensor, and why does that matter for distillation?",
+    "options": [
+      "About 2 GB in fp32, so teacher and student logits fit easily next to the model weights on a single GPU",
+      "About 200 MB per tensor, which is negligible next to the optimizer state, so no special handling is needed",
+      "About 19.9 GB; distillation needs teacher and student logits plus the student's gradient, so the loss is chunked",
+      "About 199 GB per tensor, which no GPU can hold, so logit distillation is impossible at this vocabulary size"
+    ],
+    "answer_index": 2,
+    "explanation": "32,768 tokens x 151,936 x 4 bytes is about 19.9 GB. Logit distillation needs both models' logits plus the gradient, so chunking the vocabulary projection and divergence over positions keeps peak memory to one chunk, the same trick as chunked cross-entropy."
+  },
+  {
+    "id": "17.4-063",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "How do offline logit-distillation pipelines usually store teacher distributions?",
+    "options": [
+      "The full V-dimensional teacher distribution for every token, stored in fp32",
+      "Only the teacher's argmax token at each position, as a sparse one-hot target",
+      "As a compressed teacher checkpoint that is re-run whenever a target is needed",
+      "Only the top-k log-probs per position, renormalised (reasonable industry practice)"
+    ],
+    "answer_index": 3,
+    "explanation": "Storing full distributions at V = 150K for a dataset is impossible, so offline pipelines usually keep the top-k log-probs per position and renormalise. The exact k and tail handling vary; this is reasonable industry practice, not a documented standard."
+  },
+  {
+    "id": "17.4-064",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "Why can on-policy distillation not be precomputed offline?",
+    "options": [
+      "The prefixes do not exist until the current student writes them, so the teacher must be live",
+      "Because the teacher's weights are updated every step, so its scores go stale after one update",
+      "Because top-k storage is too small to hold the teacher's scores for every possible student prefix",
+      "Because forward KL requires live teacher gradients, which cannot be stored to disk ahead of time"
+    ],
+    "answer_index": 0,
+    "explanation": "Off-policy forward KL works with stored logits since prefixes come from the teacher or a fixed dataset. On-policy prefixes are written by the student, which changes each step, so the teacher must score them live."
+  },
+  {
+    "id": "17.4-065",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "Per step, how does on-policy distillation's compute compare with an RLVR step, and how does the signal differ?",
+    "options": [
+      "Distillation is about 10x cheaper per step because it skips generation; its signal is the same single scalar reward per sequence as RL",
+      "About the same cost, dominated by student generation; RL gets one scalar per sequence, distillation a full distribution per token",
+      "Distillation is about 10x more expensive per step, since the teacher must also generate, and its signal is sparser than RL's",
+      "RL needs no generation because it scores a fixed dataset, while distillation must generate, so it costs far more per step"
+    ],
+    "answer_index": 1,
+    "explanation": "Both are dominated by generating student rollouts, so per-step cost is similar. The difference is signal density: one scalar per sequence for RL vs a full distribution per token for distillation."
+  },
+  {
+    "id": "17.4-066",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "What does the Qwen3 Technical Report claim about on-policy distillation of Qwen3-8B versus RL?",
+    "options": [
+      "RL beat on-policy distillation on AIME and coding at about a tenth of the GPU-hours, so the report used RL for every small model",
+      "They tied on all benchmarks at equal cost, so the report chose distillation only because it did not require a reward function",
+      "On-policy distillation beat RL on AIME and coding from the same start, using ~1,800 vs 17,920 GPU-hours (a company claim)",
+      "Distillation needed no teacher at inference or training time, since the 8B model distilled from its own earlier checkpoints"
+    ],
+    "answer_index": 2,
+    "explanation": "Qwen3's Table 21 reports on-policy distillation beating RL on AIME and coding from the same starting point at roughly 1,800 vs 17,920 GPU-hours. It is a company claim, not an independent reproduction."
+  },
+  {
+    "id": "17.4-067",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "6. Under the hood: what production trainers do, and the cost",
+    "question": "Why do frontier labs still need RL for their largest models even if distillation is cheaper?",
+    "options": [
+      "Because distillation cannot run on GPUs at frontier scale, since the teacher's logits do not fit in memory alongside the student",
+      "Because RL gives a denser per-token training signal than distillation, so it is the only way to improve the very largest models",
+      "Because distillation only works for math and code, where answers are checkable, while frontier models must also learn open tasks",
+      "Distillation needs a stronger teacher to exist; RL does not, so RL trains the frontier model and distillation passes it down"
+    ],
+    "answer_index": 3,
+    "explanation": "Distillation requires a stronger teacher. For the largest model there is none, so labs use RL there and distill the result into smaller models."
+  },
+  {
+    "id": "17.4-068",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "7. Side by side: when to use which",
+    "question": "What does each distillation regime need from the teacher?",
+    "options": [
+      "Sequence-level KD: text only; off-policy logit KD: log-probs on its own text; on-policy: live log-probs on the student's text",
+      "All three need only the teacher's sampled text, since log-probs can always be re-estimated from enough samples of each prefix",
+      "Sequence-level KD: live log-probs on the student's text; off-policy logit KD: text only; on-policy: the teacher's full weights",
+      "All three need direct access to the teacher's weights, since any form of distillation backpropagates through the teacher"
+    ],
+    "answer_index": 0,
+    "explanation": "Sequence-level KD works with an API. Off-policy logit KD needs log-probs on the teacher's own text (can be stored). On-policy needs the teacher live to score the student's text."
+  },
+  {
+    "id": "17.4-069",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "7. Side by side: when to use which",
+    "question": "Which distillation regime fixes exposure bias?",
+    "options": [
+      "Sequence-level KD",
+      "On-policy distillation",
+      "Off-policy logit KD",
+      "All three regimes equally"
+    ],
+    "answer_index": 1,
+    "explanation": "Only on-policy distillation trains on the student's own prefixes, so it sees and corrects the student's mistakes. Both sequence-level and off-policy logit KD train on the teacher's prefixes."
+  },
+  {
+    "id": "17.4-070",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "7. Side by side: when to use which",
+    "question": "What is the typical role of each distillation regime?",
+    "options": [
+      "On-policy distillation as the first stage from a random student, then off-policy logit KD, with sequence-level KD as the final stage",
+      "Off-policy logit KD only when the teacher and student tokenizers differ, since matching logits otherwise adds nothing over sampled text",
+      "Sequence-level KD first, or with an API teacher or other tokenizer; off-policy logit KD as a cheap early stage; on-policy last",
+      "All three are interchangeable and can be used at any stage, since each gives the same dense per-token signal from the teacher"
+    ],
+    "answer_index": 2,
+    "explanation": "Sequence-level KD suits a first stage, a closed-API teacher or mismatched tokenizers. Off-policy logit KD is a cheap first stage when logits are available. On-policy distillation is the final stage for a small student."
+  },
+  {
+    "id": "17.4-071",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "7. Side by side: when to use which",
+    "question": "Why is running on-policy distillation from a random student wasteful?",
+    "options": [
+      "Because the KL between a random student and the teacher is undefined, since the student puts mass everywhere",
+      "Because the teacher refuses to score random text, so most of each batch is dropped before the loss is computed",
+      "Because random students have no gradient through the softmax, so the first thousands of steps make no progress",
+      "The teacher spends compute grading gibberish; an earlier off-policy stage makes the student's samples worth grading"
+    ],
+    "answer_index": 3,
+    "explanation": "A common pipeline first does sequence-level or off-policy KD so the student's samples are sensible, then on-policy distillation. Starting on-policy from a random student wastes teacher compute scoring meaningless rollouts. DeepSeek's R1 distillation and Qwen3's first stage both start off-policy."
+  },
+  {
+    "id": "17.4-072",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Experiment: switch the knobs",
+    "question": "In Experiment A, what happens if reverse KL is initialised in the empty gap (init_mu = 9.5)?",
+    "options": [
+      "It gets stuck at a wide, flat solution (loss ~2.87, far above ln 2): from the gap no small move reaches a mode",
+      "It finds the bin-4 mode exactly, since reverse KL is convex and any initialisation reaches the global optimum",
+      "It finds both modes by splitting into two bumps, because starting exactly in the gap is symmetric with respect to them",
+      "It produces the same wide solution as forward KL, with the forward-KL loss of 0.881 and mu about 9"
+    ],
+    "answer_index": 0,
+    "explanation": "From the gap no small move reaches a mode, so reverse KL sticks at a poor wide solution. Starting at init_mu = 13.0 it finds the other mode (mu = 15). Forward KL reaches essentially the same wide solution (loss 0.881) from any start. Reverse KL is non-convex in the student's parameters."
+  },
+  {
+    "id": "17.4-073",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Experiment: switch the knobs",
+    "question": "In the bigram experiment, what happens with slip = 0.1 instead of 0.05?",
+    "options": [
+      "The gap between on- and off-policy closes, because a sloppier student visits off-road rows under both regimes",
+      "The recovery gap stays wide and both on-policy KLs rise, because a sloppier student is more often lost",
+      "Off-policy becomes better than on-policy, since the student's noisier rollouts give it worse training targets",
+      "Both on-policy KLs drop to about 0.001, since more slipping gives the student more recovery practice"
+    ],
+    "answer_index": 1,
+    "explanation": "A sloppier student leaves the road more, so recovery matters more and the gap stays wide; both KLs rise. With slip = 0 and 2000 steps instead, both on-policy KLs drop to about 0.001 and the gap almost disappears."
+  },
+  {
+    "id": "17.4-074",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "What does F.kl_div(input, target) compute, and what is the classic mistake?",
+    "options": [
+      "KL(input || target) with both in probability space; the classic mistake is passing the teacher as input, which flips the direction",
+      "The generalized JSD between input and target; the classic mistake is forgetting to pass beta, which then defaults to reverse KL",
+      "KL(target || input) with input in log space; passing the student as target silently turns forward KL into reverse KL",
+      "The cross-entropy of target under input; the classic mistake is forgetting the mask, which makes the loss include padding"
+    ],
+    "answer_index": 2,
+    "explanation": "F.kl_div(input, target) computes KL(target || input) with input as log-probabilities. Swapping arguments silently changes the direction. Test against a hand example."
+  },
+  {
+    "id": "17.4-075",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Why must teacher logits be computed under torch.no_grad() and detached?",
+    "options": [
+      "Only to save time and memory; the gradient into the teacher is harmless because the optimizer never steps it",
+      "Because bf16 tensors cannot be backpropagated through, so a teacher in bf16 would raise an autograd error",
+      "Because the teacher has no trainable parameters once loaded for inference, so its graph would be empty anyway",
+      "Otherwise gradient flows into the teacher and you are fine-tuning it toward the student"
+    ],
+    "answer_index": 3,
+    "explanation": "If the teacher's logits carry gradient, the optimizer will update the teacher to match the student, the opposite of distillation. Compute them under no_grad and detach."
+  },
+  {
+    "id": "17.4-076",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Why must prompt tokens be masked out of the distillation loss?",
+    "options": [
+      "Prompt tokens are given, not generated; including them trains the student to mimic the teacher's view of user text",
+      "Prompt tokens have no logits in the teacher's forward pass, so their divergence is undefined and produces NaNs in the loss",
+      "The teacher cannot score prompt tokens, since it was only trained on assistant turns, so its targets there are random noise",
+      "Masking prompt tokens is what makes the KL non-negative; without it, the per-token divergences can cancel and go below zero"
+    ],
+    "answer_index": 0,
+    "explanation": "Only completion tokens are generated by the model. Including prompt positions would train the student to match the teacher's predictions on the user's text, the same mistake as unmasked SFT."
+  },
+  {
+    "id": "17.4-077",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "What is the temperature-mismatch mistake in distillation?",
+    "options": [
+      "Using any sampling temperature other than 1, which always biases the student's rollouts relative to the teacher's",
+      "Sampling at tau but computing the loss at temperature 1 (or softening one side only), so target and trained distributions differ",
+      "Using a different sampling temperature for each batch, which makes the loss scale drift and destabilises the learning rate",
+      "Applying the temperature to the completion mask as well as the logits, which down-weights the last tokens of each sequence"
+    ],
+    "answer_index": 1,
+    "explanation": "Pick one temperature and apply it to both teacher and student logits. TRL uses its temperature setting for both sampling and the loss."
+  },
+  {
+    "id": "17.4-078",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "Why is 'on-policy distillation always wins' a mistake?",
+    "options": [
+      "Because on-policy distillation is in fact always worse than off-policy once the student has been pre-trained on teacher text",
+      "Because on-policy distillation cannot use reverse KL, so it loses the mode-seeking behaviour that makes students precise",
+      "It fixes exposure bias but does not guarantee a better student; measure on your task",
+      "Because on-policy distillation needs no teacher at all, so it is really self-training and cannot exceed the student's start"
+    ],
+    "answer_index": 2,
+    "explanation": "On-policy distillation addresses exposure bias, which matters when the student cannot be perfect, but its benefit is not guaranteed. A 2026 study found it smaller than expected in some settings."
+  },
+  {
+    "id": "17.4-079",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Exercise",
+    "question": "In the sampled on-policy reverse-KL update for one bigram row, what reward is used for each sampled token v_i ~ p_S?",
+    "options": [
+      "r_i = log p_T(v_i)",
+      "r_i = p_T(v_i) - p_S(v_i)",
+      "r_i = 1 if v_i is the teacher's argmax else 0",
+      "r_i = -(log p_S(v_i) - log p_T(v_i))"
+    ],
+    "answer_index": 3,
+    "explanation": "The reward is the negative log-ratio, r_i = -(log p_S(v_i) - log p_T(v_i)). The REINFORCE loss is -(1/N) sum_i (r_i - r_bar) log p_S(v_i) with the rewards detached; its expected gradient equals the exact reverse-KL gradient p_S(l - K)."
+  },
+  {
+    "id": "17.4-080",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Exercise",
+    "question": "Why does the sampled REINFORCE estimator with reward -l_v match the exact reverse-KL gradient in expectation?",
+    "options": [
+      "grad KL(p_S||p_T) = E_{v~p_S}[l_v grad log p_S(v)], since E_{v~p_S}[grad log p_S(v)] = 0; a baseline leaves it unchanged",
+      "Because the teacher's gradient exactly cancels the student's score-function term, leaving the pathwise derivative of the KL",
+      "Because reverse KL is linear in p_S, so the expectation of any single-sample estimate equals the full sum over the vocabulary",
+      "Because sampling from p_S is unbiased only for forward KL, and the reward -l_v converts the reverse KL into a forward KL first"
+    ],
+    "answer_index": 0,
+    "explanation": "The extra term E_{p_S}[grad log p_S] vanishes, leaving E[l_v grad log p_S(v)]. Minimizing KL means following -l_v as a reward, and a baseline leaves the expectation unchanged while reducing variance. Cosine similarity with the exact gradient rises toward 1 as N grows."
+  },
+  {
+    "id": "17.4-081",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Exercise",
+    "question": "When is the sampled per-token reverse-KL form preferred, and when is the full-vocabulary form preferred?",
+    "options": [
+      "Sampled always, because the one-sample estimator is both unbiased and lower variance than the full sum over the vocabulary",
+      "Full-vocabulary when the teacher's whole distribution is available, as a few samples over 150K tokens are noisy; else sampled",
+      "Full-vocabulary only for tiny vocabularies below about 1K tokens, since beyond that the sum over V cannot fit in GPU memory",
+      "Sampled only for forward KL, since the reverse-KL form needs the teacher's full distribution to compute the baseline K exactly"
+    ],
+    "answer_index": 1,
+    "explanation": "On a 3-token vocabulary 10 samples are already close, but with a 150K-token vocabulary a handful of samples per position is very noisy. The sampled form needs only the teacher's log-prob of the sampled token, so it suits teachers that do not return full distributions."
+  },
+  {
+    "id": "17.4-082",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "A distillation loss F.kl_div(F.softmax(student_logits, -1), F.log_softmax(teacher_logits, -1), log_target=True, reduction='batchmean') is negative and falling. What is wrong?",
+    "options": [
+      "log_target should be False, since the teacher's log-softmax must be exponentiated before F.kl_div can compare it",
+      "The teacher must be passed as softmax probabilities rather than log-probabilities, which is what makes the loss go negative",
+      "The first argument must be log-probabilities; passing probabilities computes sum p_T(log p_T - p_S), not a KL, and can go negative",
+      "reduction='batchmean' should be 'sum', since batchmean divides by B and lets per-token negative values dominate the mean"
+    ],
+    "answer_index": 2,
+    "explanation": "F.kl_div expects input in log space. With probabilities passed, the formula is not a KL and can go negative. A true KL is never negative, so a negative value always means a bug. Fix: use F.log_softmax(student_logits, -1) as the first argument, giving forward KL(p_T||p_S)."
+  },
+  {
+    "id": "17.4-083",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "With (B, T, V) inputs, what does reduction='batchmean' in F.kl_div divide by, and what should you do?",
+    "options": [
+      "B * T, the batch times sequence length, so the result is already a per-token mean and nothing needs changing",
+      "V, the vocabulary size, so the result is a per-class mean and you must divide by T manually to get per-token",
+      "T, the sequence length, so you must reshape to (B, V) by summing over time before calling it",
+      "Only the first dimension, B, not B*T; reshape to (B*T, V) and mask first"
+    ],
+    "answer_index": 3,
+    "explanation": "batchmean divides the summed KL by the size of the first dimension only. For (B, T, V) that is B, not the number of tokens. Reshape to (B*T, V) and apply the mask so the loss is a mean over completion tokens."
+  },
+  {
+    "id": "17.4-084",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Research connection",
+    "question": "What is GKD (Agarwal et al., ICLR 2024) and what does it define?",
+    "options": [
+      "'On-Policy Distillation of Language Models: Learning from Self-Generated Mistakes'; defines the generalized JSD and on-policy fraction lambda",
+      "'Generalized Knowledge Distillation via Beam Search'; a sequence-level KD method that trains the student on the teacher's top-scoring beam outputs",
+      "'Grounded Knowledge Distillation for Reasoning'; a process reward model trained from teacher step scores to guide student distillation",
+      "'Generalized Kernel Distillation'; a tokenizer-alignment method that maps teacher and student vocabularies before computing the KL"
+    ],
+    "answer_index": 0,
+    "explanation": "GKD defines on-policy distillation using the generalized JSD_beta and a fraction lambda of on-policy data. MiniLLM (Gu et al., ICLR 2024) argues for reverse KL and optimizes it with a policy-gradient method."
+  },
+  {
+    "id": "17.4-085",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Research connection",
+    "question": "What did the 2026 study 'On-Policy or Off-Policy Learning? A Systematic Study of Distillation Dynamics' report?",
+    "options": [
+      "On-policy rollouts dominated every other factor, including KL direction and learning rate, across all student and teacher sizes tested",
+      "KL direction mattered more than rollout policy: forward KL was robust to rollout source, reverse KL needed on-policy; LR set forgetting",
+      "Distillation was never better than RL at matched compute, so the study recommended RLVR for every student size and every task family",
+      "Reverse KL was robust to rollout policy while forward KL needed on-policy rollouts; the learning rate had little effect on forgetting"
+    ],
+    "answer_index": 1,
+    "explanation": "Varying rollout policy, KL direction and learning rate separately on Llama 3 and Qwen 2.5 students, it found KL direction mattered more than rollout policy, forward KL was robust to rollout policy, reverse KL needed on-policy rollouts, and learning rate governed forgetting. It is a single, unreproduced paper: a reason to ablate, not a settled rule."
+  },
+  {
+    "id": "17.4-086",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Research connection",
+    "question": "According to the 2026 distillation-dynamics study, did on-policy data's generalization advantage survive later RLVR?",
+    "options": [
+      "Yes; RLVR amplified the on-policy advantage, widening the generalization gap on harder variants",
+      "Yes, unchanged: the generalization gap from on-policy data stayed the same through later RLVR",
+      "It helped generalization on harder variants, but the advantage did not reliably survive later RLVR",
+      "No; on-policy data hurt generalization from the start, and RLVR later only partly closed the gap"
+    ],
+    "answer_index": 2,
+    "explanation": "The study reports that on-policy data helped generalization on harder variants, but this advantage did not reliably survive later RLVR training."
+  },
+  {
+    "id": "17.4-087",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Research connection",
+    "question": "Which of these is classified as reasonable industry practice rather than publicly documented in the distillation literature?",
+    "options": [
+      "The GKD and MiniLLM methods, which define on-policy distillation and the reverse-KL objective",
+      "Qwen3's two-stage strong-to-weak distillation, off-policy first and then on-policy logit matching",
+      "TRL's DistillationTrainer loss defaults and its chunked computation of the generalized JSD",
+      "Storing top-k logits for offline KD and staging sequence-level or off-policy KD before on-policy"
+    ],
+    "answer_index": 3,
+    "explanation": "GKD, MiniLLM, Qwen3's two-stage distillation (with a company-claimed GPU-hour comparison) and TRL's loss/defaults are publicly documented. Top-k stored logits and staging are reasonable industry practice. Claiming a given lab's small models are distilled this way without a report saying so is inference."
+  },
+  {
+    "id": "17.4-088",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Research connection",
+    "question": "In the GKD paper, which parts should be read on a first pass?",
+    "options": [
+      "The KD-divergence background, the GKD algorithm, and the ablations on on-policy fraction and divergence; skim tasks, skip RLHF part",
+      "Only the RLHF-combination part, since it shows how GKD plugs into a reward-model pipeline; the KD background and ablations can be skipped",
+      "Only the task-by-task result tables for summarisation, translation and arithmetic; the algorithm itself can be read later",
+      "Only the appendix proofs that JSD_beta interpolates between the KLs; the method and experiments follow directly from them"
+    ],
+    "answer_index": 0,
+    "explanation": "Read the forward/reverse KL and generalized JSD background and the GKD algorithm, and the ablations on the on-policy fraction and divergence. Skim task results and skip the RLHF combination initially."
+  },
+  {
+    "id": "17.4-089",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why is SFT on teacher samples a special case of forward-KL distillation, and what does it lose?",
+    "options": [
+      "It is reverse KL with a one-hot student on the sampled token, so it loses nothing: its expected gradient equals the full reverse KL, and its variance is the same as summing over the vocabulary",
+      "One-hot teacher on sampled y gives -log p_S(y); over y ~ p_T that is forward KL plus constant teacher entropy, so gradients match in expectation, but it loses non-sampled preferences and is noisier",
+      "It is JSD with beta = 0.5 on the teacher's prefixes, so it is bounded by ln 2; what it loses is exposure bias, which only the full forward-KL form corrects when evaluated on the student's own prefixes",
+      "It is not related to KL at all: SFT maximises the likelihood of the sampled tokens, which is a different objective whose minimiser need not match the teacher's distribution even with infinite samples"
+    ],
+    "answer_index": 1,
+    "explanation": "SFT cross-entropy is forward KL against a one-hot teacher. In expectation over teacher samples it differs from forward KL only by H(p_T), which does not depend on the student, but the single sample discards the rest of the teacher's distribution and makes the gradient much noisier."
+  },
+  {
+    "id": "17.4-090",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Fitting a one-bump student to a two-bump teacher, which divergence yields a student that sometimes produces outputs the teacher would almost never produce?",
+    "options": [
+      "Reverse KL, because it is student-weighted, so the student is free to place mass wherever the teacher is low",
+      "JSD_0.5, because it is bounded by ln 2, so placing mass between the modes costs the student at most a constant",
+      "Forward KL: it is teacher-weighted, so missing a mode is very costly and the student spreads mass between modes",
+      "Neither: forward and reverse KL give the same one-bump student, so it never places mass the teacher would not"
+    ],
+    "answer_index": 2,
+    "explanation": "Forward KL forces the student to cover both modes, which a one-bump student can only do by spreading into the gap (26.8% vs the teacher's 0.24%). Reverse KL is student-weighted, punishes that gap mass, and commits to one mode."
+  },
+  {
+    "id": "17.4-091",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Check yourself",
+    "question": "What does on-policy distillation need in terms of infrastructure, compared with off-policy?",
+    "options": [
+      "Nothing extra; it reads the same stored top-k teacher logits as off-policy KD and simply samples its prefixes from those stored distributions",
+      "Only a larger disk, since the teacher's scores for every student rollout are written out before each training epoch",
+      "Only a reward model trained to imitate the teacher, which replaces the teacher's log-probs during student training",
+      "The teacher running live alongside training (like a reward model in RLHF) plus a fast generation engine for the student"
+    ],
+    "answer_index": 3,
+    "explanation": "Off-policy teacher log-probs can be computed once and stored. On-policy prefixes come from the changing student, so the teacher must score them live, and the student needs a fast generation engine for rollouts."
+  },
+  {
+    "id": "17.4-092",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Check yourself",
+    "question": "When would you still choose plain sequence-level distillation?",
+    "options": [
+      "Only the teacher's text is available (closed API), the tokenizers differ, or as a cheap first stage before on-policy",
+      "When you need to fix exposure bias, since training on the teacher's text shows the student the states it will reach",
+      "When you want a dense per-token signal, since each sampled token carries the teacher's full distribution with it",
+      "When the teacher is weaker than the student, since sequence-level KD lets the student filter out the teacher's mistakes"
+    ],
+    "answer_index": 0,
+    "explanation": "Sequence-level KD needs only text and does not require a shared tokenizer, and it is a standard cheap first stage so the student's samples are worth grading later. DeepSeek's R1 distillation used it."
+  },
+  {
+    "id": "17.4-093",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Advanced extension: TRL's fused LM head (added 2026-10-11)",
+    "question": "What changed in TRL v1.15.0 regarding how distillation and other trainers compute token log-probs?",
+    "options": [
+      "They switched to storing the full logits in fp64 so the generalized JSD is computed exactly, which is now the default for distillation",
+      "Tokens are scored by a fused Triton LM head that tiles the projection and reduces straight to log-probs and entropy; on by default",
+      "They removed reverse KL from DistillationTrainer, since the fused kernel only supports teacher-weighted divergences",
+      "They now require the teacher to run on CPU in a separate process, so the student's GPU never holds the teacher's logits"
+    ],
+    "answer_index": 1,
+    "explanation": "In TRL v1.15.0 the SFT, DPO, KTO, GRPO, RLOO and Distillation trainers use a fused Triton LM head instead of chunking. It never materialises the logits tensor and is on by default (publicly documented). A separate Triton kernel for the distillation divergence is listed but its internals are not described."
+  },
+  {
+    "id": "17.4-094",
+    "chapter": "17.4",
+    "chapter_name": "Logit & on-policy distillation",
+    "module": "17",
+    "module_name": "Modern reasoning models",
+    "source": "lessons/module-17/lesson-04.md",
+    "section": "Advanced extension: TRL's fused LM head (added 2026-10-11)",
+    "question": "What mechanism does TRL's fused LM head use to avoid building the logits tensor?",
+    "options": [
+      "Top-k sparsification of the vocabulary, keeping only the 128 largest logits per position",
+      "Quantising the logits to int8 per tile, so the full tensor fits in a tenth of the memory",
+      "An online logsumexp over vocabulary tiles, as in FlashAttention's online softmax",
+      "Caching logits on disk in tiles and streaming them back for the backward pass"
+    ],
+    "answer_index": 2,
+    "explanation": "The fused head computes log-probs with an online logsumexp across vocabulary tiles, the same recurrence used in FlashAttention's online softmax. The divergences themselves are unchanged; only how logits are produced changes."
+  }
+]

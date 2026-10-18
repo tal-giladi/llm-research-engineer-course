@@ -1,0 +1,1010 @@
+[
+  {
+    "id": "03.3-001",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Without warmup and gradient clipping, what commonly happens to large-batch Adam training?",
+    "options": [
+      "It trains normally but converges slightly slower overall",
+      "It routinely diverges in the first few hundred steps",
+      "It overfits the first batch and then stops improving",
+      "It runs out of GPU memory as Adam's state fills up"
+    ],
+    "answer_index": 1,
+    "explanation": "Warmup and clipping are not optional polish: without them, large-batch Adam runs routinely diverge early, with the loss shooting to inf or nan in the first few hundred steps. That is why they appear on essentially every production LLM run."
+  },
+  {
+    "id": "03.3-002",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "1. Intuition: the learning rate should change over training",
+    "question": "Why should the learning rate start near zero at the very beginning of LLM training?",
+    "options": [
+      "Weights are random, v_hat rests on one or two noisy gradients and Adam's first steps are ~eta, so big eta diverges",
+      "Because the gradients are exactly zero at initialization, so any nonzero rate only adds noise to the weights",
+      "Because a small initial rate makes the model memorize the first batch, which anchors the rest of training",
+      "Because the loss is lowest at initialization and a large step would immediately move the model away from it"
+    ],
+    "answer_index": 0,
+    "explanation": "At the start, the per-parameter scale estimate is unreliable and Adam moves each parameter by roughly eta regardless of gradient size. A large eta here can throw parameters wildly off. Starting near zero and ramping up, warmup, avoids that."
+  },
+  {
+    "id": "03.3-003",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "1. Intuition: the learning rate should change over training",
+    "question": "Why is the learning rate decayed toward zero near the end of training?",
+    "options": [
+      "To speed up the final steps so the run finishes sooner on the same hardware",
+      "To make the minibatch gradient unbiased once the model nears convergence",
+      "So the optimizer settles into a minimum instead of bouncing around it",
+      "To reduce the memory used by Adam's optimizer state at the end of training"
+    ],
+    "answer_index": 2,
+    "explanation": "Late in training, large steps keep the parameters bouncing around the minimum. Shrinking eta lets them settle in. Decay does not change memory use or the gradient's bias."
+  },
+  {
+    "id": "03.3-004",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "1. Intuition: the learning rate should change over training",
+    "question": "What is the near-universal default learning-rate schedule for LLM pretraining?",
+    "options": [
+      "A constant learning rate held fixed for the whole run",
+      "Step decay by 10x at the end of every epoch",
+      "Exponential growth of the learning rate over training",
+      "Linear warmup followed by cosine decay to a floor"
+    ],
+    "answer_index": 3,
+    "explanation": "The standard schedule ramps eta linearly from near zero over the first W steps, then glides it down a half-cosine to a small floor over the rest of training. It covers the start (warmup), middle (peak) and end (decay) phases."
+  },
+  {
+    "id": "03.3-005",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "1. Intuition: the learning rate should change over training",
+    "question": "How does the training loop obtain the learning rate from a warmup + cosine schedule?",
+    "options": [
+      "The schedule is a pure function of the step; the loop writes eta(s) into the optimizer",
+      "The optimizer adjusts eta automatically from the recent loss values, lowering it when the loss rises",
+      "The learning rate is derived from the gradient norm each step, so large gradients get small rates",
+      "The schedule is applied once before training starts, baking every step's rate into the optimizer"
+    ],
+    "answer_index": 0,
+    "explanation": "The schedule depends only on the step number s, so each iteration the loop computes eta(s) and sets it in the optimizer. It does not react to the loss or gradients, which also makes the whole curve inspectable before training."
+  },
+  {
+    "id": "03.3-006",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "In the warmup phase (s < W) of the warmup + cosine schedule, what is the learning rate eta(s)?",
+    "options": [
+      "eta_max * s / T",
+      "eta_max * (s + 1) / W",
+      "eta_min + eta_max * s / W",
+      "eta_max * W / (s + 1)"
+    ],
+    "answer_index": 1,
+    "explanation": "Warmup is a straight line eta_max*(s+1)/W, rising from eta_max/W at step 0 to eta_max. Using s+1 rather than s makes the first step's rate nonzero and places the peak exactly at s = W."
+  },
+  {
+    "id": "03.3-007",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "Why does the warmup formula use (s + 1)/W rather than s/W?",
+    "options": [
+      "To make the schedule decrease slightly during warmup before it rises",
+      "To make the warmup phase take W + 1 steps instead of W steps",
+      "So the first step's rate is nonzero and the peak is exactly at s = W",
+      "To make the learning rate exceed eta_max slightly at the end of warmup"
+    ],
+    "answer_index": 2,
+    "explanation": "With s/W, step 0 would get a learning rate of exactly zero, wasting the step. Using s+1 gives eta_max/W at step 0, and the linear ramp meets the cosine branch's value eta_max at s = W."
+  },
+  {
+    "id": "03.3-008",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "In the cosine-decay phase of the schedule, what is the progress variable p?",
+    "options": [
+      "p = s / T, the fraction of total training completed so far",
+      "p = W / T, a constant equal to the warmup fraction of the run",
+      "p = (T - s) / W, the remaining steps measured in warmup lengths",
+      "p = (s - W) / (T - W), from 0 to 1 over the decay phase"
+    ],
+    "answer_index": 3,
+    "explanation": "p measures progress through the decay phase only: it is 0 at s = W and 1 at s = T. The cosine factor is computed from p, so the decay spans exactly the steps after warmup."
+  },
+  {
+    "id": "03.3-009",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "What is the cosine-decay formula for eta(s) with progress p?",
+    "options": [
+      "eta_min + 0.5*(1 + cos(pi*p))*(eta_max - eta_min)",
+      "eta_max * cos(pi*p), clipped below at eta_min",
+      "eta_min + cos(p)*(eta_max - eta_min), unscaled",
+      "eta_max - 0.5*(1 - cos(pi*p))*eta_min"
+    ],
+    "answer_index": 0,
+    "explanation": "The factor 0.5*(1 + cos(pi*p)) runs from 1 at p = 0 to 0 at p = 1, scaling the gap between eta_max and eta_min. So the rate glides from eta_max to eta_min. eta_max*cos(pi*p) would turn negative."
+  },
+  {
+    "id": "03.3-010",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "Why does the factor 0.5*(1 + cos(pi*p)) go from 1 to 0 as p goes from 0 to 1?",
+    "options": [
+      "Because cos(pi*p) grows linearly in p, so the factor shrinks at a constant rate",
+      "Because cos(0) = 1 gives 1 at p = 0 and cos(pi) = -1 gives 0 at p = 1",
+      "Because cos(pi*p) stays between 0 and 1, so the factor is already normalized",
+      "Because the factor is normalized by the total step count T at every step"
+    ],
+    "answer_index": 1,
+    "explanation": "At p = 0, 0.5*(1 + 1) = 1; at p = 1, 0.5*(1 + (-1)) = 0. In between it follows a half-cosine. cos(pi*p) ranges from 1 to -1, not 0 to 1, which is why the 1 + and 0.5 are needed."
+  },
+  {
+    "id": "03.3-011",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "What is the shape of the cosine-decay curve?",
+    "options": [
+      "Fast decay at the start, then flat",
+      "A straight line from eta_max to eta_min",
+      "Fast decay in the middle, gentle near both ends",
+      "Gentle in the middle and fast near both ends"
+    ],
+    "answer_index": 2,
+    "explanation": "A half-cosine is flat at both ends (slope zero at p = 0 and p = 1) and steepest at p = 0.5. So the learning rate leaves the peak gently, falls fastest mid-run, and eases into the floor."
+  },
+  {
+    "id": "03.3-012",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.1 The exact formula",
+    "question": "What does the warmup + cosine schedule do if the training loop runs past the planned total T steps?",
+    "options": [
+      "It restarts warmup from zero and begins a second cycle",
+      "It continues the cosine past p = 1, so the rate rises again",
+      "It returns eta_max again, as if a new run had started",
+      "It holds the learning rate at the floor eta_min"
+    ],
+    "answer_index": 3,
+    "explanation": "Past T the schedule clamps to eta_min. It does not restart, reuse the peak, or let the cosine continue (which would rise back up toward eta_max)."
+  },
+  {
+    "id": "03.3-013",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.2 Worked table",
+    "question": "With W = 100, T = 1000, eta_max = 6e-4 and eta_min = 6e-5, at which step is the midpoint of the cosine-decay phase, and what is the cosine factor there?",
+    "options": [
+      "s = 550, where p = 0.5 and the factor is exactly 0.5",
+      "s = 500, halfway through all T steps, where the factor is 0",
+      "s = 550, where p = 0.5 and the factor is still 1",
+      "s = 1000, where p = 1 and the factor has fallen to 0.5"
+    ],
+    "answer_index": 0,
+    "explanation": "The decay phase runs from W = 100 to T = 1000, so its midpoint is (W + T)/2 = 550, where p = 0.5. cos(pi/2) = 0, making the factor 0.5*(1 + 0) = 0.5, so eta is halfway between eta_min and eta_max: 3.3e-4."
+  },
+  {
+    "id": "03.3-014",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.2 Worked table",
+    "question": "What is a common choice for the floor eta_min relative to the peak eta_max?",
+    "options": [
+      "Exactly zero, with no floor",
+      "One tenth of the peak",
+      "Half the peak value",
+      "Equal to the peak value"
+    ],
+    "answer_index": 1,
+    "explanation": "A floor of eta_max/10 is common; for example eta_max = 6e-4 with eta_min = 6e-5. GPT-3 also decays to 10% of the peak. A floor of zero is possible but the 10% choice is the documented common shape."
+  },
+  {
+    "id": "03.3-015",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.2 Worked table",
+    "question": "What is a typical GPT peak learning rate used in the warmup + cosine schedule example?",
+    "options": [
+      "6e-2",
+      "6e-8",
+      "6e-4",
+      "6.0"
+    ],
+    "answer_index": 2,
+    "explanation": "6e-4 is given as a typical GPT peak learning rate. With 100 warmup steps it starts at 6e-6 at step 0 and decays to a floor of 6e-5."
+  },
+  {
+    "id": "03.3-016",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.3 The from-scratch schedule",
+    "question": "In the from-scratch cosine_warmup_lr function, how are the three phases checked?",
+    "options": [
+      "Cosine first, then warmup, then the floor, so decay takes priority over warmup",
+      "Only warmup and cosine are checked; past max_steps the cosine keeps going",
+      "Floor first, then cosine, then warmup, so late steps short-circuit everything",
+      "Warmup if step < W; else min_lr if step >= max_steps; else the cosine"
+    ],
+    "answer_index": 3,
+    "explanation": "The function returns max_lr*(step+1)/warmup_steps during warmup, clamps to min_lr at or past max_steps, and otherwise computes progress and the cosine coefficient. At step == max_steps both the clamp and the cosine give min_lr, so the boundaries agree."
+  },
+  {
+    "id": "03.3-017",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.3 The from-scratch schedule",
+    "question": "How does the training loop apply a schedule's learning rate to a torch.optim optimizer?",
+    "options": [
+      "By setting g['lr'] for each g in opt.param_groups before the step",
+      "By passing the learning rate as an argument to loss.backward()",
+      "By re-creating the optimizer with the new rate on every step",
+      "By scaling every gradient by the learning rate before step()"
+    ],
+    "answer_index": 0,
+    "explanation": "torch.optim optimizers store their learning rate in each param group, so the loop writes g['lr'] = cosine_warmup_lr(step, ...) for every group. The from-scratch AdamW exposes self.lr, so there it is just opt.lr = .... Re-creating the optimizer would discard its moment state."
+  },
+  {
+    "id": "03.3-018",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.3 The from-scratch schedule",
+    "question": "What does the test test_cosine_warmup_endpoints_and_shape check about the schedule?",
+    "options": [
+      "That the learning rate stays constant once warmup has finished",
+      "That the peak is at s = W, the floor at s = T, and warmup rises monotonically",
+      "That the learning rate never drops below eta_max during the decay phase",
+      "That the cosine phase decays linearly between the peak and the floor"
+    ],
+    "answer_index": 1,
+    "explanation": "The test verifies the schedule's key landmarks and shape: eta_max exactly at the end of warmup, eta_min at the horizon T, and a monotonic increase during warmup."
+  },
+  {
+    "id": "03.3-019",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.3 The from-scratch schedule",
+    "question": "How does PyTorch provide warmup + cosine learning-rate schedules?",
+    "options": [
+      "Inside torch.optim.AdamW as a built-in warmup_steps argument read on every step",
+      "Via torch.nn.utils.clip_grad_norm_, which rescales the step size alongside the gradient",
+      "Via lr_scheduler.LambdaLR (or CosineAnnealingLR plus warmup), stepped each iteration",
+      "Through the DataLoader's shuffle option, which reorders batches to mimic a schedule"
+    ],
+    "answer_index": 2,
+    "explanation": "A LambdaLR scheduler takes a function of the step; calling scheduler.step() each iteration overwrites the optimizer's lr, exactly as a manual loop does. AdamW itself has no schedule built in."
+  },
+  {
+    "id": "03.3-020",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "2.3 The from-scratch schedule",
+    "question": "What is an advantage of writing the learning-rate schedule as a plain function of the step?",
+    "options": [
+      "It makes the schedule adapt automatically to the observed loss curve",
+      "It removes the need for warmup, since the function starts at the peak",
+      "It reduces optimizer memory because no scheduler object is stored",
+      "The whole schedule is inspectable: print the curve before training"
+    ],
+    "answer_index": 3,
+    "explanation": "Because eta depends only on step, you can evaluate it for every step in advance and inspect the curve before spending any compute. It does not adapt to the loss or change memory use."
+  },
+  {
+    "id": "03.3-021",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "Which two facts about Adam make warmup necessary at the start of training?",
+    "options": [
+      "Early steps are ~eta in size whatever the gradient, and v_hat is unreliable early",
+      "Adam's early gradients are biased, and its learning rate grows automatically each step",
+      "Adam stores no optimizer state early on, and its epsilon is too large for small gradients",
+      "Adam ignores the learning rate early, and its momentum buffer is exactly zero for W steps"
+    ],
+    "answer_index": 0,
+    "explanation": "At t = 1, m_hat/sqrt(v_hat) = sign(g), so every parameter moves by about eta. And v_hat, an EMA with beta2 = 0.999, needs hundreds of steps to become trustworthy. Large steps with an unreliable scale from a random start is a recipe for divergence."
+  },
+  {
+    "id": "03.3-022",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "Why does Adam's second-moment estimate v_hat take hundreds of steps to become reliable?",
+    "options": [
+      "Because it is updated only every 100 steps, so it needs many updates to settle",
+      "Because it is an EMA with beta2 = 0.999, so early it rests on one or two gradients",
+      "Because it is initialized to a large value that takes hundreds of steps to decay",
+      "Because it is computed from the parameters, which change slowly at the start"
+    ],
+    "answer_index": 1,
+    "explanation": "With beta2 = 0.999, the EMA has a long memory and needs many steps to average over a representative set of gradients. In the first handful of steps it reflects just one or two noisy minibatches, so the per-parameter scaling is essentially a guess."
+  },
+  {
+    "id": "03.3-023",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "How does warmup prevent divergence at the start of Adam training?",
+    "options": [
+      "It disables Adam's second moment during warmup so steps scale with the raw gradient",
+      "It clips the gradient to zero for the first W steps while v_hat accumulates",
+      "eta starts near zero and grows linearly, so steps stay tiny until v_hat warms up",
+      "It increases the batch size gradually so early gradients are less noisy"
+    ],
+    "answer_index": 2,
+    "explanation": "By the time eta reaches its peak at step W, v_hat has accumulated enough history to be reliable and the parameters have moved off the pathological initial point. Adam itself runs unchanged throughout."
+  },
+  {
+    "id": "03.3-024",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "How does the importance of warmup depend on batch size and model size?",
+    "options": [
+      "It matters mainly for small models, which have the noisiest gradients",
+      "It matters mainly for small batches, where each gradient is noisiest",
+      "It is independent of both, depending only on the optimizer's betas",
+      "It matters more the larger the batch size and the model"
+    ],
+    "answer_index": 3,
+    "explanation": "The instability that warmup defuses grows with batch size and model size, which is why every large run uses warmup. It is not a small-model or small-batch concern."
+  },
+  {
+    "id": "03.3-025",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "In production LLM runs, which aspects of warmup are tuned?",
+    "options": [
+      "Only its length and the peak eta_max; warmup is never turned off",
+      "Whether to use it at all, decided per run from a short pilot sweep",
+      "Only the floor eta_min, since warmup length is fixed by the token budget",
+      "Only the batch size used during warmup, ramped up to the full batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Warmup is treated as mandatory; what practitioners tune is how long it lasts and how high the peak learning rate goes. Turning warmup off on a large-batch Adam run is a bug, not an experiment."
+  },
+  {
+    "id": "03.3-026",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "What is the typical symptom of a missing or too-short warmup on a large-batch AdamW run?",
+    "options": [
+      "The loss stays flat for the whole run because the weights barely move",
+      "The loss drops briefly, then shoots to inf or nan within a few hundred steps",
+      "The loss decreases smoothly for the whole run but plateaus higher than expected",
+      "The loss oscillates gently around a fixed value for the entire run"
+    ],
+    "answer_index": 1,
+    "explanation": "Without adequate warmup, the run looks fine for a moment, then the large early steps with an unreliable scale push it into divergence and the loss blows up to inf or nan, typically in the first few hundred steps."
+  },
+  {
+    "id": "03.3-027",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "If an AdamW run's loss decreases briefly then shoots to inf or nan early on, which two fixes should be tried first?",
+    "options": [
+      "Lower weight decay and remove bias correction",
+      "Increase the learning rate and the batch size",
+      "Add or lengthen warmup, and turn on gradient clipping",
+      "Switch off shuffling and use full-batch gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "Early blow-ups are the classic signature of missing or too-short warmup, and gradient clipping caps any catastrophic individual step. Raising the learning rate would make it worse."
+  },
+  {
+    "id": "03.3-028",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "3. Why warmup?",
+    "question": "Which paper documents linear warmup plus cosine decay to 10% of the peak, with warmup over roughly the first 375M tokens?",
+    "options": [
+      "The original Transformer paper (Vaswani et al. 2017)",
+      "The Adam paper (Kingma & Ba 2015)",
+      "The AdamW paper (Loshchilov & Hutter 2019)",
+      "The GPT-3 paper (Brown et al. 2020)"
+    ],
+    "answer_index": 3,
+    "explanation": "GPT-3 warms the learning rate up over about the first 375M tokens and then cosine-decays it to 10% of the peak, matching the eta_min = eta_max/10 shape. Nearly every open LLM since, including LLaMA and OLMo, uses this schedule."
+  },
+  {
+    "id": "03.3-029",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "What problem does gradient clipping address, even when warmup is in place?",
+    "options": [
+      "An occasional bad minibatch whose huge gradient undoes thousands of good steps",
+      "The bias of the minibatch gradient estimate relative to the full-batch gradient",
+      "The memory cost of Adam's optimizer state, which grows with every large gradient",
+      "Gradients that stay too small to make progress once the learning rate has decayed"
+    ],
+    "answer_index": 0,
+    "explanation": "Batches with a few pathological examples or rare token combinations can produce huge gradients. One such step can wreck the model, causing a loss spike. Clipping caps the gradient size so no single step is catastrophic."
+  },
+  {
+    "id": "03.3-030",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "What is the gradient-clipping-by-global-norm rule with threshold c?",
+    "options": [
+      "g <- g - c for every component, shifting the whole gradient down by c",
+      "g <- g * min(1, c/||g||), with ||g|| the L2 norm over every component",
+      "g <- clamp(g, -c, c) for every component, independently of the others",
+      "g <- g / ||g||, normalizing the gradient to unit length on every step"
+    ],
+    "answer_index": 1,
+    "explanation": "The factor min(1, c/||g||) is 1 when the norm is within the threshold and c/||g|| otherwise, so the whole gradient is scaled down to length c only when it is too long. Clamping each component would change the direction; always normalizing would also enlarge small gradients."
+  },
+  {
+    "id": "03.3-031",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "In global-norm gradient clipping, what is ||g|| computed over?",
+    "options": [
+      "Each parameter tensor separately, clipping each one on its own",
+      "Only the last layer's gradient, since it is the largest in practice",
+      "Every gradient component in the model, as one long vector",
+      "The current minibatch's per-example loss values, not the gradients"
+    ],
+    "answer_index": 2,
+    "explanation": "The global norm treats all the model's gradients as one flattened vector: ||g|| = sqrt(sum_i g_i^2) over every component. One shared scale is then applied everywhere."
+  },
+  {
+    "id": "03.3-032",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "What is the near-universal default clip threshold c for global-norm gradient clipping?",
+    "options": [
+      "0.001",
+      "100",
+      "10",
+      "1.0"
+    ],
+    "answer_index": 3,
+    "explanation": "c = 1.0 is the near-universal default. If the gradient's global norm exceeds 1.0, it is scaled down to exactly 1.0; otherwise it is left alone."
+  },
+  {
+    "id": "03.3-033",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "When global-norm clipping triggers, what happens to the gradient's direction?",
+    "options": [
+      "It is preserved; every component is scaled by the same factor",
+      "It is rotated toward the steepest component to damp the spike",
+      "It is reversed so the bad step is undone on the next update",
+      "It is randomized slightly to help training escape the bad batch"
+    ],
+    "answer_index": 0,
+    "explanation": "Multiplying every component by the same factor c/||g|| shortens the vector without changing its direction. The update still points the same way downhill, just with a capped size."
+  },
+  {
+    "id": "03.3-034",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "Why is gradient clipping done with one global scale rather than per-tensor clipping?",
+    "options": [
+      "Per-tensor clipping requires twice the memory, since each tensor's norm needs its own buffer",
+      "Scaling each tensor separately would bend the gradient direction",
+      "Per-tensor clipping cannot run on GPUs because the norms must be reduced on the CPU",
+      "Global clipping is applied to the parameters, while per-tensor clipping is applied to gradients"
+    ],
+    "answer_index": 1,
+    "explanation": "If different tensors were scaled by different factors, the combined gradient vector would point in a new direction, corrupting the step rather than just capping it. One shared factor preserves the true direction."
+  },
+  {
+    "id": "03.3-035",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.1 The problem and the fix",
+    "question": "In global-norm clipping, what happens if ||g|| is at or below the threshold c?",
+    "options": [
+      "The gradient is scaled up so that its norm becomes exactly c",
+      "The gradient is set to zero so that the step is skipped",
+      "The factor min(1, c/||g||) is 1, so nothing changes",
+      "The gradient is divided by c, shrinking it slightly"
+    ],
+    "answer_index": 2,
+    "explanation": "When ||g|| <= c, c/||g|| >= 1, so min(1, c/||g||) = 1 and the gradient is untouched. Clipping only ever shrinks gradients; it never enlarges small ones."
+  },
+  {
+    "id": "03.3-036",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.2 Worked example",
+    "question": "A model's entire flattened gradient is [3, 4] and the clip threshold is c = 1.0. What is the clipped gradient?",
+    "options": [
+      "[1.0, 1.0]",
+      "[3.0, 1.0]",
+      "[0.75, 1.0]",
+      "[0.6, 0.8]"
+    ],
+    "answer_index": 3,
+    "explanation": "The norm is sqrt(9 + 16) = 5 > 1, so every component is scaled by 1/5 = 0.2, giving [0.6, 0.8] with norm exactly 1. The 3:4 ratio, and thus the direction, is preserved. Clamping each component to 1 would give [1, 1], a different direction."
+  },
+  {
+    "id": "03.3-037",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.2 Worked example",
+    "question": "With clip threshold c = 1.0, what happens to a gradient [0.1, 0.2]?",
+    "options": [
+      "It is left untouched, since its norm (about 0.22) is below 1",
+      "It is scaled up to norm 1 so its length matches the threshold",
+      "It is set to zero, since small gradients are treated as noise",
+      "It is scaled by 0.2, the ratio of its largest component to c"
+    ],
+    "answer_index": 0,
+    "explanation": "Its norm sqrt(0.01 + 0.04) is about 0.22 < 1, so the clip factor is 1 and the gradient is unchanged. Clipping caps large gradients only."
+  },
+  {
+    "id": "03.3-038",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.3 The from-scratch implementation",
+    "question": "How does the from-scratch clip_grad_norm_ compute the global L2 norm?",
+    "options": [
+      "As the sum of absolute values of all gradient components across the model",
+      "As the L2 norm of the per-tensor L2 norms, equal to the norm over all components",
+      "As the maximum of the per-tensor L2 norms, so the largest tensor sets the scale",
+      "As the average of the per-tensor norms, weighted by each tensor's element count"
+    ],
+    "answer_index": 1,
+    "explanation": "It stacks the per-tensor norms ||g_j|| and takes their L2 norm: sqrt(sum_j ||g_j||^2) = sqrt(sum_j sum_i g_ji^2), the norm over every component. The maximum or average of per-tensor norms would not equal the global norm."
+  },
+  {
+    "id": "03.3-039",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.3 The from-scratch implementation",
+    "question": "What value does the from-scratch clip_grad_norm_ return, and why?",
+    "options": [
+      "The post-clip norm, so the loop can verify it equals the threshold",
+      "The clip coefficient, which the loop uses to adjust the learning rate",
+      "The pre-clip norm, which the loop logs to watch for spikes",
+      "Nothing; it only modifies the gradients in place and returns None"
+    ],
+    "answer_index": 2,
+    "explanation": "It returns the norm before clipping. Logging it reveals sudden jumps in gradient norm, an early warning that training is becoming unstable. The post-clip norm would hide the spikes, since it is capped at c."
+  },
+  {
+    "id": "03.3-040",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.3 The from-scratch implementation",
+    "question": "In the from-scratch clip_grad_norm_, why is clip_coef computed as max_norm / (total_norm + 1e-6)?",
+    "options": [
+      "The 1e-6 makes the coefficient slightly larger than 1 so small gradients are boosted",
+      "The 1e-6 sets the minimum gradient norm below which clipping is skipped entirely",
+      "The 1e-6 is the default clip threshold used when max_norm is not given",
+      "It guards against division by zero and matches PyTorch's own 1e-6"
+    ],
+    "answer_index": 3,
+    "explanation": "If all gradients were zero, total_norm would be zero and the division would fail. Adding 1e-6 guards against that, and using the same epsilon as torch.nn.utils.clip_grad_norm_ lets the test match PyTorch to floating-point precision."
+  },
+  {
+    "id": "03.3-041",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.3 The from-scratch implementation",
+    "question": "In the from-scratch clip_grad_norm_, when are the gradients actually modified?",
+    "options": [
+      "Only when clip_coef < 1.0; each gradient is then scaled in place",
+      "Every step, by multiplying each gradient by clip_coef unconditionally",
+      "Only when clip_coef > 1.0, which means the norm is above the threshold",
+      "Only on the first step, when the gradient norm is at its largest"
+    ],
+    "answer_index": 0,
+    "explanation": "The check if clip_coef < 1.0 ensures gradients are only ever shrunk. When the norm is below the threshold, clip_coef > 1 and the gradients are left alone; scaling them up would distort small updates."
+  },
+  {
+    "id": "03.3-042",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "4.3 The from-scratch implementation",
+    "question": "What is PyTorch's built-in equivalent of the from-scratch global-norm gradient clipping?",
+    "options": [
+      "torch.optim.lr_scheduler.LambdaLR",
+      "torch.nn.utils.clip_grad_norm_",
+      "torch.clamp applied to each parameter",
+      "torch.optim.AdamW's weight_decay argument"
+    ],
+    "answer_index": 1,
+    "explanation": "torch.nn.utils.clip_grad_norm_ computes the global norm, rescales gradients in place when it exceeds max_norm, and returns the norm. The test test_clip_grad_norm_matches_torch checks the from-scratch version returns the same norm and gradients."
+  },
+  {
+    "id": "03.3-043",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "5. Where these sit in the training loop",
+    "question": "In a pretraining loop using clipping, a schedule and AdamW, what is the order of operations within one step?",
+    "options": [
+      "clip_grad_norm_, backward(), zero_grad(), set this step's lr, step()",
+      "step(), backward(), clip_grad_norm_, set this step's lr, zero_grad()",
+      "zero_grad(), forward, backward(), clip_grad_norm_, set lr, step()",
+      "set this step's lr, step(), forward, backward(), clip_grad_norm_"
+    ],
+    "answer_index": 2,
+    "explanation": "Gradients are cleared, the forward pass computes the loss, backward() fills .grad, clipping caps the gradient, the schedule sets the learning rate, and step() applies the AdamW update. Clipping must come after backward and before step."
+  },
+  {
+    "id": "03.3-044",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "5. Where these sit in the training loop",
+    "question": "Between which two calls do gradient clipping and setting the scheduled learning rate sit in the training loop?",
+    "options": [
+      "Between zero_grad() and the forward pass",
+      "Between the forward pass and backward()",
+      "After step(), before the next zero_grad()",
+      "Between loss.backward() and optimizer.step()"
+    ],
+    "answer_index": 3,
+    "explanation": "Clipping needs the gradients that backward() produces and must change them before step() uses them. The learning rate for this step must also be set before step(). Both slot between backward() and step()."
+  },
+  {
+    "id": "03.3-045",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "6. Tensor shapes, dtype, cost",
+    "question": "What does computing the warmup + cosine learning-rate schedule cost?",
+    "options": [
+      "Plain Python float arithmetic on the step: no tensors, negligible cost",
+      "An O(P) pass over all parameters to rescale their stored learning rates",
+      "A full forward pass to evaluate the loss before the rate is chosen",
+      "One GPU kernel launch per parameter tensor to write the new rate"
+    ],
+    "answer_index": 0,
+    "explanation": "The schedule is a simple scalar formula of the step number. It touches no tensors and runs once per step, so its cost is negligible."
+  },
+  {
+    "id": "03.3-046",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "6. Tensor shapes, dtype, cost",
+    "question": "What does global-norm gradient clipping cost per step for a model with P parameters?",
+    "options": [
+      "O(P^2) work for the pairwise norms, plus an extra P-sized buffer for the clipped copy",
+      "O(P) for one scalar norm, another O(P) scale only if it triggers; ~no extra memory",
+      "No work at all, since PyTorch computes the global norm for free during backward()",
+      "O(1) work regardless of P, since the norm is read from a cached running statistic"
+    ],
+    "answer_index": 1,
+    "explanation": "Clipping reduces over every gradient component in one streaming pass to get the norm, and if it triggers, scales each gradient in place in another pass. Only a tiny vector of per-tensor norms and one scalar are stored, so the cost is trivial next to the backward pass."
+  },
+  {
+    "id": "03.3-047",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "6. Tensor shapes, dtype, cost",
+    "question": "During global-norm clipping, where are the per-tensor norms stacked, and do any tensor shapes change?",
+    "options": [
+      "On the CPU, and every gradient is flattened into a single vector first",
+      "On the GPU, and gradients are reshaped into one long contiguous vector",
+      "Into a tiny vector on the gradients' device; no gradient changes shape",
+      "In a separate float64 buffer the size of the parameters, kept on the CPU"
+    ],
+    "answer_index": 2,
+    "explanation": "The per-tensor norms form a small vector on the same device as the gradients, and its norm is the global norm. Gradients are never reshaped or flattened; the 'one long vector' view is conceptual."
+  },
+  {
+    "id": "03.3-048",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Exercise",
+    "question": "With eta_max = 3e-4, roughly what warmup length W gives a step-0 learning rate of about 1e-6 under eta(0) = eta_max/W?",
+    "options": [
+      "3 steps",
+      "30 steps",
+      "3000 steps",
+      "300 steps"
+    ],
+    "answer_index": 3,
+    "explanation": "Solving eta_max/W = 1e-6 gives W = 3e-4/1e-6 = 300 steps. Real runs often warm up over hundreds to a couple thousand steps so that v_hat has stabilized and the early steps are tiny."
+  },
+  {
+    "id": "03.3-049",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "A run with correct warmup, cosine decay and AdamW shows the loss suddenly spiking upward every few thousand steps and then slowly recovering. Which technique most directly addresses this?",
+    "options": [
+      "Gradient clipping by global norm",
+      "A longer linear warmup phase",
+      "Removing weight decay entirely",
+      "Switching from AdamW to plain SGD"
+    ],
+    "answer_index": 0,
+    "explanation": "Intermittent spikes after warmup come from occasional outlier minibatches producing huge gradients. Clipping the global norm to c = 1.0 caps exactly those rare updates while leaving normal steps untouched. Warmup only affects the start of training."
+  },
+  {
+    "id": "03.3-050",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "Why is lowering the learning rate a worse fix than gradient clipping for intermittent loss spikes caused by outlier minibatches?",
+    "options": [
+      "Because lowering the learning rate has no effect on the size of updates from large gradients",
+      "It slows every step, including the good ones, while clipping acts only when ||g|| > c",
+      "Because a lower learning rate makes each spike larger by keeping the model near the bad region",
+      "Because the learning rate is fixed by the schedule and cannot be changed during a run"
+    ],
+    "answer_index": 1,
+    "explanation": "A lower eta shrinks all steps to defend against the rare bad ones, hurting convergence everywhere. Clipping is targeted: it only rescales the gradient on steps where the norm exceeds the threshold."
+  },
+  {
+    "id": "03.3-051",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Debugging exercise",
+    "question": "How can you confirm that intermittent loss spikes are caused by outlier minibatches with unusually large gradients?",
+    "options": [
+      "By checking that the learning rate is at its floor whenever a spike appears",
+      "By measuring the optimizer's memory use and seeing it jump on the bad steps",
+      "By logging the pre-clip norm from clip_grad_norm_ and seeing it spike",
+      "By inspecting the post-clip norm, which rises well above c on the bad steps"
+    ],
+    "answer_index": 2,
+    "explanation": "clip_grad_norm_ returns the norm before clipping. If it jumps on exactly the steps where the loss spikes, outlier gradients are the cause. The post-clip norm is capped at c, so it would hide the size of the spike."
+  },
+  {
+    "id": "03.3-052",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Check yourself",
+    "question": "At the end of warmup (step s = W), what is the learning rate, and which branch of the schedule produces it?",
+    "options": [
+      "eta_max * (W + 1)/W, slightly above the peak, from the warmup branch",
+      "eta_min, from the floor branch, because warmup hands over to the floor",
+      "eta_max/2, from the cosine branch, at the midpoint of the decay",
+      "Exactly eta_max, from the cosine branch with p = 0"
+    ],
+    "answer_index": 3,
+    "explanation": "At s = W the condition s < W is false, so the cosine branch runs with p = 0. The factor 0.5*(1 + cos 0) = 1 gives eta_min + (eta_max - eta_min) = eta_max. The last warmup step, s = W - 1, also reaches eta_max, so the branches meet continuously."
+  },
+  {
+    "id": "03.3-053",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does warmup specifically help Adam more than plain SGD?",
+    "options": [
+      "Adam's early v_hat is unreliable and its first steps are ~eta; SGD has no such estimate",
+      "Because plain SGD uses a fixed learning rate that cannot be scheduled by the training loop",
+      "Because Adam has no learning rate during its first steps, so warmup has to supply one",
+      "Because plain SGD diverges whenever warmup is used, so it cannot benefit from it at all"
+    ],
+    "answer_index": 0,
+    "explanation": "Adam's per-parameter scaling relies on v_hat, which is built from one or two noisy gradients early on, and its first steps have fixed size eta. Warmup keeps eta tiny until v_hat matures. Plain SGD steps proportionally to the gradient and has no such estimate, so it is far less sensitive, though warmup can still help it."
+  },
+  {
+    "id": "03.3-054",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Check yourself",
+    "question": "A gradient has global norm 10 and the clip threshold is c = 2. By what factor is each component scaled, and what is the resulting norm?",
+    "options": [
+      "Factor 0.5, resulting norm 5",
+      "Factor 0.2, resulting norm 2",
+      "Factor 2, resulting norm 20",
+      "Factor 0.8, resulting norm 8"
+    ],
+    "answer_index": 1,
+    "explanation": "The factor is c/||g|| = 2/10 = 0.2. Every component is multiplied by 0.2, so the norm becomes 10*0.2 = 2, exactly the threshold, with direction unchanged."
+  },
+  {
+    "id": "03.3-055",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why must gradient clipping run after loss.backward() but before optimizer.step()?",
+    "options": [
+      "Because clipping modifies the loss value that backward() differentiates",
+      "Because step() recomputes the gradients and would overwrite the clipped ones",
+      "It needs the gradients in .grad, and must cap them before they update params",
+      "Because clipping must be applied to the parameters after they are updated"
+    ],
+    "answer_index": 2,
+    "explanation": "backward() populates .grad, so clipping cannot happen before it. step() consumes .grad to update the parameters, so clipping after it would be too late. The order is backward(), clip_grad_norm_(), set lr, step()."
+  },
+  {
+    "id": "03.3-056",
+    "chapter": "03.3",
+    "chapter_name": "Warmup, cosine decay, gradient clipping",
+    "module": "3",
+    "module_name": "Optimization",
+    "source": "lessons/module-03/lesson-03.md",
+    "section": "Next",
+    "question": "Which topic follows the optimization module, after warmup, cosine decay and gradient clipping?",
+    "options": [
+      "Distributed training with FSDP and sharded optimizer state",
+      "Reinforcement learning from human feedback with PPO",
+      "Scaling laws for compute-optimal model and data size",
+      "Tokenization: bytes, Unicode and BPE from scratch"
+    ],
+    "answer_index": 3,
+    "explanation": "With the optimization toolkit complete (update rule and momentum, AdamW, schedule and clipping), the next module turns to how text becomes numbers the model can consume: tokenization, starting with characters, bytes and Unicode, then BPE."
+  }
+]

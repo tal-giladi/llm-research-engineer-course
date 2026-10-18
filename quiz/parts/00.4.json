@@ -1,0 +1,686 @@
+[
+  {
+    "id": "00.4-001",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "As models scale from a single line to a Transformer, which part of the training recipe stays identical?",
+    "options": [
+      "The optimizer, which stays plain SGD with the same learning rate",
+      "The loss function, which is always mean squared error on the outputs",
+      "The skeleton: predict, measure loss, zero grads, backward, step",
+      "The data format, which is always a flat list of real-valued numbers"
+    ],
+    "answer_index": 2,
+    "explanation": "The model grows, the data becomes token sequences, the optimizer becomes AdamW, and the loss becomes cross-entropy — but the five-step skeleton never changes. If you can read and write that loop, you can read every training script in the course."
+  },
+  {
+    "id": "00.4-002",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
+    "question": "What role does nn.Module play in PyTorch?",
+    "options": [
+      "It holds parameters, runs the forward computation, and hands all parameters to an optimizer",
+      "It is a data loader that batches and shuffles training examples before each forward pass",
+      "It is an optimizer that reads each weight's gradient and applies the update rule in place",
+      "It is a loss function that compares predictions to targets and returns a scalar for backward"
+    ],
+    "answer_index": 0,
+    "explanation": "nn.Module is PyTorch's model container: it holds parameters, defines the forward computation, and can return every parameter at once so an optimizer can update them together. Tracking millions of parameters as loose variables would be unmanageable. Data loading, optimisation and losses are separate objects."
+  },
+  {
+    "id": "00.4-003",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
+    "question": "What is the correct order of the five steps in the canonical training loop?",
+    "options": [
+      "zero_grad, step, predict, backward, loss",
+      "predict, backward, loss, step, zero_grad",
+      "loss, predict, step, zero_grad, backward",
+      "predict, loss, zero_grad, backward, step"
+    ],
+    "answer_index": 3,
+    "explanation": "Run the model forward (predict), measure how wrong it is (loss), clear old gradients (zero_grad), let autograd fill .grad (backward), then let the optimizer nudge parameters (step). Backward needs a loss, and step needs the gradients backward just wrote."
+  },
+  {
+    "id": "00.4-004",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
+    "question": "Why is zero_grad one of the five steps in every training iteration?",
+    "options": [
+      "Because it moves the parameters one step downhill",
+      "Because gradients accumulate across backward calls",
+      "Because it computes the loss from the predictions",
+      "Because it resets the learning rate schedule every step"
+    ],
+    "answer_index": 1,
+    "explanation": "backward adds into .grad rather than overwriting, so last step's gradients must be cleared each iteration. zero_grad does not move parameters (step does), compute the loss, or touch the learning rate."
+  },
+  {
+    "id": "00.4-005",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "What operation does nn.Linear(in_features, out_features) represent?",
+    "options": [
+      "y = x W^T + b, a learnable affine map",
+      "y = W x^2 + b, a learnable quadratic map",
+      "y = max(0, x W^T), a ReLU layer",
+      "y = softmax(x W^T), a classifier"
+    ],
+    "answer_index": 0,
+    "explanation": "nn.Linear computes y = x W^T + b with a learnable weight matrix W and bias b — the wx + b of a single neuron generalised to vectors and matrices. It has no nonlinearity built in."
+  },
+  {
+    "id": "00.4-006",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "What are the shapes of the weight and bias in nn.Linear(in_features, out_features)?",
+    "options": [
+      "Weight (in_features, out_features), bias (in_features,)",
+      "Weight (out_features, in_features), bias (out_features,)",
+      "Weight (out_features, in_features), bias (in_features,)",
+      "Weight (in_features, in_features), bias (out_features,)"
+    ],
+    "answer_index": 1,
+    "explanation": "W is stored as (out_features, in_features), which is why the forward pass uses W^T: x of shape (..., in) times W^T of shape (in, out) gives (..., out). The bias has one entry per output feature, shape (out_features,)."
+  },
+  {
+    "id": "00.4-007",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "What does it mean that nn.Linear's weight and bias are 'learnable'?",
+    "options": [
+      "They are re-initialised randomly at every forward pass so the model explores weight space",
+      "They are stored in float64 for accuracy, so gradient updates never lose precision",
+      "They are recomputed from the training data on each step by a closed-form least-squares fit",
+      "They have requires_grad=True, so autograd tracks them and the optimizer may update them"
+    ],
+    "answer_index": 3,
+    "explanation": "Learnable means the weight and bias are created with requires_grad=True: autograd computes gradients for them and the optimizer is allowed to change them. They are not re-randomised or recomputed from data each step."
+  },
+  {
+    "id": "00.4-008",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "For layer = nn.Linear(1, 1), what are layer.weight.shape and layer.bias.shape?",
+    "options": [
+      "torch.Size([1]) and torch.Size([1])",
+      "torch.Size([1, 1]) and torch.Size([1, 1])",
+      "torch.Size([1, 1]) and torch.Size([1])",
+      "torch.Size([]) and torch.Size([])"
+    ],
+    "answer_index": 2,
+    "explanation": "Weight is (out, in) = (1, 1) and bias is (out,) = (1,). That is exactly two numbers — one weight and one bias — which makes nn.Linear(1, 1) perfect for fitting a line."
+  },
+  {
+    "id": "00.4-009",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "How is nn.Linear used in a Transformer compared with the line-fitting model?",
+    "options": [
+      "A completely different layer class replaces it in Transformers, with its own fused attention math",
+      "The same nn.Linear becomes the QKV/output projections and MLP layers, only with larger sizes",
+      "It is only used for the final output layer that maps the hidden state to vocabulary logits",
+      "It is replaced by elementwise multiplications in Transformers, since matmuls are too costly"
+    ],
+    "answer_index": 1,
+    "explanation": "The very same nn.Linear becomes the QKV and output projections of attention and the two MLP layers, only with large in/out feature sizes. Nothing about the layer itself changes."
+  },
+  {
+    "id": "00.4-010",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "What is a PyTorch Parameter?",
+    "options": [
+      "A tensor with requires_grad=True that an nn.Module registers as part of the model",
+      "A hyperparameter such as the learning rate, stored on the module for the optimizer",
+      "A configuration entry for a model, such as its hidden size, read when it is built",
+      "A tensor that the optimizer cannot change, kept fixed as a constant during training"
+    ],
+    "answer_index": 0,
+    "explanation": "A Parameter is just a tensor with requires_grad=True registered by an nn.Module. Registration makes it appear in .parameters() and get moved by .to(device). Parameters are exactly the tensors the optimizer is allowed to change; hyperparameters like lr are not Parameters."
+  },
+  {
+    "id": "00.4-011",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "2. nn.Linear: a learnable affine map",
+    "question": "What does registering a tensor as a Parameter in an nn.Module achieve?",
+    "options": [
+      "It is automatically converted to bfloat16 to save memory",
+      "It is excluded from gradient computation and frozen",
+      "It appears in .parameters() and is moved by .to(device)",
+      "It is saved to disk automatically after every step"
+    ],
+    "answer_index": 2,
+    "explanation": "Registration is bookkeeping: it makes the tensor show up in model.parameters() (so the optimizer sees it) and makes model.to(device) move it. It does not change dtype, disable gradients, or trigger saving."
+  },
+  {
+    "id": "00.4-012",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "3. .parameters() and the optimizer",
+    "question": "What does model.parameters() return?",
+    "options": [
+      "A dictionary mapping hyperparameter names to values",
+      "A copy of all the weights as detached NumPy arrays",
+      "The total number of trainable parameters as an integer",
+      "An iterator over every registered parameter tensor"
+    ],
+    "answer_index": 3,
+    "explanation": "model.parameters() yields every registered parameter tensor — for nn.Linear, its weight and bias. You hand this to the optimizer so it knows which tensors to update. It returns the tensors themselves, not copies or a count."
+  },
+  {
+    "id": "00.4-013",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "3. .parameters() and the optimizer",
+    "question": "What is the SGD update rule for a parameter theta with learning rate eta?",
+    "options": [
+      "theta <- theta - eta * theta.grad",
+      "theta <- theta + eta * theta.grad",
+      "theta <- eta * theta.grad",
+      "theta <- theta / (eta * theta.grad)"
+    ],
+    "answer_index": 0,
+    "explanation": "SGD subtracts the learning rate times the gradient: theta <- theta - eta * grad. Subtracting moves downhill because the gradient points uphill. Adding would increase the loss, and replacing theta outright discards the current value."
+  },
+  {
+    "id": "00.4-014",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "3. .parameters() and the optimizer",
+    "question": "What does the learning rate (lr) control in SGD?",
+    "options": [
+      "The number of training steps the optimizer will run in total",
+      "The batch size used for each gradient estimate",
+      "How many of the parameters get updated on each step of training",
+      "The step size: how far each parameter moves downhill per step"
+    ],
+    "answer_index": 3,
+    "explanation": "The learning rate eta scales the gradient, so it sets how far each parameter moves per step. It is not the number of steps, the batch size, or which parameters are updated."
+  },
+  {
+    "id": "00.4-015",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "3. .parameters() and the optimizer",
+    "question": "What do optimizer.step() and optimizer.zero_grad() each do?",
+    "options": [
+      "step computes the gradients via autograd; zero_grad sets the parameters themselves to zero",
+      "step applies the update rule to every parameter; zero_grad clears each parameter's .grad",
+      "step clears the gradients left by backward; zero_grad then applies the update to each weight",
+      "step runs the forward pass over the batch; zero_grad runs the backward pass for the loss"
+    ],
+    "answer_index": 1,
+    "explanation": "optimizer.step() applies the update rule (theta <- theta - lr * grad for SGD) to every parameter. optimizer.zero_grad() clears every parameter's .grad. Gradients are computed by loss.backward(), not by step, and zero_grad does not zero the weights."
+  },
+  {
+    "id": "00.4-016",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "3. .parameters() and the optimizer",
+    "question": "How does an optimizer like torch.optim.SGD change a model's parameters?",
+    "options": [
+      "It returns new parameter tensors that you must assign back to the model",
+      "It rebuilds the model from scratch with new weights at every step",
+      "It holds references to the parameters and mutates them in place in step()",
+      "It changes a copy of the parameters, leaving the model's own tensors untouched"
+    ],
+    "answer_index": 2,
+    "explanation": "The optimizer holds references to the parameter tensors, reads each one's .grad (filled by backward), and writes the updated values back in place when step() is called. You do not need to reassign anything to the model."
+  },
+  {
+    "id": "00.4-017",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "4. The canonical training loop",
+    "question": "In the line-fitting example, what data is the nn.Linear(1, 1) model trained on?",
+    "options": [
+      "100 points lying exactly on y = 2x + 1, with no noise added at all",
+      "100 random points with no underlying line, to test that loss stays high",
+      "100 points from y = 2x + 1 plus Gaussian noise with standard deviation 0.1",
+      "1000 points sampled from the parabola y = x^2 with small Gaussian noise"
+    ],
+    "answer_index": 2,
+    "explanation": "The example fabricates N = 100 inputs x ~ randn(100, 1) and targets y = 2x + 1 + 0.1 * randn, so the true slope is 2, intercept 1, and the noise has standard deviation 0.1. The goal is to recover slope and intercept."
+  },
+  {
+    "id": "00.4-018",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "4. The canonical training loop",
+    "question": "Which loss and optimizer does the line-fitting example use?",
+    "options": [
+      "nn.CrossEntropyLoss and AdamW with lr=0.1",
+      "nn.L1Loss and torch.optim.SGD with lr=1.0",
+      "nn.MSELoss and torch.optim.Adam with lr=0.001",
+      "nn.MSELoss and torch.optim.SGD with lr=0.1"
+    ],
+    "answer_index": 3,
+    "explanation": "The example uses mean squared error (nn.MSELoss), the natural loss for regression, and plain SGD with lr=0.1. Cross-entropy and AdamW appear later when training GPT-2."
+  },
+  {
+    "id": "00.4-019",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "4. The canonical training loop",
+    "question": "In the line-fitting example run for 1001 steps with seed 42, what happens to the loss and learned parameters?",
+    "options": [
+      "Loss falls from about 2.30 to about 0.0078; weight ≈ 2.0012 and bias ≈ 1.0036",
+      "Loss falls to exactly 0; weight = 2 and bias = 1 exactly, matching the true line",
+      "Loss stays near 2.30 throughout; weight and bias barely move from their initial values",
+      "Loss grows towards infinity as the weight diverges after the first few hundred steps"
+    ],
+    "answer_index": 0,
+    "explanation": "The loss drops from 2.3003 to 0.0078 and flattens by step 200, and the learned weight and bias come out at 2.0012 and 1.0036 — the model recovered the true line. It cannot reach zero because of the noise in the data."
+  },
+  {
+    "id": "00.4-020",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "4. The canonical training loop",
+    "question": "Why does the line-fitting loss plateau at about 0.0078 instead of 0?",
+    "options": [
+      "The learning rate is too large for the loss to converge any further than this",
+      "It is roughly the variance of the added noise, the best any straight line can do",
+      "nn.Linear(1, 1) cannot exactly represent the line y = 2x + 1 because it lacks a bias",
+      "The gradients were never zeroed, so training stalled once they accumulated"
+    ],
+    "answer_index": 1,
+    "explanation": "The targets include noise with standard deviation 0.1, so variance ≈ 0.01 per point; no straight line can fit noise. A residual near that level means the model fit the signal and correctly refused to fit the noise. It is not a bug."
+  },
+  {
+    "id": "00.4-021",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "What does pred = model(x) do for nn.Linear(1, 1) with x of shape (100, 1)?",
+    "options": [
+      "Computes the MSE loss of the predictions against the targets",
+      "Updates the weight and bias using the gradients from the last step",
+      "Returns the model's gradients with respect to each input point",
+      "Runs the forward pass, computing x W^T + b with shape (100, 1)"
+    ],
+    "answer_index": 3,
+    "explanation": "Calling the module runs its forward pass, x W^T + b, producing one prediction per input, shape (100, 1). The loss, gradients and updates come from later lines."
+  },
+  {
+    "id": "00.4-022",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "Why do you call model(x) rather than model.forward(x)?",
+    "options": [
+      "model.forward(x) does not exist on nn.Module subclasses unless you register it",
+      "nn.Module.__call__ runs forward plus the hooks and bookkeeping PyTorch relies on",
+      "model(x) runs the backward pass as well, so gradients are ready for the step",
+      "model.forward(x) always runs under torch.no_grad(), so no graph would be recorded"
+    ],
+    "answer_index": 1,
+    "explanation": "model(x) goes through nn.Module.__call__, which runs forward and also invokes registered hooks and other bookkeeping. Calling .forward() directly skips that machinery. forward is what you define; model(x) is what you call. Neither runs backward."
+  },
+  {
+    "id": "00.4-023",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "What does nn.MSELoss compute from pred and y?",
+    "options": [
+      "The mean of (pred - y)^2 over all points, a scalar tensor",
+      "The sum of the absolute errors |pred - y| over all points",
+      "A (100, 1) tensor holding each point's squared error",
+      "The square root of the mean squared error, as a scalar"
+    ],
+    "answer_index": 0,
+    "explanation": "MSELoss computes the mean of the squared differences over all 100 points, giving one scalar. Because it is a tensor, it carries the graph back to the parameters so backward works. It is not an absolute error or a root-mean-square."
+  },
+  {
+    "id": "00.4-024",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "Which line of the training loop is the only one that actually changes the parameters?",
+    "options": [
+      "loss.backward()",
+      "optimizer.zero_grad()",
+      "optimizer.step()",
+      "pred = model(x)"
+    ],
+    "answer_index": 2,
+    "explanation": "optimizer.step() subtracts lr * grad from each parameter, which is why the next prediction is a little better. backward only fills .grad, zero_grad only clears .grad, and the forward pass only reads the parameters."
+  },
+  {
+    "id": "00.4-025",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "What does loss.backward() do in the line-fitting loop?",
+    "options": [
+      "Subtracts lr times the gradient from the weight and bias, updating them in place",
+      "Walks back from loss through MSELoss and the Linear, filling weight.grad and bias.grad",
+      "Clears the gradients left in weight.grad and bias.grad by the previous iteration",
+      "Recomputes the predictions with the current weights and stores them for the next step"
+    ],
+    "answer_index": 1,
+    "explanation": "Autograd walks backward from the loss through MSELoss and the Linear layer, depositing gradients into weight.grad and bias.grad. Subtracting them is the optimizer's job, and clearing is zero_grad's."
+  },
+  {
+    "id": "00.4-026",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Reading the five lines",
+    "question": "Training GPT-2 later uses the same five-line loop. What changes?",
+    "options": [
+      "The order of zero_grad and backward is reversed so gradients can accumulate across steps",
+      "backward is replaced by a manual gradient computation written specifically for attention",
+      "The loop no longer calls optimizer.step(), because AdamW updates weights inside backward",
+      "A Transformer model, token sequences as x, cross-entropy as loss_fn, AdamW as optimizer"
+    ],
+    "answer_index": 3,
+    "explanation": "Only the components change: the model becomes a Transformer, the inputs are batches of token sequences, the loss is cross-entropy, and the optimizer is AdamW. The five-line body itself is unchanged."
+  },
+  {
+    "id": "00.4-027",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "Why can the same torch.optim.SGD train both a one-line model and a billion-parameter one?",
+    "options": [
+      "The optimizer only sees a flat list of tensors with .grad, via .parameters()",
+      "SGD inspects the model's architecture and adapts its update rule per layer type",
+      "Large models use a different, sharded SGD class internally that PyTorch picks for you",
+      "The optimizer compiles a custom update kernel for each model it is given"
+    ],
+    "answer_index": 0,
+    "explanation": ".parameters() is the contract between model and optimizer: the optimizer never knows what a Linear or a Transformer is, only a list of tensors each with a .grad. For a bigger model it simply loops over more tensors."
+  },
+  {
+    "id": "00.4-028",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "Where must zero_grad sit relative to backward and step?",
+    "options": [
+      "Between backward and step, so step sees freshly cleared buffers",
+      "After backward but before computing the loss on the next batch",
+      "Before backward (or after step), never between backward and step",
+      "It can go anywhere in the loop, since it never affects the parameters"
+    ],
+    "answer_index": 2,
+    "explanation": "zero_grad must clear gradients before backward writes new ones, which is equivalent to right after the previous step. Placing it between backward and step would erase the gradients just before the optimizer uses them."
+  },
+  {
+    "id": "00.4-029",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "What happens if the five training-loop steps are put in the wrong order?",
+    "options": [
+      "PyTorch raises an ordering error on the very first misplaced call",
+      "The optimizer detects the problem and reorders the calls automatically",
+      "Usually no error is raised; the model silently trains wrong",
+      "Training still works correctly, just more slowly per step"
+    ],
+    "answer_index": 2,
+    "explanation": "A different order does not error — it silently trains wrong, for example step reading stale or erased gradients. That is why the order must be learned cold. PyTorch does not detect or fix it."
+  },
+  {
+    "id": "00.4-030",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "Why must optimizer.step() come after loss.backward()?",
+    "options": [
+      "backward resets the learning rate that step uses",
+      "step computes the loss that backward needs",
+      "backward moves the parameters to the GPU first",
+      "step reads the .grad that backward just wrote"
+    ],
+    "answer_index": 3,
+    "explanation": "step uses each parameter's .grad, which is only filled by backward for the current batch. Calling step first would use stale or empty gradients. backward does not touch the learning rate or devices."
+  },
+  {
+    "id": "00.4-031",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "What does training memory consist of per parameter?",
+    "options": [
+      "Its value, a .grad of the same size, and any optimizer state (Adam keeps two more tensors)",
+      "Only its value, since gradients are computed on the fly and discarded after each update",
+      "Its value plus one byte per element recording the gradient's sign for the update",
+      "Its value replicated once per training step, so memory grows linearly with step count"
+    ],
+    "answer_index": 0,
+    "explanation": "Each parameter needs storage for its value, its gradient (same size), and for richer optimizers extra per-parameter state — Adam keeps two more tensors per parameter. This accounting decides whether a model like GPT-2 fits on a GPU."
+  },
+  {
+    "id": "00.4-032",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "5. Under the hood — what each step costs and does",
+    "question": "How many extra per-parameter tensors does the Adam optimizer keep beyond the gradient?",
+    "options": [
+      "Zero",
+      "Two",
+      "One",
+      "Four"
+    ],
+    "answer_index": 1,
+    "explanation": "Adam keeps two additional tensors per parameter (its running statistics), on top of the parameter value and its gradient. Plain SGD keeps none. That extra state is a major part of the training memory budget."
+  },
+  {
+    "id": "00.4-033",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Hardware for this lesson",
+    "question": "What hardware does the line-fitting training lesson need?",
+    "options": [
+      "A GPU with at least 8 GB of memory for the 1001 steps",
+      "Any CPU; it runs well under a second with no GPU",
+      "A multi-GPU node, because 1001 steps is a long run",
+      "A CPU with at least 64 GB of RAM to hold the data"
+    ],
+    "answer_index": 1,
+    "explanation": "Fitting nn.Linear(1, 1) to 100 points takes well under a second for all 1001 steps on any CPU, with zero GPU-hours. It is the last lesson that trains instantly on a laptop; compute needs grow from module 6 onward."
+  },
+  {
+    "id": "00.4-034",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Exercise",
+    "question": "In the line-fitting example, what happens when lr is raised from 0.1 to 1.0?",
+    "options": [
+      "Training diverges: the loss grows to about 1.3e4 and the weight ends near -72",
+      "Training converges ten times faster and lands on the same weight and bias as lr = 0.1",
+      "Training converges, but to a weight of about 1.0 instead of the true slope 2",
+      "The loss oscillates for a while but still settles at about 0.0078 by the end"
+    ],
+    "answer_index": 0,
+    "explanation": "With lr = 1.0 each step overshoots the minimum and lands farther out, so the loss grows — around 1.3 x 10^4 after 50 steps, with the weight near -72 instead of 2. A larger step size does not mean faster convergence when it exceeds what the curvature tolerates."
+  },
+  {
+    "id": "00.4-035",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Exercise",
+    "question": "In the line-fitting example, what happens with lr = 2.0?",
+    "options": [
+      "It converges exactly like lr = 0.1, reaching a loss of about 0.0078 by the end",
+      "It diverges slowly at first but recovers and converges by around step 1000",
+      "It raises a RuntimeError on the very first step because the update is too large to apply",
+      "It diverges even faster, overflowing to inf and then nan within a few dozen steps"
+    ],
+    "answer_index": 3,
+    "explanation": "With lr = 2.0 the overshoot amplifies even faster: the loss overflows to inf and then nan within a few dozen steps, with the weight around -1.3 x 10^25. No error is raised up front; the numbers just blow up."
+  },
+  {
+    "id": "00.4-036",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Exercise",
+    "question": "What is the mechanism behind divergence when the learning rate is too large?",
+    "options": [
+      "The gradients shrink to zero after a few steps and training stalls at a high loss",
+      "The model runs out of parameters to update, so the optimizer starts reusing stale values",
+      "Each step overshoots the minimum to a point with a steeper opposite gradient, so swings grow",
+      "Large learning rates silently convert the weights to integers, so updates lose all precision"
+    ],
+    "answer_index": 2,
+    "explanation": "Gradient descent assumes small steps. If the step is larger than the curvature tolerates, the update jumps past the bottom of the bowl to a point with an even steeper opposite gradient; the next step jumps back farther, and the oscillation grows exponentially. Gradients do not vanish."
+  },
+  {
+    "id": "00.4-037",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Exercise",
+    "question": "What tools does later material introduce specifically to keep large models from diverging early in training?",
+    "options": [
+      "Larger learning rates combined with fewer total training steps",
+      "Removing the bias term from every layer to reduce the parameter count",
+      "Switching from squared-error loss to absolute-error loss everywhere",
+      "Learning-rate warmup and decay schedules, and gradient clipping"
+    ],
+    "answer_index": 3,
+    "explanation": "Because the learning rate is the single most important hyperparameter, warmup and decay schedules and gradient clipping are introduced to keep big models stable early on. Raising the learning rate would make divergence more likely."
+  },
+  {
+    "id": "00.4-038",
+    "chapter": "00.4",
+    "chapter_name": "nn.Module and a minimal training loop",
+    "module": "0",
+    "module_name": "ML / PyTorch foundations",
+    "source": "lessons/module-00/lesson-04.md",
+    "section": "Check yourself",
+    "question": "With x of shape (100, 1) and nn.Linear(1, 1), what are the shapes of pred and loss (MSELoss)?",
+    "options": [
+      "pred is (100,); loss is (100, 1), one value per point",
+      "pred is (1, 1); loss is (1,), averaged over the batch",
+      "pred is (100, 1); loss is a scalar with shape ()",
+      "pred is (100, 1); loss is (100, 1), not yet reduced"
+    ],
+    "answer_index": 2,
+    "explanation": "Linear(1, 1) maps the last dimension from 1 to 1, so pred has shape (100, 1), one prediction per input. MSELoss reduces all of them to a single mean, a rank-0 tensor with shape (), which is what .backward() requires."
+  }
+]

@@ -1,0 +1,1280 @@
+[
+  {
+    "id": "02.3-001",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "For a linear layer z = Wx + b followed by softmax and cross-entropy against true class t, what is ∂L/∂z?",
+    "options": [
+      "onehot(t) − p, the truth minus the predicted distribution",
+      "−1/p_t at the true class and 0 elsewhere",
+      "p ⊙ (1 − p), the elementwise softmax derivative",
+      "p − onehot(t), the predicted distribution minus the truth"
+    ],
+    "answer_index": 3,
+    "explanation": "The gradient of cross-entropy with respect to the logits is p − onehot(t). The reversed sign would make gradient descent move the wrong way. −1/p_t is ∂L/∂p (the gradient with respect to probabilities, before the softmax step), and p(1 − p) is only the softmax Jacobian's diagonal."
+  },
+  {
+    "id": "02.3-002",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is the gradient p − onehot(target) so central to training a GPT-style language model?",
+    "options": [
+      "It is the gradient of the attention scores inside each transformer block, before masking",
+      "It is the gradient used only during fine-tuning, while pretraining uses a different one",
+      "It is the gradient at the output logits that starts the whole backward pass each step",
+      "It is the gradient of the embedding table with respect to the integer token ids"
+    ],
+    "answer_index": 2,
+    "explanation": "The final layer produces logits, softmax gives a next-token distribution, cross-entropy against the true next token is the loss, and p − onehot(target) is the gradient that launches backprop through the whole network on every step. It is not specific to fine-tuning or attention."
+  },
+  {
+    "id": "02.3-003",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "1. Intuition: predicted minus true",
+    "question": "In the logit gradient p − onehot(t), what sign does the entry for a wrong token with p_i > 0 have, and what does gradient descent do to that logit?",
+    "options": [
+      "Zero; gradient descent leaves that logit unchanged",
+      "Negative; gradient descent pushes that logit up",
+      "Positive; gradient descent pushes that logit down",
+      "Positive; gradient descent pushes that logit up"
+    ],
+    "answer_index": 2,
+    "explanation": "For a wrong token, y_i = 0, so the gradient is p_i > 0. Gradient descent moves against the gradient, lowering that logit. The model put too much probability there, so it is pushed down by an amount equal to how wrong the probability was."
+  },
+  {
+    "id": "02.3-004",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "1. Intuition: predicted minus true",
+    "question": "In the logit gradient p − onehot(t), what is the entry for the true token when p_t < 1, and what does that do?",
+    "options": [
+      "1 − p_t, which is positive, so gradient descent pushes the true logit down",
+      "p_t, which is positive, so gradient descent pushes the true logit down",
+      "p_t − 1, which is negative, so gradient descent pushes the true logit up",
+      "−log p_t, which is the loss, so the true logit is set to the loss value"
+    ],
+    "answer_index": 2,
+    "explanation": "The true class has target 1, so its gradient entry is p_t − 1 < 0 whenever p_t < 1. Stepping against a negative gradient increases that logit, raising the true token's probability."
+  },
+  {
+    "id": "02.3-005",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "1. Intuition: predicted minus true",
+    "question": "In the logit gradient p − onehot(t), what determines the size of each logit's nudge?",
+    "options": [
+      "The number of classes in the vocabulary, which scales every entry by 1/C",
+      "The value of the loss divided by the number of classes in the vocabulary",
+      "The magnitude of the logit itself, so large logits get the largest nudges",
+      "How wrong the predicted probability was for that class"
+    ],
+    "answer_index": 3,
+    "explanation": "Each entry is p_i − y_i, the gap between the predicted probability and the truth. Larger mistakes give larger nudges. The logit's raw magnitude and vocabulary size do not enter the formula directly."
+  },
+  {
+    "id": "02.3-006",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "1. Intuition: predicted minus true",
+    "question": "Why does the logit gradient come out as the clean p − onehot(t)?",
+    "options": [
+      "Because cross-entropy ignores every class except the one with the largest logit",
+      "Because softmax is a linear function of the logits, so its Jacobian is constant",
+      "Softmax and cross-entropy fit together so their awkward terms cancel",
+      "Because the one-hot target makes the softmax Jacobian collapse to the identity"
+    ],
+    "answer_index": 2,
+    "explanation": "Each piece alone has an awkward gradient, but paired, the −1/p_t from cross-entropy cancels the p_t from the softmax Jacobian. Softmax is nonlinear, and its Jacobian is diag(p) − pp^T, not the identity."
+  },
+  {
+    "id": "02.3-007",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "In z = Wx + b for C classes and input dimension d, what are the shapes of x, W, b and z?",
+    "options": [
+      "x: (d,), W: (C, d), b: (d,), z: (C,)",
+      "x: (C,), W: (C, d), b: (C,), z: (d,)",
+      "x: (d,), W: (d, C), b: (d,), z: (C,)",
+      "x: (d,), W: (C, d), b: (C,), z: (C,)"
+    ],
+    "answer_index": 3,
+    "explanation": "W maps d inputs to C logits, so it is (C, d); x is (d,), and b and z are both (C,). A (d, C) weight would map the wrong way for Wx, and the bias must match the logits' shape."
+  },
+  {
+    "id": "02.3-008",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "What is the componentwise formula for the logit z_i of a linear layer z = Wx + b?",
+    "options": [
+      "z_i = Σ_j W_ji·x_j + b_i",
+      "z_i = Π_j W_ij·x_j + b_i",
+      "z_i = Σ_j W_ij·x_j + b_i",
+      "z_i = Σ_j W_ij·x_i + b_j"
+    ],
+    "answer_index": 2,
+    "explanation": "Row i of W dotted with x, plus bias b_i, gives z_i. Using W_ji would apply W^T. The indices on x and b must be j and i respectively."
+  },
+  {
+    "id": "02.3-009",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "In a language model, what does the class count C in the output layer correspond to?",
+    "options": [
+      "The number of transformer layers",
+      "The hidden dimension d",
+      "The batch size N",
+      "The vocabulary size"
+    ],
+    "answer_index": 3,
+    "explanation": "The output layer produces one logit per possible next token, so C is the vocabulary size (≈50,000 for GPT-2). d is the input (hidden) dimension, and N is the batch size."
+  },
+  {
+    "id": "02.3-010",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "What are the properties of the softmax output p_i = e^{z_i} / Σ_k e^{z_k}?",
+    "options": [
+      "Shape (C,), entries in [−1, 1], summing to 0",
+      "Shape (C,), entries positive, summing to 1",
+      "Shape (C,), entries positive, with the largest equal to 1",
+      "Shape (1,), a single probability for the true class"
+    ],
+    "answer_index": 1,
+    "explanation": "Softmax turns C logits into a probability distribution: all entries strictly positive (exponentials) and normalised to sum to 1. It keeps the logits' shape. The largest entry is not forced to 1."
+  },
+  {
+    "id": "02.3-011",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "What is onehot(t) for a true class index t?",
+    "options": [
+      "A vector of ones scaled by 1/C, spreading the target mass over all classes",
+      "The vector with y_t = 1 and y_i = 0 for every other i",
+      "The scalar t converted to a float and used directly as the target value",
+      "The vector with y_t = 0 and y_i = 1 for every other i"
+    ],
+    "answer_index": 1,
+    "explanation": "The one-hot vector puts probability 1 on the correct class and 0 everywhere else. The uniform vector is not one-hot, and the index t itself is a scalar, not a distribution."
+  },
+  {
+    "id": "02.3-012",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "Against a one-hot target y = onehot(t), what does the cross-entropy L = −Σ_i y_i log p_i reduce to?",
+    "options": [
+      "−log p_t, the negative log-probability of the true class",
+      "1 − p_t, the total probability the model put on wrong classes",
+      "−Σ_i log p_i, the sum of negative log-probabilities over all classes",
+      "−log(1 − p_t), the log-probability of not choosing t"
+    ],
+    "answer_index": 0,
+    "explanation": "Every term with y_i = 0 vanishes, leaving only −log p_t. This is why only the true-class probability appears in the loss."
+  },
+  {
+    "id": "02.3-013",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "2. The forward pass, every symbol named",
+    "question": "In what order is the classifier pipeline x → z → p → L backpropagated?",
+    "options": [
+      "Parameters first: ∂L/∂W and ∂L/∂b, then ∂L/∂z, then finally ∂L/∂p",
+      "All at once: every gradient is computed independently, straight from L",
+      "Right to left: ∂L/∂p, then ∂L/∂z, then the gradients for W, b and x",
+      "Left to right: ∂L/∂x first, then ∂L/∂z, then ∂L/∂p at the very end"
+    ],
+    "answer_index": 2,
+    "explanation": "Backprop sweeps from the loss back toward the input, the VJP sweep. You need ∂L/∂z before you can compute the linear layer's gradients, and ∂L/∂p before ∂L/∂z."
+  },
+  {
+    "id": "02.3-014",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "3. Step one: loss with respect to the probabilities",
+    "question": "For L = −log p_t, what is ∂L/∂p?",
+    "options": [
+      "−1/p_t at entry t and 0 at every other entry",
+      "−1/p_i at every entry i, one term per class",
+      "p − onehot(t) at every entry, the logit gradient",
+      "−log p_t at entry t and 0 at every other entry"
+    ],
+    "answer_index": 0,
+    "explanation": "L depends only on p_t, so ∂L/∂p_t = −1/p_t and all other entries are 0. This sparsity (one nonzero entry) is what makes the softmax step collapse cleanly. p − onehot(t) is ∂L/∂z, a later step."
+  },
+  {
+    "id": "02.3-015",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4. Step two: the softmax Jacobian, and the collapse to p − y",
+    "question": "By the chain rule through softmax, what is ∂L/∂z_i in terms of ∂L/∂p_k?",
+    "options": [
+      "Σ_k (∂L/∂p_k)(∂p_k/∂z_i), summing over how each p_k depends on z_i",
+      "(∂L/∂p_i)(∂p_i/∂z_i), using only the matching index, since p_i depends on z_i alone",
+      "Π_k (∂L/∂p_k)(∂p_k/∂z_i), a product over k, one factor per output",
+      "Σ_k (∂L/∂z_k)(∂z_k/∂p_i), summing over how each logit depends on p_i"
+    ],
+    "answer_index": 0,
+    "explanation": "Every p_k depends on every z_i through the softmax denominator, so the chain rule sums over k. Because ∂L/∂p_k is nonzero only at k = t, the sum collapses to one term: −(1/p_t)·∂p_t/∂z_i."
+  },
+  {
+    "id": "02.3-016",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4. Step two: the softmax Jacobian, and the collapse to p − y",
+    "question": "What is the softmax Jacobian entry ∂p_t/∂z_i, written compactly with the Kronecker delta?",
+    "options": [
+      "p_t(δ_ti − p_i)",
+      "p_i(δ_ti − p_t)",
+      "δ_ti − p_t·p_i",
+      "p_t(1 − p_i)"
+    ],
+    "answer_index": 0,
+    "explanation": "∂p_t/∂z_i = p_t(1 − p_t) when i = t and −p_t·p_i when i ≠ t; both cases are p_t(δ_ti − p_i). The δ − p_t·p_i form gives 1 − p_t^2 on the diagonal, which is wrong."
+  },
+  {
+    "id": "02.3-017",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "For softmax over C classes, what is the shape of its Jacobian J with J_ki = ∂p_k/∂z_i?",
+    "options": [
+      "C × d, matching the shape of the linear layer's weight matrix",
+      "C × 1, one entry per class, since softmax acts elementwise",
+      "C × C, row k for output p_k and column i for input z_i",
+      "1 × C, a single row of partials, like the gradient of a scalar"
+    ],
+    "answer_index": 2,
+    "explanation": "Softmax maps a C-vector to a C-vector, so its Jacobian is C × C (9 entries for C = 3). Rows index outputs, columns index inputs. The weight matrix shape (C, d) belongs to the linear layer."
+  },
+  {
+    "id": "02.3-018",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "When differentiating p_k = e^{z_k}/S with S = Σ_i e^{z_i}, what is ∂S/∂z_i?",
+    "options": [
+      "e^{z_i}, since each z_i appears once in the sum",
+      "e^{z_i}/S, which is the probability p_i",
+      "S, since the derivative of a sum of exponentials is itself",
+      "1, since the sum is linear in each of its terms"
+    ],
+    "answer_index": 0,
+    "explanation": "S is a sum of exponentials, and z_i appears only in the term e^{z_i}, whose derivative is e^{z_i}. That fact feeds the quotient rule for both diagonal and off-diagonal softmax Jacobian entries."
+  },
+  {
+    "id": "02.3-019",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "Using the quotient rule, what is the diagonal softmax Jacobian entry ∂p_1/∂z_1?",
+    "options": [
+      "p_1(1 + p_1)",
+      "1 − p_1^2",
+      "p_1(1 − p_1)",
+      "−p_1^2 alone"
+    ],
+    "answer_index": 2,
+    "explanation": "With u = e^{z_1}: (e^{z_1}S − e^{z_1}e^{z_1})/S^2 = p_1 − p_1^2 = p_1(1 − p_1). −p_1^2 alone drops the u'S term, p_1(1 + p_1) flips the sign of the S' term, and 1 − p_1^2 is the diagonal of the wrong I − pp^T form."
+  },
+  {
+    "id": "02.3-020",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "Using the quotient rule, what is the off-diagonal softmax Jacobian entry ∂p_1/∂z_2?",
+    "options": [
+      "0, because p_1's numerator has no z_2",
+      "−p_1·p_2",
+      "p_1·p_2",
+      "p_1(1 − p_2)"
+    ],
+    "answer_index": 1,
+    "explanation": "u = e^{z_1} has no z_2, so u' = 0, but S' = e^{z_2}: (0·S − e^{z_1}e^{z_2})/S^2 = −p_1p_2. It is not 0, because z_2 still appears in the denominator S."
+  },
+  {
+    "id": "02.3-021",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "What is the full softmax Jacobian in matrix form?",
+    "options": [
+      "I − p·p^T",
+      "diag(p) − p·p^T",
+      "diag(p) + p·p^T",
+      "p·p^T − diag(p)"
+    ],
+    "answer_index": 1,
+    "explanation": "The diagonal entries are p_k − p_k^2 and the off-diagonal entries are −p_k·p_i, which is exactly diag(p) − pp^T. The I − pp^T form would put 1 − p_k^2 on the diagonal."
+  },
+  {
+    "id": "02.3-022",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "Which two structural properties does the softmax Jacobian diag(p) − pp^T have?",
+    "options": [
+      "It is the identity, and its trace is C",
+      "It is antisymmetric, and every column sums to 1",
+      "It is diagonal, and every row sums to 1",
+      "It is symmetric, and every row sums to 0"
+    ],
+    "answer_index": 3,
+    "explanation": "Entries −p_k p_i = −p_i p_k make it symmetric. Each row sums to p_k(1 − Σ_i p_i) = 0. It has nonzero off-diagonal entries, so it is not diagonal or identity."
+  },
+  {
+    "id": "02.3-023",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "Why must every row of the softmax Jacobian sum to 0?",
+    "options": [
+      "Shifting every logit by the same constant changes no probability, so no p_k moves",
+      "Because softmax outputs sum to 1, so each row of the Jacobian must also sum to 1",
+      "Because the diagonal entries of the softmax Jacobian are always exactly zero",
+      "Because the Jacobian equals the identity minus itself, so every row cancels"
+    ],
+    "answer_index": 0,
+    "explanation": "Row k says how p_k changes as each logit is nudged. Shifting all logits by the same amount cancels in the ratio, so the row sum is 0. Algebraically the off-diagonals sum to −p_k(1 − p_k), cancelling the diagonal p_k(1 − p_k)."
+  },
+  {
+    "id": "02.3-024",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "What is the Kronecker delta δ_ki?",
+    "options": [
+      "1 when k = i and 0 otherwise — entry (k, i) of the identity matrix",
+      "The probability p_k evaluated at index i, i.e. the softmax output p_i",
+      "The signed difference k − i between the two indices, zero on the diagonal",
+      "0 when k = i and 1 otherwise — entry (k, i) of ones minus identity"
+    ],
+    "answer_index": 0,
+    "explanation": "δ_ki is a switch: 1 for equal indices, 0 for different ones (δ_22 = 1, δ_23 = 0). It lets the diagonal and off-diagonal softmax cases be written as one formula p_k(δ_ki − p_i)."
+  },
+  {
+    "id": "02.3-025",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.1 The full softmax Jacobian, built from a concrete case",
+    "question": "How does the Kronecker delta δ_ti relate to the one-hot target y = onehot(t)?",
+    "options": [
+      "δ_ti is the i-th entry of p",
+      "δ_ti is exactly the i-th entry of y",
+      "δ_ti is the sum of the entries of y",
+      "δ_ti is 1 − y_i for every i"
+    ],
+    "answer_index": 1,
+    "explanation": "δ_ti = 1 only at i = t and 0 elsewhere, which is precisely the one-hot vector's i-th entry. This is how p_i − δ_ti stacks into p − y."
+  },
+  {
+    "id": "02.3-026",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.2 Numeric example",
+    "question": "For p = (0.2, 0.5, 0.3), what is the first row of the softmax Jacobian?",
+    "options": [
+      "(0.04, −0.10, −0.06)",
+      "(0.80, −0.10, −0.06)",
+      "(0.16, −0.10, −0.06)",
+      "(0.16, 0.10, 0.06)"
+    ],
+    "answer_index": 2,
+    "explanation": "Row 1: p_1(1 − p_1) = 0.2·0.8 = 0.16, −p_1p_2 = −0.10, −p_1p_3 = −0.06. It sums to 0 as every softmax Jacobian row must. 0.04 would be p_1^2."
+  },
+  {
+    "id": "02.3-027",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.3 Why we only need one row",
+    "question": "Why does computing ∂L/∂z through softmax only require row t of the softmax Jacobian?",
+    "options": [
+      "Because the loss is evaluated only at the largest logit, which sits at row t",
+      "∂L/∂p is nonzero only at entry t, so the VJP picks out row t scaled by −1/p_t",
+      "Because only column t of the Jacobian is ever computed by the softmax forward",
+      "Because every other row of the softmax Jacobian is all zeros by construction"
+    ],
+    "answer_index": 1,
+    "explanation": "The VJP (∂L/∂p)^T J with a single nonzero entry −1/p_t at t selects row t of J times −1/p_t. The other C − 1 rows are multiplied by zero and never matter; they are not themselves zero."
+  },
+  {
+    "id": "02.3-028",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.3 Why we only need one row",
+    "question": "For p = (0.2, 0.5, 0.3) and true class t = 2 (second entry), what does (0, −2, 0)·J give, where J is the softmax Jacobian?",
+    "options": [
+      "(0.2, −0.5, 0.3), which equals p − y",
+      "(−0.2, 0.5, −0.3), which equals y − p",
+      "(0.2, 0.5, 0.3), which equals p",
+      "(0, −0.5, 0), only the true-class entry"
+    ],
+    "answer_index": 0,
+    "explanation": "−2 × row 2 (−0.10, 0.25, −0.15) = (0.2, −0.5, 0.3). That matches p − y = (0.2, 0.5 − 1, 0.3), so the VJP route and the closed form agree."
+  },
+  {
+    "id": "02.3-029",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.3 Why we only need one row",
+    "question": "In the derivation of ∂L/∂z_i = −(1/p_t)·p_t(δ_ti − p_i), what is the simplified result?",
+    "options": [
+      "p_i − δ_ti",
+      "−(δ_ti − p_i)/p_t",
+      "p_t(p_i − δ_ti)",
+      "δ_ti − p_i"
+    ],
+    "answer_index": 0,
+    "explanation": "The −1/p_t cancels the leading p_t, leaving −(δ_ti − p_i) = p_i − δ_ti. Stacked over i that is p − onehot(t). The δ_ti − p_i form has the sign flipped."
+  },
+  {
+    "id": "02.3-030",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.3 Why we only need one row",
+    "question": "Why is the fused softmax + cross-entropy logit gradient numerically safe even when p_t is tiny?",
+    "options": [
+      "Because p_t is clamped to at least 0.5 before the loss is computed in the fused op",
+      "Because the gradient is computed in float64 inside the fused op, then cast back",
+      "Because tiny p_t values are rounded up to 1 by softmax before they reach the loss",
+      "The −1/p_t from cross-entropy cancels the softmax Jacobian's p_t, leaving no division"
+    ],
+    "answer_index": 3,
+    "explanation": "∂L/∂p_t = −1/p_t contains a dangerous division, but the softmax Jacobian's p_t cancels it exactly, leaving p − y: no division, no blow-up. No clamping or higher precision is involved."
+  },
+  {
+    "id": "02.3-031",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "4.3 Why we only need one row",
+    "question": "In the linear + softmax + cross-entropy backward pass, what role does g = p − y (shape (C,)) play for the linear layer?",
+    "options": [
+      "It is the updated value of the bias b after one optimizer step",
+      "It is the incoming gradient v pushed back through z = Wx + b",
+      "It is the final gradient for the input x, used to update x",
+      "It is the diagonal of the softmax Jacobian at the current p"
+    ],
+    "answer_index": 1,
+    "explanation": "g = ∂L/∂z is the upstream gradient fed into the linear layer's VJP, from which ∂L/∂W, ∂L/∂b and ∂L/∂x are computed. It is not itself ∂L/∂x or an updated parameter."
+  },
+  {
+    "id": "02.3-032",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "For z = Wx + b with g = ∂L/∂z, what is ∂L/∂b?",
+    "options": [
+      "g",
+      "W^T g",
+      "g x^T",
+      "sum(g)"
+    ],
+    "answer_index": 0,
+    "explanation": "z_i contains +b_i directly, so ∂z_i/∂b_i = 1 and ∂z_k/∂b_i = 0 for k ≠ i; hence ∂L/∂b_i = g_i and ∂L/∂b = g, shape (C,). W^T g is the input gradient and gx^T the weight gradient."
+  },
+  {
+    "id": "02.3-033",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "For z = Wx + b with g = ∂L/∂z, what is ∂L/∂W_ij?",
+    "options": [
+      "W_ij · g_i",
+      "g_i · x_j",
+      "Σ_k g_k·x_j",
+      "g_j · x_i"
+    ],
+    "answer_index": 1,
+    "explanation": "W_ij affects only z_i, with ∂z_i/∂W_ij = x_j, so ∂L/∂W_ij = g_i x_j. Stacked, this is the outer product gx^T. Summing over k would wrongly mix in other logits."
+  },
+  {
+    "id": "02.3-034",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "For z = Wx + b with g = ∂L/∂z, what is ∂L/∂W as a matrix, and its shape?",
+    "options": [
+      "W^T g, a matrix-vector product of shape (d,)",
+      "g x^T, an outer product of shape (C, d)",
+      "g^T x, an inner product giving one scalar",
+      "x g^T, an outer product of shape (d, C)"
+    ],
+    "answer_index": 1,
+    "explanation": "Column vector g (C,1) times row vector x^T (1,d) gives a (C, d) matrix, the same shape as W, as it must be. x g^T is its transpose, a common mistake."
+  },
+  {
+    "id": "02.3-035",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "For z = Wx + b with g = ∂L/∂z, why does ∂L/∂x_j involve a sum over i?",
+    "options": [
+      "x_j affects every z_i through column j of W",
+      "x_j affects only z_j through the diagonal of W",
+      "x_j is shared across examples in the batch",
+      "x_j affects the bias b_i of every class"
+    ],
+    "answer_index": 0,
+    "explanation": "Each input coordinate feeds every logit: ∂L/∂x_j = Σ_i g_i W_ij, which stacks to W^T g. The weight W_ij by contrast touches only z_i, so its gradient needs no sum."
+  },
+  {
+    "id": "02.3-036",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "For z = Wx + b with g = ∂L/∂z, what is ∂L/∂x and its shape?",
+    "options": [
+      "W^T g, shape (C,)",
+      "g x^T, shape (C, d)",
+      "W^T g, shape (d,)",
+      "W g, shape (C,)"
+    ],
+    "answer_index": 2,
+    "explanation": "W^T (d, C) times g (C,) gives (d,), matching x. W g would not even type-check when C ≠ d. This gradient is handed to the previous layer to continue the backward sweep."
+  },
+  {
+    "id": "02.3-037",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "What is ∂L/∂x of a linear layer used for in the backward pass?",
+    "options": [
+      "It is added to the bias gradient of the same layer before the update",
+      "It is handed to the previous layer as that layer's incoming gradient",
+      "It is discarded in every layer, since inputs are never parameters",
+      "It is used to update the weights W of the same layer, as W -= lr·∂L/∂x"
+    ],
+    "answer_index": 1,
+    "explanation": "∂L/∂x is how the backward sweep continues down into earlier layers; in a deeper layer, x is the previous layer's output. W's own update uses gx^T, not W^T g."
+  },
+  {
+    "id": "02.3-038",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "When x is the raw data input to the first layer, why does autograd skip computing ∂L/∂x?",
+    "options": [
+      "It has no earlier layer to receive it and data cannot be changed, so requires_grad=False",
+      "Because ∂L/∂x is always exactly zero for the first layer of any network",
+      "Because the input is detached from the graph automatically after the forward pass",
+      "Because the first layer has no weights to differentiate, so its backward is skipped"
+    ],
+    "answer_index": 0,
+    "explanation": "Raw data is not a parameter and has no upstream layer, so no one needs its gradient; autograd computes only ∂L/∂W and ∂L/∂b. The gradient wouldn't be zero, it is just unneeded."
+  },
+  {
+    "id": "02.3-039",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "5. Step three: through the linear layer to W, b, x",
+    "question": "What is the linear layer's VJP pattern between forward and backward-to-input?",
+    "options": [
+      "Forward multiplies by W; backward-to-input multiplies by W^T",
+      "Forward multiplies by W^T; backward-to-input multiplies by W",
+      "Both forward and backward multiply by W",
+      "Forward multiplies by W; backward-to-input multiplies by W^{-1}"
+    ],
+    "answer_index": 0,
+    "explanation": "The 'transpose on the way back' is the linear layer's VJP: ∂L/∂x = W^T g. It is not the inverse; W need not be square or invertible."
+  },
+  {
+    "id": "02.3-040",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "6. Full numeric example, by hand",
+    "question": "For logits z = [−0.2, 1.0, 0.9] with p ≈ [0.137, 0.453, 0.410] and true class t = 0, what is g = p − onehot(0)?",
+    "options": [
+      "≈ [0.137, −0.547, 0.410]",
+      "≈ [0.863, −0.453, −0.410]",
+      "≈ [−0.863, 0.453, 0.410]",
+      "≈ [−1.2, 1.0, 0.9]"
+    ],
+    "answer_index": 2,
+    "explanation": "Subtract 1 only at the true class: [0.137 − 1, 0.453, 0.410]. [0.137, −0.547, 0.410] is the result for t = 1. Subtracting from logits instead of probabilities is wrong."
+  },
+  {
+    "id": "02.3-041",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "6. Full numeric example, by hand",
+    "question": "In the logit gradient g = p − onehot(t), what do the entries always sum to, and why?",
+    "options": [
+      "The loss value, because g is the derivative of the loss itself",
+      "−1, because only the true class contributes, with entry −1",
+      "0, because p sums to 1 and the one-hot vector sums to 1",
+      "1, because p is a probability distribution summing to 1"
+    ],
+    "answer_index": 2,
+    "explanation": "Σ(p_i − y_i) = 1 − 1 = 0 regardless of which class is true. Interpretation: softmax gradients only redistribute probability between classes, never create or remove total mass."
+  },
+  {
+    "id": "02.3-042",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "6. Full numeric example, by hand",
+    "question": "In the worked example with p_0 ≈ 0.137 for true class 0 and positive gradients for classes 1 and 2, what does the gradient tell the model to do?",
+    "options": [
+      "Lower the logit of class 0 and raise the logits of classes 1 and 2",
+      "Raise the logit of class 0 and lower the logits of classes 1 and 2",
+      "Raise all three logits by the same amount, preserving their gaps",
+      "Leave class 0 alone and lower only class 1, the largest probability"
+    ],
+    "answer_index": 1,
+    "explanation": "Class 0's gradient (−0.863) is negative, so gradient descent increases its logit; classes 1 and 2 are positive, so they decrease. Class 0 needs the biggest correction because it was most under-predicted."
+  },
+  {
+    "id": "02.3-043",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "6. Full numeric example, by hand",
+    "question": "For x = [1, 2] and g = [−0.863, 0.453, 0.410], what is the first row of ∂L/∂W = g x^T?",
+    "options": [
+      "[1, 2], x itself",
+      "[−0.863, −1.727]",
+      "[−0.863, 0.453]",
+      "[−0.863, −0.432]"
+    ],
+    "answer_index": 1,
+    "explanation": "Row i of the outer product is g_i · x^T, so row 0 is −0.863 × [1, 2] = [−0.863, −1.727]. [−0.863, 0.453] reads g's first two entries, not an outer-product row."
+  },
+  {
+    "id": "02.3-044",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "7. Tensor shapes and the batched reality",
+    "question": "For a batch of N examples, what is the shape of the logits z and of g = p − y?",
+    "options": [
+      "(C, N) and (N, C)",
+      "Both (N, C)",
+      "Both (C,)",
+      "(N, C) and (C,)"
+    ],
+    "answer_index": 1,
+    "explanation": "Batching adds a leading axis: inputs become (N, d), logits, probabilities and g become (N, C). Targets become an (N,) int64 tensor."
+  },
+  {
+    "id": "02.3-045",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "7. Tensor shapes and the batched reality",
+    "question": "For a batch of N examples, what dtype are the class targets typically stored as in PyTorch?",
+    "options": [
+      "int64 (long), shape (N,)",
+      "bool one-hot, shape (N, C)",
+      "float32 one-hot, shape (N, C)",
+      "float16 indices, shape (N,)"
+    ],
+    "answer_index": 0,
+    "explanation": "Targets are class indices, so they are stored as an (N,) long (int64) tensor, not as one-hot floats. Logits and gradients are float32."
+  },
+  {
+    "id": "02.3-046",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "7. Tensor shapes and the batched reality",
+    "question": "For a batch of N examples with a mean loss, what is the shape of ∂L/∂W for the output projection, and does it depend on N?",
+    "options": [
+      "(N, C, d), one gradient per example",
+      "(N, d), one row per example",
+      "(C, d), independent of N",
+      "(C, d·N), concatenated over the batch"
+    ],
+    "answer_index": 2,
+    "explanation": "The loss is the batch mean, a scalar, so per-example outer products are summed and averaged into a single (C, d) matrix — the same shape as W. Batch size changes compute, not the gradient's shape."
+  },
+  {
+    "id": "02.3-047",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "7. Tensor shapes and the batched reality",
+    "question": "In matrix form, what is the batched weight gradient for a mean loss with G of shape (N, C) and X of shape (N, d)?",
+    "options": [
+      "(1/N) G^T X",
+      "(1/N) G X^T",
+      "N · G^T X",
+      "(1/N) X^T G"
+    ],
+    "answer_index": 0,
+    "explanation": "G^T X is (C, N)×(N, d) = (C, d), the sum of per-example outer products g_n x_n^T; dividing by N gives the mean. X^T G is (d, C), the transpose. G X^T is (N, N)."
+  },
+  {
+    "id": "02.3-048",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "7. Tensor shapes and the batched reality",
+    "question": "Why is the final projection's weight gradient one of the largest single tensors in a GPT?",
+    "options": [
+      "Its shape grows with the number of layers in the model",
+      "Its shape is (C, d) and C is the vocabulary size, around 50,000",
+      "Its shape is (C, C) because softmax is C × C",
+      "Its shape is (N, C, d) with a full copy per token in the batch"
+    ],
+    "answer_index": 1,
+    "explanation": "The output projection gradient matches W's shape (C, d), and C ≈ 50,000 makes it huge. It does not scale with batch size or depth. The softmax Jacobian is C × C but is never materialised."
+  },
+  {
+    "id": "02.3-049",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "8. From-scratch, then verified against loss.backward()",
+    "question": "In a from-scratch backward for linear + softmax + CE with p, x, W and target t, which line computes ∂L/∂W?",
+    "options": [
+      "dW = torch.outer(g, g) with g = p − y",
+      "dW = torch.outer(x, g) with g = p − y",
+      "dW = W.t() @ g with g = p − y",
+      "dW = torch.outer(g, x) with g = p − y"
+    ],
+    "answer_index": 3,
+    "explanation": "∂L/∂W = gx^T, which torch.outer(g, x) computes with shape (C, d). outer(x, g) gives the (d, C) transpose. W.t() @ g is ∂L/∂x, and outer(g, g) is (C, C), not W's shape."
+  },
+  {
+    "id": "02.3-050",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "8. From-scratch, then verified against loss.backward()",
+    "question": "In PyTorch, why is z.unsqueeze(0) and t.unsqueeze(0) used when calling F.cross_entropy on a single example?",
+    "options": [
+      "To detach the logits from the autograd graph so the loss is not recorded",
+      "F.cross_entropy expects batched inputs: logits (N, C) and targets (N,)",
+      "To apply softmax to the logits along the new axis before the loss",
+      "To convert the logits from float32 to float64 for extra precision"
+    ],
+    "answer_index": 1,
+    "explanation": "cross_entropy takes logits of shape (N, C) and targets of shape (N,), so a single example needs a batch axis of size 1. unsqueeze changes shape only, not dtype or graph membership."
+  },
+  {
+    "id": "02.3-051",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "8. From-scratch, then verified against loss.backward()",
+    "question": "What does F.cross_entropy(logits, target) do in its forward pass?",
+    "options": [
+      "Computes softmax, stores the full p, then calls torch.log on p and picks entry t",
+      "Expects probabilities as input and only computes the negative log of entry t",
+      "Applies a sigmoid to each logit independently and sums the per-class losses",
+      "Fuses softmax, log and the NLL pick into one op, without forming p explicitly"
+    ],
+    "answer_index": 3,
+    "explanation": "cross_entropy takes raw logits and fuses softmax + log + NLL, never materialising p in the forward. Passing probabilities instead of logits is a mistake. It is the multi-class softmax loss, not per-logit sigmoids."
+  },
+  {
+    "id": "02.3-052",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "8. From-scratch, then verified against loss.backward()",
+    "question": "How does the backward of F.cross_entropy compute the gradient with respect to the logits?",
+    "options": [
+      "It returns −1/p_t at the true class and 0 elsewhere",
+      "It estimates the gradient by finite differences on the logits",
+      "It differentiates softmax and log separately and multiplies their Jacobians",
+      "It is hard-coded to return p − onehot(t), scaled by 1/N for the batch mean"
+    ],
+    "answer_index": 3,
+    "explanation": "The framework knows the closed form and applies it directly, which is faster and numerically safer than chaining softmax and log Jacobians. −1/p_t is ∂L/∂p, not the logit gradient."
+  },
+  {
+    "id": "02.3-053",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "8. From-scratch, then verified against loss.backward()",
+    "question": "Verifying a hand-derived backward against loss.backward() with torch.allclose(..., atol=1e-6) checks what?",
+    "options": [
+      "That the gradients are all smaller than 10^-6 in magnitude, so training has converged",
+      "That the loss value is below 10^-6 after one optimizer step on the batch",
+      "That W.grad, b.grad and x.grad equal g x^T, g and W^T g to machine precision",
+      "That the model's predictions match the targets exactly on every example"
+    ],
+    "answer_index": 2,
+    "explanation": "allclose with a small tolerance confirms the analytic gradients match autograd's, validating the derivation. It says nothing about loss size or gradient magnitude."
+  },
+  {
+    "id": "02.3-054",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "9. Under the hood: numerical stability and why the fused op exists",
+    "question": "Why does computing softmax naively as exp(z)/sum(exp(z)) fail for large logits?",
+    "options": [
+      "A large logit makes softmax output negative values",
+      "A large logit makes the softmax Jacobian non-symmetric",
+      "A large logit makes the sum exactly zero",
+      "A large logit overflows exp"
+    ],
+    "answer_index": 3,
+    "explanation": "e^z overflows the floating-point range for large z (above about 88 in float32), producing inf. The sum isn't zero, outputs stay non-negative, and the Jacobian's symmetry is unaffected."
+  },
+  {
+    "id": "02.3-055",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "9. Under the hood: numerical stability and why the fused op exists",
+    "question": "How do stable softmax implementations avoid overflow?",
+    "options": [
+      "Divide every logit by the vocabulary size before exponentiating",
+      "Compute exp in float16, whose wider exponent range avoids inf",
+      "Clip every logit to the range [−1, 1] before exponentiating",
+      "Subtract the max logit before exponentiating, so exponents are ≤ 0"
+    ],
+    "answer_index": 3,
+    "explanation": "p_i = e^{z_i − max z}/Σ e^{z_k − max z} is mathematically identical (the shared factor cancels) but keeps every exponent ≤ 0, so nothing overflows. Dividing or clipping logits changes the distribution."
+  },
+  {
+    "id": "02.3-056",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "9. Under the hood: numerical stability and why the fused op exists",
+    "question": "Why is computing −log p_t via log_softmax better than forming p_t and then taking log?",
+    "options": [
+      "It makes the loss always positive, which plain log of p_t cannot guarantee",
+      "It avoids computing the logits entirely, reading log-probabilities directly",
+      "It skips the max-subtraction trick, saving one operation per row",
+      "It avoids forming a tiny p_t and then taking its log, which loses precision"
+    ],
+    "answer_index": 3,
+    "explanation": "A tiny p_t rounds toward zero before the log sees it, losing digits or producing −inf. log_softmax computes the log-probability directly from logits. It uses the max-subtraction trick, not skips it."
+  },
+  {
+    "id": "02.3-057",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "9. Under the hood: numerical stability and why the fused op exists",
+    "question": "Why do frameworks hard-code the VJP of common composite ops like softmax + cross-entropy?",
+    "options": [
+      "To reduce the number of model parameters",
+      "Because autograd cannot differentiate exponentials",
+      "Because those ops have no mathematical derivative",
+      "For both speed and numerical safety"
+    ],
+    "answer_index": 3,
+    "explanation": "The fused backward is just a subtraction p − y, with no chain of softmax and log Jacobians multiplied at runtime and no log of a tiny probability. Autograd could differentiate the pieces, but less efficiently and less safely."
+  },
+  {
+    "id": "02.3-058",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "10. Research connection",
+    "question": "In GPT-2, what launches the backward pass through all of its transformer layers?",
+    "options": [
+      "A separate auxiliary loss computed at the output of every transformer layer",
+      "The gradient of the attention mask with respect to the input token embeddings",
+      "The gradient of the positional embeddings with respect to each token's position",
+      "The gradient p − onehot(t) at the vocabulary logits"
+    ],
+    "answer_index": 3,
+    "explanation": "GPT-2's final linear layer projects the last hidden state to vocab_size logits; softmax + cross-entropy against the true next token gives the loss, and p − onehot(t) starts backprop through all 12 (or 48) layers."
+  },
+  {
+    "id": "02.3-059",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Exercise",
+    "question": "For the same p = [0.137, 0.453, 0.410] but true class t = 1, what is g = p − onehot(t)?",
+    "options": [
+      "≈ [0.137, −0.547, 0.410]",
+      "≈ [−0.137, −0.547, −0.410]",
+      "≈ [0.137, 0.547, 0.410]",
+      "≈ [−0.863, 0.453, 0.410]"
+    ],
+    "answer_index": 0,
+    "explanation": "The forward is unchanged; only the one-hot moves to [0, 1, 0]. Subtracting 1 at entry 1 gives [0.137, −0.547, 0.410], which still sums to 0. [−0.863, ...] is the t = 0 case."
+  },
+  {
+    "id": "02.3-060",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Exercise",
+    "question": "For p = [0.137, 0.453, 0.410], why is the loss lower for true class t = 1 than for t = 0?",
+    "options": [
+      "Because the forward pass and its logits change when the target class changes",
+      "Because the gradient for t = 1 sums to a smaller total than the one for t = 0",
+      "The model gave class 1 more probability, so −log p_1 ≈ 0.79 < −log p_0 ≈ 1.99",
+      "Because the loss for t = 1 ignores class 0 entirely, while t = 0 counts all three"
+    ],
+    "answer_index": 2,
+    "explanation": "Loss is −log p_t; p_1 = 0.453 > p_0 = 0.137, so it is 'less wrong', and its true-class gradient is smaller in magnitude (−0.547 vs −0.863). The forward and logits don't depend on the target; gradient sums are 0 either way."
+  },
+  {
+    "id": "02.3-061",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What goes wrong if the input gradient of a linear layer uses W instead of W^T when C = d?",
+    "options": [
+      "No error, because W = W^T for any square matrix",
+      "An immediate shape error at runtime",
+      "A silent wrong-answer bug, since shapes still match",
+      "Only a slower computation with the same result"
+    ],
+    "answer_index": 2,
+    "explanation": "When C ≠ d, using W is a shape bug that errors. When C = d, shapes match so it runs, but the result is wrong unless W happens to be symmetric. Square matrices are not generally symmetric."
+  },
+  {
+    "id": "02.3-062",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "What is the effect of writing ∂L/∂W = x g^T instead of g x^T?",
+    "options": [
+      "It gives a (d, C) matrix, the transpose of the correct (C, d) gradient",
+      "It gives the input gradient W^T g of shape (d,) instead of a weight gradient",
+      "It gives the same (C, d) matrix, since outer products of vectors commute",
+      "It gives a scalar instead of a matrix, since x and g are contracted"
+    ],
+    "answer_index": 0,
+    "explanation": "Outer products don't commute: x g^T is (d, C), the transpose of what W needs. The correct gradient must match W's (C, d) shape."
+  },
+  {
+    "id": "02.3-063",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "With a batch mean loss (reduction='mean'), what factor does every parameter gradient carry relative to the per-example sum?",
+    "options": [
+      "1/sqrt(N)",
+      "N",
+      "1/N",
+      "1/C"
+    ],
+    "answer_index": 2,
+    "explanation": "Averaging the loss over N examples scales every gradient by 1/N. Forgetting this is a common mistake when comparing hand gradients against PyTorch's default reduction='mean' rather than 'sum'."
+  },
+  {
+    "id": "02.3-064",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "In float32 with logits z = [0, 100] and true class t = 0, what happens if you compute p = softmax(z) naively and then −log(p[0])?",
+    "options": [
+      "The loss comes out correctly as about 100, since float32 handles e^100",
+      "An exception is raised by torch.exp before any value is computed",
+      "The loss comes out as 0, because p_1 rounds to 1 and absorbs all the mass",
+      "exp(100) overflows to inf, p_0 becomes 0, log(0) = −inf: loss inf, gradient nan"
+    ],
+    "answer_index": 3,
+    "explanation": "e^100 exceeds float32's max (about e^88), so naive exp returns inf; p_0 = 1/inf = 0; log(0) = −inf; the loss is inf and its gradient nan. The true loss is log(1 + e^100) ≈ 100."
+  },
+  {
+    "id": "02.3-065",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "For logits z = [0, 100] and true class 0, how does the log_softmax formula compute a finite loss?",
+    "options": [
+      "Rescale the logits by 1/100 to [0, 1], so the loss comes out as about 1",
+      "Replace inf by the largest float32 value, so the loss is about 3.4e38",
+      "Clip the logits to [0, 1] before exponentiating, so the loss is log 2",
+      "Shift logits by the max to [−100, 0], so log p_0 ≈ −100 and the loss is 100"
+    ],
+    "answer_index": 3,
+    "explanation": "log p_t = z_t − max z − log Σ e^{z_k − max z}. Shifted logits [−100, 0] give exponentials ≈ 0 and 1, sum ≈ 1, so log p_0 = −100 and the loss is a finite 100. Clipping or rescaling changes the answer."
+  },
+  {
+    "id": "02.3-066",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Common mistakes",
+    "question": "Even without overflow, why can forming a tiny p_t (say 10^-40) and then taking log lose accuracy?",
+    "options": [
+      "Because the log of a tiny number underflows to exactly zero in float32",
+      "Because softmax always rounds tiny probabilities up to 0.5 to avoid log(0)",
+      "Because log of any number below 1 is undefined in float32 arithmetic",
+      "The tiny p_t is rounded to almost nothing before log sees it, so digits are lost"
+    ],
+    "answer_index": 3,
+    "explanation": "Float32 cannot represent 10^-40 accurately (it is in the subnormal range), so the value reaching log is already damaged. log of numbers below 1 is defined (negative), and is not zero."
+  },
+  {
+    "id": "02.3-067",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Check yourself",
+    "question": "What does it mean that the logit gradient p − onehot(t) sums to zero?",
+    "options": [
+      "The gradient redistributes probability between classes, never changing the total",
+      "Every class receives the same update, so the logits all shift by one constant",
+      "The loss is zero at every point in training, since the gradient cancels out",
+      "The gradient has no effect on the logits, since positive and negative parts cancel"
+    ],
+    "answer_index": 0,
+    "explanation": "Every unit pushed off wrong classes is pushed onto the right one; the total is conserved. The individual entries differ and are nonzero, so logits do change, and the loss is not zero."
+  },
+  {
+    "id": "02.3-068",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Check yourself",
+    "question": "For a batch of N = 32 tokens with vocab C = 50257 and hidden size d = 768, what is the shape of ∂L/∂W for the final projection?",
+    "options": [
+      "(32, 768)",
+      "(50257, 768)",
+      "(32, 50257, 768)",
+      "(768, 50257)"
+    ],
+    "answer_index": 1,
+    "explanation": "∂L/∂W always has W's shape (C, d) = (50257, 768) and does not depend on N; the batch is summed/averaged in via (1/N)G^T X. (768, 50257) is the transpose."
+  },
+  {
+    "id": "02.3-069",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Where exactly does the softmax + cross-entropy derivation contain a division by p_t, and how is it removed?",
+    "options": [
+      "In ∂L/∂W = g x^T; it is removed by transposing W before the outer product",
+      "In the batch mean 1/N; it is removed by using reduction='sum' instead",
+      "In ∂L/∂p_t = −1/p_t; the softmax entry p_t(δ_ti − p_i) cancels it",
+      "In the softmax denominator S; it is removed by subtracting the max logit"
+    ],
+    "answer_index": 2,
+    "explanation": "The dangerous division appears only in ∂L/∂p_t. The p_t in the softmax Jacobian cancels it, leaving p_i − δ_ti with no division. Max-subtraction addresses forward overflow, a separate issue."
+  },
+  {
+    "id": "02.3-070",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Check yourself",
+    "question": "Why does the most under-predicted true class get the biggest correction in p − onehot(t)?",
+    "options": [
+      "Because the true class's gradient entry is multiplied by C, the number of classes",
+      "Its entry p_t − 1 is largest in magnitude when p_t is far below the target 1",
+      "Because its logit is always the largest, so softmax gives it the largest gradient",
+      "Because wrong classes always have zero gradient, so all correction goes to class t"
+    ],
+    "answer_index": 1,
+    "explanation": "The size of each nudge is how wrong that probability was. With p_0 = 0.137 against target 1, the entry is −0.863, the largest magnitude. Wrong classes have nonzero positive gradients p_i."
+  },
+  {
+    "id": "02.3-071",
+    "chapter": "02.3",
+    "chapter_name": "Backprop through linear + softmax + CE by hand",
+    "module": "2",
+    "module_name": "Gradients & backpropagation",
+    "source": "lessons/module-02/lesson-03.md",
+    "section": "Next",
+    "question": "In a linear layer's backward pass, which matrices carry the gradient into the rest of the network and update the layer?",
+    "options": [
+      "W^{-1} carries ∂L/∂x down to earlier layers; g is the layer's own weight gradient",
+      "W^T carries ∂L/∂x down to earlier layers; g x^T is the layer's own weight gradient",
+      "g x^T carries ∂L/∂x down to earlier layers; W^T g is the layer's own weight gradient",
+      "W carries ∂L/∂x down to earlier layers; x g^T is the layer's own weight gradient"
+    ],
+    "answer_index": 1,
+    "explanation": "The linear layer uses W forward and W^T backward to propagate ∂L/∂x = W^T g; its parameter gradient is ∂L/∂W = g x^T (shape (C, d)). g alone is the bias gradient."
+  }
+]

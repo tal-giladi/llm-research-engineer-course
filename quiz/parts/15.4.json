@@ -1,0 +1,830 @@
+[
+  {
+    "id": "15.4-001",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Prerequisites / why this matters",
+    "question": "Why is choosing the alignment method one of the highest-leverage decisions in a post-training project?",
+    "options": [
+      "It sets the compute budget, the data-collection strategy, and the failure surface",
+      "It fixes the tokenizer, vocabulary size, and context length that post-training must use",
+      "It retroactively reweights the pretraining data mix toward the chosen preference domain",
+      "It decides the attention-head count and hidden width of the policy being aligned"
+    ],
+    "answer_index": 0,
+    "explanation": "SFT, RM+PPO, and DPO differ in how much compute and infrastructure they need, what data must be collected (demonstrations vs preference pairs vs on-policy samples), and how they fail. Architecture and tokenizer are fixed before post-training."
+  },
+  {
+    "id": "15.4-002",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "The causal story so far",
+    "question": "How are SFT, RM+PPO, and DPO typically related in an aligned model's training?",
+    "options": [
+      "They are stages: SFT first, then preference optimization (PPO or DPO) on top",
+      "They are rival recipes; a project picks exactly one of the three and runs only that one",
+      "DPO runs first on the base model, then SFT fixes the format, then PPO polishes the output",
+      "PPO replaces SFT entirely, and DPO is used only afterward as an offline evaluation metric"
+    ],
+    "answer_index": 0,
+    "explanation": "Almost every aligned model does SFT first, then a preference-optimization stage. The real choice is which preference method to use for the second stage. Treating them as competitors is a common mistake."
+  },
+  {
+    "id": "15.4-003",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "The causal story so far",
+    "question": "What does SFT teach, and what can it not do?",
+    "options": [
+      "It teaches answer ranking from demonstrations, but it cannot teach the chat format or the turn structure",
+      "It teaches a reward model to score answers, but it cannot change the policy's own next-token distribution",
+      "It teaches the model to recover from its own sampled mistakes, but it cannot teach basic instruction-following",
+      "It teaches instruction format and following, but can't rank answers: each demonstration counts as equally correct"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT imitates demonstrations with next-token cross-entropy, so it installs format and instruction-following. Because every demonstration is treated as equally correct, it cannot learn that one answer is better than another. Recovery from its own mistakes is in fact a weakness (exposure bias)."
+  },
+  {
+    "id": "15.4-004",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "The causal story so far",
+    "question": "How does DPO relate to RM+PPO in terms of objective and machinery?",
+    "options": [
+      "A different objective that drops the reference policy entirely, but is optimized with the same RL machinery",
+      "The same reward-model-plus-rollout machinery, but trained on absolute human scores instead of pairwise labels",
+      "The same preference objective, rearranged into one supervised loss on pairs with no reward model or sampling",
+      "A weaker surrogate objective that only converges once a full PPO run has already initialized the policy"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO optimizes the same KL-constrained preference objective as RM+PPO, but as a closed-form supervised loss on preference pairs. It needs no reward model and no rollouts. It still uses a frozen reference policy."
+  },
+  {
+    "id": "15.4-005",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What each one optimizes",
+    "question": "What is the SFT objective and its training data?",
+    "options": [
+      "E[r(x,y)] - beta · KL(pi_theta || pi_ref), maximized using on-policy samples drawn each step",
+      "-sum_t log pi_theta(y_t | y_<t, x) on response tokens, using (prompt, ideal response) demonstrations",
+      "-E log sigmoid(beta · implicit reward margin), using (prompt, chosen, rejected) preference pairs",
+      "Mean squared error between a scalar head and human scores, using individually rated completions"
+    ],
+    "answer_index": 1,
+    "explanation": "SFT minimizes the negative log-likelihood of a gold response's tokens, matching one demonstration per prompt. The KL-constrained reward objective is RM+PPO's, and the log-sigmoid margin is DPO's."
+  },
+  {
+    "id": "15.4-006",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What each one optimizes",
+    "question": "What data pipeline does RM+PPO use?",
+    "options": [
+      "Only (prompt, ideal response) demonstrations, trained with token-level cross-entropy on the response",
+      "Preference pairs train a reward model, which then scores on-policy samples generated during RL",
+      "A fixed offline set of preference pairs fed directly into a supervised log-sigmoid loss on the policy",
+      "Absolute 1-10 human ratings that the policy regresses directly through a mean-squared-error head"
+    ],
+    "answer_index": 1,
+    "explanation": "RM+PPO first trains a reward model on preference pairs, then optimizes the policy against that learned reward using samples generated from the current policy. Feeding offline pairs straight into a supervised loss is DPO."
+  },
+  {
+    "id": "15.4-007",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What each one optimizes",
+    "question": "What is the fundamental difference between SFT's target and the target of preference methods?",
+    "options": [
+      "SFT's target is an ordering (chosen beats rejected); preference methods' target is a single gold point",
+      "Both targets are points, but preference methods average the two gold answers into one blended target response",
+      "SFT's target is a scalar reward value; preference methods' target is the next token of the gold answer",
+      "SFT's target is a point (one gold answer); preference methods' target is an ordering (chosen beats rejected)"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT pushes the model toward one specific gold response. Preference methods learn that chosen should beat rejected, a relative ordering. That is why SFT hits a quality ceiling at its demonstrations while preference tuning can push past it."
+  },
+  {
+    "id": "15.4-008",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What each one optimizes",
+    "question": "Do PPO and DPO optimize different objectives?",
+    "options": [
+      "Yes; PPO maximizes a learned reward model's score, while DPO only maximizes the likelihood of chosen responses",
+      "Yes; DPO drops the KL constraint entirely, so it optimizes reward with no anchor to the reference policy",
+      "No; both optimize the same KL-constrained objective, via RL on a reward model vs a closed-form supervised loss",
+      "No; both reduce exactly to SFT on the chosen responses, so they differ only in how batches are constructed"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO's derivation starts from PPO's KL-constrained objective and rearranges it via the closed-form optimal policy. The difference is how they get there: PPO uses RL and a learned reward model, DPO a direct classification loss. DPO's KL constraint is built in through the reference."
+  },
+  {
+    "id": "15.4-009",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "How many models are resident during training for SFT, RM+PPO, and DPO, respectively?",
+    "options": [
+      "SFT: 2 (policy and reference); RM+PPO: 2 (policy and reward model); DPO: 4 including a critic",
+      "SFT: 1; RM+PPO: up to 4; DPO: 2 (effectively 1 if reference log-probs are cached)",
+      "SFT: 1; RM+PPO: 1 with the reward folded in; DPO: 1, since the reference is never loaded",
+      "SFT: 4 with ensembling; RM+PPO: 3 without a reference; DPO: 2 including a reward model"
+    ],
+    "answer_index": 1,
+    "explanation": "SFT trains only the policy. RM+PPO keeps the policy (with value head), a frozen reference, and the reward model — up to four models. DPO needs the policy and a frozen reference, and caching the reference's log-probs makes it effectively one model."
+  },
+  {
+    "id": "15.4-010",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "Which of SFT, RM+PPO, and DPO requires generation in the training loop?",
+    "options": [
+      "Only RM+PPO, which does autoregressive rollouts every step",
+      "Only DPO, which samples fresh chosen and rejected pairs every step",
+      "All three, since each scores completions sampled from the policy",
+      "Only SFT, which generates its own demonstrations before each epoch"
+    ],
+    "answer_index": 0,
+    "explanation": "PPO must sample completions from the current policy each iteration to score them. SFT and DPO train on fixed datasets with no generation. Generation is slow, which is a major part of PPO's cost."
+  },
+  {
+    "id": "15.4-011",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "What are the main hyperparameters of DPO compared with RM+PPO?",
+    "options": [
+      "DPO: clip epsilon and GAE lambda; RM+PPO: only beta, because the reward model fixes all the other settings",
+      "DPO: learning rate and epochs only; RM+PPO: learning rate and epochs only, like any SFT run",
+      "DPO: beta and learning rate; RM+PPO: epsilon, beta_KL, learning rate, GAE lambda, rollout/batch sizes",
+      "DPO: rollout size, beta_KL and value-loss weight; RM+PPO: beta and learning rate, with nothing else"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO has few knobs — mainly beta and the learning rate. PPO has many interacting ones: the clip epsilon, the KL coefficient, the learning rate, GAE lambda, and rollout and batch sizes. SFT mainly needs learning rate and epochs."
+  },
+  {
+    "id": "15.4-012",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "What two factors dominate PPO's cost relative to DPO?",
+    "options": [
+      "Computing the Bradley-Terry loss over every pair, and re-tokenizing the dataset at each epoch",
+      "Saving full optimizer-state checkpoints every step, and logging per-token metrics to disk",
+      "Keeping several large models in memory at once, and generating completions every step",
+      "Needing a larger vocabulary for the value head, and a much longer context for every prompt"
+    ],
+    "answer_index": 2,
+    "explanation": "PPO holds up to four models in memory and runs slow autoregressive rollouts each iteration. DPO removes both — no reward model, no rollouts — which is why it trains like SFT."
+  },
+  {
+    "id": "15.4-013",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "According to the comparison of post-training methods, why did DPO become the default for open-weight models?",
+    "options": [
+      "Because DPO has been proven to always produce higher-quality models than PPO on every benchmark",
+      "Mainly the engineering gap: it trains like SFT without a reward model or rollouts",
+      "Because PPO's license terms forbid running it on open-weight checkpoints released by labs",
+      "Because DPO needs no preference data at all, only the demonstrations already used for SFT"
+    ],
+    "answer_index": 1,
+    "explanation": "DPO optimizes the same objective with far less infrastructure and instability, so it is much easier to run. That engineering advantage, rather than a claim of strictly better quality, explains its dominance in the open-weight ecosystem. It still needs preference pairs."
+  },
+  {
+    "id": "15.4-014",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "What infrastructure each needs",
+    "question": "What is DPO's relative training cost?",
+    "options": [
+      "Roughly SFT cost plus a frozen forward pass",
+      "Roughly the same as RM+PPO, rollouts included",
+      "Lower than SFT, because no labels are needed",
+      "Roughly four times RM+PPO, due to paired data"
+    ],
+    "answer_index": 0,
+    "explanation": "DPO forwards the trainable policy and a frozen reference (whose log-probs can be cached) on fixed chosen/rejected completions. That is approximately SFT plus one frozen forward. PPO is the most expensive; SFT is the cheapest."
+  },
+  {
+    "id": "15.4-015",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Reward hacking (RM+PPO)",
+    "question": "What is reward hacking in RM+PPO?",
+    "options": [
+      "The reward model collapses to outputting nearly constant rewards, so PPO's advantage estimates vanish entirely",
+      "Labelers coordinate to inflate preference labels for one style, biasing the reward model toward it",
+      "The value head overfits the training prompts, so advantage estimates blow up on any new prompt",
+      "The policy exploits the proxy reward model's blind spots: high-scoring but bad outputs (verbose, sycophantic)"
+    ],
+    "answer_index": 3,
+    "explanation": "The reward model is only a proxy for human preference. Optimizing it hard enough leads the policy to exploit its weaknesses, producing outputs the reward model overrates. Verbosity, sycophancy, and formulaic answers are typical symptoms."
+  },
+  {
+    "id": "15.4-016",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Reward hacking (RM+PPO)",
+    "question": "Which principle describes reward hacking, and how is it stated?",
+    "options": [
+      "Occam's razor: among reward models that fit the labels, the simplest one generalizes best",
+      "The bitter lesson: general methods that exploit more compute eventually beat hand-built ones",
+      "Murphy's law: anything that can go wrong in an optimization loop eventually will go wrong",
+      "Goodhart's law: when a measure becomes a target, it stops being a good measure"
+    ],
+    "answer_index": 3,
+    "explanation": "Reward hacking is Goodhart's law in action: once the reward model's score is the optimization target, it no longer tracks true quality well. The KL penalty is the main defense against pushing the proxy too far."
+  },
+  {
+    "id": "15.4-017",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Reward hacking (RM+PPO)",
+    "question": "What is the warning sign of reward hacking in an RM+PPO run?",
+    "options": [
+      "Reward and KL both staying flat for many steps while the value loss slowly creeps upward",
+      "Reward climbing while KL to the reference explodes and human ratings drop",
+      "Value loss decreasing steadily to zero while the advantage estimates shrink toward zero",
+      "The clip fraction falling to zero while the reported reward drops steadily step after step"
+    ],
+    "answer_index": 1,
+    "explanation": "Reward hacking shows reported reward rising, KL to the reference rising quickly as the policy drifts, and actual human-judged quality falling. A healthy run keeps KL bounded while reward improves."
+  },
+  {
+    "id": "15.4-018",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Over-optimization (RM+PPO, and DPO too)",
+    "question": "What is over-optimization in preference tuning?",
+    "options": [
+      "Pushing too hard against a fixed reward or preference signal so measured and real quality diverge",
+      "Using so many GPUs that communication dominates and each step's utilization drops sharply",
+      "Running the optimizer with too small a learning rate, so the policy barely moves from the reference",
+      "Training the reward model for too few steps, so its scores are noisy before PPO even begins"
+    ],
+    "answer_index": 0,
+    "explanation": "Even without pathological hacking, optimizing too hard against any fixed signal eventually hurts true quality: past some point the measured metric keeps improving while real quality declines. In PPO this shows up as the KL-vs-reward trade-off."
+  },
+  {
+    "id": "15.4-019",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Over-optimization (RM+PPO, and DPO too)",
+    "question": "Under which conditions is DPO prone to over-optimization?",
+    "options": [
+      "With a large beta and a single epoch, which lets the policy drift far from the reference",
+      "Only when a separate reward model is trained and used alongside it to relabel the pairs",
+      "Never, because DPO has no explicit reward model whose blind spots the policy could exploit",
+      "With small beta or many epochs, it can over-fit the preference pairs and degrade"
+    ],
+    "answer_index": 3,
+    "explanation": "DPO is not immune to over-optimization. A small beta lets the policy drift far from the reference, and many epochs over-fit the fixed pairs. Large beta and fewer epochs are mitigations."
+  },
+  {
+    "id": "15.4-020",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Over-optimization (RM+PPO, and DPO too)",
+    "question": "What is DPO's known 'margin-only' failure mode?",
+    "options": [
+      "It can drive both chosen and rejected log-probabilities up to exactly zero, making every output certain",
+      "It can make the frozen reference model's log-probabilities increase alongside the policy's chosen ones",
+      "It can push both chosen and rejected log-probs down, as long as rejected falls faster than chosen",
+      "It can make the implicit reward margin turn negative while the reported DPO loss still keeps decreasing"
+    ],
+    "answer_index": 2,
+    "explanation": "DPO only optimizes the difference of implicit rewards, so the loss can improve even if the chosen completion's probability falls, as long as the rejected falls faster. This can generally suppress output. Monitoring the absolute chosen log-prob, not just the margin, catches it."
+  },
+  {
+    "id": "15.4-021",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Over-optimization (RM+PPO, and DPO too)",
+    "question": "When training with DPO, which quantity should be monitored in addition to the margin to catch the margin-only pathology?",
+    "options": [
+      "The absolute log-probability of the chosen completions",
+      "The reward model's bias term and its calibration drift",
+      "The PPO clip fraction and the approximate KL per step",
+      "The tokenizer's out-of-vocabulary rate on the rejected set"
+    ],
+    "answer_index": 0,
+    "explanation": "Because the margin can improve while both chosen and rejected probabilities fall, watching the chosen log-prob directly (along with reward accuracy) reveals when the model is being suppressed overall. There is no reward model or clip fraction in DPO."
+  },
+  {
+    "id": "15.4-022",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Distribution shift (RM+PPO especially)",
+    "question": "What is distribution shift in RM+PPO?",
+    "options": [
+      "The improving policy produces completions unlike the reward model's training data, so its scores become unreliable",
+      "The tokenizer's merge statistics shift during RL, so the same text maps to different token sequences over time",
+      "The frozen reference model gradually drifts away from the SFT checkpoint it was copied from during training",
+      "The test-set prompt distribution differs from the training prompts, so held-out reward is measured on new topics"
+    ],
+    "answer_index": 0,
+    "explanation": "The reward model was trained on completions from some earlier distribution, often the SFT model's. PPO moves the policy into regions the reward model has not been trained on, making its scores unreliable exactly on the outputs being optimized. The reference model stays frozen."
+  },
+  {
+    "id": "15.4-023",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Distribution shift (RM+PPO especially)",
+    "question": "How does production RLHF mitigate distribution shift of the reward model?",
+    "options": [
+      "By freezing the policy after the first epoch so its outputs stay inside the reward model's original training range",
+      "By increasing the PPO clip epsilon so each update can move further before the reward model goes stale",
+      "By removing the KL penalty so the policy explores more widely and the reward model sees more variety",
+      "By periodically collecting fresh preferences on the current policy's outputs and retraining the reward model"
+    ],
+    "answer_index": 3,
+    "explanation": "Refreshing the reward model on new on-policy samples keeps it accurate where the policy now operates. Freezing the policy or removing the KL term would not address the reward model's coverage, and removing KL would worsen hacking."
+  },
+  {
+    "id": "15.4-024",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Distribution shift (RM+PPO especially)",
+    "question": "What analogue of distribution shift does DPO on a fixed offline dataset face, and what addresses it?",
+    "options": [
+      "The reference log-probs drift as training proceeds; recomputing them from the current policy every step fixes it",
+      "The tokenizer drifts toward the chosen responses; retraining the tokenizer on rejected ones fixes it",
+      "The fixed pairs may not cover the policy's new behavior; online/iterative DPO regenerates them from the policy",
+      "There is no analogue, because DPO is fully offline and its loss cannot be affected by the policy's outputs"
+    ],
+    "answer_index": 2,
+    "explanation": "As DPO moves the policy, the fixed offline pairs stop reflecting what the policy actually generates. Online or iterative DPO variants sample new pairs from the current policy to keep the data on-policy. The reference stays frozen."
+  },
+  {
+    "id": "15.4-025",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "SFT's failure: it just imitates",
+    "question": "What is exposure bias in SFT?",
+    "options": [
+      "The model is exposed to too many distinct prompts per epoch and overfits to their surface wording",
+      "Trained only on gold prefixes (teacher forcing), it never learns to recover from its own mistakes",
+      "The model memorizes the reward model's preferences and reproduces them instead of the demonstrations",
+      "The model is shown the reference policy's sampled outputs during training and copies their errors"
+    ],
+    "answer_index": 1,
+    "explanation": "Teacher forcing always conditions on correct previous tokens, so at generation time, when the model conditions on its own possibly flawed outputs, it has no training experience with recovering. Preference methods, which score the model's own style of outputs, partly address this."
+  },
+  {
+    "id": "15.4-026",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "SFT's failure: it just imitates",
+    "question": "Besides exposure bias, what are SFT's fundamental limitations?",
+    "options": [
+      "It cannot learn instruction-following or chat format, only the raw style of the demonstration text",
+      "It cannot exceed the quality of its demonstrations and cannot express that A is better than B",
+      "It requires a trained reward model and online rollouts, so it is as costly to run as full RM+PPO",
+      "It cannot be sharded across more than one GPU, because the cross-entropy loss is not decomposable"
+    ],
+    "answer_index": 1,
+    "explanation": "SFT is imitation: it is capped by its demonstrations and has no way to encode comparisons between answers. That gap is why preference learning exists. It does successfully teach instruction-following and format."
+  },
+  {
+    "id": "15.4-027",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "When to use which",
+    "question": "What is the default post-training recipe?",
+    "options": [
+      "PPO first on the base model, then a short SFT pass afterward to repair the chat formatting",
+      "DPO directly on the base model, skipping SFT, since preference pairs also teach the format",
+      "RLAIF only, with no SFT stage, because AI labels make human demonstrations redundant now",
+      "SFT first, then DPO for preference tuning unless a specific need calls for PPO"
+    ],
+    "answer_index": 3,
+    "explanation": "SFT always comes first to install instruction-following and provide a sensible reference. DPO then gives most of the benefit of preference tuning at a fraction of PPO's infrastructure and instability. PPO is reserved for cases that need its specific advantages."
+  },
+  {
+    "id": "15.4-028",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "When to use which",
+    "question": "When is SFT alone the right choice?",
+    "options": [
+      "When you need a reusable reward model for best-of-n sampling and for filtering candidate outputs",
+      "When you want tight online control of the reward/KL trade-off while the policy is still moving",
+      "When you have good demonstrations, need instruction-following and format, and lack preference data",
+      "When the policy must exceed the quality of every demonstration it was trained on, not just match it"
+    ],
+    "answer_index": 2,
+    "explanation": "SFT is cheapest and is always the first stage. With good demonstrations and no preference data, it is enough for instruction-following and format. Reward reuse and online control are reasons for RM+PPO; surpassing demonstrations requires preference methods."
+  },
+  {
+    "id": "15.4-029",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "When to use which",
+    "question": "What advantages justify paying for full RM+PPO over DPO?",
+    "options": [
+      "Lower peak memory than DPO and no generation in the loop, so each step runs noticeably faster",
+      "A reusable reward model (best-of-n, filtering, scoring), online reward/KL control, and on-policy data",
+      "Fewer hyperparameters than DPO and smoother, more stable training curves on the same preference data",
+      "No need for any preference data at all, since the reward model can be bootstrapped from SFT outputs"
+    ],
+    "answer_index": 1,
+    "explanation": "RM+PPO is the high-ceiling option: the reward model is a reusable asset, the KL/reward trade-off can be controlled online, and training uses on-policy samples. Its costs are higher memory, generation, and more hyperparameters. It still needs preference data to train the reward model."
+  },
+  {
+    "id": "15.4-030",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "When to use which",
+    "question": "What characterizes a hybrid/iterative post-training recipe?",
+    "options": [
+      "SFT, then a reward model, then iterative DPO or online RL that regenerates preferences from the current policy",
+      "Alternating SFT and continued pretraining every epoch so the policy never forgets its base-model knowledge",
+      "Training DPO and PPO simultaneously on the same batch, summing both losses into one shared gradient step",
+      "Skipping SFT and running RLAIF directly on the base model, with a constitution supplying all the format rules"
+    ],
+    "answer_index": 0,
+    "explanation": "Hybrid recipes combine an SFT start with a reward model used to produce fresh preference data from the current policy, followed by iterative DPO or online RL. Llama-3-style post-training uses rejection sampling plus DPO in this spirit."
+  },
+  {
+    "id": "15.4-031",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "When to use which",
+    "question": "Why should preference optimization not be applied directly to a base (non-SFT) model?",
+    "options": [
+      "Base models expose no token log-probabilities, so neither the DPO loss nor the PPO ratio can be computed",
+      "Preference optimization needs the vocabulary retrained with chat tokens, which only SFT is able to do",
+      "Both rely on a sensible reference and a policy that already follows the chat format; SFT provides both",
+      "Base models are too small to host a reward model head, so the RM must come from a separate SFT model"
+    ],
+    "answer_index": 2,
+    "explanation": "Preference tuning refines behavior; it does not install it. Both methods use the starting model as the KL anchor/reference, so it must be a reasonable instruction follower. The SFT model supplies that sensible reference and chat-format policy."
+  },
+  {
+    "id": "15.4-032",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Constitutional AI (CAI)",
+    "question": "What is the bottleneck that Constitutional AI and RLAIF aim to relieve?",
+    "options": [
+      "GPU memory during PPO rollouts, which caps how many models stay resident",
+      "The tokenizer's vocabulary size, which limits how well feedback is encoded",
+      "Human preference labels, which are slow, expensive, and inconsistent",
+      "The shortage of fresh pretraining data once the web has been fully crawled"
+    ],
+    "answer_index": 2,
+    "explanation": "All the preference methods depend on human comparison labels, which are costly and noisy. Constitutional AI and RLAIF replace some or all of those labels with AI-generated feedback. They do not directly address compute or pretraining data."
+  },
+  {
+    "id": "15.4-033",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Constitutional AI (CAI)",
+    "question": "What happens in the supervised phase of Constitutional AI?",
+    "options": [
+      "Humans write gold responses for harmful prompts, and the model is then fine-tuned directly on those responses",
+      "The model drafts a response, critiques it against written principles, revises it, and is fine-tuned on revisions",
+      "A reward model is trained on human harm labels, and the policy is distilled from its top-scoring samples only",
+      "The model is fine-tuned on randomly sampled responses with no feedback, relying on scale to remove harm"
+    ],
+    "answer_index": 1,
+    "explanation": "Constitutional AI's first phase is self-critique and revision guided by a constitution of principles, followed by fine-tuning on the revised responses. This is self-improvement with minimal human harm labels. Human-written gold responses or human harm labels are what it avoids."
+  },
+  {
+    "id": "15.4-034",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Constitutional AI (CAI)",
+    "question": "What happens in the RL phase of Constitutional AI?",
+    "options": [
+      "A model, not humans, labels which of two responses is better; these labels train a reward model for RL",
+      "Humans label every response pair against the constitution, and the policy is then trained with plain DPO",
+      "The constitution text is scored directly as the reward signal, so no preference or reward model is trained",
+      "The policy is trained only with SFT on the constitution text itself, with no reinforcement learning stage"
+    ],
+    "answer_index": 0,
+    "explanation": "The RL phase is RLAIF: AI-generated preference labels train a preference (reward) model, and RL then optimizes the policy against it as in standard RLHF. Human labeling of pairs is replaced by AI feedback."
+  },
+  {
+    "id": "15.4-035",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Constitutional AI (CAI)",
+    "question": "What is a key benefit of the 'constitution' in Constitutional AI?",
+    "options": [
+      "It eliminates the need for any model training, since the principles are enforced at inference time instead",
+      "It guarantees the model has no biases, because every principle is reviewed and signed off by a human panel",
+      "It removes the need for a reward or preference model, because the principles are scored directly as reward",
+      "It makes the values explicit and inspectable, a document you can edit, rather than implicit in human labels"
+    ],
+    "answer_index": 3,
+    "explanation": "Writing the principles down makes the target behavior transparent and editable. Values are no longer hidden inside a large set of individual human labels. It still requires training and, in the RL phase, a preference model; it does not guarantee freedom from bias."
+  },
+  {
+    "id": "15.4-036",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "RLAIF vs RLHF",
+    "question": "What is RLAIF, and how does it compare with RLHF on the tasks studied?",
+    "options": [
+      "RLHF with the reward model removed entirely; it performs much worse than RLHF on every task studied",
+      "RLHF trained on absolute AI scores instead of pairs; it beats RLHF on all tasks by a wide margin",
+      "Supervised fine-tuning on AI-written demonstrations; it is equivalent to SFT and adds no RL stage",
+      "RLHF with an AI preference labeler instead of humans; it performs comparably and scales more cheaply"
+    ],
+    "answer_index": 3,
+    "explanation": "RLAIF replaces human preference labelers with an AI labeler. The RLAIF paper reports comparable performance to RLHF on the tasks studied, with much cheaper scaling because AI labels are fast and abundant. It is still an RL-with-reward-model pipeline."
+  },
+  {
+    "id": "15.4-037",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "RLAIF vs RLHF",
+    "question": "Which of these claims about post-training is PUBLICLY DOCUMENTED rather than industry practice or speculation?",
+    "options": [
+      "A specific frontier product currently uses DPO rather than PPO for its post-training stage",
+      "RLAIF performs comparably to RLHF on the tasks studied in the RLAIF paper",
+      "Caching reference log-probs once before training is the standard way teams run DPO today",
+      "SFT followed by preference optimization is the standard pipeline used across most labs"
+    ],
+    "answer_index": 1,
+    "explanation": "The RLAIF comparability result, the CAI critique-revise recipe, and DPO's equivalence to the RLHF objective are documented in papers. SFT→preference optimization and caching reference log-probs are reasonable industry practice. The exact recipe inside a specific frontier product is generally not public and should not be asserted."
+  },
+  {
+    "id": "15.4-038",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "RLAIF vs RLHF",
+    "question": "Which of these is classified as REASONABLE INDUSTRY PRACTICE rather than a publicly documented finding?",
+    "options": [
+      "Iterating the reward model on fresh on-policy data to combat distribution shift",
+      "The Constitutional AI critique-and-revise recipe for the supervised training phase",
+      "RLAIF's comparability with RLHF on the summarization and dialogue tasks it studied",
+      "DPO optimizing exactly the same KL-constrained objective as the RLHF/PPO derivation"
+    ],
+    "answer_index": 0,
+    "explanation": "Refreshing the reward model, SFT→preference optimization, DPO as the open-weight default, and caching reference log-probs are reasonable industry practice. The CAI recipe, RLAIF's result, and DPO's equivalence are publicly documented in papers."
+  },
+  {
+    "id": "15.4-039",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "RLAIF vs RLHF",
+    "question": "What should be avoided when discussing which alignment method a named frontier lab uses for a current model?",
+    "options": [
+      "Mentioning PPO at all, since it is obsolete and no serious lab has run it in recent years",
+      "Mentioning DPO, since it is only an academic method that no production lab actually ships",
+      "Distinguishing documented facts from speculation, since that confuses readers needlessly",
+      "Asserting the lab 'uses X' unless it published that, since exact recipes are rarely public"
+    ],
+    "answer_index": 3,
+    "explanation": "The exact post-training recipe, data mix, or RLHF-vs-DPO choice inside a specific frontier product is generally not publicly documented. Such claims are inference or speculation unless published. Separating documented facts from speculation is exactly what is encouraged."
+  },
+  {
+    "id": "15.4-040",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "When is reaching for PPO by default a mistake?",
+    "options": [
+      "Always, because PPO optimizes a different and strictly weaker objective than DPO does on the same preference data",
+      "Never, because PPO always yields better final quality whenever the compute budget allows it",
+      "When you need no reusable reward model or online control, since DPO is cheaper for the same objective",
+      "Only when the policy has fewer than 1B parameters, since below that size PPO rollouts are unstable"
+    ],
+    "answer_index": 2,
+    "explanation": "PPO and DPO optimize the same objective, so PPO's extra infrastructure is only worth it for its specific advantages: a reusable reward model, online reward/KL control, and on-policy data. Otherwise DPO is the pragmatic default."
+  },
+  {
+    "id": "15.4-041",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "What is the risk of using a stale reward model in a long PPO run?",
+    "options": [
+      "Distribution shift makes it unreliable on the policy's improved outputs, so it should be refreshed",
+      "Its scalar head's weights decay toward zero under weight decay, flattening all rewards over time",
+      "It stops producing useful gradients for the value head, so advantage estimates freeze in place",
+      "It silently changes the frozen reference policy's log-probs, corrupting the KL penalty term"
+    ],
+    "answer_index": 0,
+    "explanation": "As the policy improves, it generates outputs unlike those the reward model was trained on, so the stale model scores them unreliably. Periodically retraining on fresh on-policy preferences restores reliability."
+  },
+  {
+    "id": "15.4-042",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Common mistakes",
+    "question": "What is the misconception about AI feedback that RLAIF users should avoid?",
+    "options": [
+      "Assuming AI feedback is free of bias; RLAIF inherits the labeler model's biases and blind spots",
+      "Assuming AI feedback costs more than human labels once API calls and filtering are accounted for",
+      "Assuming AI feedback cannot train reward models, since AI labels lack the needed pairwise structure",
+      "Assuming AI feedback needs a written constitution to work at all, even for simple helpfulness ratings"
+    ],
+    "answer_index": 0,
+    "explanation": "AI labels reduce cost, not the need for oversight. The labeler model's biases and blind spots propagate into the preference data and therefore into the trained policy. AI feedback is cheaper, and it is routinely used to train reward models."
+  },
+  {
+    "id": "15.4-043",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "A DPO run reports 0.95 training reward accuracy and a tiny loss, but answers became shorter and sometimes refuse reasonable requests. What are the two most likely explanations?",
+    "options": [
+      "A data-loading bug that swaps chosen and rejected, plus a tokenizer mismatch between policy and reference",
+      "A beta that is far too large, plus a reference model that was accidentally left trainable during the run",
+      "Severe under-training from too few steps, plus a learning rate too small for the policy to move at all",
+      "Over-optimization (small beta or many epochs), plus the margin-only pathology lowering the chosen log-prob"
+    ],
+    "answer_index": 3,
+    "explanation": "High training reward accuracy with worse real quality signals over-optimization: the policy drifted far from the reference and overfit the pairs. Shorter answers and over-refusal also fit the margin-only failure, where lowering the rejected log-prob drags the chosen down too. Both are over-optimization/distribution-shift problems, not a coding bug."
+  },
+  {
+    "id": "15.4-044",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Debugging exercise",
+    "question": "What fixes address DPO over-optimization and the margin-only pathology?",
+    "options": [
+      "Lower beta further and train for more epochs so the margin saturates and the loss settles",
+      "Remove the reference model so the policy can move freely toward the chosen responses",
+      "Raise beta, use fewer epochs, early-stop on held-out data, watch chosen log-prob, add an NLL term",
+      "Swap chosen and rejected halfway through training so the two margin effects cancel each other out"
+    ],
+    "answer_index": 2,
+    "explanation": "A larger beta keeps the policy near the reference; fewer epochs and early stopping on held-out data limit overfitting. Monitoring the absolute chosen log-prob detects suppression, and adding an NLL term on chosen responses anchors their probability. Lowering beta or removing the reference would make drift worse."
+  },
+  {
+    "id": "15.4-045",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Check yourself",
+    "question": "Why is DPO usually cheaper than PPO for the same goal?",
+    "options": [
+      "It uses a smaller policy model than PPO by design, so every forward and backward pass costs less",
+      "No reward model and no generation loop; it forwards the policy and a frozen reference on fixed pairs",
+      "It needs far fewer preference pairs, because it trains on absolute scores rather than comparisons",
+      "It skips backpropagation through the rejected completions, halving the backward cost of each pair"
+    ],
+    "answer_index": 1,
+    "explanation": "DPO is effectively SFT cost plus one frozen forward, because it only needs the policy and reference log-probs on given chosen/rejected completions. PPO keeps up to four models resident and generates every step, which dominates its cost."
+  },
+  {
+    "id": "15.4-046",
+    "chapter": "15.4",
+    "chapter_name": "SFT vs RM+PPO vs DPO",
+    "module": "15",
+    "module_name": "Preference learning / RLHF / DPO",
+    "source": "lessons/module-15/lesson-04.md",
+    "section": "Check yourself",
+    "question": "In Constitutional AI, what does the constitution replace, and with what?",
+    "options": [
+      "The reward model, replaced by a rule-based keyword filter that blocks responses breaking any principle",
+      "Many human harm labels, replaced by written principles used for self-critique and AI preference labels",
+      "The SFT stage, replaced by continued pretraining on the constitution text until the model recites it",
+      "The reference policy, replaced by an embedding of the constitution that anchors the KL penalty term"
+    ],
+    "answer_index": 1,
+    "explanation": "The constitution substitutes for many human harm labels. In the supervised phase it guides self-critique and revision; in the RLAIF phase it guides AI-generated preference labels for a reward model. The values become an explicit, editable document."
+  }
+]
