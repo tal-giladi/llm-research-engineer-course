@@ -23,6 +23,7 @@
   - [03.1 · Gradient descent, SGD, momentum](lessons/module-03/lesson-01.md)
   - [03.2 · RMSProp, Adam, AdamW, weight decay](lessons/module-03/lesson-02.md)
   - [03.3 · Warmup, cosine decay, gradient clipping](lessons/module-03/lesson-03.md)
+  - [03.4 · Muon: orthogonalized momentum for weight matrices](lessons/module-03/lesson-04.md)
 - **4 · Tokenization & data representation**
   - [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md)
   - [04.2 · Byte-Pair Encoding from scratch](lessons/module-04/lesson-02.md)

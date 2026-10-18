@@ -63,6 +63,7 @@ Papers are introduced exactly where the machinery to understand them exists. The
 list with verified links, prerequisites, and "read this / skip that" guides is on the
 [**Paper curriculum**](papers/index.md) page. Rough placement:
 
+- After **3.4 (Muon, added 2026-10-18)**: Muon (Jordan et al.), Old Optimizer, New Norm, Muon is Scalable for LLM Training (Moonlight), Kimi K2 (MuonClip), When Does Muon Actually Win? (paired-budget benchmark). Lesson [3.4](lessons/module-03/lesson-04.md) depends on 2.3, 3.1, 3.2 and 3.3 (section 7 also on 5.2); code `optim/muon.py`.
 - After **6 (GPT-2)**: GPT-2, GPT-3.
 - After **7–10 (systems/scaling)**: Scaling Laws, Chinchilla, Megatron-LM, ZeRO.
 - After **8 (GPU)**: FlashAttention.

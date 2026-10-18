@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none
-- **Candidates:** C-20261005-01, C-20261007-01
+- **Candidates:** C-20261005-01, C-20261007-01, C-20261013-01, C-20261015-01
 
 ## Summary
 
@@ -16,6 +16,8 @@ Architectures that reuse a shared block of layers several times per token to buy
 - https://arxiv.org/abs/2610.06833 — 'Looped Models Done Right, Part II', 100M-1.6B, code https://github.com/ifm-ai/xllm-loop (as recorded by the daily run).
 - https://arxiv.org/abs/2610.11570 — InfiLoop, 7M-parameter puzzle model, code https://github.com/pixeli99/InfiLoop.
 - Same-week related C items: Recurrent Looped Transformer (arXiv 2610.07591), SanSi (arXiv 2610.07730), DLoop (daily 2026-10-09).
+- https://arxiv.org/abs/2610.12582 — Elastic Latent Recurrence: removes the one-loop tax; single paper, no code.
+- https://arxiv.org/abs/2610.19975 — LatentLoop: asymmetric compute across passes in looped MoE; scaling-style study, no code.
 
 ## What would change the decision
 
@@ -24,3 +26,4 @@ Independent reproduction of one group's claims by another; a looped model releas
 ## History
 
 - 2026-10-11 — WAIT — very active cluster (three independent groups, two with code) but every result is days old, sources address different sub-problems without converging on one recipe, and there is no reproduction or adoption — weekly/2026-W41.md — candidates C-20261005-01, C-20261007-01
+- 2026-10-18 — WAIT — two more independent single papers on different sub-problems; still no reproduction or shared recipe; next review date unchanged — weekly/2026-W42.md — candidates C-20261013-01, C-20261015-01
