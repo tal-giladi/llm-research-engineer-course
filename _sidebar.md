@@ -2,6 +2,7 @@
 - [Curriculum map](curriculum/course-outline.md)
 - [Paper curriculum](papers/index.md)
 - [Readiness matrix](curriculum/readiness-matrix.md)
+- [Quiz](quiz/index.html ':ignore')
 
 - **0 · ML / PyTorch foundations**
   - [00.1 · Tensors: shape, dtype, device](lessons/module-00/lesson-01.md)

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Course Quiz</title>
+  <link rel="stylesheet" href="../vendor/katex/katex.min.css">
+  <style>
+    :root {
+      --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --border: #dcdcd8;
+      --accent: #2f6fdb; --ok: #1f8a4c; --ok-bg: #e5f5ec; --bad: #c0392b; --bad-bg: #fbe9e7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #17181a; --card: #222326; --text: #e8e8ea; --muted: #9a9aa2; --border: #3a3b40;
+        --accent: #6c9cf0; --ok: #4cc27f; --ok-bg: #173324; --bad: #f07267; --bad-bg: #3a1d1a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 900px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.4em; margin: 8px 0 16px; }
+    h1 a { font-size: .6em; font-weight: normal; color: var(--accent); margin-left: 8px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    details.chapters > summary { cursor: pointer; font-weight: 600; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+    .chapter-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px 12px; margin: 4px 0 0; }
+    .chapter-list label { font-size: .9em; cursor: pointer; }
+    .chapter-list .stat { color: var(--muted); font-size: .85em; }
+    .chapter-list .stat .f { color: var(--bad); }
+    button { font: inherit; padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.small { padding: 2px 10px; font-size: .85em; }
+    button:disabled { opacity: .45; cursor: default; }
+    .modes label { margin-right: 14px; cursor: pointer; }
+    #status { color: var(--muted); font-size: .9em; }
+    .meta { color: var(--muted); font-size: .85em; margin-bottom: 8px; }
+    .meta a { color: var(--accent); }
+    .question { font-size: 1.08em; font-weight: 600; margin-bottom: 12px; }
+    .option { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 6px 0;
+      border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+    .option input { margin-top: 5px; }
+    .option.correct { border-color: var(--ok); background: var(--ok-bg); }
+    .option.wrong { border-color: var(--bad); background: var(--bad-bg); }
+    .verdict { font-weight: 700; margin: 12px 0 6px; }
+    .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); }
+    .explanation { white-space: pre-wrap; }
+    code { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: .92em; }
+    .actions { display: flex; gap: 8px; margin-top: 14px; }
+    .hint { color: var(--muted); font-size: .8em; margin-top: 8px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Course Quiz <a href="../">← back to course</a></h1>
+
+  <div class="card">
+    <details class="chapters" open>
+      <summary>Modules (<span id="selCount">0</span> selected)</summary>
+      <div class="toolbar">
+        <button class="small" id="selAll">Select all</button>
+        <button class="small" id="selNone">Select none</button>
+        <button class="small" id="selFailed">Select modules with failures</button>
+        <button class="small" id="resetStats">Reset my history</button>
+      </div>
+      <div id="chapters">Loading questions…</div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="modes">
+      <label><input type="radio" name="mode" value="all" checked> All questions</label>
+      <label><input type="radio" name="mode" value="failed"> Only failures</label>
+      <label><input type="radio" name="mode" value="unseen"> Only unseen</label>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="ask">Ask</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="card" id="qcard" hidden>
+    <div class="meta" id="qmeta"></div>
+    <div class="question" id="qtext"></div>
+    <div id="qopts"></div>
+    <div id="qresult"></div>
+    <div class="actions">
+      <button class="primary" id="check" disabled>Check</button>
+      <button id="next">Ask another</button>
+    </div>
+    <div class="hint">Keys: 1–4 pick · Enter check / next</div>
+  </div>
+</main>
+
+<script src="../vendor/katex/katex.min.js"></script>
+<script src="../vendor/katex/auto-render.min.js"></script>
+<script>
+(function () {
+  const HIST_KEY = 'llmre-quiz-history-v1';   // { id: { last: 'ok'|'fail', ok: n, fail: n, t: ms } }
+  const SEL_KEY = 'llmre-quiz-modules-v1';
+  const MODE_KEY = 'llmre-quiz-mode-v1';
+
+  function load(key, fallback) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+  }
+  function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+
+  let questions = [], chapters = [], history = load(HIST_KEY, {});
+  let current = null, checked = false, lastId = null;
+  const $ = id => document.getElementById(id);
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  // Escape HTML, then turn `code` spans into <code>. $...$ math is left for KaTeX.
+  function fmt(s) {
+    return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+  function math(el) {
+    if (window.renderMathInElement) {
+      renderMathInElement(el, {
+        delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }],
+        ignoredTags: ['code'], throwOnError: false
+      });
+    }
+  }
+
+  function selectedChapters() {
+    return new Set([...document.querySelectorAll('.ch-box:checked')].map(b => b.value));
+  }
+  function mode() { return document.querySelector('input[name=mode]:checked').value; }
+
+  function pool() {
+    const sel = selectedChapters(), m = mode();
+    return questions.filter(q => {
+      if (!sel.has(q.module)) return false;
+      const h = history[q.id];
+      if (m === 'failed') return h && h.last === 'fail';
+      if (m === 'unseen') return !h;
+      return true;
+    });
+  }
+
+  function chapterStats(ch) {
+    let ok = 0, fail = 0, seen = 0;
+    for (const q of ch.qs) {
+      const h = history[q.id];
+      if (!h) continue;
+      seen++;
+      if (h.last === 'ok') ok++; else fail++;
+    }
+    return { ok, fail, seen, total: ch.qs.length };
+  }
+
+  function renderChapters() {
+    const prevSel = load(SEL_KEY, null);
+    const root = $('chapters');
+    root.innerHTML = '<div class="chapter-list"></div>';
+    const list = root.firstChild;
+    for (const ch of chapters) {
+      const checked = prevSel ? prevSel.includes(ch.chapter) : false;
+      const lab = document.createElement('label');
+      lab.innerHTML = `<input type="checkbox" class="ch-box" value="${esc(ch.chapter)}"${checked ? ' checked' : ''}> ` +
+        `${esc(ch.chapter)} · ${esc(ch.chapter_name)} <span class="stat" data-ch="${esc(ch.chapter)}"></span>`;
+      list.appendChild(lab);
+    }
+    root.querySelectorAll('.ch-box').forEach(b => b.addEventListener('change', onSelChange));
+    refreshStats();
+    onSelChange();
+  }
+
+  function refreshStats() {
+    for (const ch of chapters) {
+      const s = chapterStats(ch);
+      const el = document.querySelector(`.stat[data-ch="${CSS.escape(ch.chapter)}"]`);
+      if (!el) continue;
+      el.innerHTML = s.seen
+        ? `(${s.ok}✓ <span class="f">${s.fail}✗</span> / ${s.total})`
+        : `(${s.total})`;
+    }
+  }
+
+  function onSelChange() {
+    const sel = selectedChapters();
+    $('selCount').textContent = sel.size;
+    save(SEL_KEY, [...sel]);
+    updateStatus();
+  }
+
+  function updateStatus() {
+    const p = pool();
+    const failsTotal = Object.values(history).filter(h => h.last === 'fail').length;
+    $('status').textContent = `${p.length} questions in pool · ${Object.keys(history).length} answered overall, ${failsTotal} currently failed`;
+    $('ask').disabled = p.length === 0;
+  }
+
+  function ask() {
+    const p = pool();
+    if (!p.length) { updateStatus(); return; }
+    let q = p[Math.floor(Math.random() * p.length)];
+    if (p.length > 1 && q.id === lastId) q = p[(p.indexOf(q) + 1) % p.length];
+    current = q; lastId = q.id; checked = false;
+
+    const h = history[q.id];
+    const prev = h ? ` · previously ${h.ok}✓ ${h.fail}✗` : '';
+    $('qmeta').innerHTML = `${esc(q.chapter)} · ${esc(q.chapter_name)} — ${esc(q.section)} · ` +
+      `<a href="../#/${esc(q.source)}" target="_blank">open lesson</a> · ${esc(q.id)}${prev}`;
+    $('qtext').innerHTML = fmt(q.question);
+    $('qopts').innerHTML = q.options.map((o, i) =>
+      `<label class="option" data-i="${i}"><input type="radio" name="opt" value="${i}"><span>${fmt(o)}</span></label>`
+    ).join('');
+    $('qresult').innerHTML = '';
+    $('check').disabled = true;
+    $('qopts').querySelectorAll('input').forEach(r => r.addEventListener('change', () => { if (!checked) $('check').disabled = false; }));
+    $('qcard').hidden = false;
+    math($('qcard'));
+    $('qcard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function check() {
+    if (!current || checked) return;
+    const picked = document.querySelector('input[name=opt]:checked');
+    if (!picked) return;
+    checked = true;
+    const i = +picked.value, right = i === current.answer_index;
+    document.querySelectorAll('.option').forEach(el => {
+      const k = +el.dataset.i;
+      if (k === current.answer_index) el.classList.add('correct');
+      else if (k === i) el.classList.add('wrong');
+      el.querySelector('input').disabled = true;
+    });
+    $('qresult').innerHTML =
+      `<div class="verdict ${right ? 'ok' : 'bad'}">${right ? '✓ Correct' : '✗ Wrong — correct answer: ' + String.fromCharCode(65 + current.answer_index)}</div>` +
+      `<div class="explanation">${fmt(current.explanation)}</div>`;
+    math($('qresult'));
+    $('check').disabled = true;
+
+    const h = history[current.id] || { ok: 0, fail: 0 };
+    h.last = right ? 'ok' : 'fail';
+    h[right ? 'ok' : 'fail']++;
+    h.t = Date.now();
+    history[current.id] = h;
+    save(HIST_KEY, history);
+    refreshStats();
+    updateStatus();
+  }
+
+  $('ask').addEventListener('click', ask);
+  $('next').addEventListener('click', ask);
+  $('check').addEventListener('click', check);
+  $('selAll').addEventListener('click', () => { document.querySelectorAll('.ch-box').forEach(b => b.checked = true); onSelChange(); });
+  $('selNone').addEventListener('click', () => { document.querySelectorAll('.ch-box').forEach(b => b.checked = false); onSelChange(); });
+  $('selFailed').addEventListener('click', () => {
+    const failed = new Set(questions.filter(q => history[q.id] && history[q.id].last === 'fail').map(q => q.module));
+    document.querySelectorAll('.ch-box').forEach(b => b.checked = failed.has(b.value));
+    onSelChange();
+  });
+  $('resetStats').addEventListener('click', () => {
+    if (!confirm('Erase all saved quiz results in this browser?')) return;
+    history = {}; save(HIST_KEY, history); refreshStats(); updateStatus();
+  });
+  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => { save(MODE_KEY, mode()); updateStatus(); }));
+  const savedMode = load(MODE_KEY, 'all');
+  const modeEl = document.querySelector(`input[name=mode][value="${savedMode}"]`);
+  if (modeEl) modeEl.checked = true;
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' && e.target.type !== 'radio') return;
+    if ($('qcard').hidden) return;
+    if (/^[1-4]$/.test(e.key) && !checked) {
+      const r = document.querySelector(`input[name=opt][value="${+e.key - 1}"]`);
+      if (r) { r.checked = true; $('check').disabled = false; }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (checked) ask(); else check();
+    }
+  });
+
+  fetch('questions.json').then(r => r.json()).then(data => {
+    questions = data.questions;
+    const map = new Map();
+    for (const q of questions) {
+      if (!map.has(q.module)) map.set(q.module, { chapter: q.module, chapter_name: q.module_name, qs: [] });
+      map.get(q.module).qs.push(q);
+    }
+    chapters = [...map.values()];
+    renderChapters();
+  }).catch(err => {
+    $('chapters').textContent = 'Could not load questions.json — serve the repo over http (py -m http.server 8080). ' + err;
+  });
+})();
+</script>
+</body>
+</html>
