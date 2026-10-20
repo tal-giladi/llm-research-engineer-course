@@ -68,3 +68,45 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** If/when the course adds a speculative-decoding lesson (a plausible Module 8/12-area gap, especially given it is now standard in vLLM/SGLang), this paper's "accepted tokens per round is not speed" result and its completion-length-inflation mechanism would be a strong worked caveat example, in the same spirit as the Muon/budget-matched-benchmark lesson added 2026-10-18.
 - **Confidence:** medium — a clear, well-measured single-paper finding (twelve model pairs, four metrics) but under review, no code, no independent reproduction, and it critiques a technique the course does not yet teach.
 - **Recommendation:** monitor; worth flagging to the weekly review alongside the existing quantization-gap note (10-18) as a second "the course has zero coverage of a now-standard inference technique" gap-review question, distinct from being independently actionable as a single-paper ADD.
+
+### C-20261020-01 · Many Biases, One Circuit: post-training tunes a pretrained cue-routing mechanism shared across sycophancy-like multiple-choice biases
+
+- **Class:** B
+- **Date discovered:** 2026-10-20
+- **Date published:** 2026-10-16 (v1)
+- **Source:** https://arxiv.org/abs/2610.22937 (verified resolves; v1, Fri 16 Oct 2026 05:00:12 UTC)
+- **Organization/researchers:** Prakhar Gupta, Terry Jingchen Zhang, Zhijing Jin (affiliations not stated on the abstract page).
+- **Category:** interpretability (mechanistic; causal attention-head analysis of post-training-induced bias)
+- **What changed:** Cue-following biases in multiple-choice QA (e.g. following "I think the answer is B" even when wrong) are usually studied one bias at a time and attributed loosely to "alignment." This paper traces four different cue types through two full post-training pipelines and finds they largely route through the same small set of attention heads — a circuit already present, in latent form, in the base (pretrained) model, not something post-training invents from scratch.
+- **Technical summary:** On most of the models tested in multiple-choice settings, four distinct cue types (e.g. suggested-answer cues, authority cues) converge on the same few attention heads. Base models already follow cues in plain-text completions; fine-tuning a base model on roughly 200 generic, cue-free assistant examples is enough to activate these heads in chat format, suggesting cue-following is a side effect of ordinary assistant-style SFT rather than something RLHF specifically introduces. The final RL stage further strengthens the effect in almost every comparison tested. As a causal check, the authors swap the attention patterns of six middle layers between an RL checkpoint and its own pre-RL predecessor in Tulu-3-8B and OLMo-2-7B; this single swap shifts each checkpoint's cue-following rate most of the way toward the other checkpoint's level, for suggested-answer cues specifically.
+- **Why it might matter:** The course has no lesson connecting post-training (SFT/RLHF) to a *specific, causally-isolated circuit* for a bias family — this would be a concrete, mechanistic complement to whatever the RLHF/alignment modules currently teach about sycophancy only behaviorally. The activation-patching swap (six middle layers, two independent base-model families) is a real causal intervention, not just a correlational probe, which is the strongest part of the evidence here.
+- **Evidence of adoption:** None — single paper, no stated venue/under-review status, no code or data release found on the abstract page.
+- **Major organizations using it:** None identified (no stated affiliation).
+- **Open-source implementation:** none found
+- **Paper:** https://arxiv.org/abs/2610.22937
+- **Code:** none found
+- **Relationship to existing course material:** New topic. Checked via `lookup "sycophancy"`, `lookup "attention head circuit"`, and `lookup "cue routing bias circuit"` (no matches in any case) and a grep of `lessons/`/`papers/` for "sycophancy"/"faithfulness" (no hits). The course's RLHF/post-training modules do not currently connect bias behavior to a specific attention-head circuit.
+- **Potential course lesson:** A worked mechanistic-interpretability case study for whatever module covers RLHF/alignment side effects: "a bias looks like an alignment failure, but activation patching shows it's an amplified pretrained circuit" — contrasted with purely behavioral sycophancy evals.
+- **Confidence:** medium — a real causal intervention (activation patching across two model families) is stronger than a pure correlational finding, but it is still one paper, no code, no stated venue, and no independent reproduction.
+- **Recommendation:** monitor; revisit if a second group reproduces the head-swap result or if the authors release code/the circuit identification on more model families.
+
+### C-20261020-02 · Beyond Marginal Influence: interaction-aware (joint) memory selection for LLM agents, with an exact-oracle benchmark
+
+- **Class:** B
+- **Date discovered:** 2026-10-20
+- **Date published:** 2026-10-16 (v1)
+- **Source:** https://arxiv.org/abs/2610.23266 (verified resolves; v1, 16 Oct 2026)
+- **Organization/researchers:** BHVSP Subrahmanyam, Neeraj Choudhary (affiliations not stated on the abstract page).
+- **Category:** memory/retrieval (agent memory selection/compression)
+- **What changed:** Existing LLM-agent memory-selection methods rank records by relevance or by each record's individual (marginal) influence on the decision, which misses cases where several memory records are redundant with each other, or are only jointly useful (no single one of them is individually "important"). This paper targets "per-decision memory sufficiency": finding the smallest subset of memory that reproduces the same agent behavior as using the full memory.
+- **Technical summary:** Introduces JointCoreBench, a benchmark with nine interaction types across six workflow domains and natural-language decisions, with exact oracle sufficient-subset labels (so search errors can be separated from model errors) — and JointCore, a baseline that tests group deletions before individual deletions, ordered by cost. On 6,912 exact-oracle conditions, JointCore finds a minimum-cost sufficient set 100% of the time while cutting subset evaluations by about 63% versus exhaustive search; across four model families (12B–70B, 432 tasks each) it uses fewer model queries and recovers minimum-cost sets more often than a cost-aware singleton-deletion baseline. The authors are explicit that both methods only preserve full-memory behavior under their primary deterministic interface (results vary under other interface designs), and that the paper is a benchmark/baseline contribution, not a claim that JointCore is ready to deploy as a memory-compression method.
+- **Why it might matter:** The registry already tracks a growing, still-unconverged cluster of agent context/memory mechanisms (`research/deferred/agent-context-compaction.md`: ReCAP, AutoCompact, PoS, Mem++, REMORY, Stateless Language Agents, Source-Judged Compaction). This is a distinct angle within that same cluster — evaluating memory *selection* for joint/interaction sufficiency rather than compacting or externalizing state — and it is the first entry in the cluster to ship an exact-oracle benchmark rather than only an end-task accuracy number, which is a methodologically useful complement if/when that cluster is reviewed as a whole.
+- **Evidence of adoption:** None — single paper, no stated venue (DOI listed as "pending registration" on the abstract page), no code release found.
+- **Major organizations using it:** None identified (no stated affiliation).
+- **Open-source implementation:** none found
+- **Paper:** https://arxiv.org/abs/2610.23266
+- **Code:** none found
+- **Relationship to existing course material:** Same problem space as the existing WAIT topic `research/deferred/agent-context-compaction.md` (checked via `lookup "agent context compaction"`, direct match; `lookup "interaction-aware memory"` and `lookup "memory selection agent"`, no direct registry matches). Adds a fifth/sixth distinct single-paper mechanism to that already-growing, still-unconverged cluster.
+- **Potential course lesson:** If/when the weekly review decides the agent-context-compaction cluster has matured enough for a lesson (whichever module covers long-horizon agents), JointCoreBench's exact-oracle framing is a clean way to teach "how would you even know a memory-compression method preserved behavior" as a design question, independent of which specific compaction/selection mechanism is taught.
+- **Confidence:** low-medium — a careful benchmark/baseline paper, but explicitly not a deployment claim, no code, no stated venue, and it adds to an already-large unconverged cluster rather than resolving it.
+- **Recommendation:** monitor alongside the existing cluster; flag to the weekly review as the cluster's sixth candidate — reinforces that the cluster question (does it need a lesson yet, and on which mechanism) is maturing in volume but not yet in convergence.
