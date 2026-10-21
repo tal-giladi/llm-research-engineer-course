@@ -110,3 +110,67 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** If/when the weekly review decides the agent-context-compaction cluster has matured enough for a lesson (whichever module covers long-horizon agents), JointCoreBench's exact-oracle framing is a clean way to teach "how would you even know a memory-compression method preserved behavior" as a design question, independent of which specific compaction/selection mechanism is taught.
 - **Confidence:** low-medium — a careful benchmark/baseline paper, but explicitly not a deployment claim, no code, no stated venue, and it adds to an already-large unconverged cluster rather than resolving it.
 - **Recommendation:** monitor alongside the existing cluster; flag to the weekly review as the cluster's sixth candidate — reinforces that the cluster question (does it need a lesson yet, and on which mechanism) is maturing in volume but not yet in convergence.
+
+### C-20261021-01 · Kronecker Delta Rule for Long Context Linear Attention (KronLSTM)
+
+- **Class:** B
+- **Date discovered:** 2026-10-21
+- **Date published:** 2026-10-19 (v1)
+- **Source:** https://arxiv.org/abs/2610.26834 (verified resolves; v1, 19 Oct 2026, cs.LG/cs.AI)
+- **Organization/researchers:** Anamaria-Roberta Hartl, Levente Zólyomi, Michael List, Günter Klambauer, Sebastian Böck, Sepp Hochreiter — the NX-AI team (Hochreiter co-invented LSTM and leads the xLSTM line of work); affiliations not stated on the abstract page itself, but the code org (NX-AI) and HF collection match the group's known xLSTM/NXAI work.
+- **Category:** attention / long-context (linear attention, associative-memory update rules)
+- **What changed:** Gated DeltaNet-style linear attention (already taught in lesson 12.5) updates its fixed-size matrix memory with the delta rule — a correction toward the new value along the new key direction. This paper proposes the "Kronecker Delta Rule," a different update that revises memory along only one direction in matrix space per step (a rank-1 Kronecker-structured correction), which the authors argue causes less interference with previously stored associations than the standard delta rule, aimed specifically at long-context stability.
+- **Technical summary:** KronLSTM extends the xLSTM family with the Kronecker Delta Rule. The authors model the memory-matrix dynamics as a Markov chain and show (claim, not yet independently checked) that it converges to a steady-state distribution with a uniformly bounded expected norm over the whole sequence — i.e., no extra normalization/stabilization step is needed to keep the recurrent state from blowing up or decaying, which is a real pain point in long-context linear-attention training. They report KronLSTM is competitive with, and on several benchmarks better than, existing linear-attention baselines including (Gated) DeltaNet variants, with the largest gains on long-context evaluations. Code (Triton kernels + PyTorch layer, flash-linear-attention compatible) and HF model checkpoints are both released.
+- **Why it might matter:** This is a direct, from-a-credible-group follow-on to the exact mechanism already taught in lesson 12.5 (Gated DeltaNet). If the stability/no-extra-normalization claim and the long-context benchmark wins hold up, it is a natural "what came after Gated DeltaNet" extension point for that lesson, analogous to how 17.4 was later extended with on-policy-distillation variants.
+- **Evidence of adoption:** None yet — paper posted 2 days ago, code/models released alongside it (same-day), no third-party reproduction, no adoption in vLLM/SGLang/HF Transformers or any shipped model found.
+- **Major organizations using it:** None identified beyond the authors' own NX-AI group.
+- **Open-source implementation:** https://github.com/NX-AI/KronLSTM (verified resolves; flash-linear-attention-compatible Triton kernels + PyTorch layer)
+- **Paper:** https://arxiv.org/abs/2610.26834
+- **Code:** https://github.com/NX-AI/KronLSTM ; models: https://huggingface.co/collections/NX-AI/kronlstm
+- **Relationship to existing course material:** Directly extends `research/accepted/hybrid-linear-attention-gated-deltanet.md` (lesson 12.5, `code/src/llmre/attention/gated_deltanet.py`). Checked via `lookup "linear attention"`, `lookup "delta rule"`, `lookup "xLSTM"` — confirms Gated DeltaNet is already taught; xLSTM is not mentioned anywhere in the course yet.
+- **Potential course lesson:** If the stability/long-context results are independently reproduced, a short extension to 12.5 contrasting the delta rule vs. the Kronecker delta rule's interference/stability tradeoff would fit cleanly next to the existing Gated DeltaNet material.
+- **Confidence:** medium — strong authorship (original LSTM/xLSTM lineage), a real theoretical stability argument plus released code and model checkpoints, but it is one paper two days old with zero independent validation or adoption so far.
+- **Recommendation:** monitor; revisit when/if there is independent benchmark reproduction or adoption of KronLSTM/Kronecker-delta-rule kernels beyond the authors' own repo.
+
+### C-20261021-02 · Large Flow Language Models (Lafa): billion-parameter continuous flow LMs with self-speculative decoding
+
+- **Class:** B
+- **Date discovered:** 2026-10-21
+- **Date published:** 2026-10-20 (v1)
+- **Source:** https://arxiv.org/abs/2610.28559 (verified resolves; v1, 20 Oct 2026, cs.CL/cs.AI)
+- **Organization/researchers:** Arnav Chavan, Chanhyuk Lee, Udbhav Bamba, Jaehoon Yoo, Seunghoon Hong, Aditi Raghunathan, Jinwoo Kim (affiliations not stated on the abstract page; Raghunathan is a known CMU robustness/ML researcher).
+- **Category:** architecture (alternative generation paradigm: continuous-flow language models, as opposed to autoregressive or discrete-diffusion LMs)
+- **What changed:** The course and most production LLMs are purely autoregressive (next-token). Discrete diffusion LMs are an alternative that trade some quality for parallel generation but (per the authors) lack the continuous-control/acceleration tooling of continuous flow models. This paper scales a *continuous flow* language model (Lafa) to 8B parameters for the first time in a data-efficient way (under 30B training tokens), using a blockwise design: causal attention across blocks (so it can adapt a pretrained AR model), bidirectional/asynchronous flow *within* each block.
+- **Technical summary:** Lafa is trained at 0.5B/7B/8B scale on <30B tokens, initialized from pretrained AR checkpoints. On instruction-following, reasoning, and coding benchmarks, the flow models reportedly match or exceed AR quality at comparable scale, and can be distilled into "flow maps" for one-/few-step generation. The authors report that flow training exhibits a multi-token-prediction-like effect that preserves or improves AR capability, which they exploit with a *self-speculative decoding* scheme: the same model drafts several tokens via the flow mechanism and verifies them autoregressively against itself, claimed to reach 2.54x the throughput of plain AR decoding at comparable quality (company/author claim, not independently reproduced).
+- **Why it might matter:** The course currently teaches only autoregressive generation as the generation paradigm (confirmed: `lookup "diffusion language model"` and manual grep return no matches). If continuous flow LMs mature, this is a candidate "alternative generation paradigms" topic — distinct from, and argued by the authors to have different tooling advantages over, discrete diffusion LMs (which the course also doesn't yet cover). The self-speculative-decoding angle is also a free efficiency trick for any AR-initialized model, independent of whether the flow-generation framing itself is adopted.
+- **Evidence of adoption:** None — single paper, one day old, no stated venue, no third-party reproduction, no adoption elsewhere.
+- **Major organizations using it:** None identified (no stated lab affiliation; appears to be an academic collaboration).
+- **Open-source implementation:** https://github.com/lafa-gh/large-flow-lms (verified resolves)
+- **Paper:** https://arxiv.org/abs/2610.28559
+- **Code:** https://github.com/lafa-gh/large-flow-lms
+- **Relationship to existing course material:** New topic/paradigm — the course teaches AR generation only (Module 6/7 onward); no diffusion-LM or flow-LM material exists anywhere in `lessons/`, `code/`, or `papers/` (checked via `lookup`).
+- **Potential course lesson:** Too early for a lesson — would need the "alternative LM paradigms" question settled first (does the course want to cover discrete diffusion LMs, flow LMs, or neither, and at what module). Worth flagging to the weekly review as a new paradigm-coverage question, not an isolated technique ADD.
+- **Confidence:** low-medium — a real 8B-scale system with released code and quantified benchmarks (not just a toy demo), but one day old, no stated venue, no independent reproduction, and the "2.54x throughput" figure is self-reported.
+- **Recommendation:** monitor; this is more a "does the course need an alternative-generation-paradigm module" signal than an independently actionable single-paper ADD.
+
+### C-20261021-03 · Self-HPO: joint harness + RL-policy co-optimization for coding agents
+
+- **Class:** B
+- **Date discovered:** 2026-10-21
+- **Date published:** 2026-10-16 (v1)
+- **Source:** https://arxiv.org/abs/2610.22791 (verified resolves; v1, 16 Oct 2026, cs.CL/cs.AI)
+- **Organization/researchers:** Zhepei Wei, Wenlin Yao, Baolin Peng, Danqing Wang, Qianhui Wu, Hao Cheng, Yu Meng, Jianfeng Gao (affiliations not stated on the abstract page; several of these authors have prior Microsoft/academic agent-RL publications, not independently confirmed here).
+- **Category:** RL/post-training + agents/tools (coding-agent harness design co-trained with the policy)
+- **What changed:** The course's agent material (Module 19, SWE-agent scaffold) and the RLVR coding-agent material (MLPerf post-training lesson, frontier/update-01) both hold the harness (tools, environment interface, prompt scaffold) fixed and only train/evaluate the policy. This paper argues the harness itself should be optimized jointly with the policy via RL, since a fixed harness caps what any policy can learn to do.
+- **Technical summary:** Self-HPO alternates: (1) the current policy analyzes its own rollout failures and proposes candidate harness edits; (2) the policy is then RL-trained under the selected harness, and the hardest tasks surfaced during that RL stage become the next round's search set for harness optimization — a recursive self-improvement loop over both components. Across three coding benchmarks, the authors report Self-HPO beats both harness-only and policy-only optimization baselines, raising Qwen3.5-35B-A3B's average resolve rate from 57.8% to 64.8%, with the gains transferring to out-of-distribution tasks; they also report improved Pass@1 reliability and a wider Pass@k capability frontier, with further gains when a stronger external model is used as the harness proposer.
+- **Why it might matter:** Concrete, quantified gains on a real, recently-released open model (Qwen3.5-35B-A3B), directly relevant to the course's existing RLVR/coding-agent material. If reproduced, it's a clean illustration that "harness design is a lever, not a constant" for agent RL — a useful complement to the existing SWE-agent (19.1) and MLPerf RLVR-coding-agent lesson content.
+- **Evidence of adoption:** None — single paper, five days old, no stated venue, no code release found (only generic third-party code-finder badges on the abstract page, not a real repo).
+- **Major organizations using it:** None identified (no stated lab affiliation).
+- **Open-source implementation:** none found
+- **Paper:** https://arxiv.org/abs/2610.22791
+- **Code:** none found
+- **Relationship to existing course material:** New angle on existing material — `lookup "harness policy optimization"` and `lookup "self-evolving agent"` return no registry/course matches; closest existing material is `lessons/module-19/lesson-01.md` (SWE-agent scaffold) and `research/accepted/mlperf-post-training-rlvr.md` (RLVR coding agent), both of which treat the harness as fixed.
+- **Potential course lesson:** A possible extension to Module 19 or the frontier-updates RLVR material: "the harness is part of the optimization problem," using Self-HPO's alternating-optimization framing as the worked example, contingent on code release / reproduction.
+- **Confidence:** low-medium — concrete numbers on a real model, but no code, no stated venue, no independent reproduction; also contemporaneous with a similarly-themed paper (HarnessPro, arXiv:2610.26770, not separately recorded here) suggesting this is an emerging but not yet converged research direction.
+- **Recommendation:** monitor; watch for code release or a second group reproducing the harness-co-optimization gain before treating as independently actionable.
+
