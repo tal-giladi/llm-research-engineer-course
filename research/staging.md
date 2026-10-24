@@ -282,3 +282,66 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Confidence:** low-medium — a concrete, named-baseline capability claim (beating a 402B model with an 8B model), but one day old, no code, no venue, no independent reproduction.
 - **Recommendation:** monitor alongside the existing tool-selection-rl-toolsearcher WAIT item; flag to the weekly review as the second data point for that topic, specifically whether "concrete results without code" plus "code without many results" (the two papers combined) together clear the bar, or whether the topic should keep waiting for a single paper with both.
 
+### C-20261024-01 · When to Follow the Teacher: Advantage-Based On-Policy Distillation (AOPD)
+
+- **Class:** B
+- **Date discovered:** 2026-10-24
+- **Date published:** 2026-10-22 (v1)
+- **Source:** https://arxiv.org/abs/2610.31563 (verified resolves; v1, Thu 22 Oct 2026 17:05:21 UTC, cs.LG primary, cross-listed cs.AI/stat.ML)
+- **Organization/researchers:** Mahdi Sabbaghi, George Pappas, Hamed Hassani, Adel Javanmard (affiliations not stated on the abstract page).
+- **Category:** RL/post-training (on-policy distillation)
+- **What changed:** Standard on-policy distillation (OPD, taught in lesson 17.4) pushes the student to match the teacher at every token of every student-sampled trajectory, implicitly assuming teacher guidance is always helpful. This paper argues that assumption is false and proposes Advantage-Based On-Policy Distillation (AOPD): each teacher action is reweighted by its counterfactual advantage under the student's own policy, so actions that would actually help the student are reinforced and actions that would not are downweighted or ignored.
+- **Technical summary:** Computing the needed counterfactual advantage directly would require extra rollouts per step. The authors show the AOPD objective can instead be estimated from the student's own standard rollouts and terminal rewards, using teacher importance weights — i.e., no extra sampling cost over vanilla OPD. Per the abstract, experiments on math, coding, and MedQA show gains over both distillation baselines and RL baselines, in both external-teacher and self-distillation settings. No specific effect sizes, model names, or compute figures were retrievable from the abstract page alone (full paper not fetched); no code repository is linked from the abstract page.
+- **Why it might matter:** This is a direct mechanism-level extension of the exact technique taught in `lessons/module-17/lesson-04.md` (17.4, on-policy distillation) — it names and addresses a specific, previously implicit assumption of the lesson's taught algorithm (teacher-matching at every step) rather than being a tangential variant. It also lands in the same active cluster the research registry is already tracking (`research/deferred/on-policy-distillation-variants.md`, WAIT since 2026-10-04, now nine prior candidates), adding a tenth independent single-paper mechanism: selective, advantage-weighted teacher-following rather than co-evolving teachers, scaling laws, negative rollouts, value-weighted token selection, or offline-vs-online comparisons.
+- **Evidence of adoption:** None — one day old at discovery, no stated venue, no code release, no third-party reproduction.
+- **Major organizations using it:** None identified (no stated affiliation; authors appear to be an academic group based on paper style, not independently confirmed).
+- **Open-source implementation:** none found on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.31563
+- **Code:** none found
+- **Relationship to existing course material:** Directly touches already-taught material (`lessons/module-17/lesson-04.md`, `code/src/llmre/reasoning/distill.py`) and is new evidence for the existing deferred topic `research/deferred/on-policy-distillation-variants.md` (checked via `lookup "advantage based on-policy distillation"` and `lookup "on-policy distillation"`, which surfaced the accepted lesson and this exact deferred file as the closest matches — confirming this specific advantage-weighting mechanism is new, not a restatement of an existing candidate in that file).
+- **Potential course lesson:** If independently reproduced or adopted, a short addendum to 17.4 noting that naive per-token teacher-matching is a simplifying assumption and that advantage-weighted variants exist; otherwise folds into the existing deferred cluster's eventual "OPD variants" roundup.
+- **Confidence:** low — one more single-paper variant in an already-large, unconverged cluster; no code, no reproduction, no stated venue.
+- **Recommendation:** add to the existing `on-policy-distillation-variants` WAIT cluster as its tenth candidate rather than opening a new topic; the weekly review should continue monitoring the cluster as a whole rather than any one variant.
+
+### C-20261024-02 · Tracing Subliminal Learning Through Pretraining
+
+- **Class:** B
+- **Date discovered:** 2026-10-24
+- **Date published:** 2026-10-22 (v1)
+- **Source:** https://arxiv.org/abs/2610.30884 (verified resolves; v1, Thu 22 Oct 2026 08:04:37 UTC, cs.LG, CC BY 4.0)
+- **Organization/researchers:** Angela Tang, Vishesh Anand, Gonçalo Paulo (affiliations not stated on the abstract page).
+- **Category:** RL/post-training, interpretability (unintended trait transfer through distillation)
+- **What changed:** "Subliminal learning" — a model trained on another model's outputs picking up traits unrelated to the content of that data (e.g. a numeric-sequence teacher transmitting an unrelated behavioral preference to a student that only ever saw numbers) — was previously an observed phenomenon largely in hard-label distillation. This paper traces the effect across pretraining checkpoints and distillation modes, directly implicating the on-policy soft-label distillation setting the course teaches in 17.4.
+- **Technical summary:** Per the abstract/summary, using Pythia, PolyPythia, and DataDecide OLMo model families, the authors find the transfer persists across differences in initialization, data order, corpus, model size, and architecture. A model's ability to transmit a trait and its ability to acquire one develop separately across pretraining checkpoints, making cross-model transfer asymmetric when teacher/student roles are reversed. Synthetic number sequences matched only to the teacher's number-frequency statistics (no semantic content) still induce transfer in the hard-label setting. In top-K soft-label distillation, removing the specific trait-bearing tokens from the loss reduces but does not eliminate transfer in the same-model case. Soft-label distillation produced more consistent transfer with less training than hard-label distillation. No code repository is linked from the abstract page; full paper not fetched.
+- **Why it might matter:** The course teaches on-policy soft-label distillation as a production post-training technique in 17.4 without flagging this specific failure mode: a teacher can transmit unintended preferences/traits to a student through logits that look, by the loss, like pure capability transfer. If reproduced, this is a safety-relevant caveat for exactly the mechanism already in `code/src/llmre/reasoning/distill.py`, not a new unrelated topic — directly useful for an LLM research engineer doing distillation in practice.
+- **Evidence of adoption:** None — one day old, no stated venue, no code release, no third-party reproduction. Builds on a prior "subliminal learning" result (not independently verified or traced to a specific prior paper here) but this paper itself is new and uncorroborated.
+- **Major organizations using it:** None identified; uses open model families (Pythia/PolyPythia/DataDecide OLMo) for its experiments, which aids future reproducibility but is not itself adoption evidence.
+- **Open-source implementation:** none found on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.30884
+- **Code:** none found
+- **Relationship to existing course material:** New topic relative to the registry (checked via `lookup "subliminal learning"` and `lookup "distillation preference transfer safety"` — no matches beyond an unrelated staging hit on a different OPD candidate), but directly touches already-taught material in `lessons/module-17/lesson-04.md` and `code/src/llmre/reasoning/distill.py`.
+- **Potential course lesson:** If reproduced, a short "failure mode" callout inside 17.4 (soft-label/on-policy distillation can transmit unintended traits, not just capability) rather than a standalone lesson.
+- **Confidence:** low-medium — a real experimental study (not just an observational anecdote) across multiple open model families with a stated mechanism, but one day old, no code, no independent reproduction, and the underlying "subliminal learning" phenomenon itself is not independently verified in this run.
+- **Recommendation:** monitor; worth flagging to the weekly review as a possible safety-callout addendum to 17.4 even before full maturity, since it bears on already-taught code rather than opening new curriculum scope.
+
+### C-20261024-03 · Inherited, Not Invented: Tracing the Provenance of Wait in Reasoning Models
+
+- **Class:** B
+- **Date discovered:** 2026-10-24
+- **Date published:** 2026-10-22 (v1)
+- **Source:** https://arxiv.org/abs/2610.30882 (verified resolves; v1, Thu 22 Oct 2026 08:03:07 UTC, cs.LG primary, cross-listed cs.CL, CC BY 4.0, status "under review")
+- **Organization/researchers:** Zhizhuo Kou, Sizai Hou, Long Chen, Jian Yang, Junyu Luo, Jingshu Peng, Wenkai Zhang, Sirui Han, Yike Guo (affiliations not stated on the abstract page).
+- **Category:** reasoning, interpretability (provenance of self-correction markers in reasoning-RL models)
+- **What changed:** Lesson 17.3 (DeepSeek-R1 case study) teaches the "aha moment" using the report's own framing: RL training produces the qualitatively new behavior of the model emitting "wait, let me reconsider" and self-correcting, implying the marker is an RL-induced emergent behavior. This paper directly challenges that reading: it argues large RL accuracy gains do not require the "wait" marker at all, and traces where the marker actually comes from across open models' training histories.
+- **Technical summary:** Per the abstract/summary, using label-free measures of the marker's frequency, position, form, and usage, plus an injected-error test, the authors find zero-RL training rarely introduces the marker into base models that lack it; instead the marker enters through training data — e.g. mid-training in OLMo-3, or fine-tuning on reasoning traces that already contain it. Where a base model already has the marker, some RL-Zero recipes amplify it and others do not; RL after SFT changes marker frequency little; and one GRPO recipe is reported to erase a marker that fine-tuning had introduced. The authors conclude marker frequency alone is not evidence of RL-driven reasoning change, and separately warn that LLM-as-a-judge revision metrics can reverse the trend found by human labeling. No code repository is linked from the abstract page; full paper not fetched; status is "under review" (no venue confirmed yet).
+- **Why it might matter:** If reproduced, this is a direct complication of the specific causal claim 17.3 currently states (that the "wait" self-correction is an RL-produced "aha moment") — not a new topic, but a challenge to how an already-taught case study's central anecdote is framed, which is exactly the kind of claim the course's "DOCUMENTED vs SPECULATION" rule cares about getting right.
+- **Evidence of adoption:** None — one day old, status "under review" (no confirmed venue), no code release, no third-party reproduction.
+- **Major organizations using it:** None identified; analysis is performed on open model training histories (OLMo-3 among them), which aids reproducibility.
+- **Open-source implementation:** none found on the abstract page.
+- **Paper:** https://arxiv.org/abs/2610.30882
+- **Code:** none found
+- **Relationship to existing course material:** New topic relative to the registry (checked via `lookup "wait token reasoning models"` — no on-topic match beyond an unrelated code snippet containing the literal string "wait") but directly touches the specific "aha moment" claim already taught in `lessons/module-17/lesson-03.md` line 33.
+- **Potential course lesson:** If the finding holds up, a caveat/correction note on 17.3's "aha moment" framing (distinguishing the DeepSeek-R1 report's own claim, labeled as such, from this paper's counter-evidence that the marker is often inherited from training data rather than RL-induced) rather than a new lesson.
+- **Confidence:** low-medium — a real multi-model tracing study with a stated methodology (not just anecdote), but one preprint, under review, no code, no independent reproduction.
+- **Recommendation:** monitor; flag to the weekly review as a potential accuracy correction to the existing 17.3 case study's framing, to revisit once code/data or a confirmed venue appears.
+
