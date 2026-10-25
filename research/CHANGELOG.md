@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W43 (2026-10-25)
+
+- Added **[16.4 · Training–inference mismatch: when on-policy RL is secretly off-policy](lessons/module-16/lesson-04.md)**: why the inference engine that samples rollouts and the trainer that updates the policy assign different probabilities to the same tokens with the same weights (reduction order, batch-dependent kernels, precision, sampling transforms, MoE routing); batch variance and batch-invariant kernels (vLLM, TorchTitan's TitanRL); measuring the mismatch (log-ratio statistics, K3); and correcting it with the decoupled three-policy GRPO objective, truncated importance sampling and rejection. An exactly solvable toy shows the uncorrected update converging to the wrong policy, and why importance weights cannot fix top-k/top-p truncation. With `llmre/rl/mismatch.py`, `tests/test_rl_mismatch.py` and `experiments/rl_mismatch.py`. Extends 16.1–16.3; `grpo_objective` is unchanged. [Review](research/weekly/2026-W43.md).
+
 ## 2026-W42 (2026-10-18)
 
 - Added **[03.4 · Muon: orthogonalized momentum for weight matrices](lessons/module-03/lesson-04.md)**: the SVD and spectral norm, why the steepest step for a weight matrix under the spectral norm is its orthogonal factor $UV^\top$, Newton-Schulz iterations that compute it with matrix multiplications only (worked by hand), the Muon/AdamW parameter split, MuonClip's QK-Clip, the compute and memory cost, and what an independent budget-matched benchmark says about equal-data vs equal-time wins. With `llmre/optim/muon.py`, `tests/test_muon.py` and `experiments/muon_vs_adamw.py`. Extends 03.1–03.2; AdamW stays the course default and nothing is replaced. [Review](research/weekly/2026-W42.md).

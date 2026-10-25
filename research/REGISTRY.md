@@ -11,28 +11,40 @@ Every topic the weekly review has decided on, so nothing is reconsidered without
 | ADD | [Logit distillation (forward vs reverse KL) and on-policy distillation](research/accepted/on-policy-distillation.md) | n/a | lessons/module-17/lesson-04.md (new lesson 17.4); code/src/llmre/reasoning/distill.py; code/tests/test_distill.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-10-04 |
 | ADD | [MLPerf Training post-training benchmark (agentic RLVR)](research/accepted/mlperf-post-training-rlvr.md) | n/a | lessons/frontier/update-01.md; code/src/llmre/evaluation/pass_at_k.py; code/tests/test_frontier_updates.py | 2026-09-26 |
 | ADD | [Muon: orthogonalized momentum (Newton-Schulz) for hidden weight matrices, with MuonClip and a budget-matched benchmark](research/accepted/muon-optimizer.md) | n/a | lessons/module-03/lesson-04.md (new lesson 03.4); code/src/llmre/optim/muon.py; code/tests/test_muon.py; code/experiments/muon_vs_adamw.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-10-18 |
+| ADD | [Training-inference mismatch in LLM RL: batch invariance and truncated importance sampling](research/accepted/rl-training-inference-mismatch.md) | n/a | lessons/module-16/lesson-04.md (new lesson 16.4); code/src/llmre/rl/mismatch.py; code/tests/test_rl_mismatch.py; code/experiments/rl_mismatch.py; _sidebar.md; curriculum/course-outline.md (paper-placement line) | 2026-10-25 |
+| WAIT | [A fix for softmax and cross-entropy: Softmax Collapse and Softmax Cancellation](research/deferred/softmax-cross-entropy-numerical-fixes.md) | 2026-11-22 | none | 2026-10-25 |
+| WAIT | [A quadratic lens on Muon's polar update: when orthogonalization helps, and why few Newton-Schulz steps can beat exact](research/deferred/muon-polar-update-theory.md) | 2026-12-20 | none (Muon is taught in 03.4) | 2026-10-25 |
 | WAIT | [AbridgeKV: compressing completed reasoning blocks into learned pause-token KV entries](research/deferred/reasoning-kv-compression-pause-tokens.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [Ares: spectral adaptive-rank optimizer exploiting gradient-subspace collapse in RLVR](research/deferred/rlvr-spectral-adaptive-rank-optimizer.md) | 2026-12-13 | none | 2026-10-18 |
-| WAIT | [Bitwise-deterministic large-scale pretraining (Megatron-Core): fingerprint-and-trace debugging](research/deferred/bitwise-deterministic-training.md) | 2026-11-29 | none | 2026-10-11 |
+| WAIT | [Bitwise-deterministic large-scale pretraining (Megatron-Core): fingerprint-and-trace debugging](research/deferred/bitwise-deterministic-training.md) | 2026-11-29 | none | 2026-10-25 |
 | WAIT | [Blackwell-era attention kernel engineering (TLX Jagged Flash Attention, FlashAttention-4 techniques)](research/deferred/tlx-blackwell-attention-kernels.md) | 2026-12-06 | none | 2026-10-04 |
-| WAIT | [Context and memory compaction for long-horizon agents](research/deferred/agent-context-compaction.md) | 2026-11-29 | none | 2026-10-18 |
+| WAIT | [Context and memory compaction for long-horizon agents](research/deferred/agent-context-compaction.md) | 2026-11-29 | none | 2026-10-25 |
 | WAIT | [Convergence bounds for asynchronous GRPO under stale rollouts (GMC-GRPO)](research/deferred/async-grpo-staleness-convergence.md) | 2026-11-29 | none | 2026-10-04 |
 | WAIT | [Delta-Matching for native FP8 attention training](research/deferred/native-fp8-training-delta-matching.md) | 2026-11-29 | none | 2026-10-04 |
 | WAIT | [DoSA: certificate-based conditional Top-K scoring for sparse-attention indexers](research/deferred/sparse-attention-indexer-dosa.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [Elastic Expert Routing: smoothing the top-k exposure boundary in sparse MoE](research/deferred/moe-stochastic-k-routing.md) | 2026-12-06 | none | 2026-10-11 |
+| WAIT | [EPIC: exact-KL prefix importance-ratio clipping for off-policy LLM RL](research/deferred/rl-prefix-kl-trust-region-clipping.md) | 2026-12-20 | none (GRPO fixes are taught in F.2) | 2026-10-25 |
+| WAIT | [FlexShard: whole-parameter and block-aligned sharding for distributed Muon and FP8 all-gathers (TorchTitan)](research/deferred/flexshard-distributed-muon-sharding.md) | 2026-12-20 | none (03.4 section 6 already covers layer-wise distributed Newton-Schulz) | 2026-10-25 |
 | WAIT | [GenCorrect: generate-verify-refine test-time pipelines for olympiad-level reasoning (Nemotron)](research/deferred/test-time-generate-verify-refine.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [GraphForge: evidence-graph-anchored synthesis of agent training tasks](research/deferred/agent-training-data-synthesis-graphforge.md) | 2026-12-06 | none | 2026-10-11 |
 | WAIT | [GVPO: Group Variance Policy Optimization](research/deferred/gvpo.md) | 2026-11-26 | taught only as directional design-space reading in lessons/frontier/update-02.md (code/src/llmre/rl/gvpo.py); not presented as standard practice | 2026-09-26 |
+| WAIT | [Harness and policy co-optimization for coding agents (Self-HPO, HarnessPro, HERD)](research/deferred/agent-harness-policy-co-optimization.md) | 2026-12-20 | none | 2026-10-25 |
 | WAIT | [HyperThink: replacing visible chain-of-thought with a hypernetwork parameter update](research/deferred/hypernetwork-latent-reasoning.md) | 2026-12-13 | none | 2026-10-18 |
+| WAIT | [Inherited, not invented: provenance of the 'wait' self-correction marker in reasoning models](research/deferred/reasoning-wait-marker-provenance.md) | 2026-12-20 | none | 2026-10-25 |
+| WAIT | [Is 2:4 sparsity still worth it? Semi-structured sparsity vs lower precision for LLM inference](research/deferred/semi-structured-sparsity-vs-quantization.md) | 2026-12-20 | none | 2026-10-25 |
+| WAIT | [Kronecker Delta Rule (KronLSTM): rank-1 Kronecker-structured memory updates for long-context linear attention](research/deferred/kronecker-delta-rule-linear-attention.md) | 2026-12-20 | none (Gated DeltaNet is taught in 12.5) | 2026-10-25 |
 | WAIT | [Language drift in chain-of-thought under RLVR](research/deferred/rlvr-cot-language-drift.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Large Flow Language Models (Lafa): continuous flow LMs initialized from AR checkpoints, with self-speculative decoding](research/deferred/continuous-flow-language-models.md) | 2026-12-20 | none | 2026-10-25 |
 | WAIT | [Linear readability of facts in pretrained representations predicts fine-tuning generalization](research/deferred/fact-linear-readability-finetuning.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [Looped (recurrent-depth) language models: training recipes, fixed-point efficiency, loop-native residuals](research/deferred/looped-recurrent-depth-lms.md) | 2026-11-29 | none | 2026-10-18 |
 | WAIT | [Low-bit (4-bit) AdamW optimizer-state quantization: rounding in preconditioner space (ZIP-SR / ZE-EDEN)](research/deferred/low-bit-optimizer-state-quantization.md) | 2026-11-29 | none | 2026-10-11 |
+| WAIT | [Monitorability is trainable: post-training for chain-of-thought monitorability](research/deferred/cot-monitorability-training.md) | 2026-12-20 | none | 2026-10-25 |
 | WAIT | [No single intrinsic tokenizer metric predicts downstream LM performance](research/deferred/tokenizer-intrinsic-metrics.md) | 2026-12-13 | none | 2026-10-18 |
-| WAIT | [On-policy distillation variants: co-evolving teacher (DCE/SRCL) and same-family scaling laws](research/deferred/on-policy-distillation-variants.md) | 2026-11-29 | none (the base technique is taught in lesson 17.4) | 2026-10-18 |
+| WAIT | [On-policy distillation variants: co-evolving teacher (DCE/SRCL) and same-family scaling laws](research/deferred/on-policy-distillation-variants.md) | 2026-11-29 | none (the base technique is taught in lesson 17.4) | 2026-10-25 |
 | WAIT | [Online test-time training / self-training of agents and its instability (ASCENT, self-generated feedback, ReSAIL)](research/deferred/agent-test-time-training-stability.md) | 2026-12-06 | none | 2026-10-11 |
 | WAIT | [OSWorld-Pro: process-based evaluation of computer-use agents](research/deferred/computer-use-agent-process-evaluation.md) | 2026-12-06 | none | 2026-10-11 |
 | WAIT | [PISA: hierarchical block-sparse attention with O(N log N) scoring](research/deferred/block-sparse-attention-pisa.md) | 2026-11-29 | none | 2026-10-04 |
+| WAIT | [Prism Attention: proposal-refined cross-layer index sharing for sparse decoding attention](research/deferred/sparse-attention-cross-layer-index-sharing.md) | 2026-12-20 | none | 2026-10-25 |
 | WAIT | [Quantizing the recurrent state of linear-attention / Gated DeltaNet layers (LeapQuant, STEPQuant)](research/deferred/linear-attention-state-quantization.md) | 2026-11-29 | none | 2026-10-18 |
 | WAIT | [Reliability and cost of RLVR training-data decontamination policies](research/deferred/rlvr-data-decontamination.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [ReplaySSM: cache SSM inputs, not state, for hybrid-model decoding](research/deferred/replayssm-ssm-input-caching.md) | 2026-11-15 | none | 2026-10-18 |
@@ -41,19 +53,24 @@ Every topic the weekly review has decided on, so nothing is reconsidered without
 | WAIT | [Session-aware agentic inference serving (NVIDIA Dynamo): session IDs, admission control, KV-cache hints](research/deferred/agentic-inference-serving-dynamo.md) | 2026-12-06 | none | 2026-10-11 |
 | WAIT | [Sharpening tax: RL post-training trades pass@k coverage for pass@1](research/deferred/rl-sharpening-tax.md) | 2026-11-29 | none | 2026-10-04 |
 | WAIT | [Sliding-window + linear-attention hybrids and the 'Seesaw Effect' on long context](research/deferred/sliding-window-linear-attention-hybrids.md) | 2026-11-29 | none | 2026-10-11 |
+| WAIT | [SPARE: per-layer MoE expert-pruning budgets from routing entropy](research/deferred/moe-expert-pruning-routing-entropy.md) | 2026-12-20 | none | 2026-10-25 |
+| WAIT | [Speculative decoding (cluster): length inflation under relaxed verification, target-probability reuse, target-regenerated baselines, RL-trained drafters, draft KV staleness](research/deferred/speculative-decoding.md) | 2026-12-20 | none | 2026-10-25 |
+| WAIT | [Subliminal learning through distillation, traced across pretraining](research/deferred/subliminal-learning-distillation.md) | 2026-12-20 | none | 2026-10-25 |
 | WAIT | [Superposition Linearity Hypothesis (two continuations from one forward pass)](research/deferred/superposition-linearity-hypothesis.md) | 2026-11-22 | none | 2026-09-27 |
 | WAIT | [The COUNT: n-gram count embeddings stored in host memory as a pretraining addition](research/deferred/ngram-count-embeddings-host-memory.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [Thinkingbox: grading agents by terminal backend state and repeat-reliability (pass^N)](research/deferred/agent-eval-terminal-state-reliability.md) | 2026-12-13 | none | 2026-10-18 |
 | WAIT | [TokenRouter: serving systems for token-level multi-model routing](research/deferred/token-level-routing-serving.md) | 2026-12-06 | none | 2026-10-11 |
-| WAIT | [ToolSearcher: RL-trained tool selection over large tool catalogs](research/deferred/tool-selection-rl-toolsearcher.md) | 2026-12-06 | none | 2026-10-04 |
+| WAIT | [ToolSearcher: RL-trained tool selection over large tool catalogs](research/deferred/tool-selection-rl-toolsearcher.md) | 2026-12-06 | none | 2026-10-25 |
 | WAIT | [Training-free sparse-attention decoding (FFD, "Faster Than Flash")](research/deferred/sparse-attention-decoding-ffd.md) | 2026-11-22 | none | 2026-09-27 |
 | WAIT | [Tree attention / shared-prefix packing for GRPO rollouts (TRL AsyncGRPO)](research/deferred/grpo-tree-attention-prefix-packing.md) | 2026-11-29 | none | 2026-10-18 |
 | WAIT | [U-Space: training-free token-level uncertainty from a learned subspace](research/deferred/token-uncertainty-subspace.md) | 2026-12-06 | none | 2026-10-11 |
 | WAIT | [Weight decay's causal role in the life cycle of massive activations](research/deferred/massive-activations-weight-decay.md) | 2026-12-13 | none | 2026-10-18 |
+| WAIT | [Zephon: elastic determinism for online, stateful data-loading pipelines](research/deferred/elastic-deterministic-data-loading.md) | 2026-12-20 | none | 2026-10-25 |
 | REJECT | [Attic-KV: query-aware 'rehearse what will be read' KV-cache compression](research/rejected/query-aware-kv-cache-compression.md) | on new evidence | none | 2026-10-11 |
 | REJECT | [Beyond Downstream QA: benchmark isolating agent-memory correctness (FEB-30)](research/rejected/agent-memory-benchmark-feb30.md) | on new evidence | none | 2026-10-18 |
 | REJECT | [Encoded but not decoded: probe vs LM-head vs behavior gap (syntax)](research/rejected/probe-behavior-gap-syntax.md) | on new evidence | none | 2026-09-27 |
 | REJECT | [H2S: highlight-then-summarize evidence compression for long-context QA](research/rejected/evidence-compression-h2s.md) | on new evidence | none | 2026-10-04 |
+| REJECT | [Many Biases, One Circuit: post-training amplifies a pretrained cue-following attention circuit](research/rejected/post-training-cue-routing-circuit.md) | on new evidence | none | 2026-10-25 |
 | REJECT | [NVIDIA/AI4Bharat translate-judge-repair synthetic data pipeline for Indic pretraining](research/rejected/indic-translate-judge-repair-pipeline.md) | on new evidence | none | 2026-10-18 |
 | REJECT | [Objective-level recovery gaps in circuit discovery](research/rejected/circuit-discovery-objective-gap.md) | on new evidence | none | 2026-10-04 |
 | REJECT | [Periodic weak spots from chunked KV-cache compression](research/rejected/chunked-kv-compression-phase-sensitivity.md) | on new evidence | none | 2026-10-04 |

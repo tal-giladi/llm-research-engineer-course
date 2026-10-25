@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none (the base technique is taught in lesson 17.4)
-- **Candidates:** C-20260928-02, C-20261001-02, C-20261008-01, C-20261010-01, C-20261011-04, C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04
+- **Candidates:** C-20260928-02, C-20261001-02, C-20261008-01, C-20261010-01, C-20261011-04, C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04, C-20261024-01
 
 ## Summary
 
@@ -22,6 +22,7 @@ Two specific extensions of on-policy distillation: a teacher that improves along
 - https://arxiv.org/abs/2609.36642 — PR-OPD: hidden-state alignment explains privileged self-distillation; code released.
 - https://arxiv.org/abs/2610.19789 — 132-run (~12k GPU-hour) reality check: no self-distillation method consistently beats GRPO in agentic RL; argues for skepticism toward the whole cluster.
 - Daily C-class lines: BranchOPD, CriticOPD (https://arxiv.org/abs/2610.20572).
+- https://arxiv.org/abs/2610.31563 — AOPD: advantage-weighted teacher-following estimated from standard rollouts; no code (W43).
 
 ## What would change the decision
 
@@ -32,3 +33,4 @@ Independent reproduction of the teacher-scale saturation result, or adoption of 
 - 2026-10-04 — WAIT — single-paper variants of a technique now taught in 17.4; no reproduction or adoption — weekly/2026-W40.md — candidates C-20260928-02, C-20261001-02
 - 2026-10-11 — WAIT — three more single-paper OPD variants this week confirm an active cluster, but none is reproduced or adopted; next review date unchanged — weekly/2026-W41.md — candidates C-20261008-01, C-20261010-01, C-20261011-04
 - 2026-10-18 — WAIT — four more single papers, and a large controlled study finding no variant consistently beats GRPO; the cluster is active but less settled than before; Semi-OPD noted for 17.4 if reproduced; next review date unchanged — weekly/2026-W42.md — candidates C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04
+- 2026-10-25 — WAIT — a tenth single-paper OPD variant, no code or reproduction; cluster still unconverged; next review date unchanged — weekly/2026-W43.md — candidates C-20261024-01

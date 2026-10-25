@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none
-- **Candidates:** C-20261001-03, C-20261002-03, C-20261004-02, C-20261010-02, C-20261012-03, C-20261017-02
+- **Candidates:** C-20261001-03, C-20261002-03, C-20261004-02, C-20261010-02, C-20261012-03, C-20261017-02, C-20261020-02
 
 ## Summary
 
@@ -19,6 +19,7 @@ Several independent approaches to agents whose history outgrows the context: per
 - https://arxiv.org/abs/2610.11287 — REMORY: learned residual memory tokens for agent context compaction; fourth single-paper approach.
 - https://arxiv.org/abs/2610.07625 — Stateless Language Agents: externalize state and rebuild context each call; single paper.
 - https://arxiv.org/abs/2610.20927 — Source-Judged Compaction: drop summary entries the environment does not support; code released.
+- https://arxiv.org/abs/2610.23266 — JointCoreBench/JointCore: exact-oracle benchmark for joint memory sufficiency; benchmark/baseline, not a deployment method (W43).
 
 ## What would change the decision
 
@@ -29,3 +30,4 @@ Convergence on one mechanism with independent reproduction or adoption in a majo
 - 2026-10-04 — WAIT — a real and growing problem area, but three different single-paper mechanisms with no convergence or reproduction yet — weekly/2026-W40.md — candidates C-20261001-03, C-20261002-03, C-20261004-02
 - 2026-10-11 — WAIT — a fourth single-paper approach; still no convergence or adoption; next review date unchanged — weekly/2026-W41.md — candidates C-20261010-02
 - 2026-10-18 — WAIT — two more distinct mechanisms (externalize vs compact in place, provenance checking); still no convergence or adoption; next review date unchanged — weekly/2026-W42.md — candidates C-20261012-03, C-20261017-02
+- 2026-10-25 — WAIT — one more single paper (memory-subset sufficiency with exact oracles); useful benchmark framing but no convergence in the cluster; next review date unchanged — weekly/2026-W43.md — candidates C-20261020-02

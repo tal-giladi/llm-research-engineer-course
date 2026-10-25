@@ -85,6 +85,7 @@
   - [16.1 · From PPO to GRPO](lessons/module-16/lesson-01.md)
   - [16.2 · RLVR & verifiable rewards](lessons/module-16/lesson-02.md)
   - [16.3 · Rejection sampling & verifiers](lessons/module-16/lesson-03.md)
+  - [16.4 · Training–inference mismatch](lessons/module-16/lesson-04.md)
 - **17 · Modern reasoning models**
   - [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md)
   - [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md)
