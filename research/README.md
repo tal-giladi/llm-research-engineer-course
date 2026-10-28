@@ -35,6 +35,7 @@ source URL ─▶ candidate (daily/…, staging.md, ID C-YYYYMMDD-NN)
 |---|---|---|
 | `PROTOCOL-daily.md` | Instructions for the daily research run | human |
 | `PROTOCOL-weekly.md` | Instructions for the weekly curriculum review | human |
+| `SCOPE-DECISIONS.md` | Tal's decisions on which areas the course covers; the weekly review follows them | human |
 | `templates/` | Candidate, topic and weekly-report templates | human |
 | `daily/YYYY-MM-DD.md` | Everything found that day, classified A–E | daily run |
 | `staging.md` | "Things worth considering": this week's A/B candidates in full | daily run; reset weekly |

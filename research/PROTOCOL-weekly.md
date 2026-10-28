@@ -45,7 +45,8 @@ engineer?"* — not "is it new", "is it popular", or "did a famous lab mention i
 ## Step 0 — Read the course before judging anything
 
 Read `CLAUDE.md` (lesson template, rules), `_sidebar.md`, `curriculum/course-outline.md`
-(module map + dependency graph), `research/REGISTRY.md`, and every lesson the candidates touch.
+(module map + dependency graph), `research/REGISTRY.md`, `research/SCOPE-DECISIONS.md` (Tal's
+scope decisions — follow them), and every lesson the candidates touch.
 You must know the existing structure, terminology, code layout (`code/src/llmre/...`),
 prerequisites and teaching style before deciding where anything fits.
 
