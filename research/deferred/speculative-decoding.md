@@ -2,9 +2,9 @@
 
 - **Topic ID:** speculative-decoding
 - **Status:** WAIT
-- **Next review:** 2026-12-20
+- **Next review:** 2026-11-15
 - **Course change:** none
-- **Candidates:** C-20261019-03
+- **Candidates:** C-20261019-03, C-20261031-03
 
 ## Summary
 
@@ -14,11 +14,16 @@ Five independent October 2026 papers on speculative decoding, each a different s
 
 - https://arxiv.org/abs/2610.23818 — relaxed verification: 1.34x accepted tokens per round but 1.54x longer completions (authors).
 - https://arxiv.org/abs/2610.29210, https://arxiv.org/abs/2610.29013, https://arxiv.org/abs/2610.29527, https://arxiv.org/abs/2610.31098 — four further single papers (daily 2026-10-22/23).
+- https://arxiv.org/abs/2610.38981 — Why speculative decoding works better than predicted on sparse MoE models (NeurIPS 2026): predictive model of MoE speedup; no third-party reproduction yet (W44).
+- The base technique (lossless draft-and-verify) is now taught in lessons/module-08/lesson-06.md (08.6, added 2026-11-01).
 
 ## What would change the decision
 
 A course-author decision to add an inference/serving foundation (speculative decoding builds directly on 06.3 sampling and 06.3/12.2 KV cache). With that foundation, a lossless-verification lesson is mature enough to ADD and the length-inflation result becomes its evaluation caveat.
 
+Update 2026-11-01: the foundation was added as 08.6 (author scope decision 2026-10-28), including the lossless rule and a one-line caveat on relaxed verification. Each refinement in this cluster (relaxed verification, drafter training, MoE speedup models) is now judged as a possible extension of 08.6 on its own evidence: independent reproduction, or adoption in vLLM/SGLang/TensorRT-LLM.
+
 ## History
 
 - 2026-10-25 — WAIT — active multi-group research on a foundational inference technique the course does not teach; adding the foundation is a structural decision for the author (as for serving and PTQ in W41/W42) — weekly/2026-W43.md — candidates C-20261019-03
+- 2026-11-01 — WAIT — the foundation now exists (08.6 teaches lossless draft-and-verify); the cluster's refinements are re-judged against it at an earlier review, as the author's 2026-10-28 scope decision asks — weekly/2026-W44.md — candidates C-20261031-03

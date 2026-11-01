@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W44 (2026-11-01)
+
+- Added **[08.6 · Inference serving: KV cache, prefill vs decode, batching, speculative decoding](lessons/module-08/lesson-06.md)**: the KV cache built from scratch for the course GPT and checked against the 06.3 loop; why prefill is compute-bound and decode memory-bound (08.2's roofline), and why batching amortizes the weights but not the cache; continuous (iteration-level) batching; paged KV memory with block tables; lossless draft-and-verify speculative decoding with its proof and speedup formula; serving metrics; and why rollout generation dominates RL post-training cost. With `llmre/model/serving.py`, `tests/test_serving.py` and `experiments/serving_costs.py`. Extends 06.3 and 08.2; `GPT.generate` is unchanged and stays the reference. [Review](research/weekly/2026-W44.md).
+
 ## 2026-W43 (2026-10-25)
 
 - Added **[16.4 · Training–inference mismatch: when on-policy RL is secretly off-policy](lessons/module-16/lesson-04.md)**: why the inference engine that samples rollouts and the trainer that updates the policy assign different probabilities to the same tokens with the same weights (reduction order, batch-dependent kernels, precision, sampling transforms, MoE routing); batch variance and batch-invariant kernels (vLLM, TorchTitan's TitanRL); measuring the mismatch (log-ratio statistics, K3); and correcting it with the decoupled three-policy GRPO objective, truncated importance sampling and rejection. An exactly solvable toy shows the uncorrected update converging to the wrong policy, and why importance weights cannot fix top-k/top-p truncation. With `llmre/rl/mismatch.py`, `tests/test_rl_mismatch.py` and `experiments/rl_mismatch.py`. Extends 16.1–16.3; `grpo_objective` is unchanged. [Review](research/weekly/2026-W43.md).

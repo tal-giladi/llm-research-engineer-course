@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-12-13
 - **Course change:** none
-- **Candidates:** C-20261012-01
+- **Candidates:** C-20261012-01, C-20261027-01
 
 ## Summary
 
@@ -13,6 +13,7 @@ Agent benchmark that grades by inspecting the environment's final backend state 
 ## Evidence
 
 - https://arxiv.org/abs/2608.19741 — single benchmark paper with code (Microsoft co-authors); the announcing blog post URL was not verified.
+- https://arxiv.org/abs/2610.32285 — Trial by Trace: component-level harness benchmark with failure attribution; single paper, no code (W44).
 
 ## What would change the decision
 
@@ -21,3 +22,4 @@ Use by an independent evaluation suite or lab report; then a short section in 13
 ## History
 
 - 2026-10-18 — WAIT — sound evaluation idea but a single benchmark without third-party use — weekly/2026-W42.md — candidates C-20261012-01
+- 2026-11-01 — WAIT — a second single-paper agent-reliability benchmark (harness components, failure attribution); no code, no adoption; next review date unchanged — weekly/2026-W44.md — candidates C-20261027-01

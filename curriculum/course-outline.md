@@ -68,6 +68,7 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 - After **7–10 (systems/scaling)**: Scaling Laws, Chinchilla, Megatron-LM, ZeRO.
 - After **8 (GPU)**: FlashAttention.
 - After **8.5 (fused linear cross-entropy, added 2026-10-11)**: Cut Cross-Entropy (Cut Your Losses in Large-Vocabulary Language Models), Liger Kernel; TRL v1.15.0 fused LM head as the production default. Lesson [8.5](lessons/module-08/lesson-05.md) depends on 1.4, 6.1, 8.2 and 8.4; code `training/fused_ce.py`.
+- After **8.6 (inference serving, added 2026-11-01)**: Orca (iteration-level scheduling), vLLM / PagedAttention, Fast Inference via Speculative Decoding (Leviathan et al.), Speculative Sampling (Chen et al.), SGLang (RadixAttention), Sarathi-Serve (chunked prefill), DistServe (prefill/decode disaggregation); RollPacker and AReaL for rollout cost in RL. Lesson [8.6](lessons/module-08/lesson-06.md) depends on 5.2, 5.3, 6.3, 7.4 and 8.2; code `model/serving.py`.
 - After **12 (architectures)**: RoPE/RoFormer, LLaMA, Llama 3, OLMo 2, Switch Transformers, DeepSeekMoE, DeepSeek-V3.
 - After **12.5 (linear/hybrid attention, added 2026-09-27)**: Transformers are RNNs (linear attention), DeltaNet parallelization, Gated DeltaNet, Kimi Linear. Lesson [12.5](lessons/module-12/lesson-05.md) depends on 5.2 and 12.3; code `attention/gated_deltanet.py`.
 - After **14 (SFT)**: FLAN, Self-Instruct.
