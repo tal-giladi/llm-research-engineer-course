@@ -134,6 +134,45 @@ The two rules **disagree**. The summed rule crowns A only because A is shorter â
 
 <div class="callout warn"><p>Length normalization is a heuristic, not a law. Dividing by token count assumes each token carries equal weight, which is not exactly true; some benchmarks normalize by the number of characters or bytes instead, and a few score by the raw sum on purpose. The point is not that one rule is universally correct â€” it is that the scoring rule is <em>part of the benchmark definition</em>, and two papers reporting "HellaSwag accuracy" with different normalizations are not directly comparable.</p></div>
 
+### 5.4 A full question, start to finish
+
+Section 5.3 used bare numbers. Here is the same method on an actual question. The probabilities are invented for illustration, not taken from a real model.
+
+The context is "He put the ice cream in the", and there are two options:
+
+- **Option A (wrong)**: " oven", 1 token.
+- **Option B (correct)**: " freezer so it would stay cold", 6 tokens.
+
+**Step 1: read the probabilities.** Glue each option onto the context and run the model once per option. At each option token, read the probability the model gave that token, given everything before it. Then take its log:
+
+| Option | Token | Probability $q$ | $\ln q$ |
+|---|---|---:|---:|
+| A | " oven" | $0.02$ | $-3.91$ |
+| B | " freezer" | $0.40$ | $-0.92$ |
+| B | " so" | $0.10$ | $-2.30$ |
+| B | " it" | $0.50$ | $-0.69$ |
+| B | " would" | $0.30$ | $-1.20$ |
+| B | " stay" | $0.30$ | $-1.20$ |
+| B | " cold" | $0.50$ | $-0.69$ |
+
+**Step 2: add the logs.** Adding logs is the same as multiplying the probabilities, so this is the log of the chance of the whole option:
+
+$$
+\ell_A = \ln(0.02) = -3.91, \qquad \ell_B = \ln(0.40 \times 0.10 \times 0.50 \times 0.30 \times 0.30 \times 0.50) = \ln(0.0009) = -7.01.
+$$
+
+If you stop here, A wins, because $-3.91 > -7.01$, and that is the wrong answer. The model does not believe ice cream goes in an oven: B simply has to get 6 tokens right in a row, and every extra token multiplies in another number below 1.
+
+**Step 3: divide by the token count.**
+
+$$
+\bar\ell_A = \frac{-3.91}{1} = -3.91, \qquad \bar\ell_B = \frac{-7.01}{6} = -1.17.
+$$
+
+Now B wins, because $-1.17 > -3.91$. Turned back into probabilities, that is about $e^{-1.17} \approx 0.31$ per token for B against $0.02$ for A, which matches what the model actually believes: B's words are far more plausible.
+
+**Step 4: return the winner.** The scorer returns the index of the highest score, here $1$ (option B), and the benchmark compares that index with the correct answer. The words "He put the ice cream in the" are never scored: they are the same for both options, so they cannot change which one wins.
+
 ## 6. In code
 
 The `multiple_choice_score` function in `llmre.evaluation.harness` implements exactly section 5: build `[context; option]`, run the model once per option, sum the option tokens' log-probabilities from the numerically stable `log_softmax` of <a href="#/lessons/module-01/lesson-04">module 1</a>, optionally divide by the option length, and return the argmax index.
