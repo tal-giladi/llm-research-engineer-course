@@ -38,7 +38,7 @@ with $D$ the total number of training tokens. This is the "$6ND$" you will see i
 
 We take $N$ as the **non-embedding** parameter count, estimated by `non_embedding_params(cfg) = 12 · n_layer · n_embd²`. Per layer it adds up like this:
 
-- **Attention: four $C\times C$ weight matrices = $4C^2$.** Three of them make the query, key and value vectors from the token's $C$-dim input: $W_Q$, $W_K$, $W_V$. The **fourth is the output projection $W_O$**: after attention has mixed the value vectors of all heads into one $C$-dim vector, $W_O$ ($C\times C$) maps that result back into the residual stream. In our code the first three are fused into one Linear, `attn.c_attn` ($C\to 3C$, i.e. $3C^2$ weights), and the fourth is `attn.c_proj` ($C\to C$, $C^2$ weights) — $3C^2 + C^2 = 4C^2$. Splitting into heads does not change this: $H$ heads of size $C/H$ together still use $C\times C$ per matrix.
+- **Attention: four $C\times C$ weight matrices = $4C^2$.** Three of them make the query, key and value vectors from the token's $C$-dim input: $W_Q$, $W_K$, $W_V$. The **fourth is the output projection $W_O$**: after attention has mixed the value vectors of all heads into one $C$-dim vector, $W_O$ ($C\times C$) maps that result back into the residual stream. (In our code the first three are fused into one Linear, `attn.c_attn` ($C\to 3C$, i.e. $3C^2$ weights), and the fourth is `attn.c_proj` ($C\to C$, $C^2$ weights) — $3C^2 + C^2 = 4C^2$. Splitting into heads does not change this: $H$ heads of size $C/H$ together still use $C\times C$ per matrix.)
 - **MLP: $8C^2$.** The $C\to 4C$ Linear has $4C^2$ weights and the $4C\to C$ Linear has another $4C^2$.
 - **Total: $4C^2 + 8C^2 = 12C^2$ per layer**, times $n_{\text{layer}}$. (Biases and LayerNorm weights are $O(C)$, negligible next to $C^2$.)
 
@@ -59,7 +59,7 @@ Because these matmuls have no parameters, they contribute nothing to $N$, so a f
 
 - $QK^\top$: one query (length $C$) dotted with $T$ keys (length $C$) = $T\cdot C$ multiply-adds = $2TC$ FLOPs.
 - $PV$: $T$ value vectors (length $C$) each scaled by a probability and summed = $T\cdot C$ multiply-adds = $2TC$ FLOPs.
-- Forward = $4TC$. Backward is again ≈ 2× forward (a gradient for each of the two operands), so forward+backward = $12TC$.
+- So, forward = $4TC$. Backward is again ≈ 2× forward (a gradient for each of the two operands), so forward+backward = $12TC$.
 - With a causal mask, token $t$ only attends to $t$ earlier tokens, so on average $\approx T/2$ keys, not $T$. That halves it: ≈ $6TC$ per layer, i.e. ≈ $6\cdot n_{\text{layer}}\cdot T\cdot C$ FLOPs per token for the whole model. (A naive implementation computes the full $T\times T$ score matrix and then masks it, so it actually spends the un-halved $12TC$; FlashAttention-style kernels skip the masked blocks.)
 
 **Tiny example:** $C = 4$, $T = 3$, no mask. $QK^\top$ for one token: 3 dot products of length 4 = 12 multiply-adds = 24 FLOPs. $PV$: 3 vectors of length 4 scaled and summed = 12 multiply-adds = 24 FLOPs. Forward = 48 $= 4\cdot 3\cdot 4$; forward+backward = 144 $= 12\cdot 3\cdot 4$. None of these 144 FLOPs touches a weight, so none of them is in $6N$.
