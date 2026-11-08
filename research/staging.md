@@ -574,3 +574,45 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Confidence:** low (single paper, self-reported numbers, no reproduction) — consistent with every other entry already in this cluster.
 - **Recommendation:** fold into `agent-context-compaction.md` as a new candidate/evidence line at the weekly review; do not open a separate topic file (same underlying problem, same evidentiary bar as the existing cluster).
 
+### C-20261108-01 · Harness-S: sibling-harness pool + RL rescue training + adaptive router, a fourth distinct mechanism in the agent-harness co-optimization cluster
+
+- **Class:** B
+- **Date discovered:** 2026-11-08
+- **Date published:** 2026-11-03 (v1)
+- **Source:** https://arxiv.org/abs/2611.04277 (verified resolves; HTTP 200)
+- **Organization/researchers:** Kangning Zhang, Wenxiang Jiao, Bowen Fang, Shuai Shao, Jiachen Zhu, Rong Shan, Shijian Wang, Hao Wang, Yuan Lu, Weiwen Liu, Weinan Zhang (affiliations not stated on the abstract page; code published under the `DeepExperience` GitHub organization, not independently identified).
+- **Category:** agents/tools (agent-harness optimization)
+- **What changed:** The existing deferred cluster (`agent-harness-policy-co-optimization.md`: Self-HPO, HarnessPro, HERD) has the policy propose edits to a single evolving harness. Harness-S instead keeps a fixed pool of specialized "sibling harnesses" (Directional Harness Evolution) and only calls on them when every attempt under the original base harness fails (Complementary Harness Rescue Training): the policy's rollouts under a rescuing sibling harness replace the failed group in RL, so the trained policy still has to work under the unmodified base harness at the end. An Adaptive Harness Router (behavior profiles + cross-LLM voting, refreshed during training) additionally picks the best top-k siblings at inference time.
+- **Technical summary:** Authors' own numbers on AppWorld, SWE-Gym, and DBBench: the policy trained with sibling-harness rescue outperforms policy-only RL training when both are evaluated on the original base harness; the router adds further gains at inference (reported as "Rank-1") at the same rollout/executor budget. Code is released (github.com/DeepExperience/Harness-S, Apache-2.0, verified live, 57 stars at capture time) but the README itself states the first release only targets AppWorld (20-harness pool: base + 19 siblings), that "the portable GPU launcher has not yet completed an end-to-end training run," and that results are not a bitwise replay of the paper's reported scores — i.e. the authors' own release flags itself as not yet fully reproduced even by themselves.
+- **Why it might matter:** A fourth mechanistically distinct approach to the same problem the course's deferred cluster is already tracking (harness/policy co-optimization for coding agents), with code released (unlike Self-HPO/HarnessPro/HERD, none of which had code at last review) — though the code's own README tempers how finished it is.
+- **Evidence of adoption:** None — single paper, five days old, no third-party reproduction, no stated lab affiliation; the code release is the authors' own, and even that is self-described as incomplete (no finished end-to-end run, no bitwise replay).
+- **Major organizations using it:** None identified.
+- **Open-source implementation:** https://github.com/DeepExperience/Harness-S (Apache-2.0; verified live).
+- **Paper:** https://arxiv.org/abs/2611.04277
+- **Code:** https://github.com/DeepExperience/Harness-S
+- **Relationship to existing course material:** `lookup "agent harness policy co-optimization"` hits `research/deferred/agent-harness-policy-co-optimization.md` directly (WAIT, next review 2026-12-20, candidates so far: C-20261021-03, plus C-20261104-03 ParetoSaddler already staged) — new, mechanistically distinct candidate for the same cluster, not a duplicate.
+- **Potential course lesson:** No new lesson; add as a fourth candidate to the existing deferred cluster (module 19/agents area) alongside Self-HPO/HarnessPro/HERD/ParetoSaddler once/if the cluster converges or gets independent reproduction.
+- **Confidence:** low — single paper, no third-party reproduction, and the authors' own code release admits its training pipeline hasn't completed an end-to-end run yet.
+- **Recommendation:** add as a new candidate to `agent-harness-policy-co-optimization.md` at the weekly review; no change to its 2026-12-20 scheduled review date.
+
+### C-20261108-02 · EvoMemState: relational + reasoning memory state for personal agents (RL-trained, beyond flat fact storage)
+
+- **Class:** B
+- **Date discovered:** 2026-11-08
+- **Date published:** 2026-11-02 (v1)
+- **Source:** https://arxiv.org/abs/2611.03743 (verified resolves; HTTP 200; cs.IR, cross-listed cs.AI)
+- **Organization/researchers:** Zhishang Xiang, Yunbo Tang, Zhongqiao Liu, Junkai Chen, Zerui Chen, Qingguo Hu, Yuxuan Zhang, William Grant, Qinggang Zhang, Jinsong Su (affiliations not stated on the abstract page; code published under the `XMUDeepLIT` GitHub organization, consistent with but not confirming a Xiamen University affiliation).
+- **Category:** memory/retrieval (agents)
+- **What changed:** Most LLM personal-agent memory systems (MemGPT, Mem0, A-MEM — all named as baselines) store memory as isolated facts retrieved by similarity. EvoMemState adds two further pieces of state per retrieval: a relational state (whether a fact is still valid and how it relates to other facts as they change over time, built via ontology-guided extraction) and a reasoning state (a request-specific plan for how to apply the retrieved facts, generated by an RL-trained policy on top of a frozen response model).
+- **Technical summary:** Authors' own numbers across MemSyco-Bench, MemTrapBench, LoCoMo-Refined and LoCoMo report consistent gains over MemGPT/Mem0/A-MEM-style baselines in retrieval completeness and in the accuracy of memory-grounded responses (no single headline number given in the abstract; full tables not independently re-extracted here). The reasoning-state policy is trained with GRPO. Code is released and confirmed live (github.com/XMUDeepLIT/EvoMemState, 26 stars at capture time): it includes inference code, GRPO policy training, and a vendored "slime" training backend, and the README states it reproduces the paper's main results table across the four cited benchmarks; training data/checkpoints are not bundled.
+- **Why it might matter:** A structurally different mechanism from the agent-memory baselines it compares against (adds explicit relational/temporal validity tracking plus an RL-trained, request-specific reasoning step, rather than flat fact storage + similarity retrieval) — relevant to the course's agents/memory material, with a working code release rather than a bare claim.
+- **Evidence of adoption:** None — single paper, six days old, no third-party reproduction; the code release is the authors' own (self-adoption, not external use), though the repo's own README claims it reproduces the paper's table.
+- **Major organizations using it:** None identified; no stated institutional affiliation on the paper itself.
+- **Open-source implementation:** https://github.com/XMUDeepLIT/EvoMemState (verified live).
+- **Paper:** https://arxiv.org/abs/2611.03743
+- **Code:** https://github.com/XMUDeepLIT/EvoMemState
+- **Relationship to existing course material:** `lookup "EvoMemState"` and `lookup "agent personal memory relational state"` — no matches; not covered by any accepted/deferred/rejected topic or lesson. (Distinct from the rejected `agent-memory-benchmark-feb30.md`, which was about a benchmark's own validity, not a memory mechanism.) New topic.
+- **Potential course lesson:** No lesson yet; a possible future agents/memory-module pointer ("beyond flat fact memory: relational validity + RL-trained reasoning state") if a second group reproduces it or it sees real use beyond the authors' own repo — low priority on single-paper evidence.
+- **Confidence:** low-medium — single paper and self-reported numbers, but a working, described code release with a reasonably specific, verifiable mechanism (ontology extraction + GRPO-trained reasoning state).
+- **Recommendation:** monitor; open a small deferred-topic file at the weekly review for agent personal-memory mechanisms (distinct from the existing context-compaction cluster, which is about trimming an agent's own working context, not personal long-term memory) if the reviewer judges it worth tracking as its own cluster.
+
