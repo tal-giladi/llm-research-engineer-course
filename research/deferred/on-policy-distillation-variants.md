@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none (the base technique is taught in lesson 17.4)
-- **Candidates:** C-20260928-02, C-20261001-02, C-20261008-01, C-20261010-01, C-20261011-04, C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04, C-20261024-01, C-20261101-01
+- **Candidates:** C-20260928-02, C-20261001-02, C-20261008-01, C-20261010-01, C-20261011-04, C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04, C-20261024-01, C-20261101-01, C-20261102-03, C-20261103-04, C-20261104-04, C-20261106-03
 
 ## Summary
 
@@ -24,6 +24,10 @@ Two specific extensions of on-policy distillation: a teacher that improves along
 - Daily C-class lines: BranchOPD, CriticOPD (https://arxiv.org/abs/2610.20572).
 - https://arxiv.org/abs/2610.31563 — AOPD: advantage-weighted teacher-following estimated from standard rollouts; no code (W43).
 - https://arxiv.org/abs/2610.38681 — WISD: weakening-induced on-policy self-distillation (MIT HAN Lab authors, code released); single paper, no reproduction (W44). Multi-teacher OPD is tracked separately in deferred/multi-teacher-on-policy-distillation.md.
+- https://arxiv.org/abs/2610.38160 — ATI-OPD: teacher rewrites the earliest high-disagreement segment, persistent-divergence loss masking; no code.
+- https://arxiv.org/abs/2610.38637 — TESD: reward-driven teacher evolution in on-policy self-distillation; no code.
+- https://arxiv.org/abs/2611.03133 — SPTA: teacher adapted by RLVR to the student's rollout prefixes before OPD; no code.
+- https://arxiv.org/abs/2611.06542 — EvoOPD: evolving bank of privileged-information feedback strategies for black-box-teacher OPD; no code.
 
 ## What would change the decision
 
@@ -36,3 +40,4 @@ Independent reproduction of the teacher-scale saturation result, or adoption of 
 - 2026-10-18 — WAIT — four more single papers, and a large controlled study finding no variant consistently beats GRPO; the cluster is active but less settled than before; Semi-OPD noted for 17.4 if reproduced; next review date unchanged — weekly/2026-W42.md — candidates C-20261012-02, C-20261013-02, C-20261014-03, C-20261015-04
 - 2026-10-25 — WAIT — a tenth single-paper OPD variant, no code or reproduction; cluster still unconverged; next review date unchanged — weekly/2026-W43.md — candidates C-20261024-01
 - 2026-11-01 — WAIT — an eleventh single-paper OPD variant (self-distillation from a weakened copy); code released but no reproduction; next review date unchanged — weekly/2026-W44.md — candidates C-20261101-01
+- 2026-11-08 — WAIT — four more single-paper variants without code or reproduction (now fifteen); the multi-teacher branch was promoted separately this week; at the 2026-11-29 review resolve the family with a synthesis (group by mechanism: teacher adaptation, teacher intervention, feedback selection, scaling) and REJECT variants that have stayed unreproduced, instead of accumulating entries — weekly/2026-W45.md — candidates C-20261102-03, C-20261103-04, C-20261104-04, C-20261106-03

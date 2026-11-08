@@ -385,6 +385,233 @@ Section 6 describes TRL's distillation loss as computed **in chunks** so the ful
 
 The goal is the same as chunking, with less memory. The mechanism is an online logsumexp over vocabulary tiles, the same recurrence as FlashAttention's online softmax. Lesson [08.5 · Fused linear cross-entropy](lessons/module-08/lesson-05.md) derives it, works it by hand and implements it from scratch, including the per-token entropy that RL trainers log. Everything in sections 2–5 of this lesson is unchanged: the divergences are the same, and only the way the logits are produced has changed.
 
+## Advanced extension: multi-teacher on-policy distillation (added 2026-11-08)
+
+<div class="callout key"><p><strong>Added 2026-11-08 by the weekly curriculum review</strong> (<a href="#/research/CHANGELOG">changelog</a>). Sections 1–7 are unchanged and remain the foundation: one teacher, the student's own rollouts, a reverse (or forward) KL at every token. This section adds the version that several 2026 open-weight model reports use as their last post-training stage: <strong>several teachers, one per domain</strong>, each grading only the rollouts of its own domain. Code: <code>code/src/llmre/reasoning/mopd.py</code>, tests in <code>code/tests/test_mopd.py</code>, and a runnable script <code>code/experiments/mopd_two_domains.py</code>.</p></div>
+
+<div class="prereq">
+<p><strong>Prerequisites:</strong> sections 2.2 (reverse KL and its gradient), 2.4 (on-policy) and the Exercise of this lesson (the sampled reverse-KL update); the group-normalized advantage of <a href="#/lessons/module-16/lesson-01">16.1</a>; truncated importance sampling between the inference engine and the trainer from <a href="#/lessons/module-16/lesson-04">16.4</a>; token-level vs sequence-level loss averaging from <a href="#/lessons/frontier/update-02">F.2</a>.</p>
+<p><strong>You will learn:</strong> why labs train one RL specialist per domain and then distill them into one student; the MOPD objective written as a policy-gradient loss whose advantage is the teacher–student log-ratio; why its expected gradient is exactly the reverse-KL gradient of section 2.2; how prompts are routed to teachers; and why the choice between per-token and per-sequence loss averaging silently decides which domain the student learns, the failure that TRL's monitoring metrics and the Open-MOPD paper both point at.</p>
+<p><strong>Why this matters for ML:</strong> "train specialists separately, then merge them by on-policy distillation" is now a documented recipe in reports from Xiaomi, NVIDIA and others (company claims), and TRL ships a trainer for it. If you run it, the domain with short answers can quietly receive a few percent of the training signal.</p>
+</div>
+
+<div class="hw">
+<p><strong>Hardware track:</strong> CPU-only. The toy is an exact computation on a 4-token problem; <code>tests/test_mopd.py</code> runs in about two seconds and the experiment script in a few seconds, a few MB of memory, 0 GPU-hours. The TRL reference run (3B student, three teachers on vLLM servers) used 4×H200 for a 60-step partial run; it is not needed here.</p>
+</div>
+
+### E.1 Intuition: specialists first, then one student
+
+**The foundational technique.** In sections 1–5 one teacher grades every token the student writes, and the student minimizes the reverse KL to it on its own prefixes. That assumes one teacher is good at everything you care about.
+
+**The problem at modern scale.** Post-training for math, code, tool use and instruction following pulls in different directions. Doing RL on all domains at once (one mixed reward) couples them: a reward or data change in one domain moves the others, and the mix is hard to tune. Doing them one after another ("cascade RL") lets later stages erase earlier gains. Merging the weights of separately trained models does not reliably keep each one's skill.
+
+**The modern technique.** Start every model from the same SFT checkpoint. Train one **teacher per domain** with RL on that domain's verifiable reward only; these can be trained in parallel by different teams. Then run on-policy distillation into one student, but route: for a math prompt, the math teacher grades the student's tokens; for a code prompt, the code teacher does. Because teachers and student share a starting checkpoint, they share a tokenizer, which token-by-token comparison requires (see Common mistakes above).
+
+<div class="callout key"><p>MOPD is section 2.4's on-policy reverse KL with the teacher chosen per prompt. Everything new is about <em>which</em> teacher grades a rollout and <em>how much weight</em> each domain's tokens get in the loss.</p></div>
+
+### E.2 Mathematics
+
+Notation. A prompt $x$ from the training mixture $\mathcal{D}$, with domain label $d(x) \in \{1,\dots,K\}$ (TRL's `teacher_id`). Teacher policies $\pi_1,\dots,\pi_K$. The student policy in the trainer $\pi_\theta$, with parameters $\theta$. The inference engine that actually sampled the rollout, $\mu_\theta$ (same weights, different numerics, as in 16.4). A response $y = (y_1,\dots,y_{|y|})$, with prefix $y_{<t}$. $\mathrm{sg}[\cdot]$ is stop-gradient.
+
+**Objective.** The per-token reverse KL of section 2.2, with the domain's teacher in place of the single teacher, on the student's own rollouts:
+
+$$\mathcal{L}(\theta) = \mathbb{E}_{x\sim\mathcal{D}}\;\mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\Big[\tfrac{1}{|y|}\textstyle\sum_{t} \mathrm{KL}\big(\pi_\theta(\cdot\mid x,y_{<t})\,\big\|\,\pi_{d(x)}(\cdot\mid x,y_{<t})\big)\Big].$$
+
+**Written as an RL advantage.** MiMo-V2-Flash (Xiaomi, section 4.4 of its report) uses the one-sample form: the per-token advantage is the teacher–student log-ratio of the token the student actually sampled,
+
+$$\hat A_t = \mathrm{sg}\!\left[\log \pi_{d(x)}(y_t\mid x,y_{<t}) - \log \pi_\theta(y_t\mid x,y_{<t})\right] + \alpha\,\hat A_{\mathrm{ORM}},$$
+
+where $\hat A_{\mathrm{ORM}}$ is an optional sequence-level outcome advantage (for example GRPO's group-normalized reward from 16.1) and $\alpha \ge 0$ its weight. The loss is the policy-gradient surrogate
+
+$$\mathcal{L}_{\mathrm{MOPD}}(\theta) = -\,\mathbb{E}_{x,\;y\sim\mu_\theta}\Big[\tfrac{1}{|y|}\textstyle\sum_{t} w_t\,\hat A_t \log \pi_\theta(y_t\mid x,y_{<t})\Big],\qquad
+w_t = \begin{cases}\mathrm{sg}\!\left[\dfrac{\pi_\theta(y_t\mid\cdot)}{\mu_\theta(y_t\mid\cdot)}\right] & \text{if } \epsilon_{\mathrm{low}} \le \dfrac{\pi_\theta}{\mu_\theta} \le \epsilon_{\mathrm{high}}\\[4pt] 0 & \text{otherwise.}\end{cases}$$
+
+$w_t$ is 16.4's truncated importance weight: it corrects for the engine having sampled the token, and drops tokens where the engine and trainer disagree too much. The report gives no numeric values for $\epsilon_{\mathrm{low}}, \epsilon_{\mathrm{high}}$ or $\alpha$.
+
+**Why this is still the reverse KL.** Take $\alpha = 0$ and $w_t = 1$. Write $\ell_v = \log p_S(v) - \log p_T(v)$ as in section 2.2, so $\hat A_t = -\ell_{y_t}$. At one position,
+
+$$\nabla_\theta\,\mathbb{E}_{v\sim p_S}\big[-\hat A_v \log p_S(v)\big]\Big|_{\hat A\ \text{fixed}} = \mathbb{E}_{v\sim p_S}\big[\ell_v\,\nabla_\theta \log p_S(v)\big] = \nabla_\theta\,\mathrm{KL}(p_S\,\|\,p_T),$$
+
+the identity from the Exercise's stronger hint (the extra term $\mathbb{E}_{p_S}[\nabla \log p_S]$ is zero). So the advantage form is an unbiased, one-sample estimate of the section 2.2 gradient. It needs only the teacher's log-prob of the *sampled* token, which is why it fits into an existing RL trainer: the teacher plays the role of a dense, per-token reward model.
+
+**The budget question.** The $\tfrac{1}{|y|}$ inside the expectation averages each sequence over its own tokens, then averages sequences: every prompt gets equal weight. Many trainers (TRL's distillation loss among them) instead average over **all tokens in the batch**. Then a sequence's weight is proportional to its length, and domain $k$'s share of the gradient is its share of tokens,
+
+$$\text{share}_k = \frac{\sum_{b:\,d(x_b)=k} |y_b|}{\sum_b |y_b|},$$
+
+not its share of prompts. This is the same per-token vs per-sequence choice F.2 discusses for GRPO and DAPO; here it decides how much each *teacher* is listened to.
+
+### E.3 Numerical example by hand
+
+**Advantages.** Reuse section 3's distributions at one position: teacher $p_T = (0.6, 0.3, 0.1)$, student $p_S = (0.3, 0.3, 0.4)$. If the student samples token 1 (the first token), $\hat A = \ln 0.6 - \ln 0.3 = \ln 2 = 0.693$: the teacher likes it more, so it is reinforced. Token 2: $\hat A = \ln 0.3 - \ln 0.3 = 0$. Token 3: $\hat A = \ln 0.1 - \ln 0.4 = -\ln 4 = -1.386$: pushed down. The expected advantage under the student is
+
+$$0.3(0.693) + 0.3(0) + 0.4(-1.386) = 0.208 - 0.555 = -0.347 = -\tfrac{1}{2}\ln 2,$$
+
+exactly minus section 3's reverse KL $\tfrac12 \ln 2 = 0.3466$. Averaging $-\hat A_v \nabla \log p_S(v)$ over $v \sim p_S$ gives the gradient $(-0.3120, -0.1040, 0.4159)$, the section 3 reverse-KL gradient. With an outcome term $\hat A_{\mathrm{ORM}} = 1$ and $\alpha = 0.5$, every token's advantage shifts up by $0.5$: $(1.193, 0.5, -0.886)$.
+
+**Importance weight.** The trainer gives the sampled token $\pi_\theta = 0.30$. If the engine gave it $\mu = 0.25$, $w = 1.2$: kept. If the engine gave it $0.10$, the ratio is $3.0 > \epsilon_{\mathrm{high}} = 2$ (an illustrative band), so $w = 0$ and the token is dropped.
+
+**Token share.** A batch has 2 math answers of 300 tokens, 2 code answers of 250 and 1 instruction-following (IF) answer of 20 tokens. IF holds $1/5 = 20\%$ of the prompts, but its token share is $20 / (600 + 500 + 20) = 20/1120 = 1.8\%$. Under a token-averaged loss the IF teacher gets 1.8% of the gradient. To give each of the 3 teachers a third, scale every sequence of teacher $k$ by $\tfrac{1/3}{\text{share}_k}$: math $0.333/0.536 = 0.622$, code $0.333/0.446 = 0.747$, IF $0.333/0.0179 = 18.7$. That is the simple form of the token-share balancing in `token_share_weights`.
+
+### E.4 Tensor shapes, dtype, device
+
+| Tensor | Shape | dtype / device | Note |
+|---|---|---|---|
+| `student_logprobs` | `(B, T)` | fp32, GPU in practice (float64 CPU in the toy) | log-prob of each sampled token; the **only** tensor with a gradient |
+| `teacher_logprobs` | `(B, T)` | fp32, returned by the routed teacher server | constant; the toy builds `(K, B, T)` and gathers with `teacher_ids` |
+| `behavior_logprobs` | `(B, T)` | fp32, from the inference engine | $\log \mu_\theta$; constant |
+| `teacher_ids` | `(B,)` | int64 | domain label per sequence |
+| `mask` | `(B, T)` | bool/int | 1 on completion tokens |
+| `orm_advantages` | `(B,)` | fp32 | optional; broadcast over $T$ |
+| advantage, `w` | `(B, T)` | fp32 | detached |
+
+Nothing of shape `(B, T, V)` is needed for the sampled-token form (TRL's `teacher_top_k=1` with reverse KL). The full-distribution variants of sections 2–5 need the teacher's top-$k$ or full log-probs per position.
+
+### E.5 From-scratch PyTorch
+
+`llmre.reasoning.mopd` builds on `llmre.reasoning.distill` without changing it:
+
+- `route_teacher_logprobs(all_teacher_logprobs, teacher_ids)` picks each sequence's own teacher.
+- `mopd_advantages(teacher_lp, student_lp, orm_advantages=None, alpha=0.0)` returns $\hat A_t$, detached.
+- `truncated_is_weights(student_lp, behavior_lp, eps_low, eps_high)` returns $w_t$.
+- `mopd_loss(..., normalize="sequence" | "token", seq_weights=None)` is the surrogate above, with the two averaging rules.
+- `teacher_token_share` (TRL's `teacher_token_frac/<id>`) and `token_share_weights` measure and correct the imbalance.
+
+The core of the loss is three lines:
+
+```python
+adv = (teacher_logprobs - student_logprobs).detach()       # (B, T)
+per_token = -(w * adv * student_logprobs) * mask            # (B, T)
+loss = (per_token.sum(-1) / mask.sum(-1)).mean()            # per-sequence average
+```
+
+**Experiment: one student, two specialists.** To make the effect exact, the toy reuses section 5's bigram "language model". There are 4 tokens: 0 is the domain-A prompt, 1 the domain-B prompt, 2 and 3 are content tokens both domains write. Teacher A *alternates* (2→3, 3→2). Teacher B *repeats* (2→2, 3→3), each with probability 0.95. A bigram student sees only the previous token, so on rows 2 and 3 it cannot satisfy both: its capacity there is shared, and the loss decides the compromise. `distill_two_domains` computes the exact expected on-policy reverse KL per domain and runs gradient descent. Run `cd code && PYTHONPATH=src python experiments/mopd_two_domains.py`:
+
+| Setting | Lengths A, B | Loss weight A/B | Reverse KL to own specialist, A | B |
+|---|---|---|---|---|
+| single teacher (A grades everything) | 8, 8 | 0.5/0.5 | 0.000 | **3.190** |
+| routed (MOPD) | 8, 8 | 0.5/0.5 | 0.990 | 0.990 |
+| routed, per-sequence average | 24, 4 | 0.5/0.5 | 0.760 | 1.127 |
+| routed, per-token average | 24, 4 | 0.857/0.143 | 0.017 | **2.506** |
+
+**Expected observations.** (1) With one teacher, domain B is simply lost: the student copies A everywhere. (2) Routing gives a symmetric compromise. (3) When B's answers are 6× shorter, a token-averaged loss hands B only $4/28 = 14\%$ of the weight, and the student ends up almost as bad on B (2.506) as with no B teacher at all (3.190). The student's probability of the "alternate" move from token 2 goes from 0.48 (per-sequence) to 0.90 (per-token): A won the shared capacity because its answers are longer, not because anyone chose that. The toy has a hard capacity conflict on purpose, so the normalization changes the *final* solution. In a large model the conflict is softer; Open-MOPD argues the main effect there is the misallocated token budget itself (below).
+
+`tests/test_mopd.py` (11 tests) checks the hand-example values; that the expected surrogate gradient equals `torch.autograd` of the 17.4 `reverse_kl`; that with one teacher the toy objective equals `distill.expected_sequence_divergence` (the foundational on-policy objective); routing, masking, stop-gradients, the importance-weight band; both normalizations; token share and balancing; and both experiments' qualitative results.
+
+### E.6 What production trainers do, and the cost
+
+**TRL** (publicly documented, `trl.experimental.async_distillation.AsyncDistillationTrainer`, experimental namespace in TRL v1.17): a background worker generates the student's rollouts with vLLM while training runs. Teachers are never loaded locally; each `teacher_id` in the dataset maps to a vLLM server URL (`teacher_server_urls`). The loss is the same generalized JSD as `DistillationTrainer` (`beta=1.0` is reverse KL). With `beta=1.0` and `teacher_top_k=1` only the teacher's log-prob of the sampled token is requested, the advantage form above. TRL logs `teacher_jsd/<id>` and `teacher_token_frac/<id>` per teacher. In the Hugging Face blog's 60-step example (math/code/IF prompts mixed 40/40/20) IF prompts got only **1–3% of trained tokens**, because the loss is averaged over tokens and IF answers are short. That is the E.3 arithmetic, measured.
+
+**NVIDIA NeMo RL** documents an MOPD recipe on top of its GRPO trainer, with a stop-gradient teacher-minus-student log-prob advantage and teachers on separate worker groups (seen in search results; the docs host was not reachable from the review session, so this is not independently verified).
+
+**Cost.** Per step it is an on-policy RL step plus one prefill per rollout on the routed teacher. Only one teacher scores each rollout, so adding teachers adds serving memory (each teacher is a full model, often the student's size), not per-step compute. Training the $K$ teachers beforehand is $K$ separate RL runs. That is the main cost, but they run in parallel and independently.
+
+**The imbalance fix.** Open-MOPD (Gao et al., Aug 2026, an independent academic group with released recipe and trajectories) reproduces the recipe on SmolLM3-3B with math, code and IF teachers. It reports that plain MOPD recovers only 35.6% of the gap to an oracle that routes each prompt to its specialist at test time, with IF (short answers) degrading most. It attributes this to misallocation of the token-level budget (length disparity across domains, drift in convergence speed, stale rewards under async updates) rather than gradient conflict. Its fixes are token-share balancing, gap-aware budget allocation and refreshing the student's rewards, which raise recovery to 83.4% (authors' measurements, single paper).
+
+### E.7 Side by side
+
+| | Single-teacher OPD (sections 1–7) | Multi-teacher OPD |
+|---|---|---|
+| Teachers | one, good at everything you need | one per domain, usually RL specialists from the same SFT checkpoint |
+| Signal | reverse/forward KL per token | same, from the routed teacher; optionally plus an outcome advantage |
+| Needs | a stronger model | $K$ specialist RL runs first; a domain label on every prompt; $K$ teacher servers |
+| New failure mode | none beyond 17.4's | domain imbalance from length and loss averaging |
+| Monitoring | one divergence | per-teacher divergence and token share |
+
+**When you would still use the single-teacher version.** When one strong teacher already covers your domains (the Qwen3 small-model recipe in section 6), when you cannot afford separate RL runs per domain, or when prompts do not split cleanly into domains. MOPD is a way to *merge specialists*. It is not needed when there is nothing to merge.
+
+### Common mistakes (MOPD)
+
+- **Treating prompt share as training share.** Check `teacher_token_frac`, not your data mixture.
+- **Letting the advantage carry gradient.** $\hat A_t$ contains $\log\pi_\theta$; without `detach()` the loss also differentiates the advantage and is no longer the reverse-KL gradient.
+- **Routing by the wrong key.** A prompt with no or a wrong `teacher_id` is graded by a teacher that never learned that domain. That is the "single teacher" row of the table, silently.
+- **Teachers from a different base model.** Token-by-token log-ratios need the same tokenizer; reports start teachers from the student's checkpoint for this reason.
+- **Comparing rewards across async staleness.** The advantage uses the student's log-prob when the rollout was scored; if training has moved on, apply the importance weight $w_t$ (16.4) or rescore.
+
+### Exercise (MOPD)
+
+The token-averaged run in the table loses domain B. Fix it **without** switching to per-sequence averaging: use `token_share_weights` to give both domains equal token share, and show you recover the per-sequence result.
+
+<details><summary>Hint</summary>
+
+In the toy, domain $d$'s weight under per-token averaging is proportional to `prompt_share[d] * lengths[d]`. Multiplying each domain by `target / token_share` makes the weights equal to the target.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+With lengths (24, 4) and 50/50 prompts, token shares are $24/28$ and $4/28$. Equal targets give scales $0.5/(24/28) = 0.583$ and $0.5/(4/28) = 3.5$. The rescaled weights are $0.5$ and $0.5$, exactly the per-sequence weights. So you can pass the rescaled shares as `prompt_share` with `normalize="token"`.
+
+</details>
+
+<details><summary>Solution</summary>
+
+```python
+from llmre.reasoning.mopd import distill_two_domains, make_two_domain_teachers
+tA, tB, st = make_two_domain_teachers()
+L = [24, 4]
+share = [0.5 * L[0], 0.5 * L[1]]
+tok_share = [s / sum(share) for s in share]
+scaled_prompts = [0.5 * (0.5 / tok_share[0]), 0.5 * (0.5 / tok_share[1])]
+r = distill_two_domains([tA, tB], st, L, scaled_prompts, "routed", "token")
+print(r["domain_weight"], r["rkl"])   # [0.5, 0.5], about [0.760, 1.127]
+```
+
+The weights become 0.5/0.5 and the result matches the per-sequence row. In a real trainer the same scaling is applied per sequence (`token_share_weights`) and passed as `seq_weights` to `mopd_loss` with `normalize="token"`. Whether *equal* shares are right is a separate choice: Open-MOPD's gap-aware allocation instead sets the budget from how far each domain still is from its teacher (we only know it from the abstract, so the toy version in "Code this after reading" is our own guess at the idea).
+
+</details>
+
+### Debugging exercise (MOPD)
+
+A colleague's MOPD run improves math and code every step, while IF accuracy stays flat. `teacher_jsd/if` is the lowest of the three divergences. They conclude "the student already matches the IF teacher". What do you check first?
+
+<details><summary>Answer</summary>
+
+`teacher_token_frac/if`. A low divergence on a domain that gets 1–3% of the tokens can simply mean those few tokens are easy (short, formulaic answers), while the student gets almost no gradient from IF. Compare token share to prompt share, then either average per sequence or reweight with token-share weights, and evaluate IF on held-out prompts rather than reading the training divergence.
+
+</details>
+
+### Research connection (MOPD)
+
+<div class="callout paper"><p><strong>MiMo-V2-Flash Technical Report</strong> — Xiaomi LLM-Core Team, Jan 2026, <a href="https://arxiv.org/abs/2601.02780">arXiv 2601.02780</a>. Names the MOPD paradigm; section 4.4 gives the advantage, the surrogate and the truncated importance weight used above (company report). <strong>MOPD: Multi-Teacher On-Policy Distillation for Capability Integration in LLM Post-Training</strong> — Ma et al., Jun 2026, <a href="https://arxiv.org/abs/2606.30406">arXiv 2606.30406</a>. Controlled comparison on Qwen3-30B-A3B (math, IF, SWE) against mixed RL, cascade RL and parameter merging (authors' measurements). <strong>Open-MOPD: Diagnosing and Fixing Capability Imbalance in Multi-Teacher On-Policy Distillation</strong> — Gao et al., Aug 2026, <a href="https://arxiv.org/abs/2608.19098">arXiv 2608.19098</a>. Independent reproduction with released recipe; the token-budget diagnosis. Implementation: TRL's <a href="https://huggingface.co/docs/trl/async_distillation_trainer">Async Distillation trainer docs</a> and the Hugging Face blog <a href="https://huggingface.co/blog/sergiopaniego/mopd-trl">"Multi-teacher on-policy distillation with TRL"</a> (worked example, per-teacher metrics, and a table of model releases that describe MOPD-style stages).</p></div>
+
+**What to read / what to skip.** MiMo-V2-Flash: read section 4.1 (why MOPD) and 4.4 (the formulation); skip the architecture and pretraining sections for this topic. Ma et al.: read the method and the baseline comparison table. Open-MOPD: read the diagnosis (the three causes) and the ablation of each fix; skim the engineering. TRL blog: read the routing setup and the token-imbalance plot.
+
+**Code this after reading:** add a gap-aware allocation to the toy. Each step, set domain weights proportional to each domain's current reverse KL to its own specialist, and compare the final per-domain KLs with equal token shares.
+
+**Documented vs inferred.** *Publicly documented:* the MiMo-V2-Flash formulation; TRL's trainer, routing, metrics and the measured 1–3% IF token share; the Open-MOPD and Ma et al. results (authors' measurements). *Company claims:* that MOPD-style stages are used in MiMo-V2-Flash, Nemotron 3 Ultra, DeepSeek-V4, GLM-5, Kimi K3, LFM2.5 and Mistral Large 4, as listed in the TRL blog from each lab's own report. Each lab's exact variant differs (sampled token only, top-16 or full distribution). *Inference:* that a given closed model uses MOPD.
+
+### Check yourself (MOPD)
+
+<details><summary>Why is the MOPD advantage $\mathrm{sg}[\log\pi_T(y_t) - \log\pi_\theta(y_t)]$ an unbiased estimate of the section 2.2 reverse-KL gradient?</summary>
+
+Its expected policy gradient is $\mathbb{E}_{v\sim p_S}[\ell_v \nabla\log p_S(v)]$ with $\ell_v = \log p_S(v) - \log p_T(v)$. The reverse-KL gradient is the same expression plus $\mathbb{E}_{p_S}[\nabla \log p_S]$, which is zero. One sampled token gives an unbiased (noisy) estimate.
+
+</details>
+
+<details><summary>Adding a third and fourth teacher: what grows, per-step compute or serving memory?</summary>
+
+Serving memory. Each rollout is scored by its one routed teacher, so per-step teacher compute stays one prefill per rollout. Every additional teacher is another model kept in memory on a server, and another RL run before distillation.
+
+</details>
+
+<details><summary>In the toy, why does per-token averaging hand domain A the shared rows?</summary>
+
+Domain A's answers are 24 tokens and B's are 4, so with equal prompt counts A holds $24/28 = 86\%$ of the tokens and of the loss. On the rows both domains use, the student moves to whatever minimizes the weighted sum, which is close to A's preference ($p_{\text{alt}} = 0.90$).
+
+</details>
+
+<details><summary>Why do reports start the domain teachers from the student's own SFT checkpoint?</summary>
+
+So that teacher and student share a tokenizer and vocabulary (required for token-level log-ratios), and so that the teacher's distribution is close to the student's. The log-ratios are then moderate and informative, rather than huge on prefixes the teacher finds alien.
+
+</details>
+
+<details><summary>When is single-teacher on-policy distillation the better choice?</summary>
+
+When one teacher already covers your domains, when separate RL runs per domain are too expensive, or when prompts do not split into clean domains. MOPD solves the problem of merging specialists. Without specialists it only adds routing and imbalance problems.
+
+</details>
+
 ## Next
 
 You can now distill a reasoning model three ways and say what each one gives up. The course turns from *how a model reasons* to *how a model acts*. Continue to [18.1 · Tool use](lessons/module-18/lesson-01.md).

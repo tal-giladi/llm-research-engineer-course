@@ -2,7 +2,7 @@
 
 - **Topic ID:** rl-sampling-mask-unbiased-is
 - **Status:** WAIT
-- **Next review:** 2026-11-08
+- **Next review:** 2026-11-15
 - **Course change:** none
 - **Candidates:** C-20261030-01
 
@@ -23,3 +23,4 @@ Qualifies on evidence (two independent OSS stacks, a major lab's practice) and f
 ## History
 
 - 2026-11-01 — WAIT — strong, adopted fix that extends 16.4 directly; one-ADD budget used by the author-approved serving foundation; next review next week — weekly/2026-W44.md — candidates C-20261030-01
+- 2026-11-08 — WAIT — still qualifies; this week's one ADD went to multi-teacher on-policy distillation, which had stronger multi-lab adoption and an independent reproduction; first in line next week — weekly/2026-W45.md — candidates none new

@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W45 (2026-11-08)
+
+- Added **[17.4 · Advanced extension: multi-teacher on-policy distillation](lessons/module-17/lesson-04.md)**: merging domain-specialist teachers into one student by routing each prompt to its domain's teacher. Covers the MOPD loss written as an RL advantage (the teacher–student log-ratio, as in MiMo-V2-Flash), with a proof that its expected gradient is 17.4's reverse-KL gradient; the truncated importance weight from 16.4; and how per-token vs per-sequence loss averaging decides which domain the student learns. An exact two-domain toy shows a single teacher losing the other domain and a token-averaged loss starving the short-answer domain. Also covers TRL's `AsyncDistillationTrainer` with its per-teacher metrics, and Open-MOPD's diagnosis. With `llmre/reasoning/mopd.py`, `tests/test_mopd.py` and `experiments/mopd_two_domains.py`. Sections 1–7 of 17.4 and `distill.py` are unchanged. [Review](research/weekly/2026-W45.md).
+
 ## 2026-W44 (2026-11-01)
 
 - Added **[08.6 · Inference serving: KV cache, prefill vs decode, batching, speculative decoding](lessons/module-08/lesson-06.md)**: the KV cache built from scratch for the course GPT and checked against the 06.3 loop; why prefill is compute-bound and decode memory-bound (08.2's roofline), and why batching amortizes the weights but not the cache; continuous (iteration-level) batching; paged KV memory with block tables; lossless draft-and-verify speculative decoding with its proof and speedup formula; serving metrics; and why rollout generation dominates RL post-training cost. With `llmre/model/serving.py`, `tests/test_serving.py` and `experiments/serving_costs.py`. Extends 06.3 and 08.2; `GPT.generate` is unchanged and stays the reference. [Review](research/weekly/2026-W44.md).
