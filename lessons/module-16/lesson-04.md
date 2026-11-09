@@ -388,6 +388,295 @@ No. Tokens with $\mu(a) = 0$ are never sampled, so no weight can reintroduce the
 
 </details>
 
+## Advanced extension: score centering (added 2026-11-09)
+
+Everything above remains correct. Importance weights change *how much* each sampled token counts. Score centering is a different kind of correction: it subtracts one vector from each token's gradient. It targets a specific failure of the uncorrected update, and it can be used alone or on top of the weights from section 2.3.
+
+**Hardware track:** CPU-only. `tests/test_rl_score_centering.py` (12 tests) and `experiments/rl_score_centering.py` each take a few seconds, 0 GPU-hours. Sources checked 2026-11-09; TRL behaviour is as of v1.17.0.
+
+### E.1 Intuition: a push that ignores the rewards
+
+Give every completion the same reward, $+1$. The rewards say nothing about which completion is better, so a correct update should be zero. On-policy it is. Under mismatch it is not: the update raises the probability of whatever the engine sampled, which is the distillation loss from [17.4](lessons/module-17/lesson-04.md) with the engine as teacher. The trainer is pulled toward the engine regardless of the task. In RL, the engine then receives the new weights, so errors can feed back into later rollouts.
+
+### E.2 Mathematics
+
+At one prefix, let $p_v$ be the trainer's probability of next token $v$ and $q_v$ the sampler's (the $\mu$ of section 2.1). Let $s_v = \nabla_\theta \log p_v$ be the **score**, a vector with one entry per parameter, and $y$ the sampled token. $R$ is the reward or advantage, and $\mathbb{E}_q$ averages over the sampler's choices. Define the sampler's **expected score**:
+
+$$
+\bar s = \sum_v q_v\, s_v .
+$$
+
+Using $\mathbb{E}[AB] = \mathbb{E}[A]\,\mathbb{E}[B] + \mathrm{Cov}(A,B)$, the uncorrected update splits into two parts:
+
+$$
+\mathbb{E}_q[R\, s_y] = \underbrace{\mathbb{E}_q[R]\,\bar s}_{\text{drift}} + \underbrace{\mathrm{Cov}_q(R, s_y)}_{\text{signal}} .
+$$
+
+- **Drift** depends on the rewards only through their mean. On-policy, $q = p$, and $\bar s = \sum_v p_v \nabla \log p_v = \nabla \sum_v p_v = \nabla 1 = 0$, so it vanishes.
+- **Signal** is the part that compares tokens by their rewards.
+
+Score centering replaces $s_y$ by the **centered score** $\tilde s_y = s_y - \bar s$. Since $\mathbb{E}_q[\tilde s_y] = 0$:
+
+$$
+\mathbb{E}_q[R\,\tilde s_y] = \mathrm{Cov}_q(R, s_y).
+$$
+
+The objective to maximize, where $\mathrm{sg}$ is stop-gradient, is
+
+$$
+R\Big(\log p_y - \sum_v \mathrm{sg}[q_v]\, \log p_v\Big),
+$$
+
+whose gradient is exactly $R\,\tilde s_y$. On-policy this gradient is identical to the plain one, for every sample and not just on average.
+
+**Group centering does not do this.** GRPO's advantage makes the mean reward zero over the whole group, but drift is computed at each prefix, using $\mathbb{E}_q[R \mid \text{prefix}]$. After a good first token, the expected advantage of the remaining tokens is positive, so drift remains there.
+
+**Top-k.** Logging $q_v$ for the whole vocabulary at each token is too expensive, so the engine logs its $k$ most likely tokens $H$ (the head). The unknown tail is modelled as the trainer's tail, rescaled to the right mass:
+
+$$
+\hat q_v = \begin{cases} q_v & v \in H \\ \rho\, p_v & v \notin H \end{cases}, \qquad \rho = \frac{1 - \sum_{v\in H} q_v}{1 - \sum_{v\in H} p_v}.
+$$
+
+Because $\sum_v p_v s_v = 0$ over the full vocabulary, the tail sum equals minus a head sum, so only head tokens appear:
+
+$$
+\sum_v \hat q_v s_v = \sum_{v\in H} (q_v - \rho\, p_v)\, s_v .
+$$
+
+This is an approximation: the real tail need not have the trainer's shape.
+
+**With importance weights.** Weight first, then center. With $w_v = f(p_v/q_v)$, for example $f(r) = \min(r, C)$, the per-token update is
+
+$$
+R\Big(w_y s_y - \sum_v q_v w_v s_v\Big),
+$$
+
+and with top-k the coefficient becomes $q_v w_v - \alpha p_v$, with $\alpha = \rho f(1/\rho)$. With exact importance sampling, $f(r) = r$, the expected score $\sum_v p_v s_v$ is zero, so centering does nothing: there is no drift left to remove. Centering earns its place when weights are truncated, masked or absent.
+
+### E.3 Worked examples
+
+**Drift and signal.** Softmax over three tokens, for which $s_v = e_v - p$ with respect to the logits. Take $p = (0.5, 0.3, 0.2)$, $q = (0.6, 0.2, 0.2)$, $R = (1, 0, 0)$.
+
+- $\bar s = q - p = (0.1, -0.1, 0)$ and $\mathbb{E}_q[R] = 0.6$.
+- Drift: $0.6\,\bar s = (0.06, -0.06, 0)$.
+- Signal, $q_v(R_v - 0.6)$ per entry: $(0.24, -0.12, -0.12)$.
+- Sum: $(0.30, -0.18, -0.12)$, which equals $0.6\, s_0 = 0.6\,(0.5, -0.3, -0.2)$, the uncorrected update.
+
+**Constant reward.** With $R = 1$ the centered scores are $\tilde s_0 = (0.4, -0.2, -0.2)$, $\tilde s_1 = (-0.6, 0.8, -0.2)$, $\tilde s_2 = (-0.6, -0.2, 0.8)$. Their $q$-weighted average is $0.6\tilde s_0 + 0.2\tilde s_1 + 0.2\tilde s_2 = (0, 0, 0)$.
+
+**Why group centering misses it.** Two tokens. The first decides the reward: advantage $+1$ after token 0, $-1$ after token 1, each with probability $0.5$, so the group mean is 0. The second token cannot change the reward, so its true gradient is 0. After first token 0, take $p = (0.5, 0.5)$ and $q = (0.8, 0.2)$ at the second token. The uncorrected update there is $+1 \cdot (q - p) = (0.3, -0.3)$, pure drift. Centered, it is $(0, 0)$.
+
+**Top-k.** $p = (0.5, 0.3, 0.15, 0.05)$, $q = (0.6, 0.25, 0.1, 0.05)$, $H = \{0, 1\}$. Then $\rho = 0.15 / 0.2 = 0.75$, and the head coefficients are $0.6 - 0.375 = 0.225$ and $0.25 - 0.225 = 0.025$. The estimate is $\hat s = (0.1, -0.05, -0.0375, -0.0125)$, against the true $\bar s = q - p = (0.1, -0.05, -0.05, 0)$. The head entries match; the tail entries carry the approximation error.
+
+### E.4 Tensor shapes, dtype, device
+
+| Tensor | Shape | dtype | Device | Note |
+|---|---|---|---|---|
+| `train_logp` | $(B, T, V)$ | float32 | trainer GPU | requires grad; the only input that carries gradient |
+| `head_ids` | $(B, T, k)$ | int32/int64 | engine, then trainer | logged at rollout |
+| `head_sampler_logp` | $(B, T, k)$ | float32 | engine, then trainer | after sampling transforms |
+| `sampled_sampler_logp` | $(B, T)$ | float32 | engine, then trainer | needed even if the sampled token is outside the head |
+| `advantages` | $(B,)$ | float32 | trainer GPU | detached |
+| coefficients $q_v w_v - \alpha p_v$ | $(B, T, k)$ | float32 | trainer GPU | detached |
+
+### E.5 From scratch: `llmre.rl.score_centering`
+
+The code is in `code/src/llmre/rl/score_centering.py`, separate from `mismatch.py`, which is unchanged.
+
+```python
+def top_k_score_centered_objective(train_logp, head_ids, head_sampler_logp, tokens,
+                                   sampled_sampler_logp, advantages, mask=None,
+                                   weight_fn=None, reduction="mean", eps=1e-6):
+    f = weight_fn or _unit_weight
+    m, R = _mask_and_rewards(tokens, advantages, mask)
+    train_head = train_logp.gather(-1, head_ids)
+    q_head = head_sampler_logp.detach().exp()
+    p_head = train_head.detach().exp()
+    q_tail = (1.0 - q_head.sum(dim=-1, keepdim=True)).clamp_min(eps)
+    p_tail = (1.0 - p_head.sum(dim=-1, keepdim=True)).clamp_min(eps)
+    rho = q_tail / p_tail
+    alpha = rho * f(1.0 / rho)
+    w_head = f((train_head.detach() - head_sampler_logp.detach()).exp())
+    coef = (q_head * w_head - alpha * p_head).detach()
+    correction = (coef * train_head).sum(dim=-1)
+    sampled = train_logp.gather(-1, tokens.unsqueeze(-1)).squeeze(-1)
+    w_y = f((sampled.detach() - sampled_sampler_logp.detach()).exp())
+    return _reduce(R * (w_y.detach() * sampled - correction), m, reduction)
+```
+
+The estimator is defined on the policy-gradient form $R \log p_y$. It is not multiplied into the clipped surrogate of `decoupled_grpo_objective`. The tests check that on-policy gradients match GRPO's first step, that the hand examples above come out, and that a head covering the whole vocabulary reproduces the exact version.
+
+Run it with `cd code && PYTHONPATH=src python experiments/rl_score_centering.py`. Part A uses a constant reward:
+
+```text
+plain PG         pi = [0.072 0.534 0.197 0.197]  KL(pi||sampler) = 4.28e-17
+score centering  pi = [0.25 0.25 0.25 0.25]  KL(pi||sampler) = 2.40e-01
+```
+
+Plain policy gradient turned into the sampler, learning nothing about the task. Score centering did not move. Part B reuses the bandit of section 5.3:
+
+```text
+optimum pi* = [0.711 0.096 0.096 0.096]
+no correction    pi = [0.486 0.209 0.153 0.153]  KL = 1.18e-01
+TIS cap 1.0      pi = [0.541 0.153 0.153 0.153]  KL = 6.49e-02
+SC               pi = [0.711 0.096 0.096 0.096]  KL = 9.53e-17
+SC + TIS cap 1.0 pi = [0.711 0.096 0.096 0.096]  KL = 1.94e-16
+```
+
+In this one-step bandit the centered update is $q_a(R_a - \mathbb{E}_q[R])$, which is zero exactly when all $R_a$ are equal, and that is the condition for the optimum. Part C is the counterweight. It reports the cosine between each expected update and the true gradient at one point, as the mismatch grows:
+
+```text
+bias x1  PG +0.861  TIS2 +0.981  SC +0.869  SC+TIS2 +0.979
+bias x3  PG +0.620  TIS2 +0.636  SC +0.470  SC+TIS2 +0.292
+bias x5  PG +0.614  TIS2 +0.614  SC +0.378  SC+TIS2 +0.121
+```
+
+The right fixed point does not mean the right direction. Centering measures the covariance **under the sampler**, so tokens the sampler rarely picks get little signal. This is one point on a toy, so read it as a warning about the mechanism, not a ranking of the methods; the real experiments below rank them differently.
+
+### E.6 Cost and what the systems do
+
+**Compute.** No extra forward pass: the head log-probabilities are a `gather` on tensors the trainer already has. The paper reports top-k overhead within 1% of baseline training wall-clock time on 0.6B and 30B models.
+
+**Rollout storage.** Each token now needs $k$ log-probabilities and $k$ ids, 8 bytes per head entry. For $B = 512$, $T = 8192$ (about 4.19M tokens), $k = 128$ costs about 4.3 GB per batch and $k = 8$ about 268 MB, against the 16.8 MB of section 6.
+
+**Publicly documented:**
+
+- Marek and Ryabinin ([arXiv 2609.20807](https://arxiv.org/abs/2609.20807), September 2026; **author results**) use REINFORCE with group-centered rewards, $k = 128$, and find $k = 32$ matches full centering in their settings. On Qwen3-30B-A3B-Base with an INT8 sampler and INT4 KV cache they report training accuracy of 30% for centering, 12% for TIS and under 5% for the other methods. With mild FP8 quantization, uncorrected policy gradient was already stable at 58%, so the correction is not always needed. Under staleness (engine synced every 64 steps) centering composed with importance sampling beat centering alone. The authors state that their headline results use deliberately severe mismatch on short sequences, as a proxy for long training under milder mismatch.
+- [Nathan Lambert's RLHF book](https://rlhfbook.com/c/06-policy-gradients) presents the same estimator and recommends it alongside TIS rather than instead of it. It derives from the paper and is not independent evidence.
+- [TRL v1.17.0](https://github.com/huggingface/trl/releases/tag/v1.17.0) (October 2026) makes centering with masked importance sampling the default (`score_centering=True`, ratio bounds 0.5 and 5.0), using the engine's top 8 tokens. It reports an FP8 sampler matching bf16 at 0.72 **(maintainer claim, no error bars seen)**. Its release notes give a 15–20% generation-throughput cost; later comments on [the PR](https://github.com/huggingface/trl/pull/7760) report 2–59% depending on vLLM version and server count. $k = 8$ is smaller than anything the paper tests.
+
+**Reasonable industry practice:** log the sampler's head mass each step; when it falls, the tail approximation is doing more of the work. **Inference:** that centering is enough on long agentic rollouts under mild mismatch is not established; the published experiments do not test that regime directly.
+
+### E.7 Which correction when
+
+| Situation | Reasonable first choice | Why |
+|---|---|---|
+| Engine and trainer can be made to agree | Remove the mismatch (section 5.1) | no estimator needed |
+| Small numerical mismatch | Measure first; plain PG or TIS may be enough | the 58% FP8 result |
+| Heavy quantization | Score centering, optionally with TIS or masking | removes drift, no large weights |
+| Stale rollouts | Centering composed with importance weights | the sampler is far from the trainer, so covariance under it is a poorer signal |
+| Top-k or top-p sampling | Score under the same truncation first (section 5.3) | centering's expectation must be over the distribution actually sampled |
+
+### Exercise: drift by hand
+
+$p = (0.4, 0.4, 0.2)$, $q = (0.5, 0.3, 0.2)$, $R = (2, 0, 0)$, softmax logits. Compute (a) $\bar s$, (b) drift, (c) signal, (d) the centered update when $y = 0$.
+
+<details><summary>Hint</summary>
+
+For softmax logits, $\bar s = q - p$. The signal entry for token $v$ is $q_v(R_v - \mathbb{E}_q[R])$.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+$\mathbb{E}_q[R] = 0.5 \cdot 2 = 1$. For (d), $s_0 = e_0 - p = (0.6, -0.4, -0.2)$.
+
+</details>
+
+<details><summary>Solution</summary>
+
+(a) $\bar s = (0.1, -0.1, 0)$. (b) Drift $= 1 \cdot \bar s = (0.1, -0.1, 0)$. (c) Signal $= (0.5 \cdot 1, 0.3 \cdot (-1), 0.2 \cdot (-1)) = (0.5, -0.3, -0.2)$. (d) $\tilde s_0 = s_0 - \bar s = (0.5, -0.3, -0.2)$, and $R\,\tilde s_0 = (1, -0.6, -0.4)$.
+
+</details>
+
+### Implementation exercise: how large must k be?
+
+On random $(B, T, V)$ logits, build a sampler by adding Gaussian noise to the trainer's logits. For $k \in \{1, 2, 8, 32, V\}$, compute the error of the reconstruction, $\sum_v |\hat q_v - q_v|$, averaged over tokens. Repeat with noise on a sharply peaked distribution (multiply the logits by 5). Then log the head mass next to the error.
+
+<details><summary>Hint</summary>
+
+Use `topk` on the sampler's logits for the head, then build $\hat q$ from $\rho$ and the trainer's tail.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+Set the head entries of a tail mask to zero with `scatter`, so that `q_hat = q_head_filled + rho * p * tail_mask`.
+
+</details>
+
+<details><summary>Solution</summary>
+
+```python
+def tail_model_error(train_logits, sampler_logits, k):
+    p, q = train_logits.softmax(-1), sampler_logits.softmax(-1)
+    ids = q.topk(k, dim=-1).indices
+    head = torch.zeros_like(q, dtype=torch.bool).scatter(-1, ids, True)
+    q_tail = (q * ~head).sum(-1, keepdim=True).clamp_min(1e-6)
+    p_tail = (p * ~head).sum(-1, keepdim=True).clamp_min(1e-6)
+    q_hat = torch.where(head, q, (q_tail / p_tail) * p)
+    return (q_hat - q).abs().sum(-1).mean()
+```
+
+The error falls as $k$ grows and is about 0 at $k = V$. Peaked distributions need a smaller $k$ for the same head mass, which is what makes small heads workable on real language models.
+
+</details>
+
+### Debugging exercise
+
+Training diverges after adding centering. The code is:
+
+```python
+coef = q_head - rho * train_head.exp()
+correction = (coef * train_head).sum(-1)
+loss = -(adv * (sampled_logp - correction)).mean()
+```
+
+What is wrong?
+
+<details><summary>Solution</summary>
+
+`coef` still depends on the trainer through `train_head.exp()`, and possibly through `rho`. Backpropagation then differentiates the coefficient too, adding a term that is not in the estimator. Compute `p_head` and `rho` from detached values, or detach `coef`. Then check that a full-vocabulary head reproduces the exact version, as `test_full_head_matches_full_centering` does.
+
+</details>
+
+### Common mistakes
+
+- **Using the trainer's probabilities as $q$.** Then $\bar s = 0$ and centering does nothing.
+- **Logging head probabilities before temperature or truncation.** $q$ must be the distribution actually sampled.
+- **Assuming the group-relative advantage already handles this.** It handles the group mean, not the mean at each prefix.
+- **Multiplying the correction into a clipped surrogate without deriving it.** The derivation above is for the policy-gradient form.
+- **Treating top-k centering as exact.** Watch the head mass.
+
+### What to read / what to skip
+
+- **Marek and Ryabinin, 2609.20807:** read sections 3–4 and appendix A (estimator, top-k, composition with IS); skim the method-by-method figures.
+- **RLHF book, score-centering section:** a short restatement if you want a second presentation.
+- **Cameron Wolfe, [Score Centering](https://cameronrwolfe.substack.com/p/score-centering):** a long survey of the mismatch methods around it (CISPO, IcePop, TOPR, DPPO).
+- **TRL PR #7760:** read for what a production default looks like and how much the cost estimates moved during review.
+
+### Check yourself: score centering
+
+<details><summary>All rewards are +1 and the engine differs from the trainer. What does the uncorrected policy gradient do, and what does score centering do?</summary>
+
+The uncorrected update pulls the trainer toward the engine (distillation), since its expected value is $\bar s$. Centering has expected update zero.
+
+</details>
+
+<details><summary>GRPO's advantages sum to zero in each group. Why can drift still appear?</summary>
+
+Drift uses the mean advantage at each prefix. Prefixes that follow good early tokens have positive mean advantage, even though the group mean is zero.
+
+</details>
+
+<details><summary>Why does exact importance sampling make centering unnecessary?</summary>
+
+With $w_v = p_v / q_v$ the expected weighted score is $\sum_v p_v s_v = 0$, so the subtracted vector is zero. Truncated or masked weights leave a nonzero remainder.
+
+</details>
+
+<details><summary>Why is centering alone a weaker choice when rollouts are very stale?</summary>
+
+It removes drift but leaves $\mathrm{Cov}_q(R, s_y)$, measured under the sampler. When the sampler is far from the trainer, that covariance can be a poor estimate of the on-policy direction, so composing with importance weights helps.
+
+</details>
+
+<details><summary>A new engine run shows head mass dropping from 99.9% to 95% with k = 8. What does that tell you?</summary>
+
+More of $\bar s$ now depends on the assumption that the sampler's tail has the trainer's shape. Increase $k$ or investigate why the sampler's distribution flattened, for example heavier quantization.
+
+</details>
+
 ## Next
 
 Module 16 now ends with the systems fact that every RL algorithm in it relies on: the numbers you train on must describe the distribution you sampled from. Module 17 builds modern reasoning models on top of this RL machinery.
