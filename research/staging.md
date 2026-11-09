@@ -1,4 +1,10 @@
+# Staging — things worth considering
 
+Temporary document for the current week. The daily run appends class **A** and **B**
+candidates here (full records); the weekly review evaluates them, archives this content into
+`weekly/YYYY-Www.md`, and resets this file. Nothing here is course material.
+
+## Candidates
 
 ### C-20261108-05 · Kimi K3.1 Pro (Moonshot AI): open-weight 2.8T/104B MoE with hybrid KDA + Gated DSA attention, MXFP4/MXFP8 QAT, joint multi-domain RL
 
@@ -20,3 +26,45 @@
 - **Potential course lesson:** No new lesson on its own. **Tal's instruction (2026-11-08): even if the review finds nothing new in it at all, do not REJECT it for lack of novelty — still add it to the course as a real-world example.** Concretely: cite its Gated DSA layer config (top-k 2048, 32 index heads) in the DSA foundation when it is written; add it as a dated production example of a linear+sparse hybrid wherever the course covers Gated DeltaNet / hybrid attention; cite it next to Inkling 2 Small as a joint-RL data point in 17.4's extension; use MXFP4/MXFP8 QAT as the QAT-vs-PTQ contrast example in the PTQ lesson; optionally its MoE shape (896 experts, 16 routed + 2 shared) as a scale example in the MoE lessons. Label all as company claims with the model-card link and date.
 - **Confidence:** high for the architecture facts (read from the card directly); low for benchmark standing (vendor numbers, harness and fallback caveats); undisclosed training details.
 - **Recommendation:** Weekly review: treat as real-world-example material per Tal's instruction — add the dated example lines above to the relevant lessons (small FIX/extension-sized edits; they need not consume the week's single ADD if the protocol allows), and fold it as evidence into the sparse-attention and hybrid-linear-attention topic files. Re-check the tech blog for training details when kimi.ai is reachable. Process note: surfaced by Tal, not the automated daily sweep.
+
+### C-20261109-01 · RecSA (Recursive Sparse Attention): tree-summarized KV cache with O(log L) per-query selection, 1M-2M-token extrapolation from a 32K-trained Qwen3-4B
+
+- **Class:** B
+- **Date discovered:** 2026-11-09
+- **Date published:** 2026-11-04 (v1)
+- **Source:** https://arxiv.org/abs/2611.07232 (verified resolves; HTTP 200)
+- **Organization/researchers:** Ruitian Wang, Xinyu Yang, Minshen Zhang, Hao Zhang (affiliations not stated on the abstract page).
+- **Category:** attention / long-context
+- **What changed:** Most trainable sparse-attention schemes (including DSA's lightning indexer, which the course plans to teach after 12.5) still score every cached key per query, i.e. O(L) selection cost. RecSA builds a tree over the KV cache in which each node summarizes its subtree with one key and one mean-pooled value, and each query descends the tree, so selection is O(log L).
+- **Technical summary:** Initialized from Qwen3-4B and trained on 0.62B tokens at the original 32K length. Authors report RULER wins over all baselines at every length from 131K to 2M (at 1M: 60.5 vs 40.0 for the best baseline, Dense + DCA) and, with optimized kernels, faster-than-dense end-to-end prefill and decoding from 64K to 2M tokens (at 524K on one H200: 3.2x prefill, 3.8x decode). All numbers are the authors'; no code linked on the abstract page.
+- **Why it might matter:** A clean, teachable contrast to the planned DSA foundation: the same "select top-k keys per query" goal, but hierarchical summaries replace the flat indexer, so both selection cost and length extrapolation change. Also gives a long-context angle (extrapolation far beyond the training length) that the sparse-attention cluster has not had.
+- **Evidence of adoption:** none; single paper, days old, no code, no reproduction.
+- **Major organizations using it:** none known.
+- **Open-source implementation:** none
+- **Paper:** https://arxiv.org/abs/2611.07232
+- **Code:** none
+- **Relationship to existing course material:** `deferred/block-sparse-attention-pisa.md` (PISA, hierarchical block-sparse attention with O(N log N) scoring; the closest prior topic, so the weekly review may fold this in there rather than open a new file); SCOPE-DECISIONS 2026-11-08 (sparse attention reopened; DSA foundation after 12.5, built from DeepSeek-V3.2/GLM-5 material, not from pending single papers); Module 12 long-context lessons.
+- **Potential course lesson:** none yet. Once the DSA foundation exists, possibly a "hierarchical vs flat key selection" note in its research-connection section if code or a reproduction appears.
+- **Confidence:** low
+- **Recommendation:** monitor; add as evidence to `block-sparse-attention-pisa.md` (WAIT) and re-judge against the DSA foundation once it is written.
+
+### C-20261109-02 · Anthropic "The components of agent memory": transcripts → notes → wiki representations → injected context, plus offline "dreaming" consolidation (production feature)
+
+- **Class:** B
+- **Date discovered:** 2026-11-09
+- **Date published:** 2026-11-06
+- **Source:** https://www.anthropic.com/research/components-of-agent-memory (verified resolves; HTTP 200)
+- **Organization/researchers:** Anthropic (engineering post, Lance Martin).
+- **Category:** agents/tools / memory/retrieval
+- **What changed:** A lab describes the agent-memory design behind a shipped product feature (Claude Managed Agents memory + "dreams"; docs at https://platform.claude.com/docs/en/managed-agents/dreams, **not fetched**: host outside this session's network allow-list). Memory is a four-level hierarchy (searchable transcripts, memory notes, structured representations such as linked wiki pages, a small always-injected context layer), explicitly excluding weight updates, in-context learning and compaction. "Dreaming" is an offline pass over logs and notes that corrects mistakes, writes notes, builds representations and promotes high-value items into injected context.
+- **Technical summary:** Reported results (all **(company claim)**): CL-Bench database task mean reward baseline → with memory, e.g. Opus 5.5 0.655 → 0.838, Sonnet 5 0.306 → 0.610, Sonnet 4.6 0.330 → 0.364 (0.641 with refined prompting); a "record only failures" rule reduced the memory gain (Opus 5 −0.234); on a ~350K-file / ~420M-token corpus, wiki-only accuracy rose from 13% to 48% across 2 → 128 dreaming sessions and wiki + search reached 61% vs 53% search-only, saving ~20K tokens per question; a Harvey LAB restructuring (one page per contract) raised graded facts 41/57 → 57/57. Design guidance: tell the model what memory is for, not how to use it; keep injected context small. Related independent work it cites: Letta/UC Berkeley sleep-time compute https://arxiv.org/abs/2504.13171 (verified) and Google Research's "sleep framework" (2026-10-27, https://research.google/blog/the-sleep-framework-a-new-way-for-llms-to-retain-knowledge-in-continual-learning/ , verified; note that one *does* update weights, low-rank MoE capacity + distillation, so it is a different mechanism under a similar name).
+- **Why it might matter:** First frontier-lab, production-backed account of a non-weight agent memory hierarchy with ablations, giving the agents module a concrete taxonomy (what is memory vs compaction vs ICL vs fine-tuning) and a measurable claim (offline consolidation improves retrieval accuracy and token cost). Offline "sleep/dream" consolidation now appears from three groups (Letta, Google, Anthropic), though with different mechanisms.
+- **Evidence of adoption:** shipped in Anthropic's Managed Agents platform and Claude Code memory (company claim); evaluations are Anthropic's own; no independent evaluation read.
+- **Major organizations using it:** Anthropic (product); Letta and Google publish related but distinct "sleep-time" methods.
+- **Open-source implementation:** example quickstart linked from the post (https://github.com/anthropics/claude-quickstarts/tree/main/managed-agents/knowledge-wiki, not opened); no evaluation code.
+- **Paper:** none (engineering post).
+- **Code:** none for the evaluations.
+- **Relationship to existing course material:** `deferred/agent-personal-memory-state.md` (its "use in a widely used agent framework" trigger is partly relevant, though the mechanism differs from EvoMemState's RL-trained relational state); `deferred/agent-context-compaction.md` (the post draws the memory/compaction boundary explicitly); `deferred/agent-continual-learning.md` (CL-Bench results); agents lessons in the course.
+- **Potential course lesson:** possibly a short "agent memory taxonomy" section in the agents module (hierarchy + offline consolidation, with a toy notes/wiki store), only if the weekly review judges the cluster converged; otherwise evidence for the deferred files.
+- **Confidence:** medium (the mechanism is described clearly; the numbers are company claims)
+- **Recommendation:** monitor; add as evidence to `agent-personal-memory-state.md` and cross-reference from `agent-context-compaction.md`; re-judge at that topic's scheduled review.
