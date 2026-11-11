@@ -89,3 +89,24 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** an advanced extension after 05.4 / in the modern-architecture module ("Beyond x + f(x): widened and learned residuals"): PreNorm magnitude growth measured on the course GPT, Hyper-Connections and the Sinkhorn doubly-stochastic projection worked by hand, Block AttnRes as softmax over depth, cost in activation memory/IO. This is a new architecture area, so the weekly review may prefer to ask Tal for a scope decision (as for sparse attention and MTP) rather than ADD directly.
 - **Confidence:** medium (adoption by DeepSeek-V4 is documented on the card; the size of the gains rests on company/author numbers)
 - **Recommendation:** weekly review: evaluate for ADD as a short architecture extension or raise it as a scope question for Tal; open a topic file either way. Before deciding, read the DeepSeek-V4 report's mHC section and look for an mHC or AttnRes reference implementation and an independent reproduction.
+
+### C-20261111-01 · How much training-inference mismatch can on-policy distillation tolerate? (a "mismatch budget" for OPD; FP8 and async rollouts)
+
+- **Class:** B
+- **Date discovered:** 2026-11-11
+- **Date published:** 2026-11-08 (v1)
+- **Source:** https://arxiv.org/abs/2611.11450 (verified, HTTP 200)
+- **Organization/researchers:** Cong Yu, Ziting Wang, Songlin Jiang, Sitong Zhang, Chengliang Chai, Youhe Jiang, Eiko Yoneki, Tuo Shi (affiliations not shown on the abstract page).
+- **Category:** RL/post-training
+- **What changed:** The course teaches training-inference mismatch for RL (16.4: batch invariance, truncated importance sampling) and on-policy distillation (17.4) separately. This paper measures mismatch for OPD directly: mismatch sources (rollout quantization across three student-teacher pairs; weight staleness and injected weight noise on one pair) are placed on one scale, and training quality is tracked against it.
+- **Technical summary:** Authors' findings: OPD tolerates substantial mismatch with little quality loss up to an empirical "mismatch budget", beyond which it degrades; both the quality cost and the mismatch produced by quantization are model-specific, with some layers especially precision-sensitive; OPD stays stable under rollout configurations that destabilize GRPO/REINFORCE; under weight noise the damage comes from shifted generation prefixes, which per-token corrections cannot fix; a lightweight admission check screens rollout configurations against a calibrated budget without full training runs. Model-specific FP8 rollout recipes keep training quality while fitting at least 1.93x the KV-cache tokens of BF16, and FP8 + asynchronous rollouts reach the same quality 1.62x sooner than synchronous BF16 (all authors' numbers).
+- **Why it might matter:** Joins two accepted lessons with one measurable claim: the dense per-token teacher signal of OPD makes it more robust to sampler/trainer divergence than sparse-reward RL. That is a concrete, testable contrast for 16.4/17.4, and the "prefix shift that per-token correction cannot fix" point sharpens what truncated IS does and does not repair.
+- **Evidence of adoption:** none beyond the paper; single study, days old, no reproduction.
+- **Major organizations using it:** none known.
+- **Open-source implementation:** https://github.com/benyucong/train-inference-mismatch-opd (exists, Apache-2.0, built on a vendored verl with vLLM rollouts per its README; not run)
+- **Paper:** https://arxiv.org/abs/2611.11450
+- **Code:** https://github.com/benyucong/train-inference-mismatch-opd
+- **Relationship to existing course material:** `accepted/rl-training-inference-mismatch.md` (lesson 16.4) and `accepted/on-policy-distillation.md` (lesson 17.4); related to `deferred/on-policy-distillation-variants.md` (the OPD cluster; the weekly review may fold it in there) and `deferred/rl-mismatch-rounding-location-alignment.md`.
+- **Potential course lesson:** none on its own. If reproduced, a short research-connection note in 16.4 or 17.4 ("OPD's dense teacher signal tolerates more rollout mismatch than GRPO; prefix shift is not fixed by per-token IS"), possibly a toy experiment on the existing `code/experiments/rl_mismatch.py`.
+- **Confidence:** low (single paper; authors' numbers)
+- **Recommendation:** monitor; add as evidence to `on-policy-distillation-variants.md` (or cross-reference from `rl-training-inference-mismatch.md`); re-judge if an independent replication or adoption in verl/TRL appears.
