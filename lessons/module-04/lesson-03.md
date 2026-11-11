@@ -85,6 +85,10 @@ you stream documents through the tokenizer and write the ids straight to a memor
 it at training time so the OS pages in only the windows you touch. The logic is identical to the
 toy above; only the storage changes.</p></div>
 
+<div class="callout key"><p><strong>Pretraining packing vs SFT packing: two differences, and one of them is changing.</strong></p>
+<p><strong>1. Splitting.</strong> Pretraining cuts a long document across two windows; SFT never splits an example, because half an example has no question or no answer. This difference stays.</p>
+<p><strong>2. Attention across the boundary.</strong> Plain pretraining packing lets a document attend to the previous, unrelated documents in its window, and relies on <code>&lt;|endoftext|&gt;</code> to tell the model to ignore them. SFT blocks that with a block-diagonal causal mask (<a href="#/lessons/module-14/lesson-02">14.2</a>). <em>This difference is disappearing.</em> Meta's <a href="https://arxiv.org/abs/2407.21783">Llama 3</a> (2024) uses the same document mask in pretraining. They report it had limited impact on standard pretraining but was important for continued pretraining on very long sequences (publicly documented). <a href="https://arxiv.org/abs/2402.13991">Zhao et al. (ACL 2024)</a> found that blocking attention between documents improves pretraining results. The SFT way is becoming the standard way in pretraining too.</p></div>
+
 ## 4. Cutting windows: the one-position shift
 
 Now the key step. The model reads a length-$T$ window `x` and, at *every* position $t$, must

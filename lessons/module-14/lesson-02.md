@@ -417,6 +417,9 @@ Usually this is what you want, because long answers have more to learn. But if y
 
 <div class="callout key"><p>Packing in one sentence: put several examples in one row to stop paying for padding, then make sure each example's <strong>labels</strong>, <strong>attention</strong> and <strong>positions</strong> behave exactly as if it were alone, and test that by comparing outputs, not by looking at the loss.</p></div>
 
+<div class="callout key"><p><strong>Pretraining packing vs SFT packing: two differences, and one of them is changing.</strong></p>
+<p><strong>1. Splitting.</strong> Pretraining cuts a long document across two windows; SFT never splits an example, because half an example has no question or no answer. This difference stays.</p>
+<p><strong>2. Attention across the boundary.</strong> Plain pretraining packing lets a document attend to the previous, unrelated documents in its window, and relies on <code>&lt;|endoftext|&gt;</code> to tell the model to ignore them. SFT blocks that with a block-diagonal causal mask (section 4 above). <em>This difference is disappearing.</em> Meta's <a href="https://arxiv.org/abs/2407.21783">Llama 3</a> (2024) uses the same document mask in pretraining. They report it had limited impact on standard pretraining but was important for continued pretraining on very long sequences (publicly documented). <a href="https://arxiv.org/abs/2402.13991">Zhao et al. (ACL 2024)</a> found that blocking attention between documents improves pretraining results. The SFT way is becoming the standard way in pretraining too.</p></div>
 
 ## Exercise
 
