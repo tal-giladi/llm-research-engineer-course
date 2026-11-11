@@ -2,7 +2,7 @@
 
 <div class="prereq">
 <p><strong>Prerequisites:</strong> <a href="#/lessons/module-07/lesson-04">07.4 · Throughput, FLOPs, MFU, memory accounting</a>.</p>
-<p><strong>How to use this page:</strong> solve every exercise before scrolling to the <a href="#/lessons/module-07/practice-04?id=solutions">Solutions</a>. Exercises marked ✍️ are for pen and paper (a calculator is fine). Exercises marked 🐍 are for Python / PyTorch with the course's <code>llmre</code> package installed. Write big numbers in scientific notation and keep 3–4 significant figures. 1 GB = $10^9$ bytes, 1 TFLOP = $10^{12}$ FLOPs.</p>
+<p><strong>How to use this page:</strong> each part ends with its own solutions; solve every exercise in a part before reading that part's solutions. Exercises marked ✍️ are for pen and paper (a calculator is fine). Exercises marked 🐍 are for Python / PyTorch with the course's <code>llmre</code> package installed. Write big numbers in scientific notation and keep 3–4 significant figures. 1 GB = $10^9$ bytes, 1 TFLOP = $10^{12}$ FLOPs.</p>
 <p><strong>Why this matters for ML:</strong> these are the numbers you are expected to produce in your head in a design review: how many FLOPs a run costs, how long it takes, whether the GPU is being used well, and whether the model fits. The goal of this page is that every number in 07.4 becomes automatic.</p>
 </div>
 
@@ -68,6 +68,95 @@ $$
 
 **A8 ✍️ — Which N?** A colleague computes FLOPs/token as $6 \times 124{,}439{,}808$ (the total parameter count, embeddings included). By what percentage does that overestimate the 6N cost? Why do the embeddings not belong in $N$ for the FLOP count?
 
+### Solutions — Part A
+
+Stop here if you have not tried Part A yet.
+
+#### A1
+
+1. Attention: $4C^2 = 4\cdot 16 = 64$. MLP: $8C^2 = 128$. One layer: $12C^2 = 192$.
+2. $N = 12\cdot 2\cdot 16 = 384$.
+3. Forward $2N = 768$ FLOPs, backward $4N = 1536$ FLOPs, total $6N = 2304$ FLOPs per token.
+
+#### A2
+
+1. $C^2 = 589{,}824$. Attention $4C^2 = 2{,}359{,}296$. MLP $8C^2 = 4{,}718{,}592$. Per layer $12C^2 = 7{,}077{,}888$.
+2. $N = 12 \cdot 7{,}077{,}888 = 84{,}934{,}656 \approx 84.9$M.
+3. Forward $2N = 169{,}869{,}312 \approx 1.70\times 10^8$. Backward $4N = 339{,}738{,}624 \approx 3.40\times 10^8$. Total $6N = 509{,}607{,}936 \approx 5.10\times 10^8$ FLOPs/token.
+
+#### A3
+
+1. $768 \cdot 3072 = 2{,}359{,}296$ weights (the same as all four attention matrices together, $4C^2$).
+2. Forward: one multiply-add per weight per token = $2 \cdot 2{,}359{,}296 = 4{,}718{,}592$ FLOPs. Backward: twice that, $9{,}437{,}184$ FLOPs.
+3. Half each: $4{,}718{,}592$ FLOPs compute $\partial L/\partial W$ and $4{,}718{,}592$ compute $\partial L/\partial x$.
+
+#### A4
+
+$N = 12\cdot 24\cdot 1024^2 = 301{,}989{,}888 \approx 302$M. $6N = 1{,}811{,}939{,}328 \approx 1.81\times 10^9$ FLOPs/token. Ratio to GPT-2 small: $301{,}989{,}888 / 84{,}934{,}656 = 3.556$.
+
+Split the 3.556 into its two causes, depth and width:
+
+- **Depth.** $N = 12\, n_{\text{layer}}\, C^2$ is linear in $n_{\text{layer}}$. Going from 12 to 24 layers doubles the number of blocks: factor $24/12 = 2$.
+- **Width: where 1.333 comes from.** The width grows from $C = 768$ to $C = 1024$, and $1024/768 = 4/3 = 1.333$ (both are multiples of 256: $768 = 3\cdot 256$, $1024 = 4\cdot 256$). Every weight matrix in a block has *both* of its dimensions proportional to $C$: the attention projections are $C\times C$, the MLP matrices are $C\times 4C$ and $4C\times C$. Making $C$ 1.333× larger makes the rows 1.333× more and the columns 1.333× more, so each matrix has $1.333 \times 1.333 = (4/3)^2 = 16/9 = 1.778\times$ as many weights. Check on one attention matrix: $768^2 = 589{,}824$, $1024^2 = 1{,}048{,}576$, and $1{,}048{,}576 / 589{,}824 = 1.778$.
+- **Together:** $2 \times 1.778 = 3.556$, exactly the ratio above ($2 \cdot 16/9 = 32/9$).
+
+Width enters squared, depth enters linearly: a 1.333× wider model costs 1.778× more per token, a 1.333× deeper one only 1.333× more.
+
+#### A5
+
+For every weight matrix the backward pass computes the gradient w.r.t. the layer's input $\partial L/\partial x$ (one matmul, ≈ $2$ FLOPs per weight per token, needed to keep propagating to earlier layers) and the gradient w.r.t. the weights $\partial L/\partial W$ (another matmul, another ≈ 2). The second one is what the optimizer uses; together they make backward ≈ $4N$, and with the forward's $2N$ the total is $6N$.
+
+#### A6
+
+**The idea.** 6N is a cost *per token*. An optimizer step processes a whole batch of tokens (every micro-batch of every accumulation round, see C1) before it updates the weights once, and every one of those tokens goes through one forward and one backward pass. So
+
+$$
+\text{FLOPs per step} = \underbrace{6N}_{\text{FLOPs per token}} \times \underbrace{\text{tokens per step}}_{\text{batch size in tokens}}
+$$
+
+The optimizer update itself (AdamW touching each parameter a handful of times) is $O(P)$ FLOPs *once per step*, not per token, so against $6N \times 500{,}000$ it is negligible and is left out.
+
+**$500{,}000$ tokens.** From A2, $6N = 509{,}607{,}936 \approx 5.096\times 10^8$ FLOPs/token.
+
+$$
+509{,}607{,}936 \times 500{,}000 = 254{,}803{,}968{,}000{,}000 \approx 2.548\times 10^{14} \text{ FLOPs}
+$$
+
+Since 1 TFLOP $= 10^{12}$ FLOPs, divide by $10^{12}$: $2.548\times 10^{14} / 10^{12} = $ **254.8 TFLOP**.
+
+**$524{,}288 = 2^{19}$ tokens.** This is the "≈ 0.5M tokens" batch written as a power of two, e.g. $16 \cdot 1024 \cdot 32$ in C1 (powers of two split evenly across micro-batches and GPUs).
+
+$$
+509{,}607{,}936 \times 524{,}288 = 267{,}181{,}325{,}549{,}568 \approx 2.672\times 10^{14} \text{ FLOPs} = \textbf{267.2 TFLOP}
+$$
+
+**Sanity checks.** The second batch has $524{,}288 / 500{,}000 = 1.0486$ times as many tokens, so it costs 4.86% more FLOPs: $254.8 \times 1.0486 = 267.2$. ✓ To get a feeling for the size: an A100 peaks at 312 TFLOP/s, so even at an impossible 100% MFU one step would take $254.8 / 312 = 0.82$ s; at a realistic MFU it takes several seconds (C5).
+
+#### A7
+
+1. $6ND = 5.096\times 10^8 \cdot 10^{10} = 5.096\times 10^{18}$ FLOPs.
+2. Time is work divided by speed, so first find the speed the GPU *actually* delivers.
+
+   **Effective rate.** 312 TFLOP/s is the A100's *peak*: what it would do if its tensor cores did useful multiply-adds every single cycle. Real training never gets there, because part of every step goes to things that are not the model's matmuls: waiting on memory reads and writes, launching kernels, LayerNorm/softmax/elementwise ops, data loading, Python. MFU is exactly the fraction of the peak that ends up as useful model FLOPs (07.4 section 4). So the useful FLOPs the GPU really delivers per second, the **effective rate**, is
+
+   $$
+   \text{effective rate} = \text{MFU} \times \text{peak} = 0.4 \times 3.12\times 10^{14} = 1.248\times 10^{14} \text{ FLOP/s} = 124.8 \text{ TFLOP/s}
+   $$
+
+   At 40% MFU, 60% of the GPU's theoretical capacity is lost to that overhead; you are effectively renting a 124.8 TFLOP/s machine.
+
+   **Time.**
+
+   $$
+   \text{time} = \frac{\text{total FLOPs}}{\text{effective rate}} = \frac{5.096\times 10^{18}}{1.248\times 10^{14}} = 40{,}834 \text{ s}, \qquad \frac{40{,}834}{3600} \approx 11.3 \text{ hours}
+   $$
+
+   At 100% MFU it would take $5.096\times 10^{18} / 3.12\times 10^{14} = 16{,}334$ s $\approx 4.5$ h; dividing by 0.4 gives the same 11.3 h. Lower MFU → lower effective rate → proportionally longer (and more expensive) run (C5).
+
+#### A8
+
+$6 \cdot 124{,}439{,}808 = 746{,}638{,}848$, versus $6N = 509{,}607{,}936$: $746.6 / 509.6 = 1.465$, a **46.5% overestimate**. The token embedding is a table lookup: reading one row costs no multiply-adds, so those $50257 \times 768$ parameters are not "used in one multiply-add per token." (In GPT-2 the same matrix is reused as the output head, and that matmul does cost $2VC$ FLOPs per token forward — a real cost the $12C^2$ estimate also leaves out, alongside the attention scores. The 6N convention drops it on purpose; know that it is there.) An overestimated FLOP count also inflates your MFU.
+
 ---
 
 ## Part B — The attention scores 6N leaves out (07.4 section 2)
@@ -91,6 +180,31 @@ $$
 
 **B4 ✍️ — Same N, different T.** Two runs of the same model: one at $T = 2048$, one at $T = 8192$. Which of these numbers change between the two runs: $N$, $6N$, the score FLOPs per token, the true total FLOPs per token? Say which way.
 
+### Solutions — Part B
+
+Stop here if you have not tried Part B yet.
+
+#### B1
+
+1. $QK^\top$: 3 dot products of length 4 = 12 multiply-adds = **24 FLOPs**. $PV$: 3 vectors of length 4 scaled and summed = 12 multiply-adds = **24 FLOPs**.
+2. Forward $4TC = 48$. Forward+backward $12TC = 144$.
+3. Causal: half, $6TC = 72$ FLOPs.
+
+#### B2
+
+1. $6\cdot 12\cdot 1024\cdot 768 = 56{,}623{,}104 \approx 5.66\times 10^7$ FLOPs/token.
+2. $1024 / (12\cdot 768) = 1024/9216 = 0.111$. Check: $5.66\times 10^7 / 5.10\times 10^8 = 0.111$. The scores add ≈ 11% on top of 6N.
+3. Naive (un-halved): $12\cdot 12\cdot 1024\cdot 768 = 113{,}246{,}208 \approx 1.13\times 10^8$, ratio $0.222$ — 22% on top of 6N, half of it wasted on masked-out entries.
+
+#### B3
+
+1. $T = 12C = 49{,}152$.
+2. $T = 4096$: $4096/49{,}152 = 0.083$ (8.3%). $T = 128{,}000$: $128{,}000/49{,}152 = 2.60$ — the scores cost 2.6× everything 6N counts.
+
+#### B4
+
+$N$ and $6N$ do not change: they depend only on the weights. The score FLOPs per token grow 4× (linear in $T$). So the true total FLOPs per token grows, and the 6N estimate becomes less accurate at $T = 8192$. For GPT-2 small's width the ratio would go from $2048/9216 = 0.22$ to $8192/9216 = 0.89$.
+
 ---
 
 ## Part C — Throughput and MFU (07.4 section 4)
@@ -109,6 +223,35 @@ $$
 **C5 ✍️ — What MFU costs you.** A GPT-2-small step of 500,000 tokens on one A100. How long does it take at 40% MFU? At 20%? If an A100 rents for $\$2$/hour (an assumed price, for the arithmetic only), what does the run of A7 cost at 40% MFU, and at 20%?
 
 **C6 ✍️ — Units.** For each quantity say whether it is a count (FLOPs), a rate (FLOP/s) or a ratio (no unit): $6N$; $6ND$; 312 TFLOP/s; tokens/sec × $6N$; MFU.
+
+### Solutions — Part C
+
+Stop here if you have not tried Part C yet.
+
+#### C1
+
+$16 \cdot 1024 \cdot 32 = 524{,}288$ tokens per step. $524{,}288 / 10.5 = 49{,}932$ tokens/sec.
+
+#### C2
+
+$\text{MFU} = 5.096\times 10^8 \cdot 49{,}932 / 3.12\times 10^{14} = 2.545\times 10^{13} / 3.12\times 10^{14} = 0.0816 = 8.2\%$.
+
+#### C3
+
+1. $5.096\times 10^8 \cdot 5\times 10^4 = 2.548\times 10^{13}$ FLOP/s; $/3.12\times 10^{14} = 0.0817 = 8.2\%$.
+2. $5.096\times 10^8 \cdot 10^6 = 5.096\times 10^{14}$ FLOP/s; peak $8 \cdot 3.12\times 10^{14} = 2.496\times 10^{15}$; $\text{MFU} = 0.204 = 20.4\%$. Always divide by the peak of *all* the GPUs that produced the aggregate tokens/sec.
+
+#### C4
+
+$\text{tokens/sec} = \text{MFU}\cdot\text{peak}/6N = 0.4 \cdot 3.12\times 10^{14} / 5.096\times 10^8 = 244{,}894 \approx 245{,}000$ tokens/sec — about 5× the 50,000 of C3.
+
+#### C5
+
+Step FLOPs $= 2.548\times 10^{14}$ (A6). At 40%: $2.548\times 10^{14} / 1.248\times 10^{14} = 2.04$ s. At 20%: $4.08$ s. The A7 run: 11.34 h at 40% → $\$22.69$; at 20% it takes 22.7 h → $\$45.37$. Half the MFU, double the bill.
+
+#### C6
+
+$6N$: a count (FLOPs per token). $6ND$: a count (FLOPs). 312 TFLOP/s: a rate. tokens/sec × $6N$: a rate (achieved FLOP/s). MFU: a ratio of two rates, no unit.
 
 ---
 
@@ -139,6 +282,47 @@ $$
 
 **D8 ✍️ — Two different "4"s.** The backward pass does about 4 FLOPs per parameter per token, and the fixed memory is $4P$ numbers. Explain in two sentences why these are unrelated.
 
+### Solutions — Part D
+
+Stop here if you have not tried Part D yet.
+
+#### D1
+
+Params 1000, grads 1000, Adam $m$ 1000 + $v$ 1000 = 2000. Total **4000 numbers** $= 4P$. At 4 bytes each: **16,000 bytes** $= 16P$.
+
+#### D2
+
+Params $4P = 497{,}759{,}232$ B ≈ 0.498 GB. Grads $4P$ ≈ 0.498 GB. Adam $8P = 995{,}518{,}464$ B ≈ 0.996 GB. Total $16P = 1{,}991{,}036{,}928$ B ≈ **1.99 GB**.
+
+#### D3
+
+$350$M: $5.6$ GB. $1.3$B: $20.8$ GB. $7$B: $112$ GB. On 24 GB: 350M fits easily; 1.3B technically fits its fixed state but leaves only 3.2 GB for activations; 7B does not. On 80 GB: 350M and 1.3B fit; 7B (112 GB) does not, even before activations.
+
+#### D4
+
+$24\times 10^9 / 16 = 1.5\times 10^9$ parameters. $80\times 10^9 / 16 = 5\times 10^9$ parameters. In practice lower, because activations need room too.
+
+#### D5
+
+1. $8 \cdot 1024 \cdot 50{,}257 = 411{,}705{,}344 \approx 4.12\times 10^8$ elements.
+2. fp32: $1{,}646{,}821{,}376$ B ≈ **1.65 GB**. bf16: ≈ **0.82 GB**.
+3. One activation tensor (1.65 GB) is 83% of all the fixed state (1.99 GB).
+4. $B = 16$: the logits double to ≈ 3.29 GB. The fixed state stays 1.99 GB — it has nothing to do with the batch.
+
+#### D6
+
+$8\cdot 1024\cdot 768 = 6{,}291{,}456$ elements; $\times 4 = 25{,}165{,}824$ B ≈ **25.2 MB**.
+
+#### D7
+
+1. $\partial L/\partial W$ has the shape of $W$: $(3072, 768)$ (PyTorch stores a Linear's weight as out × in), $2{,}359{,}296$ numbers, ≈ **9.4 MB**.
+2. $\partial L/\partial x$ has the shape of the input $x$: $(B, T, C) = (8, 1024, 768)$, $6{,}291{,}456$ numbers, ≈ **25.2 MB**.
+3. $\partial L/\partial W$ is the `.grad`; it is kept (and accumulated across tokens and micro-batches) until the optimizer step. $\partial L/\partial x$ is handed to the previous layer as its upstream gradient and freed as soon as that layer has used it. $\partial L/\partial x$ grows with $B$; $\partial L/\partial W$ does not.
+
+#### D8
+
+The "4 FLOPs per parameter per token" counts *operations*: for every token the backward pass does a multiply and an add twice with each weight, and those results are summed into slots. The "$4P$ numbers" counts *stored slots*: one weight, one gradient, one $m$, one $v$ per parameter — millions of token contributions all end up added into the same one gradient slot, so the two 4s are a coincidence.
+
 ---
 
 ## Part E — Putting it together
@@ -152,6 +336,22 @@ $$
 5. Fixed fp32 AdamW memory. Does it fit on one 80 GB GPU? If the optimizer state, gradients and parameters are sharded evenly across 8 GPUs (ZeRO/FSDP, Module 9), how much is that per GPU?
 
 **E2 ✍️ — Read a training log.** A log line says: `step 1200 | 524288 tok | 6.30 s | GPT-2 small | 1x A100`. Compute tokens/sec and MFU. Is it in the 30–50% range that well-tuned large runs report? Name one reason a model this small would sit lower.
+
+### Solutions — Part E
+
+Stop here if you have not tried Part E yet.
+
+#### E1
+
+1. $6ND = 6\cdot 7\times 10^9 \cdot 1.4\times 10^{11} = 5.88\times 10^{21}$ FLOPs.
+2. $64 \cdot 3.12\times 10^{14} \cdot 0.4 = 7.99\times 10^{15}$ FLOP/s.
+3. $5.88\times 10^{21} / 7.99\times 10^{15} = 7.36\times 10^5$ s ≈ **204.5 hours ≈ 8.5 days**.
+4. $204.5 \cdot 64 \approx$ **13,090 GPU-hours**.
+5. $16P = 112$ GB: does not fit on one 80 GB GPU. Sharded 8 ways: $112/8 = 14$ GB per GPU, leaving room for activations.
+
+#### E2
+
+$524{,}288 / 6.30 = 83{,}220$ tokens/sec. $\text{MFU} = 5.096\times 10^8 \cdot 83{,}220 / 3.12\times 10^{14} = 0.136 = 13.6\%$. Below 30–50%. A model this small does little arithmetic per kernel launch, so fixed overheads (Python, kernel launches, LayerNorm/softmax/elementwise work, the attention scores and the big logits matmul the 6N count leaves out, data loading) are a larger share of each step.
 
 ---
 
@@ -176,159 +376,11 @@ Print `model.num_params()`, `non_embedding_params(cfg)`, and `model_flops_per_to
 
 **F4 🐍 — Activation memory scales with the batch.** On a GPU, for the F2 model, record `torch.cuda.max_memory_allocated()` after one forward+backward at batch sizes 4, 8 and 16 (call `torch.cuda.reset_peak_memory_stats()` between them). Subtract the fixed state from F2. Does the rest grow linearly with $B$? On CPU only: instead compute the size of the logits tensor at each batch size from its shape and dtype.
 
----
+### Solutions — Part F
 
-## Part G — Debugging
+Stop here if you have not tried Part F yet.
 
-**G1 ✍️ — Forgot backward.** A capacity plan estimates a run's compute as $2ND$. By what factor is the time and cost underestimated?
-
-**G2 ✍️ — The wrong peak.** Someone reports 4.1% MFU for GPT-2 small at 50,000 tokens/sec on one A100. You get 8.2%. They divided by 624 TFLOP/s. What peak is that, and why is it the wrong denominator for this run?
-
-**G3 ✍️ — OOM at the optimizer step.** A 1.3B-parameter run was budgeted as "weights + grads = 10.4 GB, fits in 16 GB with room for activations." The forward and backward pass run, then the first `opt.step()` runs out of memory. What was left out of the budget, how big is it, and why does the failure appear exactly at the first step?
-
-**G4 ✍️ — Fast tokens, bad MFU.** Run A (125M params) reports 200,000 tokens/sec; run B (1.3B params) reports 30,000 tokens/sec, both on one A100. The team concludes run A is "using the GPU better." Compute both MFUs (use $N \approx P$) and decide.
-
----
-
-## Solutions
-
-Stop here if you have not tried the exercises yet.
-
-### A1
-
-1. Attention: $4C^2 = 4\cdot 16 = 64$. MLP: $8C^2 = 128$. One layer: $12C^2 = 192$.
-2. $N = 12\cdot 2\cdot 16 = 384$.
-3. Forward $2N = 768$ FLOPs, backward $4N = 1536$ FLOPs, total $6N = 2304$ FLOPs per token.
-
-### A2
-
-1. $C^2 = 589{,}824$. Attention $4C^2 = 2{,}359{,}296$. MLP $8C^2 = 4{,}718{,}592$. Per layer $12C^2 = 7{,}077{,}888$.
-2. $N = 12 \cdot 7{,}077{,}888 = 84{,}934{,}656 \approx 84.9$M.
-3. Forward $2N = 169{,}869{,}312 \approx 1.70\times 10^8$. Backward $4N = 339{,}738{,}624 \approx 3.40\times 10^8$. Total $6N = 509{,}607{,}936 \approx 5.10\times 10^8$ FLOPs/token.
-
-### A3
-
-1. $768 \cdot 3072 = 2{,}359{,}296$ weights (the same as all four attention matrices together, $4C^2$).
-2. Forward: one multiply-add per weight per token = $2 \cdot 2{,}359{,}296 = 4{,}718{,}592$ FLOPs. Backward: twice that, $9{,}437{,}184$ FLOPs.
-3. Half each: $4{,}718{,}592$ FLOPs compute $\partial L/\partial W$ and $4{,}718{,}592$ compute $\partial L/\partial x$.
-
-### A4
-
-$N = 12\cdot 24\cdot 1024^2 = 301{,}989{,}888 \approx 302$M. $6N = 1{,}811{,}939{,}328 \approx 1.81\times 10^9$ FLOPs/token. Ratio to GPT-2 small: $301{,}989{,}888 / 84{,}934{,}656 = 3.556$. Twice the layers gives $2\times$; each layer has $12C^2$ weights, so 1.333× the width gives $1.333^2 = 1.778\times$; $2 \times 1.778 = 3.556$. Width enters squared, depth enters linearly.
-
-### A5
-
-For every weight matrix the backward pass computes the gradient w.r.t. the layer's input $\partial L/\partial x$ (one matmul, ≈ $2$ FLOPs per weight per token, needed to keep propagating to earlier layers) and the gradient w.r.t. the weights $\partial L/\partial W$ (another matmul, another ≈ 2). The second one is what the optimizer uses; together they make backward ≈ $4N$, and with the forward's $2N$ the total is $6N$.
-
-### A6
-
-$500{,}000$ tokens: $509{,}607{,}936 \cdot 5\times 10^5 = 2.548\times 10^{14}$ FLOPs $= 254.8$ TFLOP. $524{,}288$ tokens: $509{,}607{,}936 \cdot 524{,}288 = 2.672\times 10^{14}$ FLOPs $= 267.2$ TFLOP.
-
-### A7
-
-1. $6ND = 5.096\times 10^8 \cdot 10^{10} = 5.096\times 10^{18}$ FLOPs.
-2. Effective rate $= 0.4 \cdot 3.12\times 10^{14} = 1.248\times 10^{14}$ FLOP/s. Time $= 5.096\times 10^{18} / 1.248\times 10^{14} = 40{,}834$ s $\approx 11.3$ hours.
-
-### A8
-
-$6 \cdot 124{,}439{,}808 = 746{,}638{,}848$, versus $6N = 509{,}607{,}936$: $746.6 / 509.6 = 1.465$, a **46.5% overestimate**. The token embedding is a table lookup: reading one row costs no multiply-adds, so those $50257 \times 768$ parameters are not "used in one multiply-add per token." (In GPT-2 the same matrix is reused as the output head, and that matmul does cost $2VC$ FLOPs per token forward — a real cost the $12C^2$ estimate also leaves out, alongside the attention scores. The 6N convention drops it on purpose; know that it is there.) An overestimated FLOP count also inflates your MFU.
-
-### B1
-
-1. $QK^\top$: 3 dot products of length 4 = 12 multiply-adds = **24 FLOPs**. $PV$: 3 vectors of length 4 scaled and summed = 12 multiply-adds = **24 FLOPs**.
-2. Forward $4TC = 48$. Forward+backward $12TC = 144$.
-3. Causal: half, $6TC = 72$ FLOPs.
-
-### B2
-
-1. $6\cdot 12\cdot 1024\cdot 768 = 56{,}623{,}104 \approx 5.66\times 10^7$ FLOPs/token.
-2. $1024 / (12\cdot 768) = 1024/9216 = 0.111$. Check: $5.66\times 10^7 / 5.10\times 10^8 = 0.111$. The scores add ≈ 11% on top of 6N.
-3. Naive (un-halved): $12\cdot 12\cdot 1024\cdot 768 = 113{,}246{,}208 \approx 1.13\times 10^8$, ratio $0.222$ — 22% on top of 6N, half of it wasted on masked-out entries.
-
-### B3
-
-1. $T = 12C = 49{,}152$.
-2. $T = 4096$: $4096/49{,}152 = 0.083$ (8.3%). $T = 128{,}000$: $128{,}000/49{,}152 = 2.60$ — the scores cost 2.6× everything 6N counts.
-
-### B4
-
-$N$ and $6N$ do not change: they depend only on the weights. The score FLOPs per token grow 4× (linear in $T$). So the true total FLOPs per token grows, and the 6N estimate becomes less accurate at $T = 8192$. For GPT-2 small's width the ratio would go from $2048/9216 = 0.22$ to $8192/9216 = 0.89$.
-
-### C1
-
-$16 \cdot 1024 \cdot 32 = 524{,}288$ tokens per step. $524{,}288 / 10.5 = 49{,}932$ tokens/sec.
-
-### C2
-
-$\text{MFU} = 5.096\times 10^8 \cdot 49{,}932 / 3.12\times 10^{14} = 2.545\times 10^{13} / 3.12\times 10^{14} = 0.0816 = 8.2\%$.
-
-### C3
-
-1. $5.096\times 10^8 \cdot 5\times 10^4 = 2.548\times 10^{13}$ FLOP/s; $/3.12\times 10^{14} = 0.0817 = 8.2\%$.
-2. $5.096\times 10^8 \cdot 10^6 = 5.096\times 10^{14}$ FLOP/s; peak $8 \cdot 3.12\times 10^{14} = 2.496\times 10^{15}$; $\text{MFU} = 0.204 = 20.4\%$. Always divide by the peak of *all* the GPUs that produced the aggregate tokens/sec.
-
-### C4
-
-$\text{tokens/sec} = \text{MFU}\cdot\text{peak}/6N = 0.4 \cdot 3.12\times 10^{14} / 5.096\times 10^8 = 244{,}894 \approx 245{,}000$ tokens/sec — about 5× the 50,000 of C3.
-
-### C5
-
-Step FLOPs $= 2.548\times 10^{14}$ (A6). At 40%: $2.548\times 10^{14} / 1.248\times 10^{14} = 2.04$ s. At 20%: $4.08$ s. The A7 run: 11.34 h at 40% → $\$22.69$; at 20% it takes 22.7 h → $\$45.37$. Half the MFU, double the bill.
-
-### C6
-
-$6N$: a count (FLOPs per token). $6ND$: a count (FLOPs). 312 TFLOP/s: a rate. tokens/sec × $6N$: a rate (achieved FLOP/s). MFU: a ratio of two rates, no unit.
-
-### D1
-
-Params 1000, grads 1000, Adam $m$ 1000 + $v$ 1000 = 2000. Total **4000 numbers** $= 4P$. At 4 bytes each: **16,000 bytes** $= 16P$.
-
-### D2
-
-Params $4P = 497{,}759{,}232$ B ≈ 0.498 GB. Grads $4P$ ≈ 0.498 GB. Adam $8P = 995{,}518{,}464$ B ≈ 0.996 GB. Total $16P = 1{,}991{,}036{,}928$ B ≈ **1.99 GB**.
-
-### D3
-
-$350$M: $5.6$ GB. $1.3$B: $20.8$ GB. $7$B: $112$ GB. On 24 GB: 350M fits easily; 1.3B technically fits its fixed state but leaves only 3.2 GB for activations; 7B does not. On 80 GB: 350M and 1.3B fit; 7B (112 GB) does not, even before activations.
-
-### D4
-
-$24\times 10^9 / 16 = 1.5\times 10^9$ parameters. $80\times 10^9 / 16 = 5\times 10^9$ parameters. In practice lower, because activations need room too.
-
-### D5
-
-1. $8 \cdot 1024 \cdot 50{,}257 = 411{,}705{,}344 \approx 4.12\times 10^8$ elements.
-2. fp32: $1{,}646{,}821{,}376$ B ≈ **1.65 GB**. bf16: ≈ **0.82 GB**.
-3. One activation tensor (1.65 GB) is 83% of all the fixed state (1.99 GB).
-4. $B = 16$: the logits double to ≈ 3.29 GB. The fixed state stays 1.99 GB — it has nothing to do with the batch.
-
-### D6
-
-$8\cdot 1024\cdot 768 = 6{,}291{,}456$ elements; $\times 4 = 25{,}165{,}824$ B ≈ **25.2 MB**.
-
-### D7
-
-1. $\partial L/\partial W$ has the shape of $W$: $(3072, 768)$ (PyTorch stores a Linear's weight as out × in), $2{,}359{,}296$ numbers, ≈ **9.4 MB**.
-2. $\partial L/\partial x$ has the shape of the input $x$: $(B, T, C) = (8, 1024, 768)$, $6{,}291{,}456$ numbers, ≈ **25.2 MB**.
-3. $\partial L/\partial W$ is the `.grad`; it is kept (and accumulated across tokens and micro-batches) until the optimizer step. $\partial L/\partial x$ is handed to the previous layer as its upstream gradient and freed as soon as that layer has used it. $\partial L/\partial x$ grows with $B$; $\partial L/\partial W$ does not.
-
-### D8
-
-The "4 FLOPs per parameter per token" counts *operations*: for every token the backward pass does a multiply and an add twice with each weight, and those results are summed into slots. The "$4P$ numbers" counts *stored slots*: one weight, one gradient, one $m$, one $v$ per parameter — millions of token contributions all end up added into the same one gradient slot, so the two 4s are a coincidence.
-
-### E1
-
-1. $6ND = 6\cdot 7\times 10^9 \cdot 1.4\times 10^{11} = 5.88\times 10^{21}$ FLOPs.
-2. $64 \cdot 3.12\times 10^{14} \cdot 0.4 = 7.99\times 10^{15}$ FLOP/s.
-3. $5.88\times 10^{21} / 7.99\times 10^{15} = 7.36\times 10^5$ s ≈ **204.5 hours ≈ 8.5 days**.
-4. $204.5 \cdot 64 \approx$ **13,090 GPU-hours**.
-5. $16P = 112$ GB: does not fit on one 80 GB GPU. Sharded 8 ways: $112/8 = 14$ GB per GPU, leaving room for activations.
-
-### E2
-
-$524{,}288 / 6.30 = 83{,}220$ tokens/sec. $\text{MFU} = 5.096\times 10^8 \cdot 83{,}220 / 3.12\times 10^{14} = 0.136 = 13.6\%$. Below 30–50%. A model this small does little arithmetic per kernel launch, so fixed overheads (Python, kernel launches, LayerNorm/softmax/elementwise work, the attention scores and the big logits matmul the 6N count leaves out, data loading) are a larger share of each step.
-
-### F1
+#### F1
 
 ```python
 print(model.num_params())                 # 124439808
@@ -340,7 +392,7 @@ print(exact, (non_embedding_params(cfg) - exact) / exact * 100)
 
 The exact count over the blocks is 85,054,464, so the estimate is 0.14% low. The difference is the biases (each Linear has one per output) and the two LayerNorms per block (a gain and a bias of length $C$ each): all $O(C)$ per layer, against $12C^2$ weights. (The lesson's 85,056,000 also includes the final LayerNorm `ln_f`, another $2C = 1536$.)
 
-### F2
+#### F2
 
 ```python
 import torch
@@ -366,7 +418,7 @@ print(opt.state[params[0]].keys())
 
 `g_bytes == p_bytes` and `a_bytes == 2 * p_bytes`. The other entry is `step`, one scalar per parameter tensor (not per parameter number), so it is negligible.
 
-### F3
+#### F3
 
 ```python
 import time
@@ -389,7 +441,7 @@ print(f"{tps:.0f} tok/s, {fpt * tps:.3g} FLOP/s, MFU {mfu(fpt, tps, peak_flops=1
 
 Expect a tiny MFU (often well under 5%). With $C = 64$ every matmul is so small that the time goes to Python overhead, kernel launches and elementwise ops, not arithmetic. The FLOP count is also a slight underestimate here: 6N ignores the logits matmul, $2VC = 2\cdot 256\cdot 64 = 32{,}768$ forward FLOPs per token, against $2N = 2\cdot 98{,}304 = 196{,}608$ — about 17% extra work that MFU does not credit.
 
-### F4
+#### F4
 
 ```python
 import torch
@@ -405,19 +457,35 @@ for B in (4, 8, 16):
 
 After subtracting the parameters and gradients, the remainder (activations) roughly doubles each time $B$ doubles. CPU-only: logits are $B \cdot 64 \cdot 256 \cdot 4$ bytes = 262,144, 524,288, 1,048,576 bytes — exactly linear.
 
-### G1
+---
+
+## Part G — Debugging
+
+**G1 ✍️ — Forgot backward.** A capacity plan estimates a run's compute as $2ND$. By what factor is the time and cost underestimated?
+
+**G2 ✍️ — The wrong peak.** Someone reports 4.1% MFU for GPT-2 small at 50,000 tokens/sec on one A100. You get 8.2%. They divided by 624 TFLOP/s. What peak is that, and why is it the wrong denominator for this run?
+
+**G3 ✍️ — OOM at the optimizer step.** A 1.3B-parameter run was budgeted as "weights + grads = 10.4 GB, fits in 16 GB with room for activations." The forward and backward pass run, then the first `opt.step()` runs out of memory. What was left out of the budget, how big is it, and why does the failure appear exactly at the first step?
+
+**G4 ✍️ — Fast tokens, bad MFU.** Run A (125M params) reports 200,000 tokens/sec; run B (1.3B params) reports 30,000 tokens/sec, both on one A100. The team concludes run A is "using the GPU better." Compute both MFUs (use $N \approx P$) and decide.
+
+### Solutions — Part G
+
+Stop here if you have not tried Part G yet.
+
+#### G1
 
 $6ND / 2ND = 3$: time and cost are underestimated **3×**.
 
-### G2
+#### G2
 
 624 TFLOP/s is the A100's bf16 peak *with 2:4 structured sparsity*. A dense training run cannot use it, so the right denominator is the dense 312 TFLOP/s: $2.548\times 10^{13} / 3.12\times 10^{14} = 8.2\%$. Always state the dtype and dense vs sparse when you report MFU.
 
-### G3
+#### G3
 
 The Adam state was left out: $m$ and $v$ are $8P = 10.4$ GB in fp32, as much as weights + grads together. The full fixed state is $16P = 20.8$ GB, more than the 16 GB GPU. PyTorch's AdamW creates $m$ and $v$ lazily inside the first `step()`, so the forward and backward pass succeed and the allocation fails exactly there.
 
-### G4
+#### G4
 
 Run A: $6 \cdot 1.25\times 10^8 \cdot 2\times 10^5 = 1.5\times 10^{14}$ FLOP/s → $48.1\%$ MFU. Run B: $6\cdot 1.3\times 10^9 \cdot 3\times 10^4 = 2.34\times 10^{14}$ FLOP/s → $75.0\%$ MFU. Run B uses the GPU better despite 6.7× fewer tokens/sec. (75% would be unusually high in practice — it is a constructed example; if you saw it in a real log you would first check that the FLOP count and peak are right.)
 
