@@ -142,3 +142,74 @@ def test_lora_has_far_fewer_trainable_params():
     full = base.weight.numel()  # what full fine-tuning would train
     assert trainable == 8 * 768 * 2
     assert full / trainable > 40  # ~48x fewer
+
+
+# --------------------------------------------------------------------------- #
+# Sequence packing
+# --------------------------------------------------------------------------- #
+from llmre.attention.attention import scaled_dot_product_attention  # noqa: E402
+from llmre.sft.packing import (  # noqa: E402
+    first_fit_decreasing,
+    pack_examples,
+    packed_attention_mask,
+    packed_labels,
+    packing_efficiency,
+)
+
+
+def _toy_examples():
+    # (ids, response_mask): A = 3 prompt + 2 response, B = 2 + 2, C = 1 + 2
+    A = ([11, 12, 13, 14, 15], [0, 0, 0, 1, 1])
+    B = ([21, 22, 23, 24], [0, 0, 1, 1])
+    C = ([31, 32, 33], [0, 1, 1])
+    return [A, B, C]
+
+
+def test_first_fit_decreasing_groups_longest_first():
+    assert first_fit_decreasing([5, 4, 3], 8) == [[0, 2], [1]]
+    assert first_fit_decreasing([20, 50, 30], 100) == [[1, 2, 0]]
+
+
+def test_pack_examples_tensors():
+    p = pack_examples(_toy_examples(), block_size=8, pad_id=0, rows=[[0, 2], [1]])
+    assert p["input_ids"].tolist() == [[11, 12, 13, 14, 15, 31, 32, 33],
+                                       [21, 22, 23, 24, 0, 0, 0, 0]]
+    assert p["doc_ids"].tolist() == [[0, 0, 0, 0, 0, 1, 1, 1],
+                                     [0, 0, 0, 0, -1, -1, -1, -1]]
+    assert p["position_ids"].tolist() == [[0, 1, 2, 3, 4, 0, 1, 2],
+                                          [0, 1, 2, 3, 0, 0, 0, 0]]
+    assert abs(packing_efficiency(p["doc_ids"]) - 12 / 16) < 1e-9
+
+
+def test_packed_labels_never_cross_a_boundary():
+    p = pack_examples(_toy_examples(), block_size=8, rows=[[0, 2], [1]])
+    labels = packed_labels(p["input_ids"], p["response_mask"], p["doc_ids"])
+    I = -100
+    assert labels.tolist() == [[I, I, 14, 15, I, 32, 33, I],
+                               [I, 23, 24, I, I, I, I, I]]
+
+
+def test_packed_attention_equals_separate_attention():
+    torch.manual_seed(0)
+    d, T = 8, 8
+    emb, pos = torch.randn(64, d), torch.randn(T, d)
+    Wq, Wk, Wv = torch.randn(d, d), torch.randn(d, d), torch.randn(d, d)
+
+    def attend(ids, position_ids, mask):
+        x = emb[ids] + pos[position_ids]
+        return scaled_dot_product_attention(x @ Wq, x @ Wk, x @ Wv, mask)
+
+    exs = _toy_examples()
+    p = pack_examples(exs, block_size=T, rows=[[0, 2]])
+    ids, pids, docs = p["input_ids"][0], p["position_ids"][0], p["doc_ids"][0]
+    packed = attend(ids, pids, packed_attention_mask(docs)[0])
+
+    causal = torch.full((T, T), float("-inf")).triu(1)
+    for (ex_ids, _), (lo, hi) in zip([exs[0], exs[2]], [(0, 5), (5, 8)]):
+        n = len(ex_ids)
+        alone = attend(torch.tensor(ex_ids), torch.arange(n), causal[:n, :n])
+        assert torch.allclose(packed[lo:hi], alone, atol=1e-5)
+
+    # The bug: a plain causal mask lets example C see example A.
+    leaky = attend(ids, torch.arange(T), causal)
+    assert not torch.allclose(leaky[5:8], packed[5:8], atol=1e-3)
