@@ -228,11 +228,12 @@ $6 \cdot 124{,}439{,}808 = 746{,}638{,}848$, versus $6N = 509{,}607{,}936$: $746
 
 ## Part B — The attention scores 6N leaves out (07.4 section 2)
 
-**B1 ✍️ — Tiny, by hand.** $C = 4$, $T = 3$, one layer.
+**B1 ✍️ — Tiny, by hand.** One attention layer with width $C = 4$ (each query, key and value vector has 4 numbers) and a sequence of $T = 3$ tokens. Count only the two attention matmuls that use **no weights**: the scores $QK^\top$ and the weighted sum $PV$. Count per token: imagine you are the last token, with one query vector, looking at the 3 keys and 3 values of the sequence. Remember: 1 multiply-add = 2 FLOPs.
 
-1. FLOPs for $QK^\top$ for one token, no mask. For $PV$.
-2. Forward total, and forward+backward total, no mask.
-3. Forward+backward total with a causal mask (average of $T/2$ keys).
+1. How many FLOPs does $QK^\top$ cost for this one token, with no mask? How many does $PV$ cost?
+2. Add them to get the forward total. Then the forward+backward total, using "backward ≈ 2× forward."
+3. Now add a causal mask: each token only looks at itself and earlier tokens, so on average it looks at about $T/2$ keys instead of $T$. What is the forward+backward total now?
+4. Write each of your answers as a multiple of $T\cdot C = 12$. Which of them are in the $6N$ count, and why?
 
 **B2 ✍️ — GPT-2 small at full context.** $T = 1024$.
 
@@ -253,9 +254,36 @@ Stop here if you have not tried Part B yet.
 
 #### B1
 
-1. $QK^\top$: 3 dot products of length 4 = 12 multiply-adds = **24 FLOPs**. $PV$: 3 vectors of length 4 scaled and summed = 12 multiply-adds = **24 FLOPs**.
-2. Forward $4TC = 48$. Forward+backward $12TC = 144$.
-3. Causal: half, $6TC = 72$ FLOPs.
+**Setup.** You are one token. You hold one query vector $q$ of length 4. The sequence has 3 tokens, so there are 3 key vectors $k_1, k_2, k_3$ and 3 value vectors $v_1, v_2, v_3$, each of length 4.
+
+**1. The two matmuls, no mask.**
+
+- **Scores $QK^\top$.** Your query is dotted with each of the 3 keys: $s_j = q\cdot k_j$. One dot product of two length-4 vectors is 4 multiply-adds ($q_1k_1 + q_2k_2 + q_3k_3 + q_4k_4$). Three of them: $3 \times 4 = 12$ multiply-adds $=$ **24 FLOPs**. In symbols: $T\cdot C$ multiply-adds $= 2TC$ FLOPs.
+- **Weighted sum $PV$.** After softmax you have 3 probabilities $p_1, p_2, p_3$. The output is $p_1 v_1 + p_2 v_2 + p_3 v_3$: each of the 3 value vectors (4 numbers) is multiplied by its probability and added in. That is again $3 \times 4 = 12$ multiply-adds $=$ **24 FLOPs** $= 2TC$.
+
+(The softmax itself is a few FLOPs per score, small next to the matmuls, so we skip it.)
+
+**2. Forward and backward, no mask.**
+
+- Forward: $24 + 24 = $ **48 FLOPs** $= 4TC = 4\cdot 3\cdot 4$.
+- Backward ≈ 2× forward, because each matmul needs a gradient for each of its two inputs (for $QK^\top$: one for $Q$ and one for $K$; for $PV$: one for $P$ and one for $V$). Backward $\approx 2 \times 48 = 96$.
+- Forward+backward: $48 + 96 = $ **144 FLOPs** $= 12TC$.
+
+**3. With a causal mask.** The first token sees 1 key, the second sees 2, the third sees 3. A token sees $T/2$ keys on average in the formula (for large $T$), so the work is halved: $144 / 2 = $ **72 FLOPs** $= 6TC$.
+
+Honest note: for a sequence this short, the exact average is $(1+2+3)/3 = 2$ keys, not $T/2 = 1.5$, which would give $144 \times 2/3 = 96$ FLOPs. The $T/2$ rule is accurate only for long sequences (at $T = 1024$ the exact average is 512.5 vs 512). Use $T/2$; just know it is an approximation.
+
+**4. In units of $TC = 12$, and who counts it.**
+
+| | FLOPs | as a multiple of $TC$ |
+|---|---|---|
+| $QK^\top$ forward | 24 | $2TC$ |
+| $PV$ forward | 24 | $2TC$ |
+| forward, no mask | 48 | $4TC$ |
+| forward+backward, no mask | 144 | $12TC$ |
+| forward+backward, causal | 72 | $6TC$ |
+
+**None** of these FLOPs is in $6N$. The $6N$ rule counts one multiply-add per **weight** per token, but $QK^\top$ and $PV$ multiply activations by activations ($q$ by $k$, $p$ by $v$): there is no weight in them. That is also why they grow with $T$ and $N$ does not.
 
 #### B2
 
