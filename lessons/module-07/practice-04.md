@@ -108,29 +108,96 @@ For every weight matrix the backward pass computes the gradient w.r.t. the layer
 
 #### A6
 
-**The idea.** 6N is a cost *per token*. An optimizer step processes a whole batch of tokens (every micro-batch of every accumulation round, see C1) before it updates the weights once, and every one of those tokens goes through one forward and one backward pass. So
+Let's go slowly, one small step at a time.
+
+**Step 1 — What is the question really asking?**
+
+Think of a factory. We already know how much work it takes to make **one** item. Now someone orders a box of 500,000 items and asks: "how much work is the whole box?" The answer is simple: work for one item × number of items.
+
+Here:
+
+- The **item** is one token.
+- The **work for one token** is $6N$ FLOPs (we found it in A2).
+- The **box** is one optimizer step: the model reads 500,000 tokens, and only then updates its weights once.
+
+So the whole rule is:
 
 $$
-\text{FLOPs per step} = \underbrace{6N}_{\text{FLOPs per token}} \times \underbrace{\text{tokens per step}}_{\text{batch size in tokens}}
+\text{FLOPs for one step} = (\text{FLOPs for one token}) \times (\text{number of tokens in the step})
 $$
 
-The optimizer update itself (AdamW touching each parameter a handful of times) is $O(P)$ FLOPs *once per step*, not per token, so against $6N \times 500{,}000$ it is negligible and is left out.
+---
 
-**$500{,}000$ tokens.** From A2, $6N = 509{,}607{,}936 \approx 5.096\times 10^8$ FLOPs/token.
+**Step 2 — Write down the number we already have.**
 
-$$
-509{,}607{,}936 \times 500{,}000 = 254{,}803{,}968{,}000{,}000 \approx 2.548\times 10^{14} \text{ FLOPs}
-$$
-
-Since 1 TFLOP $= 10^{12}$ FLOPs, divide by $10^{12}$: $2.548\times 10^{14} / 10^{12} = $ **254.8 TFLOP**.
-
-**$524{,}288 = 2^{19}$ tokens.** This is the "≈ 0.5M tokens" batch written as a power of two, e.g. $16 \cdot 1024 \cdot 32$ in C1 (powers of two split evenly across micro-batches and GPUs).
+From A2, for GPT-2 small:
 
 $$
-509{,}607{,}936 \times 524{,}288 = 267{,}181{,}325{,}549{,}568 \approx 2.672\times 10^{14} \text{ FLOPs} = \textbf{267.2 TFLOP}
+6N = 509{,}607{,}936 \text{ FLOPs per token} \;\approx\; 5.1\times 10^8
 $$
 
-**Sanity checks.** The second batch has $524{,}288 / 500{,}000 = 1.0486$ times as many tokens, so it costs 4.86% more FLOPs: $254.8 \times 1.0486 = 267.2$. ✓ To get a feeling for the size: an A100 peaks at 312 TFLOP/s, so even at an impossible 100% MFU one step would take $254.8 / 312 = 0.82$ s; at a realistic MFU it takes several seconds (C5).
+Read it as: "to do the forward and backward pass for **one** token, the model does about half a billion multiplications and additions."
+
+---
+
+**Step 3 — Multiply for 500,000 tokens.**
+
+$$
+509{,}607{,}936 \times 500{,}000 = 254{,}803{,}968{,}000{,}000 \text{ FLOPs}
+$$
+
+That number is too long to read, so write it in scientific notation:
+
+$$
+254{,}803{,}968{,}000{,}000 \approx 2.548\times 10^{14} \text{ FLOPs}
+$$
+
+---
+
+**Step 4 — Convert to TFLOP (a friendlier unit).**
+
+"T" means tera = one trillion = $10^{12}$. Just like converting grams to kilograms, divide by the size of the unit:
+
+$$
+\frac{2.548\times 10^{14}}{10^{12}} = 2.548\times 10^{2} = \textbf{254.8 TFLOP}
+$$
+
+**Answer 1:** one step of 500,000 tokens costs about **255 TFLOP**.
+
+---
+
+**Step 5 — The second batch: 524,288 tokens.**
+
+Why this strange number? It is $2^{19}$, a power of two. Engineers like powers of two because they split evenly: in C1 it is $16 \times 1024 \times 32$ (16 sequences × 1024 tokens each × 32 accumulation rounds). It is just "about half a million", rounded to a power of two.
+
+Same rule, same multiplication:
+
+$$
+509{,}607{,}936 \times 524{,}288 = 267{,}181{,}325{,}549{,}568 \approx 2.672\times 10^{14} \text{ FLOPs}
+$$
+
+Divide by $10^{12}$:
+
+$$
+\frac{2.672\times 10^{14}}{10^{12}} = \textbf{267.2 TFLOP}
+$$
+
+**Answer 2:** one step of 524,288 tokens costs about **267 TFLOP**.
+
+---
+
+**Step 6 — Check that the answers make sense.**
+
+- **Check 1.** The second batch has a little more tokens: $524{,}288 / 500{,}000 = 1.0486$, that is 4.86% more. So it should cost 4.86% more work: $254.8 \times 1.0486 = 267.2$. ✓ Matches.
+- **Check 2: how big is 255 TFLOP?** An A100 can do at most 312 TFLOP **per second**. So even if the GPU were perfect (100% MFU), one step would take $254.8 / 312 \approx 0.8$ seconds. Real GPUs are not perfect, so a real step takes a few seconds (you will compute it in C5).
+
+---
+
+**Step 7 — One small detail we ignored.**
+
+After the 500,000 tokens, the optimizer (AdamW) updates every weight once. That costs only a few FLOPs per weight, and it happens **once per step**, not once per token. Compared with 255 TFLOP it is tiny, so we leave it out.
+
+**What to remember:** cost of a step = cost of one token × tokens in the step. Everything else is just careful multiplication and unit conversion.
 
 #### A7
 
