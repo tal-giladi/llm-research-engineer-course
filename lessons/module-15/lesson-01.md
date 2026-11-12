@@ -117,7 +117,301 @@ $$
 
 That is the entire reward model on top of the backbone: one dot product per sequence.
 
-### 3. Tensor shapes / dtype / device
+### 3. Full numerical example: one preference pair, from start to finish
+
+This walks through **everything** that happens to one preference pair, with numbers small enough to check by hand. Nothing is assumed: every operation (dot product, softmax, sigmoid, log, gradient) is explained the first time it appears, and every number is computed in front of you. Numbers are rounded to 4 decimals; the last digit can differ by 1 because of rounding.
+
+> **What is real and what is shrunk.** The *steps* below are exactly the steps a real reward model runs (InstructGPT, HH-RLHF). The *sizes* are shrunk so you can follow them: each token is described by **2 numbers** instead of 768, the vocabulary has **9 tokens** instead of 50,257, there is **one** attention layer instead of 12, and we skip LayerNorm and the MLP. A real model does the same thing with bigger tables and more layers.
+
+#### Step 0 — Where the reward model comes from
+
+We start from a model that has already been through both earlier stages:
+
+1. **Pre-training** (Modules 6–9): the model read a lot of text and learned to predict the next token. In doing so it learned a list of numbers for every token (its **embedding**) and learned which earlier words to pay attention to.
+2. **SFT** (Module 14): the model was trained on example conversations, so it knows the chat format `<|user|> question <|assistant|> answer <|end|>`.
+
+**Tokens and embeddings.** The model cannot read letters. Text is first cut into **tokens** (words or word pieces), each token has a number called its **id**, and each id has a row of numbers called its **embedding**. The embedding is the model's learned description of that token. Ours has 2 numbers per token ($C = 2$, $C$ = "hidden size"). These are the values our model ended up with after pre-training + SFT; we take them as given:
+
+| id | token | embedding $e$ |
+|---:|---|---|
+| 0 | `<\|user\|>` | (0.0, 0.5) |
+| 1 | `Is` | (0.5, 0.0) |
+| 2 | `fire` | (1.0, 0.5) |
+| 3 | `hot` | (0.5, 1.0) |
+| 4 | `?` | (0.0, 0.0) |
+| 5 | `<\|assistant\|>` | (0.0, 1.0) |
+| 6 | `Yes` | (2.0, 1.0) |
+| 7 | `No` | (0.0, −1.0) |
+| 8 | `<\|end\|>` | (1.0, 0.0) |
+
+**What a "head" is.** A language model has two parts. The **backbone** (embeddings + all the transformer layers) reads the text and produces, for each position, a list of $C$ numbers that describes it: the **hidden state**. The **head** is the last layer, sitting on top of the backbone, that turns a hidden state into the output you actually want. Same backbone, different head, different job. A **scalar head** is a head whose output is one single number (a "scalar" is just one number, as opposed to a list).
+
+**Swapping the head.** The SFT model ends in an `lm_head`: a table of $2 \times 9 = 18$ weights that turns the final 2 numbers into 9 scores, one per possible next token ("what word comes next?"). A reward model does not want to predict the next word; it wants **one number that says how good the answer is**. So:
+
+- we **delete** the `lm_head`;
+- we add a **scalar head**: 2 weights $w = (w_1, w_2)$ and 1 bias $b$ (3 numbers in total). Its job: take the 2 numbers that describe the whole conversation and turn them into one score.
+
+The new head has not learned anything yet, so it starts with small random values. Ours starts at
+
+$$
+w = (-0.3,\; 0.4), \qquad b = 0.1
+$$
+
+Everything else (embeddings, attention) is copied unchanged from the SFT model. The model still *understands* the text; it just does not yet know what "a better answer" means. Teaching it that is what training does.
+
+#### Step 1 — The preference record
+
+One row of preference data, $(x, y_w, y_l)$:
+
+- prompt $x$: "Is fire hot?"
+- chosen $y_w$: "Yes" (a human labeler picked this one as better)
+- rejected $y_l$: "No"
+
+The only label is "Yes is better than No". No score, no reason.
+
+#### Step 2 — Build two full sequences and turn them into ids
+
+The reward model never scores the answer alone; it always reads **prompt + answer** in the chat format, because "Yes" is only a good answer *to this question*. So we build two sequences that are identical except for the answer:
+
+| position | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| chosen | `<\|user\|>` | `Is` | `fire` | `hot` | `?` | `<\|assistant\|>` | **`Yes`** | `<\|end\|>` |
+| rejected | `<\|user\|>` | `Is` | `fire` | `hot` | `?` | `<\|assistant\|>` | **`No`** | `<\|end\|>` |
+| chosen ids | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 |
+| rejected ids | 0 | 1 | 2 | 3 | 4 | 5 | 7 | 8 |
+
+In PyTorch the two rows go in together as one tensor `idx` of shape `(2, 8)` (2 sequences, 8 tokens each), dtype `int64` (whole numbers). $T = 8$ is the sequence length.
+
+#### Step 3 — Replace every id with its embedding
+
+Each id is looked up in the embedding table above. Now each sequence is 8 rows of 2 numbers; together a `(2, 8, 2)` float tensor. The two sequences are identical everywhere except position 7: `Yes` = (2.0, 1.0) in the chosen one, `No` = (0.0, −1.0) in the rejected one.
+
+#### Step 4 — Let the last token read the whole sequence (attention)
+
+We need **one** description of the whole conversation, so we take it from the **last** token, `<|end|>`. Attention is how that token reads everything before it. It works in four small steps: (a) score how relevant each token is, (b) turn the scores into percentages, (c) mix the tokens using those percentages, (d) add the token's own embedding back.
+
+In a real model each token's embedding is first multiplied by three learned matrices to make its *query* (what am I looking for?), *key* (what do I contain?) and *value* (what do I pass on?). In our tiny model those matrices are the identity (multiply by 1), so query, key and value are all just the embedding itself. That keeps the arithmetic readable; the steps are the same.
+
+**4a. Score each token with a dot product.** A **dot product** of two lists of numbers means: multiply the matching numbers and add the results. For example $(1, 2) \cdot (3, 4) = 1 \times 3 + 2 \times 4 = 11$. A big dot product means "these two point the same way", which attention reads as "relevant".
+
+The last token's query is $q = e_{\text{end}} = (1.0, 0.0)$. Its score for each position $s$ is
+
+$$
+\text{score}_s = \frac{q \cdot e_s}{\sqrt{C}} = \frac{1.0 \times e_{s,1} + 0.0 \times e_{s,2}}{\sqrt 2}
+$$
+
+where $e_{s,1}$ and $e_{s,2}$ are the first and second numbers of token $s$'s embedding. Dividing by $\sqrt{C} = \sqrt 2 = 1.4142$ is a fixed rule of attention that keeps scores from growing large when $C$ is large. Because $q = (1.0, 0.0)$, each score is simply the token's first number divided by 1.4142. For `fire`: $(1.0 \times 1.0 + 0.0 \times 0.5) / 1.4142 = 0.7071$.
+
+**4b. Turn scores into percentages (softmax).** Softmax does two things:
+
+1. Take $e^{\text{score}}$ for every score ($e = 2.71828$). This makes every value positive and makes bigger scores stand out more. For example $e^{0} = 1$, $e^{0.7071} = 2.0281$.
+2. Divide each of those by their total, so they add up to 1. These are the **attention weights** $a_s$: what fraction of its attention the last token gives to each position.
+
+| position | token | first number $e_{s,1}$ | score | $e^{\text{score}}$ |
+|---:|---|---:|---:|---:|
+| 1 | `<\|user\|>` | 0.0 | 0.0000 | 1.0000 |
+| 2 | `Is` | 0.5 | 0.3536 | 1.4241 |
+| 3 | `fire` | 1.0 | 0.7071 | 2.0281 |
+| 4 | `hot` | 0.5 | 0.3536 | 1.4241 |
+| 5 | `?` | 0.0 | 0.0000 | 1.0000 |
+| 6 | `<\|assistant\|>` | 0.0 | 0.0000 | 1.0000 |
+| 7 | `Yes` (chosen) | 2.0 | 1.4142 | 4.1133 |
+| 7 | `No` (rejected) | 0.0 | 0.0000 | 1.0000 |
+| 8 | `<\|end\|>` | 1.0 | 0.7071 | 2.0281 |
+
+The seven positions that both sequences share add up to $1 + 1.4241 + 2.0281 + 1.4241 + 1 + 1 + 2.0281 = 9.9044$. So the totals are:
+
+- chosen: $9.9044 + 4.1133 = 14.0177$
+- rejected: $9.9044 + 1.0000 = 10.9044$
+
+Each weight is $e^{\text{score}}$ divided by its sequence's total. For example `Yes` gets $4.1133 / 14.0177 = 0.2934$, and `<|user|>` in the chosen sequence gets $1 / 14.0177 = 0.0713$.
+
+**4c. Mix the tokens.** Multiply each token's embedding by its weight (both of its numbers), then add everything up:
+
+| token | chosen: $a_s$ | chosen: $a_s \times e_s$ | rejected: $a_s$ | rejected: $a_s \times e_s$ |
+|---|---:|---|---:|---|
+| `<\|user\|>` (0.0, 0.5) | 0.0713 | (0.0000, 0.0357) | 0.0917 | (0.0000, 0.0459) |
+| `Is` (0.5, 0.0) | 0.1016 | (0.0508, 0.0000) | 0.1306 | (0.0653, 0.0000) |
+| `fire` (1.0, 0.5) | 0.1447 | (0.1447, 0.0723) | 0.1860 | (0.1860, 0.0930) |
+| `hot` (0.5, 1.0) | 0.1016 | (0.0508, 0.1016) | 0.1306 | (0.0653, 0.1306) |
+| `?` (0.0, 0.0) | 0.0713 | (0.0000, 0.0000) | 0.0917 | (0.0000, 0.0000) |
+| `<\|assistant\|>` (0.0, 1.0) | 0.0713 | (0.0000, 0.0713) | 0.0917 | (0.0000, 0.0917) |
+| answer: `Yes` (2.0, 1.0) / `No` (0.0, −1.0) | **0.2934** | (0.5869, 0.2934) | 0.0917 | (0.0000, −0.0917) |
+| `<\|end\|>` (1.0, 0.0) | 0.1447 | (0.1447, 0.0000) | 0.1860 | (0.1860, 0.0000) |
+| **sum** | 1.0000 | **(0.9778, 0.5744)** | 1.0000 | **(0.5026, 0.2694)** |
+
+Notice what happened: in the chosen sequence the last token put 29% of its attention on `Yes`, more than on any other token, because `Yes` has a large first number. In the rejected sequence `No` got only 9%.
+
+**4d. Add the token's own embedding back (the residual connection).** Every transformer layer adds its input back to its output, so the token keeps its own information. $e_{\text{end}} = (1.0, 0.0)$:
+
+$$
+h_w = (1.0 + 0.9778,\; 0.0 + 0.5744) = (1.9778,\; 0.5744)
+$$
+
+$$
+h_l = (1.0 + 0.5026,\; 0.0 + 0.2694) = (1.5026,\; 0.2694)
+$$
+
+$h$ is called the **hidden state**. $h_w$ is the model's 2-number summary of "Is fire hot? Yes", and $h_l$ of "Is fire hot? No". They differ only because the last token read a different answer.
+
+#### Step 5 — The scalar head turns each summary into one number
+
+The reward is $r = w \cdot h + b$: a dot product with the head's weights, plus the bias. With $w = (-0.3, 0.4)$ and $b = 0.1$:
+
+$$
+r_w = (-0.3 \times 1.9778) + (0.4 \times 0.5744) + 0.1 = -0.5933 + 0.2298 + 0.1 = -0.2636
+$$
+
+$$
+r_l = (-0.3 \times 1.5026) + (0.4 \times 0.2694) + 0.1 = -0.4508 + 0.1078 + 0.1 = -0.2430
+$$
+
+The untrained head gives the **wrong** answer a slightly higher score ($-0.2430$ is bigger than $-0.2636$). That is expected: the head is random, so it has no idea yet what humans prefer.
+
+#### Step 6 — How likely does the model think "Yes" is the better answer?
+
+**The margin** is the gap between the two rewards:
+
+$$
+m = r_w - r_l = -0.2636 - (-0.2430) = -0.0206
+$$
+
+**The sigmoid** turns any number into a probability between 0 and 1: $\sigma(m) = \dfrac{1}{1 + e^{-m}}$. A margin of 0 gives exactly 0.5 (a coin flip); a big positive margin gives close to 1; a big negative margin gives close to 0. Step by step:
+
+1. $-m = 0.0206$
+2. $e^{0.0206} = 1.0208$
+3. $1 + 1.0208 = 2.0208$
+4. $1 / 2.0208 = 0.4949$ (more exactly 0.49485)
+
+So the model says "the chosen answer is better with probability 49.5%": it leans, slightly, the wrong way.
+
+#### Step 7 — The loss: one number for "how wrong"
+
+The loss is $\mathcal{L} = -\log \sigma(m)$, where $\log$ is the natural logarithm. Why this form:
+
+- if the model gives the true winner probability 1, then $-\log 1 = 0$: no penalty;
+- probability 0.5 gives $-\log 0.5 = 0.6931$;
+- the smaller the probability, the bigger the penalty ($-\log 0.1 = 2.30$, $-\log 0.01 = 4.61$).
+
+Here:
+
+$$
+\mathcal{L} = -\log(0.49485) = 0.7035
+$$
+
+A bit above 0.6931 (the coin-flip value), because the model leans the wrong way.
+
+#### Step 8 — The gradient: which way should each weight move?
+
+The **gradient** of the loss with respect to a number answers: "if I increase this number by a tiny amount, how much does the loss change, and in which direction?" Training then moves each number the opposite way, to make the loss smaller. We need it for the head's weights $w_1$, $w_2$ and the bias $b$. We get there in two links.
+
+**Link 1 — loss vs. margin.** Calculus gives the slope of $-\log\sigma(m)$ as $\sigma(m) - 1$:
+
+$$
+\frac{\partial \mathcal{L}}{\partial m} = 0.4949 - 1 = -0.5051 \quad (\text{more exactly } -0.5052)
+$$
+
+You can check it without calculus: nudge the margin by $0.001$ from $-0.0206$ to $-0.0196$ and recompute the loss; it goes from $0.703500$ to $0.702995$, a change of $-0.000505$. Dividing by the nudge, $-0.000505 / 0.001 = -0.505$. Same number. The minus sign means: **making the margin bigger makes the loss smaller**.
+
+**Link 2 — margin vs. each head weight.** Write the margin out in full:
+
+$$
+m = r_w - r_l = (w_1 h_{w,1} + w_2 h_{w,2} + b) - (w_1 h_{l,1} + w_2 h_{l,2} + b) = w_1 (h_{w,1} - h_{l,1}) + w_2 (h_{w,2} - h_{l,2})
+$$
+
+The two $b$'s cancel. Plugging in the hidden states:
+
+$$
+m = w_1 \times (1.9778 - 1.5026) + w_2 \times (0.5744 - 0.2694) = w_1 \times 0.4752 + w_2 \times 0.3050
+$$
+
+So raising $w_1$ by a tiny amount raises the margin by $0.4752$ times that amount; raising $w_2$ raises it by $0.3050$ times; and changing $b$ does nothing.
+
+**Multiply the two links** (this is the **chain rule**: how loss reacts to margin, times how margin reacts to the weight):
+
+$$
+\frac{\partial \mathcal{L}}{\partial w_1} = -0.5052 \times 0.4752 = -0.2401, \qquad
+\frac{\partial \mathcal{L}}{\partial w_2} = -0.5052 \times 0.3050 = -0.1540, \qquad
+\frac{\partial \mathcal{L}}{\partial b} = 0
+$$
+
+$\partial\mathcal{L}/\partial b = 0$ is the earlier statement "rewards are only defined up to a constant", appearing as a number: adding the same amount to both rewards never changes the gap, so the bias never learns anything.
+
+**The backbone gets a signal too.** The same chain rule says how the loss reacts to each number of the two hidden states: $\partial\mathcal{L}/\partial h_w = -0.5052 \times w = (0.1516, -0.2021)$ and $\partial\mathcal{L}/\partial h_l = +0.5052 \times w = (-0.1516, 0.2021)$. Moving opposite to these pushes $h_w$ in the direction of $w$ (raising $r_w$) and $h_l$ away from it (lowering $r_l$). From there the signal continues back into the attention and into the `Yes` and `No` embeddings. In full fine-tuning those are updated too; to keep the example readable we update only the head.
+
+#### Step 9 — Update the weights
+
+**Gradient descent:** new value = old value − learning rate × gradient. The learning rate $\eta$ controls the step size. We use a large one, $\eta = 1.0$, so the change is visible after a single step (real reward-model training uses around $10^{-5}$):
+
+$$
+w_1 \leftarrow -0.3 - 1.0 \times (-0.2401) = -0.0599
+$$
+
+$$
+w_2 \leftarrow 0.4 - 1.0 \times (-0.1540) = 0.5540
+$$
+
+$$
+b \leftarrow 0.1 - 1.0 \times 0 = 0.1 \;(\text{unchanged})
+$$
+
+Both weights went **up**, because both gradients were negative.
+
+**Run the pair again.** Steps 2–4 give the same hidden states as before (we did not change the backbone); only Step 5 changes:
+
+$$
+r_w = (-0.0599 \times 1.9778) + (0.5540 \times 0.5744) + 0.1 = -0.1185 + 0.3182 + 0.1 = 0.2997
+$$
+
+$$
+r_l = (-0.0599 \times 1.5026) + (0.5540 \times 0.2694) + 0.1 = -0.0900 + 0.1493 + 0.1 = 0.1592
+$$
+
+$$
+m = 0.2997 - 0.1592 = 0.1405, \qquad \sigma(0.1405) = \frac{1}{1 + e^{-0.1405}} = \frac{1}{1 + 0.8689} = 0.5351, \qquad \mathcal{L} = -\log 0.5351 = 0.6254
+$$
+
+After **one** step the reward model already ranks "Yes" above "No", and the loss fell from 0.7035 to 0.6254.
+
+#### Step 10 — Keep training
+
+Repeating Steps 5–9 on the same pair:
+
+| step | $w$ | $r_w$ | $r_l$ | margin | $P(y_w \succ y_l)$ | loss |
+|---:|---|---:|---:|---:|---:|---:|
+| 0 | (−0.3000, 0.4000) | −0.2636 | −0.2430 | −0.0206 | 0.4948 | 0.7035 |
+| 1 | (−0.0599, 0.5540) | 0.2997 | 0.1592 | 0.1405 | 0.5351 | 0.6254 |
+| 2 | (0.1610, 0.6958) | 0.8181 | 0.5294 | 0.2887 | 0.5717 | 0.5592 |
+| 3 | (0.3646, 0.8264) | 1.2958 | 0.8705 | 0.4253 | 0.6047 | 0.5030 |
+| 4 | (0.5524, 0.9469) | 1.7365 | 1.1852 | 0.5513 | 0.6344 | 0.4550 |
+| 5 | (0.7262, 1.0584) | 2.1442 | 1.4763 | 0.6678 | 0.6610 | 0.4140 |
+
+Every step the margin grows and the loss falls. The *absolute* rewards drift (from about −0.25 to about +2); only the gap between them means anything. In real training this loop runs over ~100k different pairs, not one, so the model learns a general sense of "better", not just "Yes beats No for this question". Real training also processes many pairs at once (a batch) and averages their losses.
+
+#### Step 11 — What the trained reward model is used for
+
+After training, the reward model takes **one** sequence (prompt + any answer) and returns **one** number, using exactly Steps 2–5 above. In RLHF (lesson 15.2) the policy writes an answer, the reward model scores it, and that number is the reward the policy is trained to increase.
+
+#### Verify every number
+
+```bash
+py -c "
+import torch, torch.nn.functional as F, math
+E={'u':(0,.5),'Is':(.5,0),'fire':(1,.5),'hot':(.5,1),'?':(0,0),'a':(0,1),'Yes':(2,1),'No':(0,-1),'end':(1,0)}
+P=['u','Is','fire','hot','?','a']
+def h(seq):
+    X=torch.tensor([E[t] for t in seq],dtype=torch.float32); q=X[-1]
+    a=F.softmax(X@q/math.sqrt(2),0); return X[-1]+a@X
+hw,hl=h(P+['Yes','end']),h(P+['No','end'])
+w=torch.tensor([-.3,.4],requires_grad=True); b=torch.tensor(.1,requires_grad=True)
+for step in range(6):
+    m=(w@hw+b)-(w@hl+b); L=-F.logsigmoid(m); w.grad=b.grad=None; L.backward()
+    print(step,[round(v,4) for v in w.tolist()],round(m.item(),4),round(L.item(),4),[round(v,4) for v in w.grad.tolist()],b.grad.item())
+    with torch.no_grad(): w-=w.grad
+"
+```
+
+### 4. Tensor shapes / dtype / device
 
 - Token ids `idx`: `(B, T)`, `int64`.
 - Backbone hidden states `hidden`: `(B, T, C)`, float, on the model's device.
@@ -128,21 +422,115 @@ For a batch that mixes sequence lengths (right-padded), you don't want the rewar
 
 ### 5. From-scratch PyTorch
 
-The module `llmre.preference.reward_model` implements this. `RewardModel` is backbone-agnostic: give it a backbone that returns `(B, T, C)` hidden states, or hand it hidden states directly.
+#### What a scalar head is, in code
+
+A scalar head is one ordinary linear layer with **one output**:
 
 ```python
-import torch
-from llmre.preference.reward_model import RewardModel, bradley_terry_loss
-
-C = 8
-rm = RewardModel(n_embd=C, backbone=None)     # scalar head only
-
-# Pretend these came from a GPT backbone: (B=2, T=4, C=8) hidden states.
-hidden = torch.randn(2, 4, C)
-rewards = rm.reward_from_hidden(hidden)        # (2,) — read at the last token
+score = nn.Linear(C, 1)    # weight shape (1, C), bias shape (1,)  ->  C + 1 numbers in total
 ```
 
-The reward-reading logic is small and worth seeing in full — the head plus the last-token gather:
+`nn.Linear(C, 1)` computes exactly $w \cdot h + b$ from the numerical example: it multiplies the $C$ numbers of a hidden state by $C$ weights, adds them up, and adds the bias. Compare it with the head the SFT model already has:
+
+| head | layer | input per position | output per position | job |
+|---|---|---|---|---|
+| `lm_head` (SFT model) | `nn.Linear(C, V)` | $C$ numbers | $V$ numbers, one per vocabulary token | "which token comes next?" |
+| `score` (reward model) | `nn.Linear(C, 1)` | $C$ numbers | 1 number | "how good is this conversation?" |
+
+For GPT-2 small, $C = 768$ and $V = 50{,}257$: the `lm_head` is $768 \times 50{,}257 \approx 38.6$M weights; the scalar head is $768 + 1 = 769$.
+
+#### Attaching it to the SFT model, step by step
+
+Our `GPT` from [06.1](lessons/module-06/lesson-01.md) runs: embeddings → transformer blocks → final LayerNorm `ln_f` → `lm_head`. We want everything **up to and including `ln_f`**, and then our scalar head instead of `lm_head`.
+
+**Step A — Load the SFT model.** It is a normal `GPT` with SFT weights loaded.
+
+**Step B — Make a separate copy for the reward model** with `copy.deepcopy`. The reward model will be trained, and we do not want that training to change the SFT model, because the SFT model is also the starting point of the *policy* in lesson 15.2. Two independent copies, two jobs.
+
+**Step C — Wrap the copy so it stops before `lm_head`.** We write a small module that runs the same steps as `GPT.forward` but returns the hidden states `(B, T, C)` instead of the logits `(B, T, V)`.
+
+Why not just `del model.lm_head`? Because of **weight tying** (06.1): in our GPT, `lm_head.weight` and the token-embedding table `wte.weight` are *the same tensor*. The embedding table is still needed to read the input, so we don't delete anything; we simply never call `lm_head`. The wrapper below keeps only `transformer` (which holds `wte`), so `lm_head` is not part of the reward model at all.
+
+**Step D — Put the backbone and the scalar head together.** `RewardModel` (from `llmre.preference.reward_model`) holds the backbone and creates `self.score = nn.Linear(C, 1)`. Its `forward` runs the backbone, applies the head at every position, and returns the value at the last token.
+
+```python
+import copy
+import torch
+import torch.nn as nn
+from llmre.model.config import GPTConfig
+from llmre.model.gpt import GPT
+from llmre.preference.reward_model import RewardModel, bradley_terry_loss
+
+# Step A: the SFT model (tiny config so it runs on CPU in a second)
+cfg = GPTConfig(vocab_size=9, block_size=8, n_layer=2, n_head=2, n_embd=16, dropout=0.0)
+sft = GPT(cfg)
+# real use: sft.load_state_dict(torch.load("sft.pt"))
+
+# Step C: the GPT up to ln_f, stopping BEFORE lm_head
+class GPTBackbone(nn.Module):
+    def __init__(self, gpt):
+        super().__init__()
+        self.transformer = gpt.transformer        # wte, wpe, blocks, ln_f -- but NOT lm_head
+
+    def forward(self, idx):                       # idx: (B, T) int64
+        T = idx.shape[1]
+        pos = torch.arange(T, device=idx.device)  # (T,)
+        x = self.transformer.drop(self.transformer.wte(idx) + self.transformer.wpe(pos))  # (B, T, C)
+        for block in self.transformer.h:
+            x = block(x)                          # (B, T, C)
+        return self.transformer.ln_f(x)           # (B, T, C) hidden states, no lm_head
+
+# Step B + D: separate copy, wrapped, with a new scalar head on top
+rm = RewardModel(n_embd=cfg.n_embd, backbone=GPTBackbone(copy.deepcopy(sft)))
+
+print(rm.score)                  # Linear(in_features=16, out_features=1, bias=True)
+print(rm.score.weight.shape)     # torch.Size([1, 16])
+```
+
+The head starts with random values (PyTorch's default initialization for `nn.Linear`); the backbone starts with the SFT weights.
+
+**Step E — Score the two sequences and train.** Same ids as the numerical example ("Is fire hot?" + Yes / No):
+
+```python
+chosen   = torch.tensor([[0, 1, 2, 3, 4, 5, 6, 8]])   # (1, 8)  ... Yes <|end|>
+rejected = torch.tensor([[0, 1, 2, 3, 4, 5, 7, 8]])   # (1, 8)  ... No  <|end|>
+
+print(rm.backbone(chosen).shape)     # torch.Size([1, 8, 16])  hidden states
+print(rm(chosen), rm(rejected))      # two (1,) rewards, random at first
+
+opt = torch.optim.AdamW(rm.parameters(), lr=1e-2)   # trains the head AND the backbone copy
+for step in range(50):
+    loss = bradley_terry_loss(rm(chosen), rm(rejected))
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+
+print(loss.item())                   # close to 0
+print(rm(chosen) > rm(rejected))     # tensor([True])
+
+torch.save(rm.state_dict(), "reward_model.pt")       # the trained reward model
+```
+
+`rm.parameters()` includes the backbone copy, so this is full fine-tuning: head and backbone both learn. To train only the head (as in the hand example), pass `rm.score.parameters()` to the optimizer instead.
+
+#### "How do I take the head out later?" You don't need to
+
+After training you have **two separate models**, and each keeps its own head for its whole life:
+
+| model | built from | head | used for |
+|---|---|---|---|
+| policy | the SFT model (`sft`) | `lm_head`, untouched | writing answers, token by token |
+| reward model | a copy of the SFT model (`rm`) | scalar head `score` | giving each finished answer one number |
+
+The reward model is never turned back into a text generator, and the scalar head is never put on the policy. In RLHF (lesson 15.2) they work side by side: the policy writes an answer with `sft.generate(...)`, then `rm(prompt_and_answer_ids)` scores it, and that number is the reward. That is also why we made a `deepcopy` in Step B: if the two shared one backbone, training one would silently change the other.
+
+If you ever do want the backbone without the head (for example, to try a different head), it is just `rm.backbone`; the head is `rm.score`. They are separate attributes, so you can use either one alone.
+
+> **Production equivalent.** In Hugging Face Transformers this whole recipe is `AutoModelForSequenceClassification.from_pretrained(sft_path, num_labels=1)`: it loads the SFT backbone, drops the language head, and adds a fresh linear layer with one output (named `score` in Llama-style models, without a bias) read at the last non-pad token. Same mechanism as above.
+
+#### The two pieces of `RewardModel`, in full
+
+The reward-reading logic: the head applied at every position, then the value at the last token is picked:
 
 ```python
 def reward_from_hidden(self, hidden, seq_lengths=None):
@@ -161,19 +549,6 @@ def bradley_terry_loss(reward_chosen, reward_rejected, reduction="mean"):
     margin = reward_chosen - reward_rejected   # (B,)
     per_pair = -F.logsigmoid(margin)           # (B,) = -log sigmoid(margin)
     return per_pair.mean()                     # (with reduction="mean")
-```
-
-A full training step: forward the reward model on the chosen and rejected completions, compute the loss, backprop, step.
-
-```python
-opt = torch.optim.SGD(rm.parameters(), lr=0.5)
-hc, hr = torch.randn(3, 4, C), torch.randn(3, 4, C)   # chosen / rejected hidden states
-for _ in range(20):
-    opt.zero_grad()
-    loss = bradley_terry_loss(rm.reward_from_hidden(hc), rm.reward_from_hidden(hr))
-    loss.backward()
-    opt.step()
-# the reward margin r_w - r_l grows; the loss falls (see test_preference.py)
 ```
 
 ### 6. Under the hood / cost
