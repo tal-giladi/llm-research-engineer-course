@@ -110,3 +110,24 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** none on its own. If reproduced, a short research-connection note in 16.4 or 17.4 ("OPD's dense teacher signal tolerates more rollout mismatch than GRPO; prefix shift is not fixed by per-token IS"), possibly a toy experiment on the existing `code/experiments/rl_mismatch.py`.
 - **Confidence:** low (single paper; authors' numbers)
 - **Recommendation:** monitor; add as evidence to `on-policy-distillation-variants.md` (or cross-reference from `rl-training-inference-mismatch.md`); re-judge if an independent replication or adoption in verl/TRL appears.
+
+### C-20261112-01 · Are dense (Monte-Carlo process) rewards worth their tokens in GRPO? A matched-compute comparison that reverses the ranking
+
+- **Class:** B
+- **Date discovered:** 2026-11-12
+- **Date published:** 2026-11-10 (v1)
+- **Source:** https://arxiv.org/abs/2611.13560 (verified, HTTP 200)
+- **Organization/researchers:** Vikash Singh, Weicong Chen, Debargha Ganguly, Yanyan Zhang, Mohsen Hariri, … Vipin Chaudhary (19 authors; affiliations not shown on the abstract page).
+- **Category:** RL/post-training
+- **What changed:** Process/dense rewards for RL on reasoning (taught in 17.2, Process reward & DeepSeekMath) are usually compared with outcome-reward GRPO at equal *training steps*. This paper compares them at equal *generated tokens and GPU-hours*, and reports that the ranking flips: in the authors' setting the Monte-Carlo step-scoring continuations are about 91% of all generated tokens.
+- **Technical summary:** Authors' claims: a matched-compute protocol (same token budget and GPU-hours per method); 1,668 runs over six models; "matching compute reverses the ranking"; on Qwen2.5-1.5B the Monte-Carlo dense reward ends 14.3 points below standard GRPO at equal tokens. Separately, selecting prompts whose predicted success rate is near 1/2 (maximum Bernoulli reward variance, i.e. largest GRPO advantage signal) improves accuracy at matched compute by 1.7 points on Qwen3-0.6B and 0.8 on Qwen2.5-1.5B. Conclusion: training interventions should be validated at matched compute.
+- **Why it might matter:** A clean, teachable methodology point for 17.2 and 16.x: a "better" reward is only better per unit of compute, and MC process rewards spend most of the rollout budget on scoring. The p≈1/2 prompt-selection result connects directly to GRPO's group-normalized advantage (zero signal when all samples agree). Both are easy to illustrate with the course's toy GRPO code.
+- **Evidence of adoption:** none; single study, two days old. Large run count is the main strength. Code repository exists but is a placeholder ("CODE WILL BE AVAILABLE SOON", no license).
+- **Major organizations using it:** none known.
+- **Open-source implementation:** https://github.com/vicky157/grpo-validation (exists; placeholder README only, no code yet)
+- **Paper:** https://arxiv.org/abs/2611.13560
+- **Code:** https://github.com/vicky157/grpo-validation (empty placeholder)
+- **Relationship to existing course material:** `lessons/module-17/lesson-02.md` (process reward / Math-Shepherd-style MC step labels) and the GRPO lessons in module 16; related registry files `accepted/mlperf-post-training-rlvr.md`, `deferred/gvpo.md`. No topic file for "compute-matched comparison of RL rewards"; `lookup "matched compute"` finds only `accepted/muon-optimizer.md` (budget-matched benchmark, a parallel methodology point).
+- **Potential course lesson:** none on its own. If code lands or the result is reproduced: a "research connection" / common-mistakes note in 17.2 ("compare reward schemes at matched generated tokens, not matched steps") and a one-paragraph note on p≈1/2 prompt filtering beside GRPO advantage normalization.
+- **Confidence:** low (single paper; authors' numbers; code not released)
+- **Recommendation:** monitor; re-judge when code is released or an independent matched-compute replication appears. The weekly review may fold the prompt-difficulty point into any existing difficulty-filtering/curriculum topic.
