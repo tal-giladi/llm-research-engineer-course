@@ -31,6 +31,13 @@ SFT does not change the model architecture or the loss function. It is the *same
 
 The whole post-training pipeline (SFT → reward model → RLHF/DPO, Modules 15) is about shaping *behavior* on top of the *knowledge* pretraining already installed. SFT is the first and cheapest step.
 
+Beyond those two changes, the training loop itself is fundamentally the same as pretraining. In practice it differs in four smaller ways:
+
+1. **Learning rate.** SFT usually uses a much lower learning rate than pretraining, so it adjusts behavior without overwriting what pretraining learned. A typical full fine-tune uses a peak around $1\times10^{-5}$ to $2\times10^{-5}$, versus around $3\times10^{-4}$ to $6\times10^{-4}$ for pretraining a small model: roughly 20 to 50 times smaller.
+2. **Batch construction.** Pretraining cuts one long stream of documents into rows that are all exactly the context length. SFT examples are separate conversations of very different lengths (a 20-token question, a 2,000-token code review), so each batch has to be padded or packed. That is the second half of [14.2](lessons/module-14/lesson-02.md).
+3. **Training duration.** SFT sees far fewer tokens: typically millions to a few billion tokens over 1 to 3 epochs, versus trillions for pretraining. Training much longer on the same small set makes the model memorize it.
+4. **Special tokens.** Chat templates introduce delimiter tokens such as ChatML's `<|im_start|>` and `<|im_end|>`, with role markers like `assistant` after them (this lesson uses `<|user|>`, `<|assistant|>`, `<|end|>`). If these tokens are new to the tokenizer, the embedding matrix gets new rows that start untrained, and SFT is where the model first learns what they mean.
+
 ## Instruction datasets: the `(instruction, [input], output)` triple
 
 An instruction-tuning example is a small record. The classic FLAN / Alpaca shape is three fields:
