@@ -53,19 +53,32 @@ $$
 
 Take input $\mathbf{x} = [1, 1, 1]$.
 
+We compute the same output $\mathbf{y}$ **two ways**. They are not two parts of the model; they are the same math arranged differently, used at different times:
+
+- **Way 1 — during training (separate form).** Keep $W$ frozen and compute $W\mathbf{x}$ and $\frac{\alpha}{r}B(A\mathbf{x})$ separately, then add. Only the small $A$ and $B$ get gradients and optimizer state, which is the whole point of LoRA.
+- **Way 2 — after training (merged form).** Fold the adapter into the weight once: $W' = W + \frac{\alpha}{r}BA$. At inference it is one ordinary matrix: no extra layer, no extra cost.
+
+### Way 1: separate form (training)
+
 **Frozen path:** $W\mathbf{x} = [1{+}0{+}2,\ 0{+}1{+}1] = [3, 2]$.
 
-**LoRA path, bottleneck first:** $A\mathbf{x} = 1\cdot1 + 0\cdot1 + 1\cdot1 = 2$ (a single number, since $r = 1$). Then $B(A\mathbf{x}) = [1, 2]\cdot 2 = [2, 4]$. Scale by $\alpha/r = 2$: $[4, 8]$.
+**LoRA path** (multiply by $A$ first, which squeezes $\mathbf{x}$ down to $r$ numbers, then expand back with $B$): $A\mathbf{x} = 1\cdot1 + 0\cdot1 + 1\cdot1 = 2$ (a single number, since $r = 1$). Then $B(A\mathbf{x}) = [1, 2]\cdot 2 = [2, 4]$. Scale by $\alpha/r = 2$: $[4, 8]$.
 
 **Sum:** $\mathbf{y} = [3, 2] + [4, 8] = [7, 10]$.
 
-Now the equivalent **merged** weight $W' = W + \frac{\alpha}{r} BA$. Here $BA = \begin{bmatrix}1\\2\end{bmatrix}\begin{bmatrix}1&0&1\end{bmatrix} = \begin{bmatrix}1&0&1\\2&0&2\end{bmatrix}$, times $2$ is $\begin{bmatrix}2&0&2\\4&0&4\end{bmatrix}$, so
+### Way 2: merged form (after training)
+
+$\alpha/r$ is just a fixed number chosen before training (here $2$), not something that depends on the input. So merging is three steps done **once**:
+
+1. Multiply the two small matrices: $BA = \begin{bmatrix}1\\2\end{bmatrix}\begin{bmatrix}1&0&1\end{bmatrix} = \begin{bmatrix}1&0&1\\2&0&2\end{bmatrix}$ (a full $2\times 3$ matrix, same shape as $W$).
+2. Scale it by the number $\alpha/r = 2$: $\frac{\alpha}{r}BA = \begin{bmatrix}2&0&2\\4&0&4\end{bmatrix}$.
+3. Add that to $W$ element by element:
 
 $$
 W' = \begin{bmatrix} 3 & 0 & 4 \\ 4 & 1 & 5 \end{bmatrix}, \qquad W'\mathbf{x} = [3{+}0{+}4,\ 4{+}1{+}5] = [7, 10].
 $$
 
-Identical to the LoRA forward — that is what `merge()` guarantees. Verified in Python:
+Same $[7, 10]$ as Way 1, so merging after training does not change what the model outputs — that is what `merge()` guarantees. Verified in Python:
 
 ```python
 import torch, torch.nn as nn
