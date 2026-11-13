@@ -1,0 +1,67 @@
+- id: q1
+  question: >-
+    A GRPO run uses 8 samples per prompt. A prompt is solved by the current model 90% of the
+    time. Roughly what share of the groups for this prompt produce no gradient?
+  options:
+    - About 10%, the share of groups that contain a wrong answer.
+    - About 1%, since mixed groups are by far the most likely outcome.
+    - About 43%, the chance that all 8 samples are correct (0.9 to the 8th).
+    - About 90%, because the advantage is scaled by the pass rate.
+  correct: 2
+  explanation: >-
+    A group gives no signal when all rewards are equal: p^8 + (1-p)^8 = 0.430 + 1e-8, about 43%.
+    Those groups cost a full generation and teach nothing.
+- id: q2
+  question: >-
+    Skywork-OR1 ships a difficulty score for three model sizes instead of one difficulty per
+    problem. Why?
+  options:
+    - Whether a problem gives learning signal depends on the pass rate of the model trained.
+    - The three scores are averaged into one difficulty to reduce noise.
+    - Larger models need longer prompts, so each size uses different problems.
+    - The scores mark which problems were used to train which model.
+  correct: 0
+  explanation: >-
+    Difficulty is a property of a (prompt, model) pair. In a 5,000-problem sample the 32B
+    model solves 43% of problems every time and the 1.5B model only 15%, so their useful
+    subsets differ a lot.
+- id: q3
+  question: >-
+    You filter a math set with the gold answers `x_1=-9, x_2=2`, `(2, 3)` and `C`. Which do
+    you keep for RLVR with a single-answer verifier?
+  options:
+    - All three, since each is a correct reference answer.
+    - Only `x_1=-9, x_2=2`, since equations are easiest to verify symbolically.
+    - Only `C`, since a single letter is the simplest string to match.
+    - Only `(2, 3)`, since it is one value; the others are two answers and a guessable letter.
+  correct: 3
+  explanation: >-
+    A comma inside brackets is one answer (a point); a top-level comma means several answers
+    one match cannot grade; a multiple-choice letter rewards guessing.
+- id: q4
+  question: >-
+    You estimate pass rates with 4 samples per prompt and drop every prompt with 0 of 4
+    correct. What is the main problem?
+  options:
+    - Prompts with all 4 correct are kept, so the set becomes too easy.
+    - Many prompts with small but useful pass rates are dropped as too hard.
+    - The estimate is biased upward, so too many prompts look easy.
+    - Four samples make the verifier slower than generation.
+  correct: 1
+  explanation: >-
+    A prompt with true pass rate 0.1 gets 0/4 about 66% of the time, yet in an 8-sample GRPO
+    group it would give signal about 57% of the time. Use more samples or re-estimate during
+    training.
+- id: q5
+  question: >-
+    Your verifier rejects `x = 1/2` when the gold answer is `\frac{1}{2}`. Why does this hurt
+    more late in training than early?
+  options:
+    - Late in training the learning rate is higher, so each wrong reward moves the model more.
+    - Late in training the KL penalty is off, so verifier errors are no longer corrected.
+    - Late in training more answers are correct, so the same error punishes more correct answers.
+    - Late in training answers are shorter, so formatting errors are more frequent.
+  correct: 2
+  explanation: >-
+    False negatives scale with the number of correct answers. They push the model toward the
+    narrow formats the verifier accepts instead of toward correctness.

@@ -72,9 +72,12 @@ list with verified links, prerequisites, and "read this / skip that" guides is o
 - After **12 (architectures)**: RoPE/RoFormer, LLaMA, Llama 3, OLMo 2, Switch Transformers, DeepSeekMoE, DeepSeek-V3.
 - After **12.5 (linear/hybrid attention, added 2026-09-27)**: Transformers are RNNs (linear attention), DeltaNet parallelization, Gated DeltaNet, Kimi Linear. Lesson [12.5](lessons/module-12/lesson-05.md) depends on 5.2 and 12.3; code `attention/gated_deltanet.py`.
 - After **14 (SFT)**: FLAN, Self-Instruct.
+- After **14.4 (SFT data sources and cleaning, added 2026-11-13)**: LIMA, Tulu 3 (Sections 3-4), OLMo 3 (Dolci), Magpie, Persona Hub, Evol-Instruct, OpenThoughts. Lesson [14.4](lessons/module-14/lesson-04.md) depends on 11.1, 11.2, 11.3, 14.1 and 14.2; code `sft/data.py`.
 - After **15 (RLHF/DPO)**: InstructGPT, Anthropic HH-RLHF, Constitutional AI, RLAIF, DPO.
+- After **15.5 (preference data, added 2026-11-13)**: UltraFeedback, HelpSteer2/HelpSteer3, Tulu 3 (Section 5), The Delta Learning Hypothesis, A Long Way to Go (length correlations), Length-Controlled AlpacaEval, RewardBench 2. Lesson [15.5](lessons/module-15/lesson-05.md) depends on 14.4, 15.1, 15.3 and 15.4; code `preference/data.py`.
 - After **16–17 (reasoning)**: Chain-of-Thought, STaR, Let's Verify Step by Step, DeepSeekMath, DeepSeek-R1.
 - After **16.4 (training–inference mismatch, added 2026-10-25)**: Batch size-invariance for policy optimization (decoupled PPO), the vLLM batch-invariance docs and TorchTitan's TitanRL post, Stabilizing RL with LLMs (Qwen), Diagnosing Training Inference Mismatch (zero-mismatch reference), Jackpot, AIS. Lesson [16.4](lessons/module-16/lesson-04.md) depends on 6.3, 7.3, 8.3, 15.2, 16.1 and 16.2; code `rl/mismatch.py`.
+- After **16.5 (RL prompt data, added 2026-11-13)**: DeepSeekMath, DeepSeek-R1, Tulu 3 (Section 6), DAPO, Skywork-OR1, POLARIS, IFEval/IFBench, From Accuracy to Robustness (verifier errors), Spurious Rewards, One-shot RLVR. Lesson [16.5](lessons/module-16/lesson-05.md) depends on 14.4, 16.1, 16.2 and 16.3; code `rl/data.py`.
 - After **17.4 (logit & on-policy distillation, added 2026-10-04)**: Distilling the Knowledge in a Neural Network, Sequence-Level KD, GKD (on-policy distillation), MiniLLM, Qwen3 strong-to-weak distillation. Lesson [17.4](lessons/module-17/lesson-04.md) depends on 14.2, 15.2, 16.1 and 17.3; code `reasoning/distill.py`.
 - After **18–19 (tools/agents)**: Toolformer, Gorilla, ReAct, SWE-agent.
 

@@ -149,6 +149,6 @@ It replaces large volumes of human harm labels with a written list of principles
 
 ## Next
 
-You can now pick and run a post-training method. Module 16 takes RL in a new direction: instead of a learned reward model of human preference, it uses **verifiable rewards** (does the math answer check out? does the code pass tests?) and the **GRPO** algorithm that grew out of PPO — the machinery behind modern reasoning models.
+You can now pick and run a post-training method. Every one of them depends on preference data that this module took as given. Next: where that data comes from, how to build pairs from ratings, and how to catch the biases that ruin it before you train.
 
-Continue to [16.1 · From PPO to GRPO](lessons/module-16/lesson-01.md).
+Continue to [15.5 · Where preference data comes from, and how to build it](lessons/module-15/lesson-05.md).

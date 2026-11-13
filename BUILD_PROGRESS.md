@@ -47,3 +47,17 @@ Validation: all nine JSONL records parse, the train/validation prompts are disjo
 Context clarification: defined prompt groups with a three-comparison example and distinguished data splitting from batching. Replaced ambiguous "one response per side" wording with one shared prompt and two alternative responses, scored independently. Added a full shared-prefix example showing the system instruction, earlier user/assistant turns, and current user question. Explicitly documented that multi-turn support requires extending the baseline schema, formatter, and grouping key; the existing single-turn trainer is unchanged.
 
 Final cleanup: after approving the revised lesson, the user requested deletion of the original backup. Removed the backup file and its comparison link from the lesson.
+
+## Post-training data lessons (2026-11-13)
+
+Goal: add lessons on where SFT, preference and RL-prompt data come from and how to build them, at the end of Modules 14, 15 and 16.
+
+- [x] Research current sources (two read-only research agents; cards saved in the session scratchpad).
+- [x] Code + tests: `sft/data.py`, `preference/data.py`, `rl/data.py`, `tests/test_posttrain_data.py`.
+- [x] 14.4 lesson + quiz + lab run on real data.
+- [x] 15.5 lesson + quiz + lab run on real data.
+- [x] 16.5 lesson + quiz + lab run on real data.
+- [x] Sidebar, outline, Next links, changelog.
+- [x] Full test suite, link check.
+
+Decisions: follow the course's existing docsify lesson style (as earlier revisions did) and add the Academy-format `.quiz.yaml` per lesson; lessons appended, never renumbered.

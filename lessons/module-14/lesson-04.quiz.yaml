@@ -1,0 +1,70 @@
+- id: q1
+  question: >-
+    You stream the first 3,000 rows of a large public SFT mixture to test your cleaning
+    pipeline, and every row has the same `source` value. What is the most likely reason?
+  options:
+    - The mixture is stored grouped by source, so the first rows all come from one subset.
+    - The dataset viewer collapses sources when you stream instead of downloading.
+    - The other sources are gated and are skipped silently when streaming.
+    - Streaming applies a default filter that keeps only the largest source.
+  correct: 0
+  explanation: >-
+    Mixtures are usually written source by source, so the head of the stream is one subset
+    (the Tulu 3 mixture starts with 3,000+ OASST rows). Shuffle the stream with a buffer, or
+    sample per source.
+- id: q2
+  question: >-
+    After adding a filter for refusal phrases, your SFT data card shows 225 of 3,000 rows
+    dropped, mostly from WildGuardMix and WildJailbreak. What should you do?
+  options:
+    - Keep the filter, since refusals in SFT data always cause over-refusal.
+    - Lower the filter's threshold so it drops fewer rows in every source.
+    - Turn the refusal check off for the safety sources and keep it for general ones.
+    - Remove the safety sources, because they conflict with the helpfulness data.
+  correct: 2
+  explanation: >-
+    Safety subsets exist to demonstrate refusing harmful requests. Filters must be configured
+    per source; a refusal filter belongs on general-purpose data where boilerplate refusals
+    of harmless requests teach over-refusal.
+- id: q3
+  question: >-
+    With 8-gram decontamination and a threshold of 0.5, a 30-word training prompt shares 12
+    of its 8-grams with the benchmark index. What happens to it?
+  options:
+    - It stays, because 12 shared 8-grams is below half of its 30 words.
+    - It stays, because only prompts that match a whole benchmark item are removed.
+    - It is removed only if its answer also matches the benchmark answer.
+    - It is removed, because 12 of its 23 8-grams is about 0.52, above the threshold.
+  correct: 3
+  explanation: >-
+    A 30-word prompt has 30 - 8 + 1 = 23 8-grams, so the score is 12/23, about 0.52. The
+    score is a fraction of the prompt's n-grams, not of its words.
+- id: q4
+  question: >-
+    You want 70% of a 600k-token SFT mixture from source A and 30% from source B. Source B
+    only has 100k tokens of clean data. What does a budget sampler that never silently
+    upsamples give you?
+  options:
+    - 420k tokens from A and 180k from B, with B's chats repeated to fill its share.
+    - 420k tokens from A and all 100k from B, with the shortfall recorded.
+    - 500k tokens from A and 100k from B, with A topped up automatically.
+    - An error, because the weights cannot be met exactly.
+  correct: 1
+  explanation: >-
+    Each source gets at most its share; a source that runs out contributes all it has.
+    Repeating B (more epochs) can be a good idea, but it should be a recorded decision,
+    not a side effect of the sampler.
+- id: q5
+  question: >-
+    Your truncation filter drops 5% of a human-written dataset. You read 30 of the dropped
+    rows and 26 are complete answers whose writers skipped the final period. What is the
+    right conclusion?
+  options:
+    - The filter's precision on this source is low, so turn it off or tighten it here.
+    - The dataset is low quality, so drop the whole source from the mixture.
+    - The filter is working, since 4 real truncations justify removing all 5%.
+    - Add a period to every response so the filter passes them.
+  correct: 0
+  explanation: >-
+    Reading a sample of dropped rows measures the filter's precision. At about 13% precision
+    it removes mostly good data, so it should be disabled or made stricter for this source.

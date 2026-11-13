@@ -68,3 +68,11 @@ GitHub → repo Settings → Pages → Source: "Deploy from a branch", branch `m
 
 ## Question bank (2026-10-18)
 - `quiz/questions.json`: 4,585 MCQs, one per substantive lesson line, 4 options + explanation each. Distractors were rewritten to remove the "longest answer is correct" giveaway; 35 answer indices were re-pointed after that pass and spot-checked. Questions were not individually human-reviewed.
+
+## Post-training data lessons (added 2026-11-13)
+- Added 14.4 (SFT data), 15.5 (preference data) and 16.5 (RL prompt data) at the end of their modules; no lesson renumbered, only the "Next" links of 14.3, 15.4 and 16.4 changed.
+- Code: `llmre/sft/data.py`, `llmre/preference/data.py`, `llmre/rl/data.py`, `tests/test_posttrain_data.py`; labs `code/scripts/lab_sft_data.py`, `lab_preference_data.py`, `lab_rl_data.py` (need `datasets==5.2.0`, `math-verify==0.9.0`; part 4 of the RL lab needs `transformers`).
+- All three labs were run on real Hugging Face data on 2026-11-13; the numbers in the lessons are from those runs. Dataset facts (rows, licenses, gating) were read from cards and the HF API the same day.
+- Each new lesson has a `lesson-NN.quiz.yaml` (5 MCQs) per the Academy guidelines. The rest of the course still has no YAML quizzes, no front-matter and no module quizzes, so the Academy importer will still report the legacy-format problems.
+- Not run: the TRL `GRPOTrainer` example in 16.5 (needs a GPU); its API was checked against trl 1.17.1 (defaults and `accuracy_reward` signature).
+- Not reviewed by a human: the license notes are pointers to each card, not legal advice.

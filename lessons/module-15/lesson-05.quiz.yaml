@@ -1,0 +1,66 @@
+- id: q1
+  question: >-
+    You binarize 3,570 UltraFeedback prompts and find the chosen response is longer in 70% of
+    pairs. What is the main risk if you train a reward model on these pairs as they are?
+  options:
+    - The reward model will overfit to the prompts, because longer pairs repeat them.
+    - The reward model can score well by measuring length, and RL will then lengthen answers.
+    - DPO will diverge, because long responses produce larger log-probability gradients.
+    - Nothing, since judges prefer longer answers because they are better.
+  correct: 1
+  explanation: >-
+    When length predicts the label, length is the cheapest feature to learn. Measure the
+    fraction of chosen-longer pairs and rebalance or use a length-normalized objective.
+- id: q2
+  question: >-
+    Two annotators agree on 90% of 200 pairs, and each picked "A" for 95% of the pairs. What
+    does Cohen's kappa tell you?
+  options:
+    - Agreement is strong, since 90% is well above the usual 73% for preference data.
+    - Agreement is moderate, since kappa corrects 90% down to about 0.5.
+    - Agreement is perfect, since both annotators have the same label frequencies.
+    - Agreement is at chance level, since chance alone gives about 90.5% here.
+  correct: 3
+  explanation: >-
+    Expected chance agreement is 0.95^2 + 0.05^2 = 0.905, so kappa = (0.90 - 0.905)/(1 - 0.905),
+    about -0.05. A label chosen 95% of the time also suggests position bias.
+- id: q3
+  question: >-
+    An LLM judge prefers response x when x is shown first, and response y when y is shown
+    first. How should this pair be handled?
+  options:
+    - Treat it as a tie and drop it, because the verdict depends on position, not content.
+    - Keep the first verdict, because the first call is the unbiased one.
+    - Keep both verdicts as two pairs with opposite labels.
+    - Ask a third time and take the majority verdict.
+  correct: 0
+  explanation: >-
+    A verdict that flips with the order carries no information about quality. Asking in both
+    orders and keeping only consistent verdicts is the standard fix for position bias.
+- id: q4
+  question: >-
+    You have four rated responses per prompt. Why might "best vs random lower" give a better
+    DPO set than "best vs worst"?
+  options:
+    - It keeps more pairs, because best vs worst drops all prompts with ties.
+    - It makes the chosen responses better, because the best response changes each time.
+    - Its rejected answers are more often plausible but worse, which is harder and more useful.
+    - It removes length bias, because random rejected answers have average length.
+  correct: 2
+  explanation: >-
+    The worst response is often obviously bad, so the model already ranks it last. A random
+    lower response is more often a near miss, which is the distinction worth learning.
+- id: q5
+  question: >-
+    HelpSteer3's first two annotators agree on 98.6% of rows; InstructGPT reported 72.6% for
+    its labelers. What is the best explanation?
+  options:
+    - HelpSteer3's prompts are much easier, so its preferences are clearer to everyone.
+    - HelpSteer3 released only its most-agreeing annotations, after heavy filtering.
+    - HelpSteer3 uses a 7-point strength scale, which always raises measured agreement.
+    - InstructGPT's labelers were untrained, while HelpSteer3's annotators were experts.
+  correct: 1
+  explanation: >-
+    The HelpSteer3 card says only the three most-agreeing of three to five annotations are
+    released and much data was filtered away. Compare agreement figures only when they are
+    measured the same way.

@@ -77,16 +77,19 @@
   - [14.1 · Instruction data & chat templates](lessons/module-14/lesson-01.md)
   - [14.2 · Loss masking & packing](lessons/module-14/lesson-02.md)
   - [14.3 · LoRA & QLoRA from scratch](lessons/module-14/lesson-03.md)
+  - [14.4 · Where SFT data comes from, and how to build a clean set](lessons/module-14/lesson-04.md)
 - **15 · Preference learning / RLHF / DPO**
   - [15.1 · Bradley-Terry & the reward model](lessons/module-15/lesson-01.md)
   - [15.2 · Policy gradient, advantage, PPO](lessons/module-15/lesson-02.md)
   - [15.3 · DPO: derivation & implementation](lessons/module-15/lesson-03.md)
   - [15.4 · SFT vs RM+PPO vs DPO](lessons/module-15/lesson-04.md)
+  - [15.5 · Where preference data comes from, and how to build it](lessons/module-15/lesson-05.md)
 - **16 · RL for reasoning**
   - [16.1 · From PPO to GRPO](lessons/module-16/lesson-01.md)
   - [16.2 · RLVR & verifiable rewards](lessons/module-16/lesson-02.md)
   - [16.3 · Rejection sampling & verifiers](lessons/module-16/lesson-03.md)
   - [16.4 · Training–inference mismatch](lessons/module-16/lesson-04.md)
+  - [16.5 · Where RL prompts come from, and how to build a verifiable set](lessons/module-16/lesson-05.md)
 - **17 · Modern reasoning models**
   - [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md)
   - [17.2 · Process reward & DeepSeekMath](lessons/module-17/lesson-02.md)

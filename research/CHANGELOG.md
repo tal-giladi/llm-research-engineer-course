@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W46 (2026-11-13, requested by Tal outside the weekly cycle)
+
+- Added **post-training data lessons at the end of Modules 14-16**: [14.4 · Where SFT data comes from, and how to build a clean set](lessons/module-14/lesson-04.md), [15.5 · Where preference data comes from, and how to build it](lessons/module-15/lesson-05.md) and [16.5 · Where RL prompts come from, and how to build a verifiable set](lessons/module-16/lesson-05.md). Each lists the current public datasets with licenses (checked 2026-11-13), builds the data from scratch, and runs a lab on real Hugging Face data whose measured results are in the lesson. With `llmre/sft/data.py`, `llmre/preference/data.py`, `llmre/rl/data.py`, `tests/test_posttrain_data.py` and `scripts/lab_{sft,preference,rl}_data.py`. Existing lessons are unchanged except their "Next" links; no lesson was renumbered.
+
 ## 2026-W46 (2026-11-09, requested by Tal outside the weekly cycle)
 
 - Added **an advanced extension on score centering to [16.4](lessons/module-16/lesson-04.md)**: the drift/signal split of the off-policy policy gradient, why group centering leaves drift at each prefix, top-k tail reconstruction, composition with importance weights, and when each correction fits. With `llmre/rl/score_centering.py`, `tests/test_rl_score_centering.py` and `experiments/rl_score_centering.py`. `mismatch.py` and the existing lesson text are unchanged. [Topic](research/accepted/rl-score-centering.md).

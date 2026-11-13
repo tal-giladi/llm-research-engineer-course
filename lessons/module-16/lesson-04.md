@@ -679,6 +679,6 @@ More of $\bar s$ now depends on the assumption that the sampler's tail has the t
 
 ## Next
 
-Module 16 now ends with the systems fact that every RL algorithm in it relies on: the numbers you train on must describe the distribution you sampled from. Module 17 builds modern reasoning models on top of this RL machinery.
+You now have the systems fact that every RL algorithm in this module relies on: the numbers you train on must describe the distribution you sampled from. The last piece is the prompts themselves: where verifiable RL prompts come from and how to filter them so every group carries signal.
 
-Continue to [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md).
+Continue to [16.5 · Where RL prompts come from, and how to build a verifiable set](lessons/module-16/lesson-05.md).

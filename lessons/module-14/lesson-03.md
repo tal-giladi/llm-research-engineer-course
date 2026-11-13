@@ -239,6 +239,6 @@ Store the *frozen* base weights in 4-bit precision (NF4), dequantizing on the fl
 
 ## Next
 
-You can now fine-tune a pretrained model to follow instructions — format the data (14.1), mask the loss to the response (14.2), and train cheaply with LoRA (14.3). But SFT only imitates demonstrations; it cannot learn from *preferences* ("response A is better than B"). Module 15 adds that: reward modeling, RLHF/PPO, and DPO.
+You can now fine-tune a pretrained model to follow instructions — format the data (14.1), mask the loss to the response (14.2), and train cheaply with LoRA (14.3). The one thing still assumed is the data itself: a clean list of chats. Next you build that list from real public datasets.
 
-Continue to [15.1 · Bradley-Terry & the reward model](lessons/module-15/lesson-01.md).
+Continue to [14.4 · Where SFT data comes from, and how to build a clean set](lessons/module-14/lesson-04.md).
