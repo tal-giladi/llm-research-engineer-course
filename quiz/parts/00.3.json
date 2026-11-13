@@ -25,7 +25,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-03.md",
     "section": "Prerequisites / why this matters",
-    "question": "Which three steps does every training loop in the course rest on?",
+    "question": "Which three steps does every gradient-based PyTorch training loop, from linear regression up to GPT-2, rest on?",
     "options": [
       "model.eval(), model.save(), then model.load() at the start of each step",
       "loss.backward(), read .grad, then step and zero the gradients",

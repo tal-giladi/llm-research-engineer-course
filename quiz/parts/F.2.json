@@ -25,7 +25,7 @@
     "module_name": "Frontier updates (bonus)",
     "source": "lessons/frontier/update-02.md",
     "section": "Prerequisites / why this matters",
-    "question": "Which earlier ideas do the GRPO fixes (Dr. GRPO, DAPO, GVPO) reuse, combined differently?",
+    "question": "Which existing alignment ideas do the GRPO fixes Dr. GRPO, DAPO and GVPO reuse, combined differently?",
     "options": [
       "Byte-level BPE merges and rotary positional encodings",
       "LoRA adapters and input-output embedding weight tying",

@@ -457,7 +457,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
-  "question": "How does a real math verifier differ from the toy `arithmetic_verifier`?",
+  "question": "How does a real math-answer verifier for RLVR differ from a toy arithmetic verifier that compares a parsed number with str(int) gold?",
   "options": [
    "It returns a continuous similarity score between 0 and 1 instead of a hard 0/1 correctness label",
    "It is a learned neural network fine-tuned on graded solutions rather than a plain function",
@@ -511,7 +511,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.1 A toy policy so the algorithm is unobscured",
-  "question": "What are the shape, dtype, and device of the toy RLVR policy's logits?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what are the shape, dtype, and device of the policy's logits?",
   "options": [
    "(num_answers,), int64, CPU",
    "(num_prompts, group_size), float16, GPU",
@@ -529,7 +529,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.1 A toy policy so the algorithm is unobscured",
-  "question": "Why does the toy RLVR policy start at chance accuracy?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the policy start at chance accuracy?",
   "options": [
    "Its logits start at zero, so softmax is uniform over the answers",
    "Its logits start random, so it guesses an arbitrary answer per prompt",
@@ -547,7 +547,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.1 A toy policy so the algorithm is unobscured",
-  "question": "If the toy categorical policy is swapped for a GPT that emits answer tokens, what changes in the RLVR loop?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what changes in the RLVR loop if the logits-table policy is swapped for a GPT that emits answer tokens?",
   "options": [
    "The whole loop must be redesigned around a learned critic that values each token",
    "The verifier must become a learned model, since a GPT's outputs are free-form text",
@@ -565,7 +565,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "How does the toy RLVR loop sample a group of answers for one prompt?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, how does the loop sample a group of G answers for one prompt?",
   "options": [
    "It takes the top-G answers by logit value, so the group always holds the most likely ones",
    "It softmaxes that prompt's logits and draws G answers with torch.multinomial, with replacement",
@@ -583,7 +583,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "In the toy RLVR loop, what is the dtype and meaning of the `sampled` tensor?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what is the dtype and meaning of the `sampled` tensor that holds each prompt's group of sampled answers?",
   "options": [
    "float log-probabilities of every answer, shape (num_prompts, num_answers)",
    "long indices into the answer space, shape (num_prompts, group_size)",
@@ -601,7 +601,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "In the toy RLVR loop, what is the verifier called on for each sampled entry?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what is the verifier called on for each sampled entry?",
   "options": [
    "The problem and the sampled index idx, which it treats as the answer",
    "The full logits row for that prompt, so it can grade the distribution",
@@ -619,7 +619,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "What does the toy RLVR loop log to `history` at each step?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what does the loop log to `history` at each step?",
   "options": [
    "The mean of the rewards tensor, i.e. the fraction correct this step",
    "The scalar loss value, i.e. the negated GRPO objective for the step",
@@ -637,7 +637,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "In the toy RLVR loop's update, why is `torch.gather(logp_all, 1, sampled)` used?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the update use `torch.gather(logp_all, 1, sampled)`, where logp_all is the log-softmax of the logits table?",
   "options": [
    "To select the log-prob of the correct answer for each prompt, which the loss then pushes up",
    "To sum the log-probs over every answer in the space, giving one total per prompt for the loss",
@@ -655,7 +655,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "What is the large-LLM analogue of `torch.gather(logp_all, 1, sampled)` in the toy RLVR loop?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, the update uses `torch.gather(logp_all, 1, sampled)` to read log-probs. What is the analogue of this in RLVR on a full LLM?",
   "options": [
    "Computing the attention scores between the prompt tokens and the generated answer tokens",
    "Applying the KL penalty against the frozen reference model's token distribution",
@@ -673,7 +673,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "Why does the toy RLVR loop pass `logp.detach()` as old_logprobs to `grpo_objective`?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the loop pass `logp.detach()` as old_logprobs to `grpo_objective`?",
   "options": [
    "It makes the ratio exactly 1 (on-policy), so the step is the plain group-baselined gradient",
    "It stops the verifier's reward from receiving any gradients through the clipped objective",
@@ -691,7 +691,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.2 The four steps, each mapped to 16.1",
-  "question": "In the toy RLVR loop, what optimizer and loss sign are used?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what optimizer and loss sign are used?",
   "options": [
    "SGD on the verifier's parameters, with loss = obj",
    "Adam on the logits, with loss = obj so it goes down",
@@ -745,7 +745,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.3 Watch the correct-rate climb",
-  "question": "How does the toy RLVR policy learn which answer is right?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, how does the policy learn which answer is right?",
   "options": [
    "The answer key is fed to the optimizer as supervised cross-entropy targets each step",
    "The verifier's gradient flows back into the logits, pointing toward the right answer",
@@ -781,7 +781,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.3 Watch the correct-rate climb",
-  "question": "What are the hardware requirements of the toy RLVR run?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what are the hardware requirements of a full training run?",
   "options": [
    "A single GPU with 24 GB of memory, about an hour",
    "A multi-GPU cluster running for several days",
@@ -799,7 +799,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "3.3 Watch the correct-rate climb",
-  "question": "Why does real reasoning RLVR need many GPUs even though the algorithm matches the toy?",
+  "question": "A toy RLVR setup with a logits-table policy and GRPO runs on CPU in under a second. Why does real reasoning RLVR on an LLM need many GPUs even though the algorithm is the same?",
   "options": [
    "It must also train a critic as large as the policy, doubling the memory and the backward passes",
    "Its verifier is a large neural network that must run on its own GPUs next to the policy",
@@ -907,7 +907,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-02.md",
   "section": "Exercise",
-  "question": "If the toy RLVR loop is given problems like \"12 + 7\" and \"34 + 5\" with answer space range(10), what happens to the correct-rate?",
+  "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, with candidate answers range(10), what happens to the correct-rate if the problems are \"12 + 7\" and \"34 + 5\"?",
   "options": [
    "It stays at 0.0, because the correct answers are outside the answer space",
    "It climbs to 1.0, only more slowly than it does on single-digit problems",

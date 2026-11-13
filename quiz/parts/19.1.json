@@ -871,7 +871,7 @@
     "module_name": "Agents & research engineering",
     "source": "lessons/module-19/lesson-01.md",
     "section": "Next",
-    "question": "After building agents, what does the course name as the final piece of the research-engineer toolkit?",
+    "question": "Beyond building models and agents, what is the final, non-code piece of a research engineer's toolkit?",
     "options": [
       "Designing experiments, measuring honestly across seeds, and writing up findings reproducibly",
       "Writing custom CUDA and Triton kernels for every agent tool so that policy calls run faster",

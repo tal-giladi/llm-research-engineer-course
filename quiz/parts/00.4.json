@@ -43,7 +43,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-04.md",
     "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
-    "question": "What is the correct order of the five steps in the canonical training loop?",
+    "question": "A PyTorch training step has five operations: predict (forward), loss, zero_grad, backward, step. In what order must they run?",
     "options": [
       "zero_grad, step, predict, backward, loss",
       "predict, backward, loss, step, zero_grad",
@@ -61,7 +61,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-04.md",
     "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
-    "question": "Why is zero_grad one of the five steps in every training iteration?",
+    "question": "Why must optimizer.zero_grad() be called in every iteration of a PyTorch training loop?",
     "options": [
       "Because it moves the parameters one step downhill",
       "Because gradients accumulate across backward calls",
@@ -457,7 +457,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-04.md",
     "section": "Reading the five lines",
-    "question": "Training GPT-2 later uses the same five-line loop. What changes?",
+    "question": "Consider the PyTorch training step pred = model(x); loss = loss_fn(pred, y); optimizer.zero_grad(); loss.backward(); optimizer.step(), used to fit a small regression model. When the same five lines are used to train GPT-2, what changes?",
     "options": [
       "The order of zero_grad and backward is reversed so gradients can accumulate across steps",
       "backward is replaced by a manual gradient computation written specifically for attention",
@@ -511,7 +511,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-04.md",
     "section": "5. Under the hood — what each step costs and does",
-    "question": "What happens if the five training-loop steps are put in the wrong order?",
+    "question": "What happens if the five operations of a PyTorch training step (forward, loss, zero_grad, backward, step) are put in the wrong order?",
     "options": [
       "PyTorch raises an ordering error on the very first misplaced call",
       "The optimizer detects the problem and reorders the calls automatically",
@@ -655,7 +655,7 @@
     "module_name": "ML / PyTorch foundations",
     "source": "lessons/module-00/lesson-04.md",
     "section": "Exercise",
-    "question": "What tools does later material introduce specifically to keep large models from diverging early in training?",
+    "question": "Which tools are used specifically to keep large models from diverging early in training?",
     "options": [
       "Larger learning rates combined with fewer total training steps",
       "Removing the bias term from every layer to reduce the parameter count",

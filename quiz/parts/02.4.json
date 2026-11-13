@@ -835,7 +835,7 @@
     "module_name": "Gradients & backpropagation",
     "source": "lessons/module-02/lesson-04.md",
     "section": "8. Under the hood: how PyTorch differs from our toy",
-    "question": "How does PyTorch manage autograd memory compared with the toy Value engine?",
+    "question": "How does PyTorch manage autograd memory compared with a minimal micrograd-style scalar Value engine written in pure Python?",
     "options": [
       "It frees the graph and saved tensors after the sweep unless retained, and offers checkpointing",
       "It frees only the leaf tensors after each backward call, keeping every intermediate alive",

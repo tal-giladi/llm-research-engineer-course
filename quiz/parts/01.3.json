@@ -313,7 +313,7 @@
     "module_name": "Probability & language modeling",
     "source": "lessons/module-01/lesson-03.md",
     "section": "2. Entropy: the average surprisal of a distribution",
-    "question": "The fact that the maximum entropy over $K$ outcomes is $\\log K$ underlies which later quantity?",
+    "question": "The fact that the maximum entropy over $K$ outcomes is $\\log K$ underlies which language-model evaluation quantity?",
     "options": [
       "The number of attention heads, which scales with $\\log K$ of the vocabulary",
       "Perplexity, whose worst (uniform) value equals the vocabulary size",
@@ -835,7 +835,7 @@
     "module_name": "Probability & language modeling",
     "source": "lessons/module-01/lesson-03.md",
     "section": "Common mistakes",
-    "question": "Why does the asymmetry of KL divergence matter later in a language-model curriculum?",
+    "question": "Why does the asymmetry of KL divergence matter when training language models?",
     "options": [
       "It forces the learning rate to be decreased over the course of training",
       "It determines the vocabulary size the tokenizer is allowed to use",

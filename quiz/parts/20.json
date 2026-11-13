@@ -1681,7 +1681,7 @@
     "module_name": "Capstone",
     "source": "lessons/module-20/lesson-01.md",
     "section": "4. Scaling each stage up",
-    "question": "How should the tokenizer's vocabulary size be scaled up from the toy capstone driver?",
+    "question": "A small end-to-end LLM pipeline (tokenizer → pretraining → SFT) smoke-tests with a BPE vocabulary of about 373 tokens. When scaling it toward a GPT-2-class model, what vocabulary size should be targeted?",
     "options": [
       "Toward 32k-50k tokens",
       "Toward 256 tokens, the byte count",
@@ -1699,7 +1699,7 @@
     "module_name": "Capstone",
     "source": "lessons/module-20/lesson-01.md",
     "section": "4. Scaling each stage up",
-    "question": "Which of these is part of scaling up the capstone pipeline from the toy driver?",
+    "question": "A small end-to-end LLM pipeline smoke-tests on a toy corpus on CPU. Which of these is part of scaling it up toward a GPT-2-class model?",
     "options": [
       "Disable gradient clipping so that larger models are not slowed down by small updates",
       "Replace the BPE tokenizer with a character-level one so that the vocabulary stays small",
@@ -1735,7 +1735,7 @@
     "module_name": "Capstone",
     "source": "lessons/module-20/lesson-01.md",
     "section": "5. Where you are now",
-    "question": "According to the course's readiness matrix, when is a skill rated 'Advanced'?",
+    "question": "In a skills readiness matrix for an ML research engineer, when is a skill rated 'Advanced'?",
     "options": [
       "When you have read the relevant paper once and can summarize its main contribution",
       "When you have used it in a production framework such as HF, TRL or DeepSpeed at work",

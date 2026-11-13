@@ -223,7 +223,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-03.md",
   "section": "1.2 A tiny illustration with the tools you have",
-  "question": "How does the toy 'keep the verified answers' demo scale up to real rejection-sampling fine-tuning?",
+  "question": "A toy demo samples single-number answers to an arithmetic problem, keeps only those a rule verifier accepts, and fine-tunes on them. How does this scale up to real rejection-sampling fine-tuning?",
   "options": [
    "Replace the single-number answer with a full chain of thought and SFT on accepted chains",
    "Replace the rule verifier with a learned reward model that can grade free-form chains",
@@ -241,7 +241,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-03.md",
   "section": "1.2 A tiny illustration with the tools you have",
-  "question": "In the toy rejection-sampling demo, how are the n = 12 candidates drawn?",
+  "question": "A toy rejection-sampling demo draws n = 12 candidate answers from a policy given as a logits vector over possible answers. How should the candidates be drawn?",
   "options": [
    "torch.topk on the logits, taking the 12 highest",
    "torch.argmax on the probabilities, repeated 12 times",
@@ -817,7 +817,7 @@
   "module_name": "RL for reasoning",
   "source": "lessons/module-16/lesson-03.md",
   "section": "Exercise",
-  "question": "Why do float() quirks like \"1e2\" or \"1_000\" not break the toy arithmetic RLVR loop?",
+  "question": "A toy arithmetic RLVR loop checks answers with an exact_match helper that uses float() parsing. Why do float() quirks like \"1e2\" or \"1_000\" not break it?",
   "options": [
    "The toy policy can only output the integers 0 to 9 as answers",
    "exact_match is not called anywhere by the toy RLVR loop",

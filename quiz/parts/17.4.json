@@ -61,7 +61,7 @@
     "module_name": "Modern reasoning models",
     "source": "lessons/module-17/lesson-04.md",
     "section": "Hardware track",
-    "question": "What hardware do the toy logit-distillation experiments need, and what would real distillation of a 0.5B student from a 1.5B teacher need?",
+    "question": "What hardware do exact logit-distillation toy experiments (a 20-bin and an 8-token distribution) need, and what would real distillation of a 0.5B student from a 1.5B teacher need?",
     "options": [
       "Toys: CPU-only, about a second, a few MB; real: one GPU with 24 GB or more for both models plus generation",
       "Toys: one 24 GB GPU for a few minutes; real: a multi-node cluster of 80 GB GPUs for both models plus generation",

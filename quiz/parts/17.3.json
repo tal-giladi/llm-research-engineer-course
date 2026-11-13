@@ -853,7 +853,7 @@
     "module_name": "Modern reasoning models",
     "source": "lessons/module-17/lesson-03.md",
     "section": "Exercise",
-    "question": "With n_demos=0 in mini_r1, should the RL stage still raise accuracy, and why does the toy not show a difference from R1-style training?",
+    "question": "A toy R1-style pipeline (cold-start SFT on n_demos worked examples, then GRPO with a rule verifier) is run with n_demos=0. Should the RL stage still raise accuracy, and why does the toy show no difference from the version with demos?",
     "options": [
       "No: without SFT demos every group is all-wrong, so the verifier gives zero reward and RL never gets a learning signal",
       "No: the group advantage is always exactly zero without SFT, because the uniform policy samples every answer equally often",
@@ -925,7 +925,7 @@
     "module_name": "Modern reasoning models",
     "source": "lessons/module-17/lesson-03.md",
     "section": "Next",
-    "question": "After the reasoning track (Modules 16-17), what does the course turn to?",
+    "question": "Once a model can reason (CoT, verifiable-reward RL, GRPO), what is the natural next capability to build in an LLM curriculum?",
     "options": [
       "Pretraining data curation and deduplication at scale",
       "Quantisation and serving reasoning models cheaply",

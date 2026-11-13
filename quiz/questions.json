@@ -2098,7 +2098,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-03.md",
       "section": "Prerequisites / why this matters",
-      "question": "Which three steps does every training loop in the course rest on?",
+      "question": "Which three steps does every gradient-based PyTorch training loop, from linear regression up to GPT-2, rest on?",
       "options": [
         "model.eval(), model.save(), then model.load() at the start of each step",
         "loss.backward(), read .grad, then step and zero the gradients",
@@ -2854,7 +2854,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-04.md",
       "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
-      "question": "What is the correct order of the five steps in the canonical training loop?",
+      "question": "A PyTorch training step has five operations: predict (forward), loss, zero_grad, backward, step. In what order must they run?",
       "options": [
         "zero_grad, step, predict, backward, loss",
         "predict, backward, loss, step, zero_grad",
@@ -2872,7 +2872,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-04.md",
       "section": "1. Intuition: bundle the parameters, then repeat a fixed recipe",
-      "question": "Why is zero_grad one of the five steps in every training iteration?",
+      "question": "Why must optimizer.zero_grad() be called in every iteration of a PyTorch training loop?",
       "options": [
         "Because it moves the parameters one step downhill",
         "Because gradients accumulate across backward calls",
@@ -3268,7 +3268,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-04.md",
       "section": "Reading the five lines",
-      "question": "Training GPT-2 later uses the same five-line loop. What changes?",
+      "question": "Consider the PyTorch training step pred = model(x); loss = loss_fn(pred, y); optimizer.zero_grad(); loss.backward(); optimizer.step(), used to fit a small regression model. When the same five lines are used to train GPT-2, what changes?",
       "options": [
         "The order of zero_grad and backward is reversed so gradients can accumulate across steps",
         "backward is replaced by a manual gradient computation written specifically for attention",
@@ -3322,7 +3322,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-04.md",
       "section": "5. Under the hood — what each step costs and does",
-      "question": "What happens if the five training-loop steps are put in the wrong order?",
+      "question": "What happens if the five operations of a PyTorch training step (forward, loss, zero_grad, backward, step) are put in the wrong order?",
       "options": [
         "PyTorch raises an ordering error on the very first misplaced call",
         "The optimizer detects the problem and reorders the calls automatically",
@@ -3466,7 +3466,7 @@
       "module_name": "ML / PyTorch foundations",
       "source": "lessons/module-00/lesson-04.md",
       "section": "Exercise",
-      "question": "What tools does later material introduce specifically to keep large models from diverging early in training?",
+      "question": "Which tools are used specifically to keep large models from diverging early in training?",
       "options": [
         "Larger learning rates combined with fewer total training steps",
         "Removing the bias term from every layer to reduce the parameter count",
@@ -6814,7 +6814,7 @@
       "module_name": "Probability & language modeling",
       "source": "lessons/module-01/lesson-03.md",
       "section": "2. Entropy: the average surprisal of a distribution",
-      "question": "The fact that the maximum entropy over $K$ outcomes is $\\log K$ underlies which later quantity?",
+      "question": "The fact that the maximum entropy over $K$ outcomes is $\\log K$ underlies which language-model evaluation quantity?",
       "options": [
         "The number of attention heads, which scales with $\\log K$ of the vocabulary",
         "Perplexity, whose worst (uniform) value equals the vocabulary size",
@@ -7336,7 +7336,7 @@
       "module_name": "Probability & language modeling",
       "source": "lessons/module-01/lesson-03.md",
       "section": "Common mistakes",
-      "question": "Why does the asymmetry of KL divergence matter later in a language-model curriculum?",
+      "question": "Why does the asymmetry of KL divergence matter when training language models?",
       "options": [
         "It forces the learning rate to be decreased over the course of training",
         "It determines the vocabulary size the tokenizer is allowed to use",
@@ -14158,7 +14158,7 @@
       "module_name": "Gradients & backpropagation",
       "source": "lessons/module-02/lesson-04.md",
       "section": "8. Under the hood: how PyTorch differs from our toy",
-      "question": "How does PyTorch manage autograd memory compared with the toy Value engine?",
+      "question": "How does PyTorch manage autograd memory compared with a minimal micrograd-style scalar Value engine written in pure Python?",
       "options": [
         "It frees the graph and saved tensors after the sweep unless retained, and offers checkpointing",
         "It frees only the leaf tensors after each backward call, keeping every intermediate alive",
@@ -39052,7 +39052,7 @@
       "module_name": "GPU performance & memory",
       "source": "lessons/module-08/lesson-05.md",
       "section": "Prerequisites / why this matters",
-      "question": "Which earlier technique does fused linear cross-entropy reuse to avoid the full logits tensor?",
+      "question": "Which technique from FlashAttention-style kernels does fused linear cross-entropy reuse to avoid materializing the full logits tensor?",
       "options": [
         "Low-rank factorization of the LM-head weight into two thin matrices, so V×C is never formed",
         "Top-k sampling of the vocabulary during training, keeping only the k largest logits per position",
@@ -47062,7 +47062,7 @@
       "module_name": "Scaling laws",
       "source": "lessons/module-10/lesson-02.md",
       "section": "5. Fit a real curve: a tiny GPT sweep",
-      "question": "The toy sweep fits α_N ≈ 0.07, close to Kaplan's 0.076. What should you conclude?",
+      "question": "A toy scaling sweep of six ~100k-parameter models on a small repeated corpus fits α_N ≈ 0.07, close to Kaplan's 0.076. What should you conclude?",
       "options": [
         "That six models are enough for a reliable scaling study on any corpus or architecture",
         "That the toy sweep has accurately measured the true scaling exponent of natural language",
@@ -57196,7 +57196,7 @@
       "module_name": "Modern architectures",
       "source": "lessons/module-12/lesson-05.md",
       "section": "3. Numerical example by hand",
-      "question": "In the same example, how does the delta rule ($\\alpha=\\beta=1$) handle the second write (k=(1,0), v=5) after storing 3?",
+      "question": "With $d_k = 2$, $d_v = 1$, a state first stores $v=3$ under key $k=(1,0)$. How does the delta rule ($\u0007lpha=\beta=1$) handle a second write of $v=5$ under the same key $k=(1,0)$?",
       "options": [
         "It predicts 3, writes only the error 5 - 3 = 2, so the address now returns 5",
         "It adds 5 on top to get 8, then halves the slot so the address returns the average 4",
@@ -68230,7 +68230,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "2.2 arithmetic_verifier — a self-contained verifiable reward",
-      "question": "How does a real math verifier differ from the toy `arithmetic_verifier`?",
+      "question": "How does a real math-answer verifier for RLVR differ from a toy arithmetic verifier that compares a parsed number with str(int) gold?",
       "options": [
         "It returns a continuous similarity score between 0 and 1 instead of a hard 0/1 correctness label",
         "It is a learned neural network fine-tuned on graded solutions rather than a plain function",
@@ -68284,7 +68284,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.1 A toy policy so the algorithm is unobscured",
-      "question": "What are the shape, dtype, and device of the toy RLVR policy's logits?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what are the shape, dtype, and device of the policy's logits?",
       "options": [
         "(num_answers,), int64, CPU",
         "(num_prompts, group_size), float16, GPU",
@@ -68302,7 +68302,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.1 A toy policy so the algorithm is unobscured",
-      "question": "Why does the toy RLVR policy start at chance accuracy?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the policy start at chance accuracy?",
       "options": [
         "Its logits start at zero, so softmax is uniform over the answers",
         "Its logits start random, so it guesses an arbitrary answer per prompt",
@@ -68320,7 +68320,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.1 A toy policy so the algorithm is unobscured",
-      "question": "If the toy categorical policy is swapped for a GPT that emits answer tokens, what changes in the RLVR loop?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what changes in the RLVR loop if the logits-table policy is swapped for a GPT that emits answer tokens?",
       "options": [
         "The whole loop must be redesigned around a learned critic that values each token",
         "The verifier must become a learned model, since a GPT's outputs are free-form text",
@@ -68338,7 +68338,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "How does the toy RLVR loop sample a group of answers for one prompt?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, how does the loop sample a group of G answers for one prompt?",
       "options": [
         "It takes the top-G answers by logit value, so the group always holds the most likely ones",
         "It softmaxes that prompt's logits and draws G answers with torch.multinomial, with replacement",
@@ -68356,7 +68356,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "In the toy RLVR loop, what is the dtype and meaning of the `sampled` tensor?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what is the dtype and meaning of the `sampled` tensor that holds each prompt's group of sampled answers?",
       "options": [
         "float log-probabilities of every answer, shape (num_prompts, num_answers)",
         "long indices into the answer space, shape (num_prompts, group_size)",
@@ -68374,7 +68374,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "In the toy RLVR loop, what is the verifier called on for each sampled entry?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what is the verifier called on for each sampled entry?",
       "options": [
         "The problem and the sampled index idx, which it treats as the answer",
         "The full logits row for that prompt, so it can grade the distribution",
@@ -68392,7 +68392,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "What does the toy RLVR loop log to `history` at each step?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what does the loop log to `history` at each step?",
       "options": [
         "The mean of the rewards tensor, i.e. the fraction correct this step",
         "The scalar loss value, i.e. the negated GRPO objective for the step",
@@ -68410,7 +68410,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "In the toy RLVR loop's update, why is `torch.gather(logp_all, 1, sampled)` used?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the update use `torch.gather(logp_all, 1, sampled)`, where logp_all is the log-softmax of the logits table?",
       "options": [
         "To select the log-prob of the correct answer for each prompt, which the loss then pushes up",
         "To sum the log-probs over every answer in the space, giving one total per prompt for the loss",
@@ -68428,7 +68428,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "What is the large-LLM analogue of `torch.gather(logp_all, 1, sampled)` in the toy RLVR loop?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, the update uses `torch.gather(logp_all, 1, sampled)` to read log-probs. What is the analogue of this in RLVR on a full LLM?",
       "options": [
         "Computing the attention scores between the prompt tokens and the generated answer tokens",
         "Applying the KL penalty against the frozen reference model's token distribution",
@@ -68446,7 +68446,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "Why does the toy RLVR loop pass `logp.detach()` as old_logprobs to `grpo_objective`?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, why does the loop pass `logp.detach()` as old_logprobs to `grpo_objective`?",
       "options": [
         "It makes the ratio exactly 1 (on-policy), so the step is the plain group-baselined gradient",
         "It stops the verifier's reward from receiving any gradients through the clipped objective",
@@ -68464,7 +68464,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.2 The four steps, each mapped to 16.1",
-      "question": "In the toy RLVR loop, what optimizer and loss sign are used?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what optimizer and loss sign are used?",
       "options": [
         "SGD on the verifier's parameters, with loss = obj",
         "Adam on the logits, with loss = obj so it goes down",
@@ -68518,7 +68518,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.3 Watch the correct-rate climb",
-      "question": "How does the toy RLVR policy learn which answer is right?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, how does the policy learn which answer is right?",
       "options": [
         "The answer key is fed to the optimizer as supervised cross-entropy targets each step",
         "The verifier's gradient flows back into the logits, pointing toward the right answer",
@@ -68554,7 +68554,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.3 Watch the correct-rate climb",
-      "question": "What are the hardware requirements of the toy RLVR run?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, what are the hardware requirements of a full training run?",
       "options": [
         "A single GPU with 24 GB of memory, about an hour",
         "A multi-GPU cluster running for several days",
@@ -68572,7 +68572,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "3.3 Watch the correct-rate climb",
-      "question": "Why does real reasoning RLVR need many GPUs even though the algorithm matches the toy?",
+      "question": "A toy RLVR setup with a logits-table policy and GRPO runs on CPU in under a second. Why does real reasoning RLVR on an LLM need many GPUs even though the algorithm is the same?",
       "options": [
         "It must also train a critic as large as the policy, doubling the memory and the backward passes",
         "Its verifier is a large neural network that must run on its own GPUs next to the policy",
@@ -68680,7 +68680,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-02.md",
       "section": "Exercise",
-      "question": "If the toy RLVR loop is given problems like \"12 + 7\" and \"34 + 5\" with answer space range(10), what happens to the correct-rate?",
+      "question": "In a toy RLVR setup whose policy is just a learnable logits table (one row per arithmetic problem, one column per candidate answer) trained with GRPO and a rule-based arithmetic verifier, with candidate answers range(10), what happens to the correct-rate if the problems are \"12 + 7\" and \"34 + 5\"?",
       "options": [
         "It stays at 0.0, because the correct answers are outside the answer space",
         "It climbs to 1.0, only more slowly than it does on single-digit problems",
@@ -69004,7 +69004,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-03.md",
       "section": "1.2 A tiny illustration with the tools you have",
-      "question": "How does the toy 'keep the verified answers' demo scale up to real rejection-sampling fine-tuning?",
+      "question": "A toy demo samples single-number answers to an arithmetic problem, keeps only those a rule verifier accepts, and fine-tunes on them. How does this scale up to real rejection-sampling fine-tuning?",
       "options": [
         "Replace the single-number answer with a full chain of thought and SFT on accepted chains",
         "Replace the rule verifier with a learned reward model that can grade free-form chains",
@@ -69022,7 +69022,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-03.md",
       "section": "1.2 A tiny illustration with the tools you have",
-      "question": "In the toy rejection-sampling demo, how are the n = 12 candidates drawn?",
+      "question": "A toy rejection-sampling demo draws n = 12 candidate answers from a policy given as a logits vector over possible answers. How should the candidates be drawn?",
       "options": [
         "torch.topk on the logits, taking the 12 highest",
         "torch.argmax on the probabilities, repeated 12 times",
@@ -69598,7 +69598,7 @@
       "module_name": "RL for reasoning",
       "source": "lessons/module-16/lesson-03.md",
       "section": "Exercise",
-      "question": "Why do float() quirks like \"1e2\" or \"1_000\" not break the toy arithmetic RLVR loop?",
+      "question": "A toy arithmetic RLVR loop checks answers with an exact_match helper that uses float() parsing. Why do float() quirks like \"1e2\" or \"1_000\" not break it?",
       "options": [
         "The toy policy can only output the integers 0 to 9 as answers",
         "exact_match is not called anywhere by the toy RLVR loop",
@@ -72352,7 +72352,7 @@
       "module_name": "Modern reasoning models",
       "source": "lessons/module-17/lesson-03.md",
       "section": "Exercise",
-      "question": "With n_demos=0 in mini_r1, should the RL stage still raise accuracy, and why does the toy not show a difference from R1-style training?",
+      "question": "A toy R1-style pipeline (cold-start SFT on n_demos worked examples, then GRPO with a rule verifier) is run with n_demos=0. Should the RL stage still raise accuracy, and why does the toy show no difference from the version with demos?",
       "options": [
         "No: without SFT demos every group is all-wrong, so the verifier gives zero reward and RL never gets a learning signal",
         "No: the group advantage is always exactly zero without SFT, because the uniform policy samples every answer equally often",
@@ -72424,7 +72424,7 @@
       "module_name": "Modern reasoning models",
       "source": "lessons/module-17/lesson-03.md",
       "section": "Next",
-      "question": "After the reasoning track (Modules 16-17), what does the course turn to?",
+      "question": "Once a model can reason (CoT, verifiable-reward RL, GRPO), what is the natural next capability to build in an LLM curriculum?",
       "options": [
         "Pretraining data curation and deduplication at scale",
         "Quantisation and serving reasoning models cheaply",
@@ -72496,7 +72496,7 @@
       "module_name": "Modern reasoning models",
       "source": "lessons/module-17/lesson-04.md",
       "section": "Hardware track",
-      "question": "What hardware do the toy logit-distillation experiments need, and what would real distillation of a 0.5B student from a 1.5B teacher need?",
+      "question": "What hardware do exact logit-distillation toy experiments (a 20-bin and an 8-token distribution) need, and what would real distillation of a 0.5B student from a 1.5B teacher need?",
       "options": [
         "Toys: CPU-only, about a second, a few MB; real: one GPU with 24 GB or more for both models plus generation",
         "Toys: one 24 GB GPU for a few minutes; real: a multi-node cluster of 80 GB GPUs for both models plus generation",
@@ -74188,7 +74188,7 @@
       "module_name": "Tool use",
       "source": "lessons/module-18/lesson-01.md",
       "section": "Prerequisites / You will learn / Why this matters",
-      "question": "Which later topic is function calling described as the foundation for?",
+      "question": "Which capability is LLM function calling the foundation for?",
       "options": [
         "Pretraining tokenizers, which need tools to split text",
         "Scaling laws, which use tools to fit compute curves",
@@ -74998,7 +74998,7 @@
       "module_name": "Tool use",
       "source": "lessons/module-18/lesson-01.md",
       "section": "6.3 A mock search",
-      "question": "Why can the agent loop be developed offline with mock_search and later switched to a real search tool?",
+      "question": "Why can an LLM agent loop be developed offline with a mock search tool and then switched to a real search tool?",
       "options": [
         "Because real search APIs also accept Python dicts as queries, so the call site does not change",
         "Because the model is retrained automatically on the new tool's outputs when the registry changes",
@@ -77392,7 +77392,7 @@
       "module_name": "Agents & research engineering",
       "source": "lessons/module-19/lesson-01.md",
       "section": "Next",
-      "question": "After building agents, what does the course name as the final piece of the research-engineer toolkit?",
+      "question": "Beyond building models and agents, what is the final, non-code piece of a research engineer's toolkit?",
       "options": [
         "Designing experiments, measuring honestly across seeds, and writing up findings reproducibly",
         "Writing custom CUDA and Triton kernels for every agent tool so that policy calls run faster",
@@ -80074,7 +80074,7 @@
       "module_name": "Capstone",
       "source": "lessons/module-20/lesson-01.md",
       "section": "4. Scaling each stage up",
-      "question": "How should the tokenizer's vocabulary size be scaled up from the toy capstone driver?",
+      "question": "A small end-to-end LLM pipeline (tokenizer → pretraining → SFT) smoke-tests with a BPE vocabulary of about 373 tokens. When scaling it toward a GPT-2-class model, what vocabulary size should be targeted?",
       "options": [
         "Toward 32k-50k tokens",
         "Toward 256 tokens, the byte count",
@@ -80092,7 +80092,7 @@
       "module_name": "Capstone",
       "source": "lessons/module-20/lesson-01.md",
       "section": "4. Scaling each stage up",
-      "question": "Which of these is part of scaling up the capstone pipeline from the toy driver?",
+      "question": "A small end-to-end LLM pipeline smoke-tests on a toy corpus on CPU. Which of these is part of scaling it up toward a GPT-2-class model?",
       "options": [
         "Disable gradient clipping so that larger models are not slowed down by small updates",
         "Replace the BPE tokenizer with a character-level one so that the vocabulary stays small",
@@ -80128,7 +80128,7 @@
       "module_name": "Capstone",
       "source": "lessons/module-20/lesson-01.md",
       "section": "5. Where you are now",
-      "question": "According to the course's readiness matrix, when is a skill rated 'Advanced'?",
+      "question": "In a skills readiness matrix for an ML research engineer, when is a skill rated 'Advanced'?",
       "options": [
         "When you have read the relevant paper once and can summarize its main contribution",
         "When you have used it in a production framework such as HF, TRL or DeepSpeed at work",
@@ -81568,7 +81568,7 @@
       "module_name": "Frontier updates (bonus)",
       "source": "lessons/frontier/update-02.md",
       "section": "Prerequisites / why this matters",
-      "question": "Which earlier ideas do the GRPO fixes (Dr. GRPO, DAPO, GVPO) reuse, combined differently?",
+      "question": "Which existing alignment ideas do the GRPO fixes Dr. GRPO, DAPO and GVPO reuse, combined differently?",
       "options": [
         "Byte-level BPE merges and rotary positional encodings",
         "LoRA adapters and input-output embedding weight tying",

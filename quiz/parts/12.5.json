@@ -601,7 +601,7 @@
     "module_name": "Modern architectures",
     "source": "lessons/module-12/lesson-05.md",
     "section": "3. Numerical example by hand",
-    "question": "In the same example, how does the delta rule ($\\alpha=\\beta=1$) handle the second write (k=(1,0), v=5) after storing 3?",
+    "question": "With $d_k = 2$, $d_v = 1$, a state first stores $v=3$ under key $k=(1,0)$. How does the delta rule ($\u0007lpha=\beta=1$) handle a second write of $v=5$ under the same key $k=(1,0)$?",
     "options": [
       "It predicts 3, writes only the error 5 - 3 = 2, so the address now returns 5",
       "It adds 5 on top to get 8, then halves the slot so the address returns the average 4",

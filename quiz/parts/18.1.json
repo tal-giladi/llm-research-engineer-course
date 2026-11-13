@@ -61,7 +61,7 @@
     "module_name": "Tool use",
     "source": "lessons/module-18/lesson-01.md",
     "section": "Prerequisites / You will learn / Why this matters",
-    "question": "Which later topic is function calling described as the foundation for?",
+    "question": "Which capability is LLM function calling the foundation for?",
     "options": [
       "Pretraining tokenizers, which need tools to split text",
       "Scaling laws, which use tools to fit compute curves",
@@ -871,7 +871,7 @@
     "module_name": "Tool use",
     "source": "lessons/module-18/lesson-01.md",
     "section": "6.3 A mock search",
-    "question": "Why can the agent loop be developed offline with mock_search and later switched to a real search tool?",
+    "question": "Why can an LLM agent loop be developed offline with a mock search tool and then switched to a real search tool?",
     "options": [
       "Because real search APIs also accept Python dicts as queries, so the call site does not change",
       "Because the model is retrained automatically on the new tool's outputs when the registry changes",

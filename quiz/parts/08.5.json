@@ -25,7 +25,7 @@
     "module_name": "GPU performance & memory",
     "source": "lessons/module-08/lesson-05.md",
     "section": "Prerequisites / why this matters",
-    "question": "Which earlier technique does fused linear cross-entropy reuse to avoid the full logits tensor?",
+    "question": "Which technique from FlashAttention-style kernels does fused linear cross-entropy reuse to avoid materializing the full logits tensor?",
     "options": [
       "Low-rank factorization of the LM-head weight into two thin matrices, so V×C is never formed",
       "Top-k sampling of the vocabulary during training, keeping only the k largest logits per position",

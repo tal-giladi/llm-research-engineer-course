@@ -1177,7 +1177,7 @@
     "module_name": "Scaling laws",
     "source": "lessons/module-10/lesson-02.md",
     "section": "5. Fit a real curve: a tiny GPT sweep",
-    "question": "The toy sweep fits α_N ≈ 0.07, close to Kaplan's 0.076. What should you conclude?",
+    "question": "A toy scaling sweep of six ~100k-parameter models on a small repeated corpus fits α_N ≈ 0.07, close to Kaplan's 0.076. What should you conclude?",
     "options": [
       "That six models are enough for a reliable scaling study on any corpus or architecture",
       "That the toy sweep has accurately measured the true scaling exponent of natural language",
