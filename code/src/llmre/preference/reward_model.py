@@ -1,10 +1,10 @@
 """Reward modeling from scratch: the Bradley-Terry preference model.
 
-This is Module 15, lesson 15.1. SFT (Module 14) teaches the model to *follow*
-instructions by imitating demonstrations, but imitation cannot tell a **good**
-answer from a mediocre one — every demonstration is treated as equally correct.
-To optimize for human preference we first need a function that *scores* a
-completion: a **reward model**.
+This is Module 15, lesson 15.1. SFT (Module 14) teaches behavior through
+demonstrations. Preference comparisons add an explicit signal about which
+candidate response better serves a particular request, even when both contain
+correct information. A **reward model** learns a scalar score from those
+comparisons for the later policy-optimization stage.
 
 Human preference data does not come as absolute scores; it comes as **pairwise
 comparisons**. A labeler sees a prompt ``x`` and two completions and marks one as

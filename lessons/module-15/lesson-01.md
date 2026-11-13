@@ -2,7 +2,7 @@
 
 <div class="prereq">
 <p><strong>Prerequisites:</strong> supervised fine-tuning from <a href="#/lessons/module-14/lesson-01">14.1 · Instruction data & chat templates</a> and the response-only loss of <a href="#/lessons/module-14/lesson-02">14.2 · Loss masking</a>; the assembled model and its hidden states from <a href="#/lessons/module-06/lesson-01">06.1 · Assembling GPT-2</a>; the log-softmax / cross-entropy machinery from <a href="#/lessons/module-01/lesson-04">01.4</a> and <code>llmre.evaluation.metrics</code>.</p>
-<p><strong>You will learn:</strong> why imitation (SFT) cannot rank answers by quality; what pairwise preference data <code>(x, y_w, y_l)</code> is; the <strong>Bradley-Terry</strong> model that turns a scalar reward into a probability of preference; and how to build and train a <strong>reward model</strong> — a language model with a scalar head — with the loss <code>-log &sigma;(r_w - r_l)</code>.</p>
+<p><strong>You will learn:</strong> how pairwise comparisons add a preference signal beyond SFT demonstrations; what pairwise preference data <code>(x, y_w, y_l)</code> is; the <strong>Bradley-Terry</strong> model that turns a scalar reward into a probability of preference; and how to build and train a <strong>reward model</strong> — a language model with a scalar head — with the loss <code>-log &sigma;(r_w - r_l)</code>.</p>
 <p><strong>Why this matters for ML:</strong> the reward model is the numerical definition of "good" that the whole RLHF pipeline (lesson 15.2) optimizes against. Get it wrong and the policy will faithfully optimize the wrong thing. Even DPO (lesson 15.3), which trains no explicit reward model, is <em>derived from</em> exactly this Bradley-Terry loss — so this lesson is the foundation of the entire module.</p>
 </div>
 
@@ -10,14 +10,14 @@
 
 Module 14 gave us a model that *follows instructions*. SFT works by imitation: we showed the model thousands of `(prompt, ideal response)` pairs and trained it, with next-token cross-entropy, to reproduce the response. That is a real capability jump — the model now answers questions instead of continuing them.
 
-But imitation has a structural blind spot. **Every demonstration is treated as equally correct.** The loss only ever says "make this exact response more likely." It never says "this response is better than that one." So SFT can teach the model *a* way to answer, but it cannot teach it to prefer a *good* answer over a *mediocre* one, because it never sees the two side by side.
+SFT can already teach good behavior when its demonstrations show it. What its ordinary next-token loss does not directly consume is a comparison: "for this prompt, response A is better than response B." Preference data supplies that additional signal. We can show the model two plausible answers and teach it which one better serves the user, even when both are grammatically fluent and contain correct information.
 
-<div class="callout key"><p>SFT (Module 14) makes the model follow instructions, but it cannot tell a <strong>good</strong> answer from a mediocre one — it only imitates. To optimize for human preference we need a signal that <em>ranks</em> answers. That signal is a <strong>reward model</strong>, and this lesson builds it.</p></div>
+> Pretraining teaches broad language patterns and factual knowledge; SFT teaches behavior through demonstrations. Preference training adds explicit comparisons of candidate responses. A reward model learns to predict those comparisons so that a later policy-training loop can use its scores.
 
-Two more concrete reasons imitation is not enough:
+Two reasons to collect comparisons alongside demonstrations:
 
-- **We can judge more easily than we can demonstrate.** Writing the *ideal* answer to "explain quantum tunneling to a 10-year-old" is hard; deciding which of two answers is *better* is easy. Human labelers are far more reliable at comparisons than at authoring gold responses.
-- **The best behavior may be off the SFT distribution.** Imitation can only reach the quality of its demonstrations. Preference optimization can push *past* them, toward whatever humans actually rank highest.
+- **A comparison can be easier to provide than a demonstration.** A reviewer may know which of two explanations better suits a beginner without being able to write the ideal explanation from scratch. A clear labeling rubric still matters.
+- **Generated candidates reveal tradeoffs.** Comparing the model's own responses can expose recurring problems such as unnecessary detail, a mismatched tone, or confident guesses. Those comparisons give a direct target for improving its choices. Neither SFT nor preference optimization guarantees improvement without evaluation.
 
 ## Preference data: pairs, not scores
 
@@ -34,6 +34,34 @@ $$
 A labeler saw both completions for the same prompt and marked $y_w$ as the better one. That is the whole label: a *direction*, not a magnitude. Anthropic's HH-RLHF dataset (helpful/harmless) and OpenAI's InstructGPT data are exactly this shape — thousands of `(prompt, chosen, rejected)` rows.
 
 <div class="callout warn"><p>The two completions share the <strong>same prompt</strong> <span>$x$</span>. A preference is always relative to a context; "this answer is good" only means "good <em>for this question</em>." When we score a completion below, the reward function always takes both: <span>$r(x, y)$</span>, never <span>$r(y)$</span> alone.</p></div>
+
+### What preference adds when the model already knows the facts
+
+Knowing that fire is hot is a poor motivating example for RLHF: a pretrained model may already know that fact. Preference training is also about **which response to choose when several responses are possible**. A response can be factually correct yet too technical for its audience, ignore a requested format, sound accusatory, or offer a confident diagnosis without enough evidence. Factual accuracy remains part of quality; it is not the only dimension.
+
+Here are three illustrative comparisons. Their labels follow the stated user request; they are examples written for this lesson, not rows claimed to come from a human-labeling study.
+
+**Tone and intent.** The user asks: "Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late."
+
+- **Chosen:** "Hi Maya, could you review my PR today when you have a moment? Thanks!"
+- **Rejected:** "Hi Maya, I'm still waiting for your review of my PR; please get it done today so I can move forward."
+- **Reason:** both messages ask for a PR review today, but the rejected version implies an overdue obligation and introduces pressure the user explicitly wanted to avoid. If the request were for a firm follow-up after a missed deadline, the appropriate tone could change.
+
+**Teaching usefulness.** The user asks for gradient accumulation explained to a programmer who can fit only two examples on their GPU, with a concrete batch-size example.
+
+- **Chosen:** "Process two examples at a time. For each microbatch, divide its mean loss by four before calling backward, and keep the accumulated gradients. After four microbatches, take one optimizer step: that gives an effective batch of eight examples. Clear the gradients before the next group."
+- **Rejected:** "Gradient accumulation adds gradients from multiple microbatches before updating the parameters. It reduces the activation memory needed for a larger effective batch."
+- **Reason:** both descriptions are correct. The chosen answer connects the idea to the user's constraints and supplies the requested example. Here the preferred answer is **longer**.
+
+**Brevity and audience.** The user asks for an API defined in one sentence for a nontechnical colleague.
+
+- **Chosen:** "An API is a set of rules that lets one piece of software ask another for information or actions."
+- **Rejected:** "An API, or application programming interface, defines how software components interact. APIs may use approaches such as REST, GraphQL, or RPC, with conventions for authentication, errors, and versioning."
+- **Reason:** the rejected version contains useful technical information, but exceeds the requested length and assumes vocabulary the audience may not know. Here the preferred answer is **shorter**.
+
+The training target is "this response better meets this request," not "longer is better," "shorter is better," or "the other response must be false." Labelers need a rubric and enough context to make that judgment; different legitimate preferences can disagree. [InstructGPT's labeling description and quality criteria](https://arxiv.org/html/2203.02155v1#S3.SS4) include task intent and constraints alongside truthfulness.
+
+SFT could also teach these behaviors through good demonstrations. RLHF is one way to use **comparative feedback** to improve the policy; it is not required to establish a basic fact, and it does not guarantee truthfulness. The pair loss below learns the supplied preferences, so poor or biased labels can teach poor choices.
 
 ## The Bradley-Terry model
 
@@ -115,7 +143,7 @@ Step 2 is the problem. RL training needs millions of judged answers, and every t
 
 So we split the work in two:
 
-- **Humans judge once, offline:** a fixed dataset of ~100k pairs ("Yes is better than No").
+- **Humans provide comparisons offline:** for example, they prefer a tactful PR-review request over an accusatory version, or a concrete beginner explanation over an abstract one. A training round uses a collected set of these judgments.
 - **A model learns to copy the humans' judgment** from that dataset. That model is the **reward model**. After training it can grade any new answer in milliseconds, as many times as needed.
 
 The reward model is a **stand-in for the human labeler**. That is its whole job.
@@ -136,12 +164,12 @@ At stage 5 the reward model is put aside (archived, or thrown away). What users 
 
 During stage 4, each training step does:
 
-1. **Policy generates** an answer to a prompt: "Is fire hot?" → "No".
-2. **Reward model scores** prompt + answer, one forward pass: $r = 1.48$.
-3. Another try: "Yes" → $r = 2.14$.
-4. **The policy is updated** to make the higher-scoring answer more likely (lesson 15.2 shows how).
+1. **Policy generates** a response to "Write a polite PR-review request": an unnecessarily pushy message.
+2. **Reward model scores** the complete prompt + message: an illustrative $r = 1.48$.
+3. Another sampled response is a tactful message that meets the same request; suppose its score is $r = 2.14$.
+4. **The policy is updated** using its sampled responses and reward signals (lesson 15.2 shows how). This sketch compares two possible responses to make the preference concrete; PPO does not require every rollout to contain a chosen/rejected pair.
 
-Yes, that is extra compute: a grading pass for every generated answer. It is the price of not needing a human in the loop, and it is paid **only during training**, like a teacher grading homework during the course. After the course the student answers alone: the policy has learned to say "Yes" by itself, so nobody needs to score it any more.
+Yes, that is extra compute: a grading pass for every generated answer. It is the price of not needing a human in the loop, and it is paid **only during training**, like a teacher grading homework during the course. After training, the policy can favor useful, appropriately phrased responses on its own, so this deployment does not need to score each answer with the reward model.
 
 ### Why a separate model, and not a second head on the same GPT?
 
@@ -164,13 +192,13 @@ Scalar-head reward models are still widely used and publicly documented (Instruc
 
 You already know how to train the SFT model. Keep its tokenizer, chat format, embeddings, transformer blocks, and final LayerNorm in mind. We will reuse that computation. The changes are **what we read from it** and **what loss we attach**.
 
-Take one human-labeled preference record:
+Use the PR-review example above as an illustrative preference record. Its label expresses the requested tone and intent:
 
 ```text
-prompt:    Is fire hot?
-chosen:    Yes
-rejected:  No
-label:     the chosen answer is better for this prompt
+prompt:    Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late.
+chosen:    Hi Maya, could you review my PR today when you have a moment? Thanks!
+rejected:  Hi Maya, I'm still waiting for your review of my PR; please get it done today so I can move forward.
+label:     the chosen answer better follows the requested tone
 ```
 
 Both answers are already in the dataset. During reward-model training we feed them in as input; we do not ask the model to generate them.
@@ -178,16 +206,29 @@ Both answers are already in the dataset. During reward-model training we feed th
 Build **two separate sequences**, each containing the same prompt and one answer:
 
 ```text
-chosen row:    <|user|> Is fire hot ? <|assistant|> Yes <|end|>
-rejected row:  <|user|> Is fire hot ? <|assistant|> No  <|end|>
+chosen row:
+<|user|>
+Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late.
+<|end|>
+<|assistant|>
+Hi Maya, could you review my PR today when you have a moment? Thanks!
+<|end|>
+
+rejected row:
+<|user|>
+Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late.
+<|end|>
+<|assistant|>
+Hi Maya, I'm still waiting for your review of my PR; please get it done today so I can move forward.
+<|end|>
 ```
 
 Now score each row using **the same reward model**, with the same backbone weights and the same scalar-head weights:
 
 ```text
-prompt + Yes --> shared reward model --> r_chosen   --+
-                                                    +--> difference --> one pair loss
-prompt + No  --> shared reward model --> r_rejected --+
+prompt + chosen message   --> shared reward model --> r_chosen   --+
+                                                                  +--> difference --> one pair loss
+prompt + rejected message --> shared reward model --> r_rejected --+
 ```
 
 **Yes, we run the two sequences independently.** You can call `rm(chosen)` and then `rm(rejected)`, or stack them as two batch rows and call `rm(two_rows)` once. Batching evaluates both rows together for efficiency; attention operates within each row, so neither answer can attend to the other. No weights are updated between the two scores.
@@ -230,7 +271,7 @@ remove the size-1 output axis          (B, T)
 select final real score per row       (B,)
 ```
 
-For our two eight-token rows, $B=2$ and $T=8$. With hidden width $C=16$, the backbone returns `(2, 8, 16)`, the head produces `(2, 8, 1)`, and the readout keeps two final real-position rewards `(2,)`. Conceptually, those rewards depend on two final hidden vectors of shape `(2, 16)`. We do **not** select an attention head, an attention matrix, or the last feature of a vector. We select one **position**, keeping all $C$ features there.
+For a shape illustration, suppose a tokenizer produces full-sequence lengths 256 and 320 for a pair; these are assumed sizes, not measured token counts for the Slack messages. After right-padding, $B=2$ and $T=320$. With hidden width $C=16$, the backbone returns `(2, 320, 16)`, the head produces `(2, 320, 1)`, and the readout keeps two final real-position rewards `(2,)`. Conceptually, those rewards depend on two final hidden vectors of shape `(2, 16)`. We do **not** select an attention head, an attention matrix, or the last feature of a vector. We select one **position**, keeping all $C$ features there.
 
 #### We still compute every position; we attach the output at the end
 
@@ -238,8 +279,8 @@ Causal attention gives each position access to its own token and the earlier tok
 
 | Position in the chosen row | Its hidden state can depend on |
 |---|---|
-| `fire` | `<user> Is fire` |
-| `Yes` | The prompt, assistant marker, and `Yes` |
+| `review` inside the user prompt | The user marker and prompt text up to that position; no answer yet |
+| `Thanks` near the end of the chosen message | The full prompt, assistant marker, and answer text up to that position |
 | Final `<end>` | The whole prompt, the answer, and `<end>` |
 
 The role markers are abbreviated in this table. The important fact is the direction: a prompt position cannot read the answer that comes after it. The final position can read all of it.
@@ -249,8 +290,8 @@ That makes the final hidden state a useful place to learn a whole-response score
 Why can two identical `<end>` tokens give different rewards? Their **input token embeddings** are identical, but their **contextual hidden states** need not be:
 
 ```text
-<end> after "Is fire hot? Yes" --> hidden vector influenced by Yes
-<end> after "Is fire hot? No"  --> hidden vector influenced by No
+<end> after the tactful message --> hidden vector influenced by that full message
+<end> after the pushy message   --> hidden vector influenced by that different message
 ```
 
 We read the vector **after the backbone**, not the fixed embedding-table row for `<end>`. The end marker itself is not essential: a model can instead read the last answer token. What matters is a consistent final real position after the complete answer.
@@ -278,7 +319,7 @@ chosen:    h_w = (2, 1)
 rejected:  h_l = (1, 2)
 ```
 
-These are illustrative backbone outputs, not token embeddings and not a claim that "Yes always has vector (2, 1)." We do not need to rederive attention to follow what happens next.
+These are illustrative backbone outputs for the two messages, not token embeddings and not a claim that a particular phrase always has the same hidden vector. We do not need to rederive attention to follow what happens next.
 
 #### Score each answer with the same head
 
@@ -355,15 +396,15 @@ In full fine-tuning the same backward pass also reaches the backbone through bot
 
 ### 4. Tensor shapes: count pairs separately from sequences
 
-Let $P$ be the number of preference pairs in a minibatch. There are $2P$ input sequences. For one pair of eight tokens and hidden width 16:
+Let $P$ be the number of preference pairs in a minibatch. There are $2P$ input sequences. Continue the assumed length example above: one pair with real lengths 256 and 320, right-padded to width 320, and hidden width 16:
 
 | Tensor | General shape | This example | dtype |
 |---|---|---|---|
-| Chosen ids | `(P, T)` | `(1, 8)` | `int64` |
-| Rejected ids | `(P, T)` | `(1, 8)` | `int64` |
-| Both groups, stacked | `(2*P, T)` | `(2, 8)` | `int64` |
-| Backbone hidden states | `(2*P, T, C)` | `(2, 8, 16)` | `float32` |
-| Position scores before readout | `(2*P, T)` | `(2, 8)` | `float32` |
+| Chosen ids, including padding | `(P, T)` | `(1, 320)` | `int64` |
+| Rejected ids | `(P, T)` | `(1, 320)` | `int64` |
+| Both groups, stacked | `(2*P, T)` | `(2, 320)` | `int64` |
+| Backbone hidden states | `(2*P, T, C)` | `(2, 320, 16)` | `float32` |
+| Position scores before readout | `(2*P, T)` | `(2, 320)` | `float32` |
 | Scalar rewards | `(2*P,)` | `(2,)` | `float32` |
 | Chosen / rejected rewards | Each `(P,)` | Each `(1,)` | `float32` |
 | Margins / per-pair losses | Each `(P,)` | Each `(1,)` | `float32` |
@@ -371,7 +412,7 @@ Let $P$ be the number of preference pairs in a minibatch. There are $2P$ input s
 
 #### Unequal answer lengths: pad first, then stack
 
-Real answers usually have different lengths. The table above used equal lengths only to make the first example small. **Before stacking, right-pad every prompt + answer sequence to the longest sequence in that minibatch.** The real text stays unchanged; padding makes the tensor rectangular.
+Real answers usually have different lengths. The table above shows equal stored widths because padding has already been applied; the real lengths remain 256 and 320. The following smaller, assumed lengths make the padding counts easy to inspect by hand. **Before stacking, right-pad every prompt + answer sequence to the longest sequence in that minibatch.** The real text stays unchanged; padding makes the tensor rectangular.
 
 Suppose a minibatch contains two preference pairs. These lengths count tokens in the **entire formatted prompt + answer**, including chat markers, not just the answer:
 
@@ -611,19 +652,19 @@ This is the input format of the reward-training entry point, not a claim that ea
 
 This loader deliberately supports the course `BPETokenizer`. A tokenizer from another library must be saved and loaded through its own API and used with a compatible backbone, not reconstructed from these merge triples. Never train a fresh tokenizer for the reward stage.
 
-#### Input 2: real preference records, with a held-out split
+#### Input 2: realistic preference records, with a held-out split
 
-Each line of `preferences-train.jsonl` is one JSON object with plain string fields. For example:
+The repository includes six hand-written comparisons in `code/data/preferences-demo/train.jsonl` and three held-out-prompt examples in `code/data/preferences-demo/validation.jsonl`. These illustrate the workflow; they are not a human-labeling study or enough data to train a useful grader. Each line is one JSON object with plain string fields. Two training examples are:
 
 ```json
-{"prompt": "Is fire hot?", "chosen": "Yes, fire releases heat.", "rejected": "No, fire is cold."}
-{"prompt": "What is 2 + 2?", "chosen": "4.", "rejected": "5."}
+{"prompt": "Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late.", "chosen": "Hi Maya, could you review my PR today when you have a moment? Thanks!", "rejected": "Hi Maya, I'm still waiting for your review of my PR; please get it done today so I can move forward."}
+{"prompt": "Explain gradient accumulation to a programmer who understands mini-batches but only has GPU memory for two examples at a time. Include one concrete batch-size example.", "chosen": "Process two examples at a time. For each microbatch, divide its mean loss by four before calling backward, and keep the accumulated gradients. After four microbatches, take one optimizer step: that gives an effective batch of eight examples. Clear the gradients before the next group.", "rejected": "Gradient accumulation adds gradients from multiple microbatches before updating the parameters. It reduces the activation memory needed for a larger effective batch."}
 ```
 
-A separate `preferences-val.jsonl` contains comparisons for held-out prompts, for example:
+The validation file contains different prompts, including:
 
 ```json
-{"prompt": "What does ice do in a warm room?", "chosen": "It melts.", "rejected": "It gets colder forever."}
+{"prompt": "Explain caching to a nontechnical coworker using one analogy, then mention one limitation.", "chosen": "A cache is like keeping a frequently used document on your desk instead of fetching it from a filing cabinet each time. It is faster, but your desk copy can become outdated when the original changes.", "rejected": "Caching stores previously computed results so later requests can reuse them. Cache entries may be indexed by keys and removed according to an expiration or eviction policy."}
 ```
 
 These rows explain the file format; they are not enough data to train a useful grader. In a real dataset, collect or load human-labeled comparisons, clean them, group all comparisons for the same prompt, then split the **prompt groups**. Keep a final test split untouched while selecting the best checkpoint on validation. Repeated or paraphrased prompts need appropriate deduplication too. The program rejects exact train/validation prompt overlap, empty fields, identical answers, and sequences exceeding the SFT context limit. It does not silently cut off an answer while keeping its original preference label.
@@ -917,7 +958,7 @@ Training metrics describe predictions made while weights were changing and dropo
 From `code/`, after installing the course package with `python -m pip install -e ".[dev]"`, run:
 
 ```bash
-python -m llmre.preference.train --sft sft_bundle.pt --train preferences-train.jsonl --validation preferences-val.jsonl --output checkpoints/reward-run --device cpu --epochs 1 --pairs-per-batch 2 --grad-accum-steps 4 --lr 0.00001
+python -m llmre.preference.train --sft sft_bundle.pt --train data/preferences-demo/train.jsonl --validation data/preferences-demo/validation.jsonl --output checkpoints/reward-run --device cpu --epochs 1 --pairs-per-batch 2 --grad-accum-steps 4 --lr 0.00001
 ```
 
 For a GPU run, use `--device cuda` and choose microbatch size according to available memory. The example learning rate and epoch count are starting settings to validate, not universal best values. The program prints an initial validation baseline and then training and validation loss/accuracy after each epoch. Watch held-out performance: increasing the training margin alone does not prove a better grader.
@@ -942,8 +983,8 @@ from llmre.sft.chat_template import render_with_response_mask
 
 rm, tokenizer = load_reward_model("checkpoints/reward-run/best.pt", device="cpu")
 messages = [
-    {"role": "user", "content": "Is fire hot?"},
-    {"role": "assistant", "content": "Yes, fire releases heat."},
+    {"role": "user", "content": "Write a short, polite Slack message asking Maya to review my PR today. Do not imply that she is late."},
+    {"role": "assistant", "content": "Hi Maya, would you be able to take a look at my PR today? Thank you!"},
 ]
 token_ids, _ = render_with_response_mask(messages, tokenizer.encode)
 ids = torch.tensor([token_ids], dtype=torch.long)  # (1, T), CPU

@@ -33,3 +33,13 @@ Follow-up validation: 14 targeted tests pass, including exact epoch-boundary res
 Unequal-length clarification: added the concrete two-pair example next to the tensor-shapes table: real lengths 8/11/13/7, shared padded shape (4,13), final real indices 7/10/12/6, and preserved chosen/rejected alignment. Verified these shapes and indices with the existing collator. The original lesson backup remains unchanged.
 
 Dropout clarification: expanded the backbone's compact embedding expression into token lookup, position lookup, addition, and dropout, with matching lesson code. Explained activation masking versus persistent weights, initialization versus per-batch forward computation, train/eval modes, and zero-dropout behavior. The language head is excluded during construction; input embeddings remain trainable.
+
+## Follow-up: realistic preference examples
+
+- [x] Replace factual yes/no examples throughout the current lesson with tone, audience, specificity, constraints, and uncertainty comparisons.
+- [x] Explain that SFT can teach these behaviors too; RLHF adds comparative feedback and is not required to establish a basic fact.
+- [x] Add six training and three validation JSONL examples, explicitly labeled as educational and hand-written, with both longer and shorter chosen answers.
+- [x] Verify JSON parsing, tokenization, unequal-length batching, source/lesson consistency, and the new data through the training entry point.
+- [x] Prepare the scoped lesson and example-data update for publication; preserve the original backup.
+
+Validation: all nine JSONL records parse, the train/validation prompts are disjoint, and chosen answer lengths vary relative to rejected answers. The actual encoder/collator produced real lengths [209,490,240,371] for the first two pairs with the byte-level fixture tokenizer and a padded shape (4,490). The full trainer and standalone checkpoint reload ran successfully on these files using an explicitly synthetic tiny CPU model. The lesson's embedded training source remains identical to the runnable module; all 111 math expressions render. The Academy checker still reports the same 616 legacy format issues. The original backup remains byte-for-byte unchanged.
