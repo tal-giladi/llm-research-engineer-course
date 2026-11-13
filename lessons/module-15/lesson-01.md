@@ -369,6 +369,50 @@ Let $P$ be the number of preference pairs in a minibatch. There are $2P$ input s
 | Margins / per-pair losses | Each `(P,)` | Each `(1,)` | `float32` |
 | Mean minibatch loss | `()` | One scalar | `float32` |
 
+#### Unequal answer lengths: pad first, then stack
+
+Real answers usually have different lengths. The table above used equal lengths only to make the first example small. **Before stacking, right-pad every prompt + answer sequence to the longest sequence in that minibatch.** The real text stays unchanged; padding makes the tensor rectangular.
+
+Suppose a minibatch contains two preference pairs. These lengths count tokens in the **entire formatted prompt + answer**, including chat markers, not just the answer:
+
+| Row order | Real tokens | Right-padding added | Stored width |
+|---|---:|---:|---:|
+| Chosen answer 1 | 8 | 5 | 13 |
+| Chosen answer 2 | 11 | 2 | 13 |
+| Rejected answer 1 | 13 | 0 | 13 |
+| Rejected answer 2 | 7 | 6 | 13 |
+
+The longest sequence has 13 tokens, so this minibatch uses `T = 13`. "Both groups, stacked" now means one tensor `ids` of shape **`(4, 13)`**: four sequences, thirteen columns each. Each chosen row still shares its prompt with its corresponding rejected row; their answer lengths can differ.
+
+```text
+row 0: [8 real tokens ] [5 padding tokens]   chosen 1
+row 1: [11 real tokens] [2 padding tokens]   chosen 2
+row 2: [13 real tokens] [no padding      ]   rejected 1
+row 3: [7 real tokens ] [6 padding tokens]   rejected 2
+```
+
+We keep the real lengths separately: `[8, 11, 13, 7]`. The final real token indices are therefore `[7, 10, 12, 6]`, because tensor indices start at zero. Each row's reward comes from its own final real position, even though all rows occupy the same stored width.
+
+For this batch, the existing functions are used as follows inside the full training loop shown below:
+
+```python
+ids, lengths = collate_pairs(batch, device)
+# ids: (4, 13), int64; lengths: (4,), int64 = [8, 11, 13, 7]
+# Both tensors and the model are on device.
+
+rewards = model(ids, seq_lengths=lengths)       # (4,), float32
+chosen, rejected = rewards.chunk(2)           # each (2,)
+# chosen = [r_chosen_1, r_chosen_2]
+# rejected = [r_rejected_1, r_rejected_2]
+loss = bradley_terry_loss(chosen, rejected)    # () mean of the two pair losses
+```
+
+`collate_pairs` arranges all chosen rows first, then all rejected rows. Splitting the rewards in half preserves pair alignment: chosen 1 is compared with rejected 1, and chosen 2 with rejected 2. Attention still operates independently within each row.
+
+**Use one shared padding width across both groups.** Padding chosen rows to their own maximum of 11 and rejected rows to their own maximum of 13 would leave tensors of shapes `(2, 11)` and `(2, 13)`; they cannot be concatenated along the batch axis. Pad both groups to 13 first. Another minibatch can use a different maximum width.
+
+We do not read a padding position as the answer's reward. In this causal GPT, padding placed after the real text also cannot affect the earlier real-token hidden states. A different backbone may require a padding attention mask as well; selecting `seq_lengths - 1` handles the reward readout, not every model's masking requirements.
+
 All tensors and model parameters below are on **CPU**. In GPU training, move both the model and input tensors to the same device; hidden states follow the model's compute dtype.
 
 For several pairs, subtract **matching** entries, then average their losses. For example, three pairs with margins $0,1,2$ have losses $0.693147,0.313262,0.126928$, whose mean is $0.377779$. We average over pairs, not over response tokens. Preserve pair order when you split the batch.

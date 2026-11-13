@@ -29,3 +29,5 @@ The Academy dry-run importer ran and reported 616 repository-wide legacy-format 
 Keep the original lesson backup unchanged. Show a single-device full-precision training baseline with explicit scaling limits; PPO policy optimization belongs to 15.2.
 
 Follow-up validation: 14 targeted tests pass, including exact epoch-boundary resume with dropout and unequal microbatch accumulation. The command-line entry point was also run end to end on synthetic fixture data; its saved scorer reloaded and scored independently. The lesson includes the exact checked-in training module. All 44 math expressions render; new links exist; content outside the mechanics section and the original backup remain unchanged. Academy dry-run result remains 616 legacy format problems, matching the earlier report.
+
+Unequal-length clarification: added the concrete two-pair example next to the tensor-shapes table: real lengths 8/11/13/7, shared padded shape (4,13), final real indices 7/10/12/6, and preserved chosen/rejected alignment. Verified these shapes and indices with the existing collator. The original lesson backup remains unchanged.
