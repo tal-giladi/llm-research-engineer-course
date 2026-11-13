@@ -59,7 +59,10 @@ class GPTBackbone(nn.Module):
             raise ValueError("sequence exceeds the SFT context length")
         pos = torch.arange(T, device=idx.device)
         tr = self.transformer
-        hidden = tr.drop(tr.wte(idx) + tr.wpe(pos))
+        token_embeddings = tr.wte(idx)             # (B, T, C): keep the input embedding
+        position_embeddings = tr.wpe(pos)          # (T, C): broadcast over batch
+        hidden = token_embeddings + position_embeddings
+        hidden = tr.drop(hidden)                  # nn.Dropout on activations; deletes no weights
         for block in tr.h:
             hidden = block(hidden)
         return tr.ln_f(hidden)

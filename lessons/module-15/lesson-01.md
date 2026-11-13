@@ -509,7 +509,10 @@ class GPTBackbone(nn.Module):
             raise ValueError("sequence exceeds the SFT context length")
         pos = torch.arange(T, device=idx.device)
         tr = self.transformer
-        hidden = tr.drop(tr.wte(idx) + tr.wpe(pos))
+        token_embeddings = tr.wte(idx)             # (B, T, C): keep the input embedding
+        position_embeddings = tr.wpe(pos)          # (T, C): broadcast over batch
+        hidden = token_embeddings + position_embeddings
+        hidden = tr.drop(hidden)                  # nn.Dropout on activations; deletes no weights
         for block in tr.h:
             hidden = block(hidden)
         return tr.ln_f(hidden)
@@ -541,6 +544,24 @@ rm = RewardModel.from_sft(sft)  # sft is your ALREADY TRAINED GPT from Module 14
 ```
 
 The backbone adapter supplies the connection to SFT; the scalar-head model and Bradley-Terry loss are the existing course implementations. Import and reuse them in your training program.
+
+#### Why `drop` is in `forward`: dropout keeps the embedding weights
+
+In the original compact expression `tr.drop(tr.wte(idx) + tr.wpe(pos))`, **`drop` is the name of an `nn.Dropout` module**. It is not a command to remove `wte`. The original `GPT.__init__` from 06.1 created it with `drop=nn.Dropout(cfg.dropout)`; the reward backbone copies that module along with the other transformer components.
+
+Read the expanded lines above in order: look up this batch's token embeddings, look up its position embeddings, add them, then apply dropout to the resulting **activation tensor**. The learned `wte.weight` table remains in the model and participates in reward-model fine-tuning. Dropout does not erase entries from that table or remove the embedding layer.
+
+For example, suppose one combined embedding vector is `[1, 2, 3, 4]` and dropout probability is `p=0.5`. During training, one possible dropout result is `[0, 4, 0, 8]`: two activation values were temporarily zeroed, and the retained values were multiplied by `1 / (1 - 0.5) = 2`. This scaling preserves each activation's expected value. The original embedding weights are unchanged by applying dropout; the optimizer may later update them using gradients.
+
+**Why run it in `forward`?** Each batch has new token ids and therefore new embedding activations. During training with nonzero dropout, each forward call samples a fresh mask for those activations. Creating or copying the module belongs in `__init__`; applying it to the current batch belongs in `forward`, just like applying attention or a linear layer. Applying dropout once in `__init__` would neither process future inputs nor provide the changing training masks.
+
+| Model mode | What `tr.drop(hidden)` does |
+|---|---|
+| `model.train()`, `p > 0` | Temporarily masks activation values using a fresh random mask and rescales retained values |
+| `model.eval()` | Returns the activations unchanged; dropout is disabled |
+| Either mode, `p = 0` | Returns the activations unchanged; the course `GPTConfig` defaults to zero dropout |
+
+The same distinction applies to the other operations: `__init__` creates or copies persistent layers and weights once; `forward` uses the current weights to compute new activations for each input batch. We keep the input embeddings. The language-model output head is excluded once when the wrapper keeps only `sft.transformer`; that has nothing to do with the per-forward dropout call.
 
 #### The complete path from SFT to a trained grader
 
