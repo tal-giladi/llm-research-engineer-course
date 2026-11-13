@@ -99,6 +99,63 @@ print([round(-F.logsigmoid(x).item(),6) for x in m])"
 
 <div class="callout warn"><p>Compute the loss as <code>-F.logsigmoid(margin)</code>, <strong>not</strong> <code>-torch.log(torch.sigmoid(margin))</code>. For a large negative margin, <code>sigmoid</code> underflows to <code>0.0</code> and <code>log(0)</code> is <span>$-\infty$</span>; <code>logsigmoid</code> is a single numerically stable kernel (it internally uses the <code>log(1+exp())</code> = softplus identity) and never overflows. Same reasoning as the stable log-softmax in <a href="#/lessons/module-01/lesson-04">01.4</a>.</p></div>
 
+## The big picture: the reward model is a temporary grader, not part of the product
+
+Before the mechanics, one fact that the rest of this module depends on: **the reward model is only used while training. It is never shipped, and it never runs when a user chats with the finished model.**
+
+### Why it exists at all
+
+RLHF wants to train the model on "humans prefer this answer". The ideal loop would be:
+
+1. the model writes an answer;
+2. a human reads it and says how good it is;
+3. the model is nudged toward answers humans like.
+
+Step 2 is the problem. RL training needs millions of judged answers, and every time the model changes, it writes new answers that nobody has judged yet. Humans cannot grade millions of fresh answers fast enough.
+
+So we split the work in two:
+
+- **Humans judge once, offline:** a fixed dataset of ~100k pairs ("Yes is better than No").
+- **A model learns to copy the humans' judgment** from that dataset. That model is the **reward model**. After training it can grade any new answer in milliseconds, as many times as needed.
+
+The reward model is a **stand-in for the human labeler**. That is its whole job.
+
+### The full timeline, start to finish
+
+| stage | what is trained | models that exist | lesson |
+|---|---|---|---|
+| 1. Pre-training | GPT learns language | GPT (with `lm_head`) | Modules 6–9 |
+| 2. SFT | GPT learns the chat format | SFT model (with `lm_head`) | Module 14 |
+| 3. Reward-model training | a **copy** of the SFT model learns to grade | SFT model **+** reward model (copy with scalar head) | this lesson |
+| 4. RL (PPO) | the SFT model, now called the **policy**, learns to write answers the grader likes; the grader is **frozen** | policy **+** frozen reward model | 15.2 |
+| 5. Ship | nothing | **policy only**: one GPT, one `lm_head` | — |
+
+At stage 5 the reward model is put aside (archived, or thrown away). What users talk to is an ordinary GPT with its normal `lm_head` that generates text exactly as in Module 6. One model, one head, one forward pass per generated token. You are right that the shipped GPT does not carry extra heads; the scalar head lives only on the temporary grader.
+
+### Why two forward passes during training (and only then)
+
+During stage 4, each training step does:
+
+1. **Policy generates** an answer to a prompt: "Is fire hot?" → "No".
+2. **Reward model scores** prompt + answer, one forward pass: $r = 1.48$.
+3. Another try: "Yes" → $r = 2.14$.
+4. **The policy is updated** to make the higher-scoring answer more likely (lesson 15.2 shows how).
+
+Yes, that is extra compute: a grading pass for every generated answer. It is the price of not needing a human in the loop, and it is paid **only during training**, like a teacher grading homework during the course. After the course the student answers alone: the policy has learned to say "Yes" by itself, so nobody needs to score it any more.
+
+### Why a separate model, and not a second head on the same GPT?
+
+Because the grader must **stay fixed while the student changes**. In stage 4 the policy's weights are updated every step. If the scalar head sat on the policy's own backbone, every update to the policy would also change the grader, and the policy could learn to make its own grader happy instead of writing better answers (this is **reward hacking**, lesson 15.4). With two separate copies, the grader is frozen and the policy cannot touch it.
+
+### Your intuition is where the field went next
+
+The two-model setup is heavy: two big models in memory, a grading pass per answer. Researchers asked the same question you are asking, and there are two well-known answers, both later in this module:
+
+- **DPO** (lesson 15.3, publicly documented, Rafailov et al. 2023): uses the same preference pairs but trains the policy **directly**, with no reward model and no generation during training. The math in this lesson is still the foundation: DPO is derived from the Bradley-Terry loss.
+- **Generative reward models / LLM-as-a-judge** (reasonable industry practice): the grader is an ordinary GPT with its normal `lm_head` that *writes* its verdict as text ("Answer A is better" or "Score: 8/10"). No special head at all.
+
+Scalar-head reward models are still widely used and publicly documented (InstructGPT; Llama 2 trained separate helpfulness and safety reward models), so we build one here: it is the cleanest way to see what "learning human preferences" means numerically.
+
 ## What *is* a reward model, mechanically?
 
 ### 1. Intuition
@@ -390,7 +447,7 @@ Every step the margin grows and the loss falls. The *absolute* rewards drift (fr
 
 #### Step 11 — What the trained reward model is used for
 
-After training, the reward model takes **one** sequence (prompt + any answer) and returns **one** number, using exactly Steps 2–5 above. In RLHF (lesson 15.2) the policy writes an answer, the reward model scores it, and that number is the reward the policy is trained to increase.
+After training, the reward model takes **one** sequence (prompt + any answer) and returns **one** number, using exactly Steps 2–5 above. It is then frozen and used only as the automatic grader during RL training (lesson 15.2): the policy writes an answer, the reward model scores it, and that number is the reward the policy is trained to increase. When RL training ends, the reward model is put aside and only the policy is shipped (see "The big picture" above).
 
 #### Verify every number
 
@@ -513,18 +570,33 @@ torch.save(rm.state_dict(), "reward_model.pt")       # the trained reward model
 
 `rm.parameters()` includes the backbone copy, so this is full fine-tuning: head and backbone both learn. To train only the head (as in the hand example), pass `rm.score.parameters()` to the optimizer instead.
 
-#### "How do I take the head out later?" You don't need to
+#### "How do I take the head out later?" You don't: you throw the whole grader away
 
-After training you have **two separate models**, and each keeps its own head for its whole life:
+The scalar head is never removed and never moved onto the model you ship. During RL training there are two separate models:
 
-| model | built from | head | used for |
-|---|---|---|---|
-| policy | the SFT model (`sft`) | `lm_head`, untouched | writing answers, token by token |
-| reward model | a copy of the SFT model (`rm`) | scalar head `score` | giving each finished answer one number |
+| model | built from | head | used for | after RL training |
+|---|---|---|---|---|
+| policy | the SFT model (`sft`) | `lm_head`, untouched | writing answers, token by token | **shipped** to users |
+| reward model | a copy of the SFT model (`rm`) | scalar head `score` | grading each answer during training | **put aside**, not shipped |
 
-The reward model is never turned back into a text generator, and the scalar head is never put on the policy. In RLHF (lesson 15.2) they work side by side: the policy writes an answer with `sft.generate(...)`, then `rm(prompt_and_answer_ids)` scores it, and that number is the reward. That is also why we made a `deepcopy` in Step B: if the two shared one backbone, training one would silently change the other.
+In code, the RL loop of lesson 15.2 looks like this (sketch):
 
-If you ever do want the backbone without the head (for example, to try a different head), it is just `rm.backbone`; the head is `rm.score`. They are separate attributes, so you can use either one alone.
+```python
+rm.eval()
+for p in rm.parameters():
+    p.requires_grad_(False)          # the grader is frozen during RL
+
+# one RL step
+full_ids = sft.generate(prompt_ids, max_new_tokens=20)     # policy writes; returns prompt + answer ids
+reward = rm(full_ids)                                       # grader scores prompt + answer
+# ... update sft's weights so high-reward answers become more likely (15.2) ...
+
+# after RL training
+torch.save(sft.state_dict(), "final_chat_model.pt")         # this is the product
+# rm is not saved with it and never runs when users chat
+```
+
+That is why we made a `deepcopy` in Step B: the policy keeps changing during RL, and the grader must not change with it.
 
 > **Production equivalent.** In Hugging Face Transformers this whole recipe is `AutoModelForSequenceClassification.from_pretrained(sft_path, num_labels=1)`: it loads the SFT backbone, drops the language head, and adds a fresh linear layer with one output (named `score` in Llama-style models, without a bias) read at the last non-pad token. Same mechanism as above.
 
