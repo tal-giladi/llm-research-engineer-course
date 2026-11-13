@@ -669,9 +669,68 @@ The validation file contains different prompts, including:
 
 These rows explain the file format; they are not enough data to train a useful grader. In a real dataset, collect or load human-labeled comparisons, clean them, group all comparisons for the same prompt, then split the **prompt groups**. Keep a final test split untouched while selecting the best checkpoint on validation. Repeated or paraphrased prompts need appropriate deduplication too. The program rejects exact train/validation prompt overlap, empty fields, identical answers, and sequences exceeding the SFT context limit. It does not silently cut off an answer while keeping its original preference label.
 
+#### Prompt groups: keep comparisons for one context together
+
+A **prompt group** is the collection of preference records that share the same prompt/context. A single prompt can have several candidate answers and several comparisons. For example, suppose the same request for a polite PR-review message has candidates A, B, and C:
+
+| Preference record | Shared prompt | Comparison |
+|---|---|---|
+| 1 | The PR-review request | A preferred to B |
+| 2 | The same PR-review request | A preferred to C |
+| 3 | The same PR-review request | B preferred to C |
+| 4 | A different request about caching | D preferred to E |
+
+Records 1–3 are **one prompt group**. When splitting the dataset, put all three in the same split, for example training. Record 4 belongs to a different group and could go into validation. If record 1 were in training and record 2 in validation, the validation prompt and even candidate A would already have been seen during training. That would not measure performance on a held-out prompt.
+
+Grouping for a data split is separate from forming minibatches: a prompt group does not have to occupy one training batch, and a batch can contain different prompts. For this single-turn baseline, the grouping key is the user prompt string. With system messages or conversation history, the context includes those messages too. A conversation id can provide a more conservative split when related turns share substantial history.
+
 For each row, `encode_pairs` uses the existing `render_with_response_mask` from 14.1 to encode `user prompt + assistant answer`. It discards the response mask because the reward loss needs no per-token labels, but preserves **the exact segment tokenization from SFT**. The course template closes each turn with `<|end|>\n`, so its final real token may be the closing newline or a BPE piece; the readout consistently uses the final real position of that complete formatted sequence.
 
-This baseline accepts one user prompt and one assistant response per side. If your data has system messages or conversation history, preserve that full shared history in both sides and extend the record formatter accordingly; do not discard it and change the task being judged.
+#### One preference pair contains two candidate assistant responses
+
+The current record format has **one shared user prompt and two alternative assistant responses**: `chosen` and `rejected`. Each scoring sequence contains that prompt and **one** candidate response:
+
+```text
+one dataset record: {prompt, chosen, rejected}
+
+chosen sequence:   user prompt + chosen assistant response
+rejected sequence: user prompt + rejected assistant response
+```
+
+Both sequences are scored, and their two rewards are compared in the loss. The candidates are alternative replies to the same request; they are not two consecutive assistant turns in one conversation. "One assistant response per side" refers to each scoring sequence, not to the number of candidates in a preference pair.
+
+#### Shared history: what both candidate responses are answering
+
+The full context of a chat can contain a system instruction, earlier user messages, earlier assistant replies, and the latest user message. For example:
+
+```text
+Shared conversation prefix:
+  system:    Explain things to a beginner.
+  user:      Explain caching using a document analogy.
+  assistant: A cache is like keeping a copy of a document on your desk
+             instead of fetching the original from a cabinet each time.
+  user:      What can go wrong with that approach?
+
+Chosen new reply:
+  assistant: Your desk copy can become outdated when the original changes.
+
+Rejected new reply:
+  assistant: Cache invalidation can be addressed with expiration and
+             coherence mechanisms.
+```
+
+For this comparison, the first continuation directly answers the question, continues the analogy, and fits the beginner instruction. The second offers technical mitigation terminology without first explaining the problem. The shared prefix is part of what makes the preference understandable.
+
+The reward model should process these as two independent sequences:
+
+```text
+sequence 1 = entire shared prefix + chosen new reply
+sequence 2 = entire shared prefix + rejected new reply
+```
+
+The system instruction and **all earlier turns are identical in both sequences**. Only the candidate continuation changes. The earlier assistant explanation belongs to the shared history; it is not one of the two responses currently being compared. If we kept only "What can go wrong with that approach?", the model would not know what "that approach" refers to. Dropping the system instruction would also remove the beginner-audience requirement. The labeler judged replies in the full context, so scoring a shortened, different context would change the task associated with the label.
+
+The checked-in baseline's `encode_pairs` currently builds just `[user prompt, assistant candidate]` from string fields. It does not yet implement the multi-turn example above. To support such data, extend the record schema to retain a role-tagged `messages` prefix, have the formatter append each candidate to that same prefix before applying the chat template, and update the split/grouping key to account for the full context. Reuse the original SFT system-message and conversation formatting. This is what "preserve the full shared history in both sides" means.
 
 #### Full runnable program: the actual training module
 
