@@ -32,9 +32,37 @@ Anthropic HH-RLHF (Bai et al. 2022, https://arxiv.org/abs/2204.05862).
 
 from __future__ import annotations
 
+import copy
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+class GPTBackbone(nn.Module):
+    """An independent copy of the course GPT, stopping before ``lm_head``.
+
+    Input: ``idx`` (B, T) int64 on the copied parameters' device.
+    Output: final hidden states (B, T, C), in the backbone's floating dtype.
+    Right-padding is supported when the caller reads only real positions;
+    causal attention prevents trailing pads from changing real-token states.
+    """
+
+    def __init__(self, sft):
+        super().__init__()
+        self.transformer = copy.deepcopy(sft.transformer)
+        self.block_size = sft.cfg.block_size
+
+    def forward(self, idx):
+        T = idx.shape[1]
+        if T > self.block_size:
+            raise ValueError("sequence exceeds the SFT context length")
+        pos = torch.arange(T, device=idx.device)
+        tr = self.transformer
+        hidden = tr.drop(tr.wte(idx) + tr.wpe(pos))
+        for block in tr.h:
+            hidden = block(hidden)
+        return tr.ln_f(hidden)
 
 
 class RewardModel(nn.Module):
@@ -74,6 +102,19 @@ class RewardModel(nn.Module):
         self.n_embd = n_embd
         # Scalar reward head: (B, T, C) -> (B, T, 1). One output feature.
         self.score = nn.Linear(n_embd, 1, bias=bias)
+
+    @classmethod
+    def from_sft(cls, sft):
+        """Copy a course GPT's SFT backbone and add a new scalar head.
+
+        No weights are shared with ``sft``. The language head stays on the
+        original model; its tied input embeddings are retained in the copy.
+        The returned model uses the SFT backbone's device and floating dtype.
+        """
+        parameter = next(sft.parameters())
+        return cls(sft.cfg.n_embd, backbone=GPTBackbone(sft)).to(
+            device=parameter.device, dtype=parameter.dtype
+        )
 
     def reward_from_hidden(
         self, hidden: torch.Tensor, seq_lengths: torch.Tensor | None = None
