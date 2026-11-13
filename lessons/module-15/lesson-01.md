@@ -186,8 +186,6 @@ Scalar-head reward models are still widely used and publicly documented (Instruc
 
 ## What *is* a reward model, mechanically?
 
-[Compare with the complete original lesson](lessons/module-15/lesson-01.backup.md).
-
 ### 1. Intuition: start with the SFT forward pass you already know
 
 You already know how to train the SFT model. Keep its tokenizer, chat format, embeddings, transformer blocks, and final LayerNorm in mind. We will reuse that computation. The changes are **what we read from it** and **what loss we attach**.

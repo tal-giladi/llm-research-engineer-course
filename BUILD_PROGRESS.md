@@ -1,16 +1,16 @@
 # Lesson 15.1 mechanics revision
 
-Goal: rewrite only "What is a reward model, mechanically?" for a learner who already understands SFT, preserve the full original lesson, and push both versions.
+Goal: clarify lesson 15.1's reward-model mechanics and training flow for a learner who already understands SFT. The user approved the revised lesson and requested removal of the original comparison backup and its link.
 
 - [x] Read the lesson, SFT/backbone code, course instructions, and primary sources.
-- [x] Preserve an exact copy of the original lesson and link it for comparison.
+- [x] Preserve an exact copy for the initial comparison, then remove the backup and link after the user's review.
 - [x] Rewrite the section: independent scoring, final hidden-state readout, pair loss, and shared gradients.
 - [x] Execute examples; check links, math rendering, and the course import report.
 - [x] Prepare the scoped revision for the requested commit and push to the existing remote branch.
 
 Active writer: main session only. Other modules and existing user changes are outside this revision.
 
-Resume: inspect git status and the diff, then continue the unchecked items. The original belongs at `lessons/module-15/lesson-01.backup.md`; do not overwrite it with the revision.
+Resume: inspect git status and the diff, then continue any unchecked items. The revised lesson is the current version; do not recreate the removed comparison backup.
 
 Decisions: keep the published lesson path and section heading stable. This is a scoped lesson edit, not an Academy format migration of the existing course.
 
@@ -26,7 +26,7 @@ The Academy dry-run importer ran and reported 616 repository-wide legacy-format 
 - [x] Test padding, pair alignment, checkpoint reload/resume, and preservation of the SFT model.
 - [x] Check the revised lesson and prepare the follow-up for publication.
 
-Keep the original lesson backup unchanged. Show a single-device full-precision training baseline with explicit scaling limits; PPO policy optimization belongs to 15.2.
+Show a single-device full-precision training baseline with explicit scaling limits; PPO policy optimization belongs to 15.2. The backup was retained during the historical validation below and subsequently removed at the user's request.
 
 Follow-up validation: 14 targeted tests pass, including exact epoch-boundary resume with dropout and unequal microbatch accumulation. The command-line entry point was also run end to end on synthetic fixture data; its saved scorer reloaded and scored independently. The lesson includes the exact checked-in training module. All 44 math expressions render; new links exist; content outside the mechanics section and the original backup remain unchanged. Academy dry-run result remains 616 legacy format problems, matching the earlier report.
 
@@ -45,3 +45,5 @@ Dropout clarification: expanded the backbone's compact embedding expression into
 Validation: all nine JSONL records parse, the train/validation prompts are disjoint, and chosen answer lengths vary relative to rejected answers. The actual encoder/collator produced real lengths [209,490,240,371] for the first two pairs with the byte-level fixture tokenizer and a padded shape (4,490). The full trainer and standalone checkpoint reload ran successfully on these files using an explicitly synthetic tiny CPU model. The lesson's embedded training source remains identical to the runnable module; all 111 math expressions render. The Academy checker still reports the same 616 legacy format issues. The original backup remains byte-for-byte unchanged.
 
 Context clarification: defined prompt groups with a three-comparison example and distinguished data splitting from batching. Replaced ambiguous "one response per side" wording with one shared prompt and two alternative responses, scored independently. Added a full shared-prefix example showing the system instruction, earlier user/assistant turns, and current user question. Explicitly documented that multi-turn support requires extending the baseline schema, formatter, and grouping key; the existing single-turn trainer is unchanged.
+
+Final cleanup: after approving the revised lesson, the user requested deletion of the original backup. Removed the backup file and its comparison link from the lesson.
