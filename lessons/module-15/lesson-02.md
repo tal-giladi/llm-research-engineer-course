@@ -237,7 +237,7 @@ where $V$ is the value model's prediction and $R$ is the reward the answer actua
 | Easy | 1.9 | 2.1 | **+0.2**: a little better than usual |
 | Hard | −1.2 | −0.9 | **+0.3**: better than usual |
 
-Starting the value model from the reward model, and the policy from the SFT model, is what InstructGPT did (publicly documented in its appendix C.4).
+Starting the value model from the reward model, and the policy from the SFT model, is what InstructGPT did (publicly documented in its appendix C.4). Some implementations save memory by putting the value prediction on the policy itself, as a second scalar head (a "value head") next to `lm_head`; the job is the same.
 
 Two practical details, both in our code:
 
@@ -291,6 +291,27 @@ Work it out with $\beta = 0.1$ and three tokens of each answer:
 | A normal polite message | 0.5, 0.4, 0.6 | 0.45, 0.40, 0.50 | 0.1054, 0.0, 0.1823 | 0.2877 | 2.1 | **2.0712** |
 
 Example: $d_1 = \log 0.9 - \log 0.3 = \log 3 = 1.0986$. The SFT model would almost never repeat "Thanks!" ten times, so those tokens carry a large drift. After the penalty, the normal message has the higher reward, so the policy is pushed toward it.
+
+In code, $d_t$ is one subtraction per token. This is the whole of `kl_penalty` in `code/src/llmre/rl/ppo.py` (docstring omitted); the trainer calls it with `reduction="none"` and adds up the answer tokens itself:
+
+```python
+def kl_penalty(logprobs, ref_logprobs, reduction="mean"):
+    log_ratio = logprobs - ref_logprobs          # d_t for every token, same shape as inputs
+    if reduction == "none":
+        return log_ratio
+    if reduction == "sum":
+        return log_ratio.sum()
+    if reduction == "mean":
+        return log_ratio.mean()
+    raise ValueError(f"unknown reduction {reduction!r}")
+```
+
+Check the first row of the table by hand:
+
+```bash
+py -c "import torch; from llmre.rl.ppo import kl_penalty; print(kl_penalty(torch.log(torch.tensor([0.9,0.9,0.9])), torch.log(torch.tensor([0.3,0.05,0.02])), reduction='sum').item())"
+# 7.7956...
+```
 
 $\beta$ sets the price of drifting. Too low and reward hacking wins. Too high and the policy cannot move away from SFT, so nothing improves. InstructGPT used $\beta = 0.02$; TRL's default is $0.05$.
 
@@ -358,6 +379,32 @@ $$
 | $\operatorname{clip}(\rho, 0.8, 1.2)$ | $\rho$ limited to the range 0.8 to 1.2 |
 | $\min$ | the smaller of the two numbers |
 | $\epsilon$ | how far a token may move per batch; 0.2 is the value the PPO paper found best, and the value InstructGPT and TRL use |
+
+The from-scratch implementation is `ppo_clip_objective` in `code/src/llmre/rl/ppo.py` (docstring omitted). Each line is one column of the table above:
+
+```python
+def ppo_clip_objective(logprobs, old_logprobs, advantages, clip_eps=0.2, reduction="mean"):
+    ratio = torch.exp(logprobs - old_logprobs)                    # rho, per token
+    unclipped = ratio * advantages                                # rho * A
+    clipped = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * advantages
+    obj = torch.minimum(unclipped, clipped)                       # the smaller one
+    if reduction == "none":
+        return obj
+    if reduction == "sum":
+        return obj.sum()
+    if reduction == "mean":
+        return obj.mean()
+    raise ValueError(f"unknown reduction {reduction!r}")
+```
+
+Reproduce the table, objective and gradient for each token:
+
+```bash
+py -c "import torch,math; from llmre.rl.ppo import ppo_clip_objective as f
+for r,A in [(1.1,1),(1.5,1),(0.5,1),(1.5,-1),(0.5,-1)]:
+    lp=torch.tensor(math.log(r),requires_grad=True); o=f(lp,torch.tensor(0.),torch.tensor(float(A)),reduction='sum'); o.backward(); print(r,A,round(o.item(),4),round(lp.grad.item(),4))"
+# 1.1 1 1.1 1.1 / 1.5 1 1.2 0.0 / 0.5 1 0.5 0.5 / 1.5 -1 -1.5 -1.5 / 0.5 -1 -0.8 0.0
+```
 
 We **maximize** this, so the training loss is its negative. On the first gradient step of a batch the policy has not moved yet, every ratio is exactly 1, and the loss is the plain "weight × log-probability" loss of section 3 (its gradient is $A_t$ times the gradient of the log-probability). The clip only matters from the second step on.
 
