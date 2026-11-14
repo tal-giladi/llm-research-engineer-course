@@ -1,0 +1,6 @@
+{"prompt": "Write a short, polite Slack message asking Daniel to approve my merge request this afternoon. Do not pressure him."}
+{"prompt": "Explain what a unit test is to a new developer in two sentences, with one example."}
+{"prompt": "Rewrite 'This design is bad' as respectful, specific feedback that suggests one improvement."}
+{"prompt": "I have 15 minutes before a standup. Suggest a realistic plan with exactly two steps."}
+{"prompt": "Our nightly job started failing yesterday. Suggest the first check to make without guessing the cause."}
+{"prompt": "Define a database index in one sentence for a nontechnical colleague."}

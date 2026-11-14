@@ -24,7 +24,7 @@ The building blocks, from simplest to what production RLHF actually uses:
 
 Full PPO-on-an-LLM is heavy (a policy, a value head, a reward model, a reference,
 and rollout generation). Here we implement the *math* on small tensors so the
-mechanism is unambiguous; wiring it to a real GPT is left to the lesson notes.
+mechanism is unambiguous; :mod:`llmre.rl.ppo_train` wires it to a real GPT.
 """
 
 from __future__ import annotations

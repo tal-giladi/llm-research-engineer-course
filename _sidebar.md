@@ -80,7 +80,7 @@
   - [14.4 · Where SFT data comes from, and how to build a clean set](lessons/module-14/lesson-04.md)
 - **15 · Preference learning / RLHF / DPO**
   - [15.1 · Bradley-Terry & the reward model](lessons/module-15/lesson-01.md)
-  - [15.2 · Policy gradient, advantage, PPO](lessons/module-15/lesson-02.md)
+  - [15.2 · Using the reward model: policy gradient & PPO](lessons/module-15/lesson-02.md)
   - [15.3 · DPO: derivation & implementation](lessons/module-15/lesson-03.md)
   - [15.4 · SFT vs RM+PPO vs DPO](lessons/module-15/lesson-04.md)
   - [15.5 · Where preference data comes from, and how to build it](lessons/module-15/lesson-05.md)

@@ -1151,4 +1151,4 @@ Margin $= 1.0$, so it is identical to the $r_w=2.0, r_l=1.0$ case: $\sigma(1.0) 
 
 We now have a function that scores completions and a way to train it from preferences. Next we treat the language model as a **policy** and use the reward model's scores to actually improve it — REINFORCE, advantages, and the PPO clipped objective that makes RLHF stable.
 
-Continue to [15.2 · Policy gradient, advantage, PPO](lessons/module-15/lesson-02.md).
+Continue to [15.2 · Using the reward model: policy gradient & PPO](lessons/module-15/lesson-02.md).

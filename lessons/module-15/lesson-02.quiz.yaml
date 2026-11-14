@@ -1,0 +1,68 @@
+- id: q1
+  question: >-
+    Your reward model grades every answer to one prompt between 50 and 52. You train with
+    loss = -grade * log p(answer). What happens?
+  options:
+    - Training works well, since higher grades still get slightly larger pushes.
+    - The reward model's gradient explodes, since its scores are far from zero.
+    - Whatever answer is sampled gets pushed up strongly, so the policy locks onto early samples.
+    - Nothing changes, because the log-probability gradient cancels the constant 50.
+  correct: 2
+  explanation: >-
+    Every weight is about 50, so every sampled answer is made much more likely, whatever its
+    quality. Subtracting the expected grade (the advantage) leaves weights between about -1 and
+    +1 that point toward better-than-usual answers.
+- id: q2
+  question: >-
+    During a PPO run the logged score rises every iteration, the drift (KL) rises fast, and the
+    example answers repeat the same polite phrase many times. What is the first change to make?
+  options:
+    - Raise the KL coefficient, so drifting from the SFT model costs more.
+    - Raise the clip range, so each batch can move the policy further.
+    - Lower the value-model learning rate, so the advantages become smaller.
+    - Remove the reference model, so the policy can leave the repeated phrase.
+  correct: 0
+  explanation: >-
+    Rising score with fast-rising drift and degenerate text is reward hacking: the policy found
+    text the reward model overrates. A larger beta makes those far-from-SFT tokens expensive.
+- id: q3
+  question: >-
+    A token in a good answer (advantage +1) had probability 0.20 when the answer was written and
+    has 0.30 after two update steps on the same batch. With epsilon 0.2, what does PPO do with it
+    on the next step?
+  options:
+    - It pushes it up at full strength, since its advantage is still positive.
+    - It pushes it back down to 0.24, the upper edge of the allowed range.
+    - It pushes it up with the gradient scaled by the clipped ratio 1.2.
+    - It gives it zero gradient, since its ratio 1.5 is past 1.2 in the helpful direction.
+  correct: 3
+  explanation: >-
+    The ratio is 0.30 / 0.20 = 1.5. For a positive advantage the minimum picks the clipped
+    constant 1.2 * A once the ratio exceeds 1.2, and a constant has no gradient. The clip stops
+    pushing; it does not pull the token back.
+- id: q4
+  question: >-
+    You add dropout 0.1 and call policy.train() in the PPO update. On the first step of each
+    batch, before any weight has changed, about 30% of answer tokens are already clipped. Why?
+  options:
+    - The value model is still untrained, so the advantages are too large on the first step.
+    - Dropout makes the same answer get different log-probabilities, so ratios are not 1.
+    - The reference model uses different weights, so the ratio compares two models.
+    - The learning rate warm-up has not started, so the optimizer state is empty.
+  correct: 1
+  explanation: >-
+    The ratio compares the policy's log-probabilities now and at rollout. With dropout on, two
+    forward passes of the same weights differ, so the clip acts on noise. Keep the policy in
+    eval() mode (gradients still flow) or set dropout to 0.
+- id: q5
+  question: >-
+    After RLHF with PPO finishes, which model or models are deployed to answer users?
+  options:
+    - The policy together with the reward model, which filters each answer.
+    - The policy together with the value model, which ranks candidate answers.
+    - Only the policy, an ordinary GPT with its language head.
+    - Only the reference, since the policy may have reward-hacked.
+  correct: 2
+  explanation: >-
+    The reference, reward model and value model exist only to train the policy. The shipped
+    model is the policy: the same architecture as the SFT model, with improved weights.
