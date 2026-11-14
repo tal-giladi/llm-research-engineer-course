@@ -224,7 +224,7 @@ In the toy example we could compute the expected grade exactly, because we knew 
 
 An answer to the hard prompt with grade −0.9 is a **good** answer (better than the usual −1.2), even though its grade is negative. A single global average could not see that.
 
-PPO estimates the expected grade with a second network, the **value model**. Its job: read a prompt and predict the reward the policy's answer will get. That is "text in, one number out", exactly the shape of your reward model. So we make the value model **a trainable copy of the reward model**, and train it with the plainest regression loss there is:
+PPO estimates the expected grade with a second network, the **value model**. Its job: read a prompt (and, as section 4.4 shows, the part of the answer written so far) and predict the reward the policy's answer will get. That is "text in, one number out", exactly the shape of your reward model. So we make the value model **a trainable copy of the reward model**, and train it with the plainest regression loss there is:
 
 $$
 \text{value loss} = \big(V - R\big)^2
@@ -245,6 +245,111 @@ Two practical details, both in our code:
 - **Rescaling.** Before using them, the advantages of a batch are shifted and scaled to mean 0 and standard deviation 1 ("whitening"). This keeps the step size the same whether the reward model's grades are around 1 or around 50.
 
 <div class="callout key"><p>GRPO (16.1) removes the value model: it writes several answers per prompt and uses their average grade as the baseline. That is the same idea as our exact "expected grade" in the toy example, estimated by sampling instead of by a second network.</p></div>
+
+### 4.4 The value model in plain words
+
+Why does PPO need it at all? Because a grade on its own says nothing. The SFT model answers a prompt, and the reward model says 1.4. Is that good? On a prompt where the model usually gets 2.0 it is a bad answer, and on one where it usually gets −1.0 it is a great one. To decide "push this answer up" or "push it down" we need a **reference point**: what the model usually gets here. The value model's only job is to supply that reference point, for every prompt, from one answer, without writing extra answers.
+
+**It reads a different input from the reward model.** Both start with the same weights, so it is natural to ask why they give different numbers:
+
+| | Reward model | Value model |
+|---|---|---|
+| Reads | the prompt + the **finished** answer | the prompt + the answer **so far** (possibly nothing yet) |
+| Answers the question | "how good is this answer?" | "what reward should I expect from here on, given how this model usually continues?" |
+| Trained during PPO? | no, frozen | yes, on the rewards the policy actually gets |
+
+Same starting weights, different input, and after the first update different weights too.
+
+**It predicts from every position, not once per prompt.** The value model gives one prediction at every position of the answer: "given the prompt and the tokens written so far, what reward do I expect by the end?" In our setup the only reward arrives at the end (the grade minus the drift), so "the reward from here on" and "the final reward" are the same number. In production setups that charge the drift token by token, it is the sum of all rewards still to come. The prediction made right after the prompt, before any answer token, is exactly the "usual grade for this prompt". The later predictions update it as the answer takes shape.
+
+A worked example. Prompt: "Ask Maya to review my PR". Treat each chunk as one token to keep it short. The answer gets $R = 2.0$:
+
+| Before writing | Value model predicts $V_t$ | Advantage $A_t = R - V_t$ |
+|---|---:|---:|
+| "Hi Maya," | 1.2 (the usual for this prompt) | **+0.8** |
+| "could you review my PR" | 1.5 (a friendly start, things look better) | **+0.5** |
+| "when you have a moment?" | 1.8 | **+0.2** |
+| "Thanks!" | 1.9 | **+0.1** |
+
+The opening "Hi Maya," gets the most credit: it changed the outlook from 1.2 to a likely good answer. "Thanks!" gets little credit, because by then a good grade was already expected. A blunt answer to the same prompt, "Review my PR" + " now.", gets $R = 0.2$:
+
+| Before writing | $V_t$ | $A_t = R - V_t$ |
+|---|---:|---:|
+| "Review my PR" | 1.2 | **−1.0** |
+| " now." | 0.5 (the blunt start already lowered the outlook) | **−0.3** |
+
+The blunt opening takes most of the blame. One prediction per prompt could not do this: every token would get the same advantage.
+
+### 4.5 The value model is only an estimate, and it starts out wrong
+
+The value model is a guess, and at the start of training it is a bad one. It is a copy of the reward model, which was trained to grade **finished** answers. Its number after the prompt alone was never trained to mean anything. Suppose it says 3.0 for the Maya prompt, while the SFT model's answers usually get about 1.25.
+
+Take one batch: the policy writes four answers to the prompt, and (ignoring the drift to keep the numbers simple) they get the grades 2.0, 1.0, 1.4 and 0.6. Their average is 1.25. Look at the advantages of the first token:
+
+| Answer | Grade $R$ | Advantage with $V = 3.0$ (untrained) | Advantage with $V = 1.2$ (trained) |
+|---|---:|---:|---:|
+| 1: polite | 2.0 | **−1.0** | **+0.8** |
+| 2: neutral | 1.0 | **−2.0** | **−0.2** |
+| 3: friendly | 1.4 | **−1.6** | **+0.2** |
+| 4: pushy | 0.6 | **−2.4** | **−0.6** |
+
+With the untrained value model, every answer has a negative advantage, so **every answer is pushed down, including the two better-than-usual ones**. On its own, that step moves answer 1 the wrong way.
+
+**How it gets better.** After every batch the value model is trained toward the rewards that actually happened, with the squared-error loss $(V - R)^2$. It cannot see the future answer, so the number that makes its error smallest on average is the average reward from that point: the "usual" grade. An illustration with a simple update rule, $V \leftarrow V + 0.5\,(\text{average } R - V)$, where each batch averages 1.25:
+
+| Iteration | $V$ after the prompt | Advantage of the polite answer ($R = 2.0$) |
+|---:|---:|---:|
+| 1 | 3.00 | −1.00 (wrong sign) |
+| 2 | 2.13 | −0.13 (wrong sign) |
+| 3 | 1.69 | +0.31 |
+| 4 | 1.47 | +0.53 |
+| 5 | 1.36 | +0.64 |
+| 6 | 1.30 | +0.70 |
+
+(The real value model uses AdamW and several passes per batch, so the exact numbers differ. The shape is the point: a few iterations of wrong signs, then the right ones.) The policy is changing during training, so its usual grade moves too. That is why the value model is trained in every iteration, not once at the start.
+
+**Why the early errors do not ruin training.** Four reasons, from the most fundamental to the most practical:
+
+1. **A wrong baseline does not change the average direction, only the noise.** Section 4.2 showed that subtracting any number $b$ that does not depend on the chosen token changes nothing on average. Check it on the three-answer policy (all probabilities 1/3, grades 2, 1, 0, learning rate 1). The logits move by $A \times (\text{onehot} - p)$:
+
+   | Policy wrote | Move with $b = 1$ (correct) | Move with $b = 3$ (too high) |
+   |---|---|---|
+   | A: polite | $+1 \times$: $[+0.67, -0.33, -0.33]$ | $-1 \times$: $[-0.67, +0.33, +0.33]$ |
+   | B: neutral | $0 \times$: $[0, 0, 0]$ | $-2 \times$: $[+0.67, -1.33, +0.67]$ |
+   | C: pushy | $-1 \times$: $[+0.33, +0.33, -0.67]$ | $-3 \times$: $[+1.00, +1.00, -2.00]$ |
+   | **Average** (each written 1/3 of the time) | $[+0.33,\ 0,\ -0.33]$ | $[+0.33,\ 0,\ -0.33]$ |
+
+   The averages are identical: A up, C down. With $b = 3$, a single step can go the wrong way (writing A pushes A down) and the steps are up to 3 times larger, so the path is much noisier. That is the price of a bad value model: more noise, not a wrong destination.
+2. **Many answers per batch.** One step averages over many answers and many prompts, so single wrong pushes partly cancel. The learning rate and the clip (section 6) keep any single step small.
+3. **Whitening removes the shared part of the error.** Our code shifts the batch's advantages to mean 0 (section 4.3). In the table above, the untrained advantages −1.0, −2.0, −1.6, −2.4 have mean −1.75. Subtract it: **+0.75, −0.25, +0.15, −0.65**. The order and signs are right again. This only fixes an error that is the same for all answers in the batch. If the value model is 1.8 too high on one prompt and accurate on another, whitening cannot separate them; that part only goes away as the value model learns.
+4. **The value model learns faster than the policy changes.** Its task is plain regression on a number it sees every iteration, and the KL penalty and the clip keep the policy changing slowly. So it catches up within a few iterations and then follows the policy. Some setups also train the value model alone for a few iterations before updating the policy at all (reasonable industry practice, not part of our code).
+
+What *does* hurt: a value model that never catches up, for example because its learning rate is far too low. Then the noise from reason 1 stays large for the whole run. The symptom is a value loss that does not fall.
+
+### 4.6 PPO and GRPO on the same prompt
+
+GRPO (16.1) gets the reference point a different way. Same prompt, same four answers, same grades:
+
+| Answer | Grade | PPO: $R - V$ (trained, $V = 1.2$) | PPO: untrained ($V = 3.0$), after whitening | GRPO: $R$ − group average (1.25) |
+|---|---:|---:|---:|---:|
+| 1: polite | 2.0 | +0.80 | +0.75 | +0.75 |
+| 2: neutral | 1.0 | −0.20 | −0.25 | −0.25 |
+| 3: friendly | 1.4 | +0.20 | +0.15 | +0.15 |
+| 4: pushy | 0.6 | −0.60 | −0.65 | −0.65 |
+
+(PPO's whitening and GRPO also divide by the standard deviation; that scales every row by the same factor, so it is left out here.) All three columns tell the policy the same thing: push 1 and 3 up, 2 and 4 down. They differ in where the reference point comes from and what it costs:
+
+| | PPO | GRPO |
+|---|---|---|
+| Writes | one or more answers per prompt (our code: `answers_per_prompt`) | a group of several answers per prompt, required |
+| Grades them with | the reward model | the reward model |
+| Reference point | the value model's prediction of the expected reward from each position | the average grade of the group |
+| With only one answer per prompt | still works: $2.0 - 1.2 = +0.8$ | the average **is** that answer's grade, so the advantage is 0 and nothing is learned |
+| Credit per token | different for each token ($A_t = R - V_t$) | the same advantage for every token of an answer |
+| At the start of training | wrong until the value model learns | no training needed, but noisy when the group is small |
+| Extra cost | a second trainable network, usually as large as the reward model | more answers to generate per prompt |
+
+Both reference points are estimates: PPO learns one with a network, GRPO measures one by sampling. Big models are expensive to keep in memory twice, which is a large part of why GRPO became popular for reasoning models (16.1).
 
 ## 5. Staying close to the SFT model: the KL penalty
 
@@ -806,6 +911,24 @@ The reward model is imperfect, so the policy can find answers it overrates (rewa
 <details><summary>A good token (advantage +2) had probability 0.10 when the answer was written and 0.15 now. With ε = 0.2, what is its PPO objective and gradient?</summary>
 
 Ratio $= 0.15 / 0.10 = 1.5$. Unclipped $1.5 \times 2 = 3.0$; clipped $1.2 \times 2 = 2.4$; the minimum is $2.4$, the clipped constant, so its gradient is 0. The token already moved more than 20% in the helpful direction, so this batch stops pushing it.
+
+</details>
+
+<details><summary>The value model starts as a copy of the reward model. Why do the two give different numbers for the same prompt?</summary>
+
+They read different input. The reward model reads the prompt plus the finished answer and grades that answer. The value model reads the prompt plus the answer so far, often nothing yet, and predicts the reward this policy usually gets from there. After the first update the value model's weights differ too, because it is trained on the policy's actual rewards and the reward model stays frozen.
+
+</details>
+
+<details><summary>At the start of training the value model predicts 3.0 for a prompt whose answers usually get about 1.25. What goes wrong, and why does training still work?</summary>
+
+Every answer gets a negative advantage, so even better-than-usual answers are pushed down in single steps. But a wrong baseline does not change the average direction of the update, only its noise. Whitening removes the part of the error that is shared by the whole batch, and the value model is trained toward the actual rewards every iteration, so within a few iterations its predictions approach 1.25 and the signs come out right.
+
+</details>
+
+<details><summary>PPO can learn from one answer per prompt. Why can't GRPO?</summary>
+
+GRPO's reference point is the average grade of the group. With a group of one, the average is that answer's own grade, so the advantage is always 0 and nothing is pushed. PPO compares the answer with the value model's prediction, which exists without any other answer.
 
 </details>
 
