@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W46 (2026-11-14, requested by Tal outside the weekly cycle)
+
+- Added **batch-size warmup (batch ramp) as §5 of [03.3](lessons/module-03/lesson-03.md)**: the gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\lVert G\rVert^2$ and the step/compute trade of McCandlish et al. 2018, worked by hand; the two-batch-size estimator; documented schedules (GPT-3, Gopher, Llama 3 405B, DeepSeek-V3, Merrill et al. 2025); implementing the ramp with gradient accumulation and a token-based learning-rate schedule; learning-rate rescaling; cost and common mistakes, plus an exercise, a debugging exercise and Check-yourself questions. With `llmre/optim/batch_schedule.py`, two tests in `tests/test_optim.py` and `experiments/noise_scale_toy.py`. Sections 1–4 are unchanged; later sections were renumbered and the lesson title gained ", batch ramp".
+
 ## 2026-W46 (2026-11-13, requested by Tal outside the weekly cycle)
 
 - Added **post-training data lessons at the end of Modules 14-16**: [14.4 · Where SFT data comes from, and how to build a clean set](lessons/module-14/lesson-04.md), [15.5 · Where preference data comes from, and how to build it](lessons/module-15/lesson-05.md) and [16.5 · Where RL prompts come from, and how to build a verifiable set](lessons/module-16/lesson-05.md). Each lists the current public datasets with licenses (checked 2026-11-13), builds the data from scratch, and runs a lab on real Hugging Face data whose measured results are in the lesson. With `llmre/sft/data.py`, `llmre/preference/data.py`, `llmre/rl/data.py`, `tests/test_posttrain_data.py` and `scripts/lab_{sft,preference,rl}_data.py`. Existing lessons are unchanged except their "Next" links; no lesson was renumbered.

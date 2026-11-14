@@ -146,3 +146,43 @@ def test_clip_grad_norm_matches_torch():
     before = small[0].grad.clone()
     clip_grad_norm_(small, max_norm=10.0)
     assert torch.allclose(small[0].grad, before, atol=0, rtol=0)
+
+
+def test_batch_ramp_schedule_and_accumulation():
+    from llmre.optim.batch_schedule import batch_size_at, grad_accum_for, plan_batch_ramp
+
+    # Worked table of lesson 03.3 section 5.3: 8 -> 64 sequences over 1M tokens, multiples of 8.
+    got = [batch_size_at(t, 8, 64, 1_000_000, 8) for t in (0, 250_000, 500_000, 750_000, 1_000_000)]
+    assert got == [8, 16, 32, 48, 64]
+    assert batch_size_at(5_000_000, 8, 64, 1_000_000, 8) == 64
+    assert grad_accum_for(48, micro_batch_size=8) == 6
+    assert grad_accum_for(64, micro_batch_size=4, world_size=4) == 4
+
+    rows = plan_batch_ramp(4_194_304, 1024, 8, 64, 1_000_000, micro_batch_size=8)
+    batches = [r["batch"] for r in rows]
+    assert batches == sorted(batches)                      # never shrinks
+    assert all(r["batch"] % 8 == 0 for r in rows)          # whole micro-batches only
+    assert len(rows) == 95                                 # vs 64 steps at a fixed batch of 64
+    assert sum(r["tokens"] for r in rows) >= 4_194_304
+
+
+def test_gradient_noise_scale_recovers_known_value():
+    from llmre.optim.batch_schedule import gradient_noise_scale, progress_fraction
+
+    # Hand example of section 5.2: exact expectations for |G|^2 = 1, tr(Sigma) = 4.
+    g_sq, tr, b = gradient_noise_scale(2.0, 1.0625, 4, 64)
+    assert abs(g_sq - 1.0) < 1e-12 and abs(tr - 4.0) < 1e-12 and abs(b - 4.0) < 1e-12
+
+    # Synthetic per-example gradients: mean mu, iid N(0, sigma^2) noise in D dims,
+    # so the true B_simple = D * sigma^2 / |mu|^2 = 8 * 1 / 1 = 8.
+    torch.manual_seed(0)
+    D, mu = 8, torch.zeros(8)
+    mu[0] = 1.0
+    small, big = [], []
+    for _ in range(2000):
+        small.append((mu + torch.randn(4, D)).mean(0).pow(2).sum().item())
+        big.append((mu + torch.randn(64, D)).mean(0).pow(2).sum().item())
+    _, _, b_est = gradient_noise_scale(sum(small) / 2000, sum(big) / 2000, 4, 64)
+    assert abs(b_est - 8.0) / 8.0 < 0.1
+
+    assert abs(progress_fraction(32, 10) - 32 / 42) < 1e-12

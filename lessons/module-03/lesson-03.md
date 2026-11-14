@@ -1,8 +1,8 @@
-# 03.3 · Warmup, cosine decay, gradient clipping
+# 03.3 · Warmup, cosine decay, gradient clipping, batch ramp
 
 <div class="prereq">
 <p><strong>Prerequisites:</strong> AdamW, bias correction, and the fact that Adam's first steps have size $\approx\eta$ from an unreliable early $\hat v$, from <a href="#/lessons/module-03/lesson-02">03.2 · RMSProp, Adam, AdamW, weight decay</a>. The learning rate $\eta$ and the update rule from <a href="#/lessons/module-03/lesson-01">03.1</a>. The gradient $\nabla L$ and <code>.grad</code> from <a href="#/lessons/module-02/lesson-01">02.1</a>.</p>
-<p><strong>You will learn:</strong> the <strong>learning-rate schedule</strong> used by real LLM runs — linear <em>warmup</em> for the first $W$ steps, then <em>cosine decay</em> down to a floor — with the exact formula and a worked table of the learning rate at steps $0$, $W$, the midpoint, and the end; <em>why</em> warmup is needed (Adam's early variance estimates are unstable and a large early $\eta$ can diverge); and <strong>gradient clipping</strong> by global L2 norm, $g \leftarrow g\cdot\min(1, c/\lVert g\rVert)$, worked on a concrete gradient.</p>
+<p><strong>You will learn:</strong> the <strong>learning-rate schedule</strong> used by real LLM runs — linear <em>warmup</em> for the first $W$ steps, then <em>cosine decay</em> down to a floor — with the exact formula and a worked table of the learning rate at steps $0$, $W$, the midpoint, and the end; <em>why</em> warmup is needed (Adam's early variance estimates are unstable and a large early $\eta$ can diverge); and <strong>gradient clipping</strong> by global L2 norm, $g \leftarrow g\cdot\min(1, c/\lVert g\rVert)$, worked on a concrete gradient; and <strong>batch-size warmup</strong> (batch ramp): why the useful batch size grows during training (the gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\lVert G\rVert^2$), how to measure it, and how to implement a ramp with gradient accumulation and a token-based learning-rate schedule.</p>
 <p><strong>Why this matters for ML:</strong> these three techniques are on essentially every production LLM training run — GPT-3, LLaMA, OLMo, and the pretraining loop you build in Module 7. They are not optional polish; without warmup and clipping, large-batch Adam training routinely diverges in the first few hundred steps. This lesson is the difference between a run that trains and a run that explodes.</p>
 </div>
 
@@ -195,7 +195,250 @@ Two design points. The function returns the **pre-clip** norm — the training l
 
 <div class="callout key"><p>Clip by <em>global</em> L2 norm: one scale factor $\min(1, c/\lVert g\rVert)$ applied to every gradient, so the whole update is capped in size but unchanged in direction. Clip threshold $c = 1.0$ is the near-universal default. It runs after <code>backward()</code> and before <code>optimizer.step()</code>.</p></div>
 
-## 5. Where these sit in the training loop
+## 5. Batch-size warmup (batch ramp)
+
+Warmup changes the *learning rate* over training. Many large runs also change the *batch size*: they start with a small global batch and grow it during the first part of training. This is called **batch-size warmup**, **batch ramp-up**, or just a **batch ramp**. It is less universal than learning-rate warmup (plenty of runs keep the batch fixed), but most of the largest publicly documented pretraining runs use some form of it, so you need to know what it is, why it works, and how to build it.
+
+### 5.1 Intuition: early gradients agree, late gradients argue
+
+Recall from 03.1 that a minibatch gradient is an *average* of per-example gradients. Averaging $B$ examples does one thing: it cancels out the part of the per-example gradients that disagree with each other (the noise). How much averaging you need depends on how much the examples disagree.
+
+- **At the start of training**, the model is terrible at everything in the same way. It has not even learned that "the" is common. Almost every example says the same thing: "raise the probability of common tokens, lower the rare ones." The per-example gradients all point roughly the same way. Averaging 8 of them gives nearly the same direction as averaging 8,000. A big batch spends 1,000× more tokens to buy almost no better a step.
+- **Later in training**, the easy patterns are learned. What is left are subtle, example-specific things: this document wants a rare word, that one wants a different one. Per-example gradients now point in many directions and mostly cancel. The true downhill direction is a small signal buried in large noise. Now you *need* a big batch to average the noise away, or each step is mostly a random walk.
+
+So the batch size worth paying for grows as the model learns. A batch ramp follows that: small batch (more, cheaper steps) while the gradients agree, large batch (fewer, cleaner steps) once they disagree.
+
+<div class="callout key"><p>The useful batch size is not a constant. It grows as the loss falls, because per-example gradients disagree more and more. A batch ramp starts small and grows the global batch so tokens are not wasted on oversized batches early in training.</p></div>
+
+### 5.2 The mathematics: the gradient noise scale
+
+McCandlish et al. (2018) made this precise. Name the pieces:
+
+- $G = \nabla L(\theta)$ — the **true gradient**: the average gradient over the whole data distribution. A vector with one entry per parameter.
+- $g_i$ — the gradient from a single example $i$. Its average over all examples is $G$.
+- $\Sigma$ — the **covariance** of the per-example gradients: how much the $g_i$ scatter around $G$. $\operatorname{tr}(\Sigma)$ (the trace, the sum of the diagonal) is the total scatter: the sum over all parameters of the variance of that parameter's gradient component.
+- $G_B = \frac{1}{B}\sum_{i=1}^{B} g_i$ — the minibatch gradient you actually compute, averaging $B$ random examples.
+
+Averaging $B$ independent samples divides the variance by $B$, so the minibatch gradient's expected squared length is the true signal plus noise shrunk by $B$:
+
+$$
+\mathbb{E}\big[\lVert G_B\rVert^2\big] = \lVert G\rVert^2 + \frac{\operatorname{tr}(\Sigma)}{B}.
+$$
+
+The batch size at which the noise term equals the signal term is the **(simple) gradient noise scale**:
+
+$$
+B_{\text{simple}} = \frac{\operatorname{tr}(\Sigma)}{\lVert G\rVert^2}.
+$$
+
+The paper's main quantity $B_{\text{noise}}$ also weights both terms by the curvature (Hessian); $B_{\text{simple}}$ drops that weighting and is what people measure in practice. With the learning rate tuned for each batch size, the paper shows the loss improvement from one step is
+
+$$
+\Delta L_{\text{opt}}(B) = \frac{\Delta L_{\max}}{1 + B_{\text{noise}}/B},
+$$
+
+where $\Delta L_{\max}$ is the improvement an infinitely large batch (the exact gradient $G$) would give. Read the fraction $\frac{1}{1 + B_{\text{noise}}/B}$ as "how much of a perfect step you get":
+
+- $B \ll B_{\text{noise}}$: the fraction is about $B/B_{\text{noise}}$. Doubling the batch nearly doubles progress per step. Larger batches are efficient.
+- $B \gg B_{\text{noise}}$: the fraction is about $1$. Doubling the batch doubles the tokens per step and buys almost nothing. Larger batches are wasted compute.
+
+$B_{\text{noise}}$ is close to the **critical batch size**: the best trade between number of steps (wall-clock time) and number of examples (compute). And because $\lVert G\rVert^2$ shrinks as the model approaches a minimum while $\operatorname{tr}(\Sigma)$ shrinks much more slowly, $B_{\text{simple}}$ **grows during training**. That growth is the whole reason for a batch ramp.
+
+### 5.3 Worked examples by hand
+
+**Noise scale from four per-example gradients.** Take a 2-parameter model and four examples.
+
+*Early in training* the per-example gradients are $[1.1, 0.9],\ [0.9, 1.1],\ [1.0, 1.2],\ [1.0, 0.8]$. Their mean is $G = [1.0, 1.0]$, so $\lVert G\rVert^2 = 1 + 1 = 2$. Variance of the first component: deviations $0.1, -0.1, 0, 0$, squares sum to $0.02$, divided by $4$ is $0.005$. Second component: deviations $-0.1, 0.1, 0.2, -0.2$, squares sum to $0.10$, divided by $4$ is $0.025$. So $\operatorname{tr}(\Sigma) = 0.005 + 0.025 = 0.03$ and
+
+$$
+B_{\text{simple}} = 0.03 / 2 = 0.015.
+$$
+
+Far below $1$: a single example already gives an almost perfect direction.
+
+*Late in training* the per-example gradients are $[1, -1],\ [-1, 1],\ [1.2, -0.8],\ [-0.8, 1.2]$. They point in opposite directions. The mean is $G = [0.1, 0.1]$, $\lVert G\rVert^2 = 0.02$. First component: deviations $0.9, -1.1, 1.1, -0.9$, squares $0.81 + 1.21 + 1.21 + 0.81 = 4.04$, divided by $4$ is $1.01$. The second component is the same, $1.01$. So $\operatorname{tr}(\Sigma) = 2.02$ and
+
+$$
+B_{\text{simple}} = 2.02 / 0.02 = 101.
+$$
+
+Same model size, same data, but the batch worth paying for went from about $1$ to about $100$.
+
+**What a batch buys.** Suppose $B_{\text{noise}} = 10$ early and $500$ late. Compare $B = 32$ and $B = 512$ (16× the tokens per step):
+
+| phase | $B_{\text{noise}}$ | fraction at $B=32$ | fraction at $B=512$ | 16× tokens buys |
+|---|---|---|---|---|
+| early | $10$ | $\frac{1}{1 + 10/32} = 0.76$ | $\frac{1}{1 + 10/512} = 0.98$ | $1.29\times$ progress |
+| late | $500$ | $\frac{1}{1 + 500/32} = 0.06$ | $\frac{1}{1 + 500/512} = 0.51$ | $8.4\times$ progress |
+
+Early, the big batch is a terrible deal: 16× the compute for 1.29× the progress per step. Late, it is a good deal. Hence: small early, large late.
+
+**Measuring the noise scale without per-example gradients.** You normally cannot afford per-example gradients for a large model. But you can measure $\lVert G_B\rVert^2$ at two batch sizes, $B_{\text{small}}$ and $B_{\text{big}}$, and solve the two equations from §5.2 for the two unknowns (McCandlish et al., Appendix A.1):
+
+$$
+\lVert G\rVert^2 \approx \frac{B_{\text{big}}\lVert G_{B_{\text{big}}}\rVert^2 - B_{\text{small}}\lVert G_{B_{\text{small}}}\rVert^2}{B_{\text{big}} - B_{\text{small}}}, \qquad
+\operatorname{tr}(\Sigma) \approx \frac{\lVert G_{B_{\text{small}}}\rVert^2 - \lVert G_{B_{\text{big}}}\rVert^2}{1/B_{\text{small}} - 1/B_{\text{big}}}.
+$$
+
+Example: with $B_{\text{small}} = 4$ you measure $\lVert G_4\rVert^2 = 2.0$; with $B_{\text{big}} = 64$, $\lVert G_{64}\rVert^2 = 1.0625$. Then
+
+$$
+\lVert G\rVert^2 = \frac{64\cdot 1.0625 - 4\cdot 2.0}{64 - 4} = \frac{68 - 8}{60} = 1.0, \qquad
+\operatorname{tr}(\Sigma) = \frac{2.0 - 1.0625}{0.25 - 0.015625} = \frac{0.9375}{0.234375} = 4.0,
+$$
+
+so $B_{\text{simple}} = 4.0/1.0 = 4$. (Check: plug back in. $1 + 4/4 = 2$ and $1 + 4/64 = 1.0625$.) In a data-parallel run this is almost free: each GPU's local gradient is a small-batch gradient and the all-reduced gradient is the big-batch one, so you get both numbers every step.
+
+### 5.4 The schedule
+
+Real runs use one of two shapes. Both are **publicly documented**:
+
+- **Linear ramp in tokens.** GPT-3 (Brown et al. 2020, Appendix B) increases the batch linearly from 32k tokens to the full batch (3.2M tokens for the 175B model) over the first 4–12 billion tokens, depending on model size.
+- **Step doubling.** Gopher (Rae et al. 2021) increases its batch from 3M to 6M tokens partway through training. Llama 3 405B (2024) starts at 4M tokens with 4,096-token sequences, doubles to 8M after 252M tokens (switching to 8,192-token sequences), and doubles again to 16M after 2.87T tokens. DeepSeek-V3 (2024) grows its batch from 3,072 to 15,360 sequences over the first 469B tokens. Merrill et al. (2025, AI2) measure the critical batch size during OLMo training and double the batch each time it has grown past the current one.
+
+Not every run does this: LLaMA 1 and 2, for example, used a fixed 4M-token batch. Whether a run ramps is a design choice, not a requirement like learning-rate warmup.
+
+The linear version, written like the learning-rate formula. Let $n$ be the number of tokens seen so far, $B_0$ the starting batch, $B_{\text{final}}$ the full batch (both in sequences), $R$ the ramp length in tokens, and $k$ the **granularity**:
+
+$$
+B(n) = \begin{cases}
+\operatorname{clamp}\!\Big(k\Big\lfloor \tfrac{1}{k}\big(B_0 + (B_{\text{final}} - B_0)\,\tfrac{n}{R}\big)\Big\rfloor,\ B_0,\ B_{\text{final}}\Big) & n < R\\[1ex]
+B_{\text{final}} & n \ge R
+\end{cases}
+$$
+
+Why round down to a multiple of $k$? Because a batch is not one tensor. It is built from **micro-batches** of $b$ sequences — the most that fits in one GPU's memory — on each of $W$ GPUs, summed over $G$ accumulation steps (Module 7 builds this): $B = b \cdot G \cdot W$. The micro-batch $b$ is fixed by memory, so the only knob that changes during a ramp is $G$, and $B$ must be a multiple of $k = b\cdot W$.
+
+**Worked table.** Sequences of $1{,}024$ tokens, micro-batch $b = 8$ on one GPU (so $k = 8$), ramp from $B_0 = 8$ to $B_{\text{final}} = 64$ sequences over $R = 1{,}000{,}000$ tokens:
+
+| tokens seen $n$ | raw $B_0 + 56\cdot n/R$ | rounded down to $\times 8$ | accumulation $G = B/8$ | tokens per step |
+|---|---|---|---|---|
+| $0$ | $8$ | $8$ | $1$ | $8{,}192$ |
+| $250{,}000$ | $22$ | $16$ | $2$ | $16{,}384$ |
+| $500{,}000$ | $36$ | $32$ | $4$ | $32{,}768$ |
+| $750{,}000$ | $50$ | $48$ | $6$ | $49{,}152$ |
+| $\ge 1{,}000{,}000$ | — | $64$ | $8$ | $65{,}536$ |
+
+Train on $4{,}194{,}304$ tokens ($= 64$ full batches). Without a ramp that is $64$ steps of $64$ sequences. With the ramp it is $95$ steps: $47$ steps during the ramp (18 at batch 8, 9 at 16, 6 at 24, 4 at 32, 4 at 40, 3 at 48, 3 at 56) consume about $1.06$M tokens, which the fixed batch would have spent in only about $16$ steps. Same tokens, same compute, about $31$ more optimizer updates, all of them in the phase where small batches lose almost nothing (§5.3). That is the trade: **more steps for the same compute, early, where they are cheap in quality.**
+
+### 5.5 Tensor shapes, dtype, device
+
+The schedule itself is plain Python `int` arithmetic, like the learning-rate schedule. The tensors it controls:
+
+- Each micro-batch `x, y`: shape `(b, T)` = `(8, 1024)`, dtype `int64` token ids, on the training device. **This never changes during the ramp**, so peak activation memory never changes either.
+- What changes is how many micro-batches feed one optimizer step, $G$: $1$ at the start, $8$ at the end in the table above. Gradients are accumulated in each parameter's `.grad` (same shape and dtype as the parameter, e.g. `float32`) across the $G$ backward passes.
+- For the noise-scale estimate, the per-example gradients in §5.3 form a `(B, P)` matrix (examples × parameters). That is exactly what you never materialize for a real model; the two-batch-size estimator only needs two scalars, $\lVert G_{B_{\text{small}}}\rVert^2$ and $\lVert G_{B_{\text{big}}}\rVert^2$.
+
+### 5.6 The from-scratch implementation
+
+`code/src/llmre/optim/batch_schedule.py`:
+
+```python
+def batch_size_at(tokens_seen, start_batch, final_batch, ramp_tokens, granularity=1):
+    if start_batch % granularity or final_batch % granularity:
+        raise ValueError("start_batch and final_batch must be multiples of granularity")
+    if tokens_seen >= ramp_tokens:
+        return final_batch
+    raw = start_batch + (final_batch - start_batch) * tokens_seen / ramp_tokens
+    rounded = int(raw // granularity) * granularity   # whole micro-batches only
+    return max(start_batch, min(final_batch, rounded))
+
+
+def grad_accum_for(batch_size, micro_batch_size, world_size=1):
+    per_step = micro_batch_size * world_size          # sequences per accumulation step
+    if batch_size % per_step:
+        raise ValueError(f"batch_size {batch_size} is not a multiple of {per_step}")
+    return batch_size // per_step                     # G
+
+
+def gradient_noise_scale(g_small_sq, g_big_sq, b_small, b_big):
+    g_sq = (b_big * g_big_sq - b_small * g_small_sq) / (b_big - b_small)       # |G|^2
+    trace_sigma = (g_small_sq - g_big_sq) / (1.0 / b_small - 1.0 / b_big)     # tr(Sigma)
+    return g_sq, trace_sigma, trace_sigma / g_sq                              # B_simple
+```
+
+```python
+for n in [0, 250_000, 500_000, 750_000, 1_000_000]:
+    b = batch_size_at(n, 8, 64, 1_000_000, granularity=8)
+    print(n, b, grad_accum_for(b, micro_batch_size=8))
+# 0         8  1
+# 250000   16  2
+# 500000   32  4
+# 750000   48  6
+# 1000000  64  8
+
+print(gradient_noise_scale(2.0, 1.0625, 4, 64))   # (1.0, 4.0, 4.0)
+```
+
+The same file has `plan_batch_ramp(...)`, which simulates the whole run and returns one row per step (step, tokens seen, batch, $G$, tokens). Print it before you launch: it is how the $95$-step count above was produced. The tests `test_batch_ramp_schedule_and_accumulation` and `test_gradient_noise_scale_recovers_known_value` check the worked table, the step count, and that the estimator recovers a known noise scale from synthetic per-example gradients.
+
+Inside the training loop, the ramp only changes how many micro-batches you accumulate. Two things must switch from *steps* to *tokens*:
+
+```python
+tokens_seen = 0
+while tokens_seen < total_tokens:
+    B = batch_size_at(tokens_seen, B0, B_final, ramp_tokens, granularity=b * world)
+    G = grad_accum_for(B, micro_batch_size=b, world_size=world)
+    opt.zero_grad()
+    for _ in range(G):
+        x, y = get_batch()                        # (b, T) int64 — fixed shape
+        loss = compute_loss(model, x, y)
+        (loss / G).backward()                     # divide by THIS step's G
+    clip_grad_norm_(model.parameters(), 1.0)
+    # The lr schedule is now a function of tokens, not steps (W_tok, T_tok in tokens).
+    opt.lr = cosine_warmup_lr(tokens_seen, W_tok, T_tok, max_lr, min_lr)
+    opt.step()
+    tokens_seen += B * seq_len
+```
+
+- **Divide by the current $G$.** Each micro-batch loss is a mean over $b$ sequences. Summing $G$ of them and dividing by $G$ gives the mean over all $B$ sequences, so the gradient has the same scale at every batch size.
+- **Schedule the learning rate in tokens.** With a fixed batch, "step 100" and "6.5M tokens" mean the same thing. With a ramp they do not: the first 100 steps of the table's run cover about $4.5$M tokens instead of $6.6$M. GPT-3 states its learning-rate warmup (375M tokens) and decay in tokens for this reason. `cosine_warmup_lr` does not care about units, so pass it tokens and token-valued $W$ and $T$.
+- **Checkpoint `tokens_seen`.** It is now part of the training state. Resume without it and the run restarts its ramp at the small batch.
+
+<div class="callout pt"><p>Neither <code>torch.optim</code> nor <code>torch.utils.data.DataLoader</code> has a batch ramp: a DataLoader's batch size is fixed when you build it. Production training frameworks implement it the way above, by varying the number of accumulated micro-batches per step; Megatron-LM, for example, has a <code>--rampup-batch-size</code> option. In a hand-written loop it is the few lines shown.</p></div>
+
+### 5.7 Should the learning rate change when the batch grows?
+
+A larger batch gives a less noisy gradient, which can tolerate a larger step. Two rules of thumb exist: scale $\eta$ linearly with $B$ (common for SGD) or with $\sqrt{B}$ (common for Adam). What is documented:
+
+- **Merrill et al. (2025)** raise the base learning rate by $\sqrt{2}$ each time they double the batch (square-root rule), and report slightly better loss than the original OLMo run with 43% fewer gradient steps.
+- **GPT-3** describes its batch ramp and its learning-rate schedule separately and does not say the learning rate was rescaled during the ramp.
+- **Smith et al. (2017)** show the link from the other side: for SGD the gradient noise depends on the ratio $\eta/B$, so *increasing the batch size* during training can replace *decaying the learning rate*, reaching the same accuracy in fewer steps.
+
+So: **publicly documented** that both choices have been used; **reasonable practice** to rescale $\eta$ with $\sqrt{B}$ under Adam when the batch jumps by a large factor, and to watch the loss and gradient norm right after each jump.
+
+### 5.8 Cost
+
+- **Memory:** unchanged. The micro-batch shape is fixed; only the number of accumulation steps changes.
+- **Throughput (tokens per second per GPU):** unchanged in the simple loop, because each GPU always processes full micro-batches. Time per optimizer step grows with $G$.
+- **The real constraint:** the starting batch must be at least one micro-batch per GPU, $B_0 \ge b\cdot W$. On a large cluster with a small $B_0$ you cannot keep every GPU busy, so how small a batch you can start with is limited by the cluster's size (this is **inference**, from $B = b\cdot G\cdot W$; the papers do not describe how they handled it).
+- **Benefit:** more optimizer updates for the same token budget during the phase where small batches are nearly as good per step (§5.3), or equivalently the same loss in less compute. Merrill et al. report slightly better loss than their original fixed-batch OLMo run with 43% fewer gradient steps.
+
+<div class="callout paper"><p><strong>Read:</strong> McCandlish et al. 2018, <a href="https://arxiv.org/abs/1812.06162">An Empirical Model of Large-Batch Training</a>. Read §2 (the noise scale, eqs. 2.7–2.11) and Appendix A.1 (the two-batch-size estimator); skim the per-task experiments. Then Merrill et al. 2025, <a href="https://arxiv.org/abs/2505.23971">Critical Batch Size Revisited</a>, for a modern LLM measurement and a batch-warmup recipe. Optional: Smith et al. 2017, <a href="https://arxiv.org/abs/1711.00489">Don't Decay the Learning Rate, Increase the Batch Size</a>. Sources for §5.4: <a href="https://arxiv.org/abs/2005.14165">GPT-3</a> Appendix B, <a href="https://arxiv.org/abs/2112.11446">Gopher</a> §3.2, <a href="https://arxiv.org/abs/2407.21783">Llama 3</a> §3.4.1, <a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3</a> §4.2. Checked 2026-11-14.</p></div>
+
+### 5.9 Code this after reading
+
+Run `code/experiments/noise_scale_toy.py` (CPU, a few seconds). It trains a linear regression with SGD and measures $B_{\text{simple}}$ with the two-batch-size estimator at several points:
+
+```text
+step    0  loss  14.5636  |G|^2   29.2846  tr(Sigma)    431.42  B_simple      14.7
+step   25  loss   1.3251  |G|^2    2.3543  tr(Sigma)     46.73  B_simple      19.9
+step   50  loss   0.2241  |G|^2    0.2000  tr(Sigma)      7.32  B_simple      36.6
+step  100  loss   0.1254  |G|^2    0.0023  tr(Sigma)      4.12  B_simple    1768.9
+step  300  loss   0.1248  |G|^2    0.0022  tr(Sigma)      3.85  B_simple    1778.2
+```
+
+Both $\lVert G\rVert^2$ and $\operatorname{tr}(\Sigma)$ fall, but the signal falls far faster, so the noise scale grows about 100× as the loss approaches its floor. Then change it: add a batch ramp to the SGD loop (start at 8, grow to 256) and compare the loss after the same number of *examples* against fixed batches of 8 and 256.
+
+### 5.10 Common mistakes
+
+- **Learning-rate schedule still in steps.** Warmup and cosine decay end at a different point in training than planned. Use tokens.
+- **Dividing the loss by a fixed $G$.** Divide by the current step's $G$, or the gradient's scale jumps every time the batch grows.
+- **Batch not a multiple of $b\cdot W$.** The last accumulation step is a partial micro-batch or the batch silently differs across GPUs. Round down to the granularity.
+- **Not saving `tokens_seen`.** A resumed run drops back to the starting batch.
+- **Ramping the micro-batch instead of $G$.** Growing $b$ changes peak memory mid-run and can OOM hours into training. Keep $b$ fixed.
+
+## 6. Where these sit in the training loop
 
 All three techniques slot into the loop between `backward()` and `step()`, in this order:
 
@@ -209,12 +452,13 @@ for step in range(max_steps):
     opt.step()                                  # (3) AdamW update with that lr
 ```
 
-That is the skeleton of every pretraining loop in this course. Module 7 fills in batching, gradient accumulation, checkpointing, and throughput accounting around exactly these lines.
+That is the skeleton of every pretraining loop in this course. Module 7 fills in batching, gradient accumulation, checkpointing, and throughput accounting around exactly these lines. A run with a batch ramp uses the token-based version in §5.6.
 
-## 6. Tensor shapes, dtype, cost
+## 7. Tensor shapes, dtype, cost
 
 - **Schedule:** pure Python `float` arithmetic on the integer `step` — no tensors, no device, negligible cost. Called once per step.
 - **Clipping:** computes one scalar norm by reducing over every gradient component ($O(P)$ work for $P$ parameters, a single streaming pass), then, only if clipping triggers, one elementwise scale of each gradient tensor (another $O(P)$ pass). The per-tensor norms are stacked into a tiny vector on the gradients' device; nothing changes shape. Cost is trivial next to the backward pass that produced the gradients, and memory overhead is essentially zero (one scalar).
+- **Batch ramp:** Python `int` arithmetic once per step; micro-batch tensors keep their `(b, T)` shape, only the number of them per step changes (§5.5, §5.8).
 
 ## Exercise
 
@@ -232,6 +476,28 @@ $W = \eta_{\max}/\eta(0) = (3\times 10^{-4})/(10^{-6}) = 300$ steps. So a warmup
 
 </details>
 
+### Exercise: batch ramp
+
+A run uses 4 GPUs with micro-batch $b = 4$ sequences each, and ramps the global batch linearly from $16$ to $128$ sequences over $2{,}000{,}000$ tokens. After $1{,}300{,}000$ tokens, what batch size does `batch_size_at` return, and how many accumulation steps $G$ does each GPU run?
+
+<details><summary>Hint</summary>
+
+The granularity is $b\cdot W$. Compute the raw linear value first, then round it down.
+
+</details>
+
+<details><summary>Stronger hint</summary>
+
+Granularity $k = 4\cdot 4 = 16$. Raw value $= 16 + (128 - 16)\cdot 1.3/2.0$. Round down to a multiple of $16$, then $G = B/(b\cdot W)$.
+
+</details>
+
+<details><summary>Solution</summary>
+
+Raw $= 16 + 112\cdot 0.65 = 88.8$. Rounded down to a multiple of $16$: $80$. Then $G = 80/16 = 5$: each of the 4 GPUs runs 5 micro-batches of 4 sequences ($4\cdot 5\cdot 4 = 80$). Check in code: `batch_size_at(1_300_000, 16, 128, 2_000_000, 16)` → `80`, `grad_accum_for(80, 4, 4)` → `5`.
+
+</details>
+
 ## Debugging exercise
 
 A run uses warmup + cosine decay and AdamW, but every few thousand steps the loss suddenly spikes upward by a lot and then slowly recovers. Warmup is present and correct. What single technique from this lesson most directly addresses these intermittent spikes, and why not just lower the learning rate instead?
@@ -239,6 +505,31 @@ A run uses warmup + cosine decay and AdamW, but every few thousand steps the los
 <details><summary>Solution</summary>
 
 **Gradient clipping** (§4). The spikes are caused by occasional outlier minibatches producing an unusually large gradient; clipping the global norm to $c = 1.0$ caps exactly those rare huge updates while leaving all the normal steps untouched. Lowering the learning rate instead would slow down *every* step — the 99.9% that were fine — to defend against the 0.1% that were not, wasting compute and hurting convergence. Clipping is targeted: it only acts when $\lVert g\rVert > c$. Logging the pre-clip norm (which `clip_grad_norm_` returns) would confirm the diagnosis — you would see the norm spike on the bad steps.
+
+</details>
+
+### Debugging exercise: batch ramp
+
+You add a batch ramp ($8 \to 64$ sequences, micro-batch $8$) to a working loop. The loss curve looks fine, but the logged pre-clip gradient norm climbs in a staircase: it jumps up each time the batch size changes and stays there, ending about $8\times$ higher than in the old run. Clipping now triggers on every step late in training. The accumulation code is:
+
+```python
+G = grad_accum_for(B, micro_batch_size=8)
+for _ in range(G):
+    x, y = get_batch()
+    compute_loss(model, x, y).backward()
+```
+
+What is wrong, why does the loss still look fine, and what is the fix?
+
+<details><summary>Hint</summary>
+
+What is the gradient of a *sum* of $G$ mean losses, compared with the gradient of their mean?
+
+</details>
+
+<details><summary>Solution</summary>
+
+The loss is never divided by $G$, so `.grad` holds the *sum* of $G$ micro-batch gradients instead of their mean: $G$ times too large. $G$ grows from $1$ to $8$ during the ramp, which is exactly the staircase. The loss looks fine because Adam divides by $\sqrt{\hat v}$, which cancels a constant gradient scale (03.2), so the update barely changes. But clipping now acts on the inflated norm and fires constantly, and every batch jump mixes old and new scales in $\hat m$ and $\hat v$ for a while. SGD would have taken $8\times$ larger steps and probably diverged. Fix: `(compute_loss(model, x, y) / G).backward()` with the current step's $G$.
 
 </details>
 
@@ -274,8 +565,32 @@ After `loss.backward()` (it needs the gradients to exist in `.grad`) and before 
 
 </details>
 
+<details><summary>Why can a run use a small batch early in training without losing much, but not late?</summary>
+
+Early, per-example gradients mostly agree, so the gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\lVert G\rVert^2$ is small and a small batch already gives nearly the true direction. As the loss falls, $\lVert G\rVert^2$ shrinks much faster than $\operatorname{tr}(\Sigma)$, so the noise scale grows and a larger batch is needed to average the noise away.
+
+</details>
+
+<details><summary>With $B_{\text{noise}} = 100$, what fraction of a perfect step do you get at $B = 100$ and at $B = 1000$?</summary>
+
+$\frac{1}{1 + 100/100} = 0.5$ and $\frac{1}{1 + 100/1000} \approx 0.91$. Ten times the tokens per step for under twice the progress: past $B_{\text{noise}}$, extra batch is mostly wasted.
+
+</details>
+
+<details><summary>During a batch ramp, which part of the batch changes: the micro-batch size, the number of accumulation steps, or the number of GPUs? Why?</summary>
+
+The number of accumulation steps $G$. The micro-batch $b$ is set by GPU memory, and changing it mid-run would change peak memory and could OOM; the number of GPUs is fixed for the job. $B = b\cdot G\cdot W$, so $G$ is the knob.
+
+</details>
+
+<details><summary>Why should the learning-rate schedule be expressed in tokens when the batch ramps?</summary>
+
+With a fixed batch, steps and tokens are proportional, so it does not matter. With a ramp, early steps consume fewer tokens than late ones, so a warmup of $W$ steps covers fewer tokens than planned and the cosine decay ends at a different point in training. Tokens are the unit that stays meaningful.
+
+</details>
+
 ## Next
 
-You now have the full optimization toolkit: the update rule and momentum (03.1), adaptive per-parameter scaling and decoupled weight decay in AdamW (03.2), and the warmup + cosine schedule with gradient clipping that keep a real run stable (03.3). Every training loop for the rest of the course uses exactly these pieces. The next module leaves optimization behind and turns to how text becomes numbers the model can consume — **tokenization**: characters, bytes, Unicode, and Byte-Pair Encoding from scratch.
+You now have the full optimization toolkit: the update rule and momentum (03.1), adaptive per-parameter scaling and decoupled weight decay in AdamW (03.2), and the warmup + cosine schedule with gradient clipping that keep a real run stable, plus the batch ramp that large runs use to spend their early tokens well (03.3). Every training loop for the rest of the course uses exactly these pieces. The next module leaves optimization behind and turns to how text becomes numbers the model can consume — **tokenization**: characters, bytes, Unicode, and Byte-Pair Encoding from scratch.
 
 Continue to [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md).
