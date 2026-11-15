@@ -2,7 +2,7 @@
 
 - **Topic ID:** speculative-decoding
 - **Status:** WAIT
-- **Next review:** 2026-11-15
+- **Next review:** 2026-11-29
 - **Course change:** none
 - **Candidates:** C-20261019-03, C-20261031-03, C-20261102-01, C-20261103-01, C-20261103-02, C-20261103-03, C-20261105-02, C-20261106-02
 
@@ -22,6 +22,7 @@ Five independent October 2026 papers on speculative decoding, each a different s
 - https://arxiv.org/abs/2610.27815 — ProVe: proposer-verifier self-speculative block decoding; single paper, no code.
 - https://arxiv.org/abs/2611.02846 — SpecOPD: branch-parallel on-policy distillation for drafters, acceptance-length objective; single paper, no code.
 - https://arxiv.org/abs/2611.06425 and https://github.com/fudan-generative-vision/D3D — D3D: standalone diffusion drafter enabling pipelined drafting; code with SGLang integration, no reproduction.
+- https://arxiv.org/abs/2611.14399 — REAL Loss: drafters trained on expected acceptance length (daily 2026-11-13, C class); single paper.
 
 ## What would change the decision
 
@@ -36,3 +37,4 @@ Update 2026-11-08: FLy now meets the adoption half of this bar (vLLM core, docum
 - 2026-10-25 — WAIT — active multi-group research on a foundational inference technique the course does not teach; adding the foundation is a structural decision for the author (as for serving and PTQ in W41/W42) — weekly/2026-W43.md — candidates C-20261019-03
 - 2026-11-01 — WAIT — the foundation now exists (08.6 teaches lossless draft-and-verify); the cluster's refinements are re-judged against it at an earlier review, as the author's 2026-10-28 scope decision asks — weekly/2026-W44.md — candidates C-20261031-03
 - 2026-11-08 — WAIT — six new entries; FLy (peer-reviewed, shipped and re-measured in vLLM core) is the first refinement to meet this file's adoption bar and is judged as a possible lossy-verification extension of 08.6 at the scheduled 2026-11-15 review; the diffusion-drafter entries (XPress, MDraft, D3D) stay WAIT under the 2026-11-03 non-autoregressive scope decision — weekly/2026-W45.md — candidates C-20261102-01, C-20261103-01, C-20261103-02, C-20261103-03, C-20261105-02, C-20261106-02
+- 2026-11-15 — WAIT — FLy still meets the adoption bar but ranks behind the queued author-approved foundations and Keep Sampling Mask; no new third-party evidence this week — weekly/2026-W46.md — candidates none new

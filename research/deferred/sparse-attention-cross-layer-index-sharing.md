@@ -27,3 +27,4 @@ Update 2026-11-08: question for the author in weekly/2026-W45.md. The 2026-10-28
 
 - 2026-10-25 — WAIT — peer-reviewed but single paper with no code; the course has no sparse-attention foundation lesson to extend — weekly/2026-W43.md — candidates C-20261019-01
 - 2026-11-08 — WAIT — MLI is a cross-layer index-reuse method like Prism, but the bigger news is that DSA is used by two major open-weight labs (DeepSeek-V3.2, GLM-5), which may meet the reopening condition of the author's 2026-10-28 sparse-attention decision; that is the author's call, so this topic is not REJECTed under that decision while the question is open; next review date unchanged — weekly/2026-W45.md — candidates C-20261106-01
+- 2026-11-15 — WAIT — the author reopened sparse attention (2026-11-08); the DSA foundation is tracked in sparse-attention-dsa-foundation.md and this file is re-judged against it once written; date unchanged — weekly/2026-W46.md — candidates none new

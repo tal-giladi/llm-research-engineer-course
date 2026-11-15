@@ -2,7 +2,7 @@
 
 - **Topic ID:** rl-sampling-mask-unbiased-is
 - **Status:** WAIT
-- **Next review:** 2026-11-15
+- **Next review:** 2026-11-22
 - **Course change:** none
 - **Candidates:** C-20261030-01
 
@@ -20,7 +20,10 @@ When rollouts are sampled with top-k/top-p, the engine's token probabilities are
 
 Qualifies on evidence (two independent OSS stacks, a major lab's practice) and fits as an advanced-extension section of 16.4, which already teaches that importance weights cannot fix top-k/top-p truncation. Waiting only because of the weekly ADD budget (the author-approved serving foundation took this week's slot). Next week: ADD as a 16.4 extension unless a stronger candidate competes; re-check whether verl/OpenRLHF adopted it.
 
+Update 2026-11-15: re-reading 16.4 shows the lesson already teaches the principle (section 5.3, the implementation-exercise solution and a Check-yourself answer: apply the same truncation and renormalize in the trainer), and Tal's 2026-11-09 score-centering extension already cites the TRL v1.17.0 release with masked IS. The remaining delta is narrower than W44 recorded: why the trainer cannot reliably recompute the top-p set itself (boundary tokens flip under numerical mismatch), so the engine must return its sampling mask, and the size of the bias (ratios ~1e-4 at top_p=0.9). Next review should decide between a short extension of 16.4 section 5.3 and closing it as covered.
+
 ## History
 
 - 2026-11-01 — WAIT — strong, adopted fix that extends 16.4 directly; one-ADD budget used by the author-approved serving foundation; next review next week — weekly/2026-W44.md — candidates C-20261030-01
 - 2026-11-08 — WAIT — still qualifies; this week's one ADD went to multi-teacher on-policy distillation, which had stronger multi-lab adoption and an independent reproduction; first in line next week — weekly/2026-W45.md — candidates none new
+- 2026-11-15 — WAIT — still adopted, but the delta over 16.4 (which already says to renormalize under the same truncation) is narrower than recorded; the ADD went to the older author-approved PTQ foundation; decide extension vs covered next week — weekly/2026-W46.md — candidates none new

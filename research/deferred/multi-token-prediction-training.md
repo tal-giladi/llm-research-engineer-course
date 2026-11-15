@@ -22,3 +22,4 @@ MTP itself may deserve a foundation (training objective + drafter for 08.6) once
 ## History
 
 - 2026-11-01 — WAIT — MTP is relevant to 08.6 and the DeepSeek-V3 guide but the candidate is a single small-scale paper; base MTP to be considered as its own topic — weekly/2026-W44.md — candidates C-20261031-04
+- 2026-11-15 — WAIT — the PTQ foundation landed this week, so per SCOPE-DECISIONS 2026-11-03 the author-approved MTP foundation may now be an ADD in a later week; this Soft-MTP file is re-judged against it once that exists — weekly/2026-W46.md — candidates none new

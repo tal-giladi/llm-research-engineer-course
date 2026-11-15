@@ -21,3 +21,4 @@ A course-author decision to add post-training quantization (see ternary-post-tra
 ## History
 
 - 2026-10-25 — WAIT — single paper for a foundation (PTQ) the course does not have — weekly/2026-W43.md — candidates C-20261022-02
+- 2026-11-15 — WAIT — the PTQ foundation it depended on now exists (08.7); re-judge against it on its own evidence at the scheduled review — weekly/2026-W46.md — candidates none new

@@ -21,3 +21,4 @@ First the author-approved post-training-quantization foundation (weights) has to
 ## History
 
 - 2026-11-08 — WAIT — a single paper with good code, but it refines a technique (low-bit KV quantization) the course has not taught yet; depends on the pending PTQ foundation — weekly/2026-W45.md — candidates C-20261105-03
+- 2026-11-15 — WAIT — the PTQ foundation it depended on now exists (08.7); re-judge against it on its own evidence at the scheduled review — weekly/2026-W46.md — candidates none new

@@ -4,7 +4,7 @@
 - **Status:** WAIT
 - **Next review:** 2026-11-29
 - **Course change:** none
-- **Candidates:** C-20260928-01
+- **Candidates:** C-20260928-01, C-20261109-01
 
 ## Summary
 
@@ -13,6 +13,7 @@ Replaces exhaustive query-block/key-block scoring in block-sparse attention with
 ## Evidence
 
 - https://arxiv.org/abs/2609.31093 — single paper; no code confirmed, no reproduction, no serving-stack adoption.
+- https://arxiv.org/abs/2611.07232 — RecSA: tree-summarized KV cache, O(log L) per-query selection, extrapolation to 1M-2M tokens from a 32K-trained Qwen3-4B (authors' numbers; no code).
 
 ## What would change the decision
 
@@ -21,3 +22,4 @@ Public code plus an independent reproduction, or adoption in a serving or traini
 ## History
 
 - 2026-10-04 — WAIT — single unreproduced paper in a crowded sparse-attention space — weekly/2026-W40.md — candidates C-20260928-01
+- 2026-11-15 — WAIT — RecSA joins as a second hierarchical-selection paper; no code; to be re-judged against the DSA foundation once it exists; date unchanged — weekly/2026-W46.md — candidates C-20261109-01

@@ -4,6 +4,11 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W46 (2026-11-15, weekly review)
+
+- Added **[08.7 · Post-training quantization: int8/int4 weights, scales, GPTQ and AWQ](lessons/module-08/lesson-07.md)**: integer grids with scales and zero-points at per-tensor, per-channel and per-group granularity; why the objective is the layer output error with $H = X^\top X$; GPTQ's column-by-column error compensation and AWQ's activation-aware channel scaling, each derived and worked by hand; the MXFP4 block format; post-training quantization vs quantization-aware training; bytes per weight and when a 4-bit model is faster. Code `code/src/llmre/model/quantize.py`, tests `code/tests/test_quantize.py`, experiment `code/experiments/ptq_gpt.py`.
+- Added dated real-world examples from the Kimi K3.1 Pro model card: QAT in [08.7](lessons/module-08/lesson-07.md), a linear + sparse attention hybrid in [12.5](lessons/module-12/lesson-05.md), joint multi-domain RL in [17.4](lessons/module-17/lesson-04.md)'s multi-teacher extension.
+
 ## 2026-W46 (2026-11-14, requested by Tal outside the weekly cycle)
 
 - Added **batch-size warmup (batch ramp) as §5 of [03.3](lessons/module-03/lesson-03.md)**: the gradient noise scale $B_{\text{simple}} = \operatorname{tr}(\Sigma)/\lVert G\rVert^2$ and the step/compute trade of McCandlish et al. 2018, worked by hand; the two-batch-size estimator; documented schedules (GPT-3, Gopher, Llama 3 405B, DeepSeek-V3, Merrill et al. 2025); implementing the ramp with gradient accumulation and a token-based learning-rate schedule; learning-rate rescaling; cost and common mistakes, plus an exercise, a debugging exercise and Check-yourself questions. With `llmre/optim/batch_schedule.py`, two tests in `tests/test_optim.py` and `experiments/noise_scale_toy.py`. Sections 1–4 are unchanged; later sections were renumbered and the lesson title gained ", batch ramp".

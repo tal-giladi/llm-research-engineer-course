@@ -51,6 +51,7 @@
   - [08.4 · FlashAttention & a Triton kernel; benchmark](lessons/module-08/lesson-04.md)
   - [08.5 · Fused linear cross-entropy: the loss without the logits](lessons/module-08/lesson-05.md)
   - [08.6 · Inference serving: KV cache, batching, speculative decoding](lessons/module-08/lesson-06.md)
+  - [08.7 · Post-training quantization: int8/int4, GPTQ, AWQ](lessons/module-08/lesson-07.md)
 - **9 · Distributed training**
   - [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md)
   - [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md)

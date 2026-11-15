@@ -4,7 +4,7 @@
 - **Status:** ADD
 - **Next review:** n/a
 - **Course change:** lessons/module-12/lesson-05.md (new lesson 12.5); code/src/llmre/attention/gated_deltanet.py; code/tests/test_gated_deltanet.py; _sidebar.md; curriculum/course-outline.md (paper-placement line)
-- **Candidates:** C-20260926-01
+- **Candidates:** C-20260926-01, C-20261108-05
 
 ## Summary
 
@@ -24,6 +24,7 @@ long-range retrieval in the full layers.
 - https://arxiv.org/abs/2608.30320 — Qwen3.8-Next architecture report (2026), continues the hybrid line and adds sparse attention (company claim on efficiency).
 - https://github.com/fla-org/flash-linear-attention — open-source Triton kernels (GDN since Dec 2024, KDA, GDN variants), used by vLLM for Qwen3-Next.
 - https://github.com/rasbt/LLMs-from-scratch/blob/main/ch04/08_deltanet/README.md — independent educational from-scratch implementation.
+- https://huggingface.co/moonshotai/Kimi-K3.1-Pro — 93 layers, 69 KDA + 24 Gated DSA: a linear + sparse hybrid (card verified 2026-11-15). Added to 12.5 as a dated real-world example on the author's instruction (2026-11-08).
 
 ## What would change the decision
 
@@ -33,3 +34,4 @@ Attention, DeepSeek-style indexers) if those are adopted beyond one lab.
 ## History
 
 - 2026-09-27 — ADD — mechanism settled (ICLR 2025 paper, open kernels), shipped by two independent labs (Qwen, Moonshot) in 3:1 hybrids and supported by vLLM/SGLang; fills a real gap after 12.3's KV-cache lesson — weekly/2026-W39.md — candidates C-20260926-01
+- 2026-11-15 — ADD — dated real-world example added to 12.5 (Kimi K3.1 Pro, linear + sparse hybrid), per the author's instruction; existing text unchanged — weekly/2026-W46.md — candidates C-20261108-05

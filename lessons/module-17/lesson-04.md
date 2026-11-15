@@ -519,6 +519,8 @@ loss = (per_token.sum(-1) / mask.sum(-1)).mean()            # per-sequence avera
 
 **When you would still use the single-teacher version.** When one strong teacher already covers your domains (the Qwen3 small-model recipe in section 6), when you cannot afford separate RL runs per domain, or when prompts do not split cleanly into domains. MOPD is a way to *merge specialists*. It is not needed when there is nothing to merge.
 
+**The other design: one joint RL run (real-world example, added 2026-11-15).** Not every lab trains specialists and merges them. Moonshot's Kimi K3.1 Pro model card ([Hugging Face](https://huggingface.co/moonshotai/Kimi-K3.1-Pro), November 2026, company claim) says the model was "post-trained from Kimi K3 with large-scale joint reinforcement learning across hundreds of downstream domains": a single RL run over the whole domain mix, with no specialist teachers to distil from. That design has the same budget problem as E.3. If the RL loss is averaged over tokens, domains with long answers take most of the gradient. The card does not say how the domains are balanced, and as of this date no published controlled comparison of joint RL against specialists plus MOPD exists.
+
 ### Common mistakes (MOPD)
 
 - **Treating prompt share as training share.** Check `teacher_token_frac`, not your data mixture.
