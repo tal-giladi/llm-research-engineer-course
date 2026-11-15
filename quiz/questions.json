@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "count": 4585,
+  "count": 4584,
   "questions": [
     {
       "id": "00.1-001",
@@ -3385,24 +3385,6 @@
       ],
       "answer_index": 1,
       "explanation": "Adam keeps two additional tensors per parameter (its running statistics), on top of the parameter value and its gradient. Plain SGD keeps none. That extra state is a major part of the training memory budget."
-    },
-    {
-      "id": "00.4-033",
-      "chapter": "00.4",
-      "chapter_name": "nn.Module and a minimal training loop",
-      "module": "0",
-      "module_name": "ML / PyTorch foundations",
-      "source": "lessons/module-00/lesson-04.md",
-      "section": "Hardware for this lesson",
-      "question": "What hardware does the line-fitting training lesson need?",
-      "options": [
-        "A GPU with at least 8 GB of memory for the 1001 steps",
-        "Any CPU; it runs well under a second with no GPU",
-        "A multi-GPU node, because 1001 steps is a long run",
-        "A CPU with at least 64 GB of RAM to hold the data"
-      ],
-      "answer_index": 1,
-      "explanation": "Fitting nn.Linear(1, 1) to 100 points takes well under a second for all 1001 steps on any CPU, with zero GPU-hours. It is the last lesson that trains instantly on a laptop; compute needs grow from module 6 onward."
     },
     {
       "id": "00.4-034",
