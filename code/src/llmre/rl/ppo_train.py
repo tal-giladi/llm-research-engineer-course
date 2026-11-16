@@ -86,7 +86,7 @@ def sample_answers(policy, prompt_ids, n, max_new_tokens, end_ids):
     room = policy.cfg.block_size - len(prompt_ids)
     if room < 1:
         raise ValueError("prompt leaves no room for an answer in the context")
-    idx = torch.tensor([prompt_ids] * n, dtype=torch.long, device=device)  # (n, T0)
+    idx = torch.tensor([prompt_ids] * n, dtype=torch.long, device=device)  # (n, T0): n times the same prompt to get different answers
     answers = [[] for _ in range(n)]
     finished = [False] * n
     for _ in range(min(max_new_tokens, room)):
