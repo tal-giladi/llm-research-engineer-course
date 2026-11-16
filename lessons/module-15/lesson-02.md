@@ -912,6 +912,16 @@ The reward model is imperfect, so the policy can find answers it overrates (rewa
 
 Ratio $= 0.15 / 0.10 = 1.5$. Unclipped $1.5 \times 2 = 3.0$; clipped $1.2 \times 2 = 2.4$; the minimum is $2.4$, the clipped constant, so its gradient is 0. The token already moved more than 20% in the helpful direction, so this batch stops pushing it.
 
+Step by step:
+
+1. **The ratio** compares the policy now with the policy that wrote the answer. $1.5$ means the token is now 50% more likely than when it was sampled. The earlier update steps on this batch already raised it.
+2. **The clip range** with $\varepsilon = 0.2$ is $[0.8, 1.2]$. Because the advantage is positive, only the upper bound matters: the clipped ratio is $\min(1.5, 1.2) = 1.2$.
+3. **The two candidates** are the unclipped term $1.5 \times 2 = 3.0$ and the clipped term $1.2 \times 2 = 2.4$. PPO takes the smaller one, $2.4$, so it never counts more gain than the clip allows.
+4. **Why the gradient is 0.** $1.2 \times 2$ is a fixed number with no $\theta$ in it, so changing the weights does not change it. The loss for this token is flat, and the optimizer has no reason to raise the probability further.
+5. **Compare with a token still inside the range.** Had the probability been $0.11$, the ratio would be $1.1$. The minimum is then the unclipped term $1.1 \times 2 = 2.2$, which depends on $\theta$, so the gradient still pushes the probability up.
+
+Why stop at 20%: the advantage $+2$ was measured on an answer the old policy wrote. The further the policy moves away from that policy, the less this one sample tells us about the new policy, so PPO uses it only for a small move. The token is not stuck. The next iteration writes new answers with the updated policy, and if the token is still good it gets a new advantage and can be pushed again from $0.15$.
+
 </details>
 
 <details><summary>The value model starts as a copy of the reward model. Why do the two give different numbers for the same prompt?</summary>
