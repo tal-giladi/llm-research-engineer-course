@@ -531,7 +531,7 @@ What ships is one ordinary GPT with its `lm_head`, exactly like the SFT model, o
 ### 7.2 One iteration, step by step
 
 1. Take a few prompts. Format each with the SFT chat template, ending with the open `<|assistant|>` header.
-2. **Write.** The policy writes several answers per prompt, sampling one token at a time, until it writes the end-of-turn marker `<|end|>` or reaches a length limit.
+2. **Write.** The policy writes one answer to each prompt (the same prompt can be sent more than once to get several different answers), sampling one token at a time, until it writes the end-of-turn marker `<|end|>` or reaches a length limit.
 3. **Grade.** The reward model scores each prompt + answer: one number per answer.
 4. **Freeze the numbers PPO needs**, with no gradients: the policy's log-probability of every answer token (the "old" log-probabilities), the reference's log-probabilities, the drift, the reward $R = \text{grade} - \beta \cdot \text{drift}$, the value model's $V_t$, and the rescaled advantages $A_t = R - V_t$.
 5. **Update, several times.** For a few passes over the batch, in small groups of answers: compute the new log-probabilities, the PPO loss, one optimizer step for the policy; compute $V_t$ again, the value loss, one optimizer step for the value model.
