@@ -1,0 +1,57 @@
+- id: q1
+  question: >-
+    You start DPO with the policy and the frozen reference both loaded from the same SFT
+    checkpoint. On the first batch, the reference gives the chosen answers much higher
+    probability than the rejected ones. What is the per-pair loss?
+  options:
+    - Below log 2, because the reference already ranks the chosen answers higher.
+    - Exactly log 2 for every pair, because every policy-minus-reference change is zero.
+    - Above log 2, because the rejected answers still have nonzero probability.
+    - It varies per pair with the gap between the chosen and rejected probabilities.
+  correct: 1
+  explanation: >-
+    DPO only scores how the policy moved relative to the reference. At the start both log
+    changes are 0, so the margin is 0, sigma(0) = 0.5, and the loss is -log 0.5 = log 2 for
+    every pair, whatever the reference itself prefers.
+- id: q2
+  question: >-
+    A teammate computes sequence log-probs by averaging token log-probs over each answer
+    instead of summing them, "so long answers are not penalized". What changes?
+  options:
+    - It optimizes a different objective and rescales the implicit reward against beta.
+    - Nothing important, because the reference subtraction cancels the length factor exactly.
+    - Only the logging changes, since the gradient direction of the loss is unchanged.
+    - Training becomes unstable because averaged log-probs can be positive.
+  correct: 0
+  explanation: >-
+    log pi(y|x) is the sum of token log-probs; the derivation needs that exact quantity.
+    Averaging divides each answer by its own length, so it is no longer the DPO objective
+    and the implicit reward is rescaled, which interacts with beta.
+- id: q3
+  question: >-
+    In one DPO pair the policy has made both the chosen and the rejected answer less likely
+    than the reference does, but the rejected one dropped much more. What does the loss say?
+  options:
+    - The loss rises, because the chosen answer's probability went down.
+    - The loss is log 2, because both changes have the same sign.
+    - The loss is undefined until the chosen answer's probability increases.
+    - The loss falls below log 2, because the chosen-minus-rejected change is positive.
+  correct: 3
+  explanation: >-
+    The margin is (chosen change) - (rejected change). A small drop minus a large drop is
+    positive, so sigma of the margin is above 0.5 and the loss is below log 2. DPO is relative
+    and does not guarantee the chosen answer's absolute probability rises.
+- id: q4
+  question: >-
+    Why can DPO train without ever computing the partition function Z(x), which sums over
+    every possible answer?
+  options:
+    - Z(x) is approximated by the reference model's probability of the chosen answer.
+    - Z(x) equals 1 whenever beta is small, so it can be dropped.
+    - Each pair compares two answers to the same prompt, so the beta log Z(x) terms cancel.
+    - The sigmoid normalizes the scores, which replaces the role of Z(x).
+  correct: 2
+  explanation: >-
+    The reward rewritten through the optimal policy is beta log(pi*/pi_ref) + beta log Z(x).
+    Bradley-Terry only uses the reward difference between two answers to the same prompt, and
+    the identical beta log Z(x) terms subtract to zero.
