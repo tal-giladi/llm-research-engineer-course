@@ -26,3 +26,24 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** dated extension of 01.3 / 17.4: "KL between nearly equal distributions in FP32", with a from-scratch stable K3 and a property-based test in `code/tests/`.
 - **Confidence:** medium
 - **Recommendation:** attach to the 2026-11-22 re-review of `softmax-cross-entropy-numerical-fixes`; check the paper's listings against the course's own KL/K3/distill code before deciding. Still no training-outcome evidence.
+
+### C-20261118-01 · CertiSum: certified-exact accumulation for bitwise-identical MXFP4 training across GPU vendors and parallelism layouts
+
+- **Class:** B
+- **Date discovered:** 2026-11-18
+- **Date published:** 2026-11-16
+- **Source:** https://arxiv.org/abs/2611.21584 (verified; full text read at https://arxiv.org/html/2611.21584v1)
+- **Organization/researchers:** Steve Rhyner, Yubo Gao, Stefan de Lasa, Sankeerth Durvasula, Nandita Vijaykumar (University of Toronto / Vector Institute; one author also NVIDIA, per the paper)
+- **Category:** distributed
+- **What changed:** A third, independent group (after Megatron-Core and TorchTitan) documents bitwise-reproducible training, and goes further: identical training states across AMD MI350X and NVIDIA GB200 and across data/tensor/context-parallel layouts, in 4-bit MXFP4.
+- **Technical summary:** FP32 accumulation of MXFP4 products is exact in any summation order whenever every partial sum fits the 24-bit significand; the paper certifies this per output with a sufficient bound (sum of absolute products below 2^24, with exponent guards keeping values normal) from statistics collected during quantization (row bound, per-32-element block bound, or a tight bound from a native GEMM on sign-cleared operands). Uncertified outputs are recomputed exactly from the same quantized operands (chunked native accumulation with exact merging, FP64 when a capacity check passes, or an integer superaccumulator); attention and nearly all weight-gradient GEMMs (46-68% of step GEMM FLOPs) go straight to exact kernels. Quantization blocks are kept unchanged across layouts and partial sums are merged without rounding. Results (authors): 200-step Qwen3-8B-Base runs bit-identical across MI350X and GB200 and across DP/TP/CP changes on MI350X; +11.8-60.5% step latency over the non-exact MXFP4 twin at larger shapes (15.4-77.3% at smaller), still up to 1.24x faster than BF16 and 1.70x faster than deterministic BF16. Stated limits: format-specific bounds (MXFP8 certifies less often), per-platform kernel-exactness assumption, needs replacing GEMM/attention/collectives/autograd; RL needs it in both trainer and inference engine.
+- **Why it might matter:** Turns "why is training nondeterministic" (07.3 reproducibility, 16.4 batch invariance) into a clean, hand-checkable arithmetic argument: summation order only matters when a partial sum rounds, and you can bound when it cannot. A from-scratch exercise (certify a toy int/FP4 dot product, show order-independence, then break it past 2^24) fits 07.3 and the MXFP4 material in 08.7.
+- **Evidence of adoption:** none found; no framework integration reported (TorchTitan is only a BF16 baseline). Short runs (200 steps).
+- **Major organizations using it:** none known.
+- **Open-source implementation:** none found (no repository link in the paper text read).
+- **Paper:** https://arxiv.org/abs/2611.21584
+- **Code:** none
+- **Relationship to existing course material:** `research/deferred/bitwise-deterministic-training.md` (WAIT, next review 2026-11-29; bar: a second framework/lab documenting a comparable determinism workflow); `research/accepted/rl-training-inference-mismatch.md`; lessons/module-07/lesson-03.md (exact resume), lessons/module-16/lesson-04.md (batch invariance), lessons/module-08/lesson-07.md (MXFP4).
+- **Potential course lesson:** dated extension of 07.3: "When is floating-point summation order-independent? Certifying exact accumulation", with a small NumPy/PyTorch exercise and a test in `code/tests/`.
+- **Confidence:** medium
+- **Recommendation:** attach to the 2026-11-29 re-review of `bitwise-deterministic-training` as independent evidence of the determinism direction; monitor for code release or framework integration.
