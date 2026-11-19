@@ -47,3 +47,24 @@ candidates here (full records); the weekly review evaluates them, archives this 
 - **Potential course lesson:** dated extension of 07.3: "When is floating-point summation order-independent? Certifying exact accumulation", with a small NumPy/PyTorch exercise and a test in `code/tests/`.
 - **Confidence:** medium
 - **Recommendation:** attach to the 2026-11-29 re-review of `bitwise-deterministic-training` as independent evidence of the determinism direction; monitor for code release or framework integration.
+
+### C-20261119-01 · Sampler choice under high temperature: top-nσ keeps long and agentic generation intact where top-p/top-k collapse
+
+- **Class:** B
+- **Date discovered:** 2026-11-19
+- **Date published:** 2026-11-17
+- **Source:** https://arxiv.org/abs/2611.22148 (verified; full text read at https://arxiv.org/html/2611.22148v1)
+- **Organization/researchers:** Allen G. Roush, Minh Nhat Nguyen, Ravid Shwartz-Ziv, Judah Goldfeder, Sanjay Basu (NeurIPS 2026, Evaluations and Datasets track, per the arXiv comment)
+- **Category:** inference
+- **What changed:** A large evaluation (29 open-weight models, 1B-122B, ten benchmarks plus needle retrieval to 1M tokens, including SWE-bench Verified coding agents) argues that the truncation rule, not the model, decides whether long generation survives raised temperature, and identifies the order of temperature vs truncation in serving engines as the mechanism.
+- **Technical summary:** Samplers whose candidate set stays small as temperature rises (top-nσ: keep logits within n standard deviations of the max logit, Tang et al. https://arxiv.org/abs/2411.07641) keep quality; samplers that admit the low-probability tail (top-p, top-k, Top-H, pure sampling) fall apart. Results (authors): at T=2, coding agents with top-p/top-k/Top-H resolve 0 of 100 GitHub issues, top-nσ 46-62 on three Qwen3.5 models; median retention of the T=1 score 100% for top-nσ vs 26% for top-p; in one Llama-3.1-8B story the top-p pool grows from 4 to 51,845 tokens from T=1 to T=2 while top-nσ stays at 3; typical pool size predicts judged quality across 133 setting x temperature cells (Spearman rho = -0.77). The paper states that HF, vLLM and SGLang apply temperature before truncation by default and llama.cpp the opposite; choosing the candidate set at T=1 and applying temperature afterwards ("temperature-last") stops the collapse for min-p, Top-H and P-less. Stated limits: one primary LLM judge (gpt-oss-120b; a second judge agrees rho = 0.92 on cell means), top-nσ still loops in 71% of forced 16K generations at T=2, Gemma-4-31B shows almost no separation (attributed to soft-capped logits, not isolated), and a script issue excluded some top-nσ settings from the sweep correlation. Experiments ran through a custom vLLM logits processor.
+- **Why it might matter:** The course teaches temperature, top-k and top-p from scratch on a 5-logit vector (06.3). The ordering point (temperature before vs after truncation) and the "candidate-set size" diagnostic are small, hand-checkable extensions of exactly that lesson, and they matter for RL rollouts and agents that sample at T >= 1.
+- **Evidence of adoption:** top-nσ is a built-in llama.cpp sampler (`--top-nsigma`, in the default sampler chain; verified in https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md). Not found in vLLM `sampling_params.py`, SGLang `sampling_params.py` or Transformers `logits_process.py` (checked today; all three ship min-p). Single evaluation paper; no independent reproduction yet.
+- **Major organizations using it:** none known beyond llama.cpp.
+- **Open-source implementation:** https://github.com/Hellisotherpeople/Long-Context-Generation-Is-a-Sampling-Problem-8- (verified exists via web fetch; not run)
+- **Paper:** https://arxiv.org/abs/2611.22148 ; top-nσ: https://arxiv.org/abs/2411.07641 (verified) ; min-p: https://arxiv.org/abs/2407.01082 (verified)
+- **Code:** https://github.com/Hellisotherpeople/Long-Context-Generation-Is-a-Sampling-Problem-8-
+- **Relationship to existing course material:** new (lookup "top-nsigma", "min-p": no matches); lessons/module-06/lesson-03.md teaches greedy/temperature/top-k/top-p.
+- **Potential course lesson:** dated extension of 06.3: "Truncation order and candidate-set size: min-p and top-nσ", worked by hand on the same 5-logit vector at T=1 and T=2, with a test that top-nσ's set is temperature-invariant when temperature is applied after truncation.
+- **Confidence:** medium
+- **Recommendation:** monitor; review for a short 06.3 extension if a second group reproduces the high-temperature result or vLLM/SGLang/Transformers add top-nσ or a temperature-last option.
