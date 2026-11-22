@@ -70,6 +70,7 @@
   - [12.3 · MQA / GQA](lessons/module-12/lesson-03.md)
   - [12.4 · Mixture of Experts (DeepSeek-style)](lessons/module-12/lesson-04.md)
   - [12.5 · Linear attention, Gated DeltaNet & hybrid stacks](lessons/module-12/lesson-05.md)
+  - [12.6 · Sparse attention: DeepSeek Sparse Attention](lessons/module-12/lesson-06.md)
 - **13 · Evaluation**
   - [13.1 · Loss, perplexity, zero-/few-shot](lessons/module-13/lesson-01.md)
   - [13.2 · Contamination, calibration, task eval](lessons/module-13/lesson-02.md)

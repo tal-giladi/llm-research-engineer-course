@@ -1,8 +1,8 @@
 # Keep Sampling Mask: unbiased importance ratios under top-k/top-p rollouts (DeepSeek-V3.2 practice, TRL v1.17.0 default, vLLM support)
 
 - **Topic ID:** rl-sampling-mask-unbiased-is
-- **Status:** WAIT
-- **Next review:** 2026-11-22
+- **Status:** REJECT
+- **Next review:** on new evidence
 - **Course change:** none
 - **Candidates:** C-20261030-01
 
@@ -22,8 +22,11 @@ Qualifies on evidence (two independent OSS stacks, a major lab's practice) and f
 
 Update 2026-11-15: re-reading 16.4 shows the lesson already teaches the principle (section 5.3, the implementation-exercise solution and a Check-yourself answer: apply the same truncation and renormalize in the trainer), and Tal's 2026-11-09 score-centering extension already cites the TRL v1.17.0 release with masked IS. The remaining delta is narrower than W44 recorded: why the trainer cannot reliably recompute the top-p set itself (boundary tokens flip under numerical mismatch), so the engine must return its sampling mask, and the size of the bias (ratios ~1e-4 at top_p=0.9). Next review should decide between a short extension of 16.4 section 5.3 and closing it as covered.
 
+Decision 2026-11-22 (closed as covered, as W46 asked): the mechanism is sound and adopted, but 16.4 already teaches it (section 5.3, the implementation-exercise solution and a Check-yourself answer), and the 16.4 score-centering extension already cites the TRL v1.17.0 release with masked IS. Reopen only if 16.4 is revised for another reason (then add one sentence on why the engine must return its mask: boundary tokens flip under numerical mismatch), or if new evidence shows the residual bias materially changes training in a widely used stack.
+
 ## History
 
 - 2026-11-01 — WAIT — strong, adopted fix that extends 16.4 directly; one-ADD budget used by the author-approved serving foundation; next review next week — weekly/2026-W44.md — candidates C-20261030-01
 - 2026-11-08 — WAIT — still qualifies; this week's one ADD went to multi-teacher on-policy distillation, which had stronger multi-lab adoption and an independent reproduction; first in line next week — weekly/2026-W45.md — candidates none new
 - 2026-11-15 — WAIT — still adopted, but the delta over 16.4 (which already says to renormalize under the same truncation) is narrower than recorded; the ADD went to the older author-approved PTQ foundation; decide extension vs covered next week — weekly/2026-W46.md — candidates none new
+- 2026-11-22 — REJECT — covered: 16.4 already teaches applying the same truncation and renormalizing in the trainer, and the 16.4 score-centering extension cites TRL v1.17.0's masked IS; the remaining delta is a sentence, not a lesson — weekly/2026-W47.md — candidates none new

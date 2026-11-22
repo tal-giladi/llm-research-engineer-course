@@ -4,6 +4,10 @@ How the course evolves. Changes happen at most once a week, only when a developm
 bar in [the weekly review protocol](research/PROTOCOL-weekly.md). New material extends the
 existing lessons; it never replaces them. "No curriculum changes this week" is a normal entry.
 
+## 2026-W47 (2026-11-22, weekly review)
+
+- Added **[12.6 · Sparse attention: DeepSeek Sparse Attention (lightning indexer + top-k)](lessons/module-12/lesson-06.md)**: why dense attention costs $O(T^2)$ and what sparsity can and cannot remove; the lightning indexer score and top-k key selection, worked by hand on four tokens; training the indexer by KL to the head-summed attention (dense warm-up, then sparse training with a detached input); a from-scratch `DSAttention` that reduces exactly to 12.3's GQA when nothing is dropped; DeepSeek-V3.2's per-layer cost at 4K-128K context (about 11× fewer prefill and 13× fewer decode multiply-adds at 128K, no saving in KV storage); and GLM-5 and Kimi K3.1 Pro as further adopters. With `code/src/llmre/attention/sparse.py`, `code/tests/test_sparse_attention.py` and `code/experiments/dsa_indexer_warmup.py`. No existing lesson or code was changed. [Review](research/weekly/2026-W47.md).
+
 ## 2026-W46 (2026-11-15, weekly review)
 
 - Added **[08.7 · Post-training quantization: int8/int4 weights, scales, GPTQ and AWQ](lessons/module-08/lesson-07.md)**: integer grids with scales and zero-points at per-tensor, per-channel and per-group granularity; why the objective is the layer output error with $H = X^\top X$; GPTQ's column-by-column error compensation and AWQ's activation-aware channel scaling, each derived and worked by hand; the MXFP4 block format; post-training quantization vs quantization-aware training; bytes per weight and when a 4-bit model is faster. Code `code/src/llmre/model/quantize.py`, tests `code/tests/test_quantize.py`, experiment `code/experiments/ptq_gpt.py`.
