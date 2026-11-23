@@ -89,9 +89,64 @@ The constitution makes the values **explicit and inspectable** (a document you c
 
 ### RLAIF vs RLHF
 
-RLAIF = RLHF with the preference labeler swapped from human to AI. The reported finding (**PUBLICLY DOCUMENTED** in the RLAIF paper): on the tasks studied, RLAIF performs **comparably** to RLHF, and it scales far more cheaply because AI labels are fast and abundant.
+**The one-sentence version.** RLAIF is RLHF with exactly one part swapped: the person who looks at two answers and says "this one is better" is replaced by a language model. Everything after that — training a reward model on the pairs, then running PPO (or DPO) against it — is unchanged from 15.1–15.3.
 
-Honesty markers, as the brief requires:
+**Where the swap happens.** Walk the RLHF pipeline and mark the one box that changes:
+
+| Step | RLHF | RLAIF |
+|---|---|---|
+| 1. Start from an SFT model | same | same |
+| 2. Sample two answers A and B for each prompt | same | same |
+| 3. **Decide which answer is better** | a hired human annotator reads both and clicks one | a separate "labeler" LLM is prompted to compare them |
+| 4. Train a reward model on the labeled pairs (15.1) | same | same |
+| 5. Optimize the policy against it with PPO + KL (15.2), or skip 4–5 and run DPO (15.3) | same | same |
+
+So "RLAIF vs RLHF" is not a comparison of two training algorithms. It is a comparison of **two sources of preference labels** feeding the same algorithm.
+
+**What the AI labeler actually does.** It is just a prompt. Roughly:
+
+```text
+You are rating two summaries of the same article.
+Article: <article>
+Summary 1: <answer A>
+Summary 2: <answer B>
+Explain which summary is more accurate, complete and concise, then answer "1" or "2".
+```
+
+Three details from the RLAIF paper ([Lee et al. 2023](https://arxiv.org/abs/2309.00267)) make this work in practice:
+
+1. **Soft labels, not a hard click.** Instead of reading off the word "1" or "2", read the labeler's probabilities for the two tokens and normalize them: e.g. $P(\text{"1"}) = 0.8$, $P(\text{"2"}) = 0.2$. That 0.8 is a *confidence*, which a human click cannot give you.
+2. **Position-bias fix.** LLM judges tend to favor whichever answer is shown first. So ask twice, once with the order swapped, and average.
+3. **Let it reason first.** Asking the labeler to explain before answering (chain-of-thought) improved agreement with human labels.
+
+**Tiny worked example.** The labeler sees (A, B) and gives $P(A \text{ better}) = 0.8$. Shown (B, A) it gives $P(A \text{ better}) = 0.7$ (position bias pulled it a bit toward B, which was now first). Average: $p = 0.75$. The reward model is then trained with this *soft* target in the usual Bradley–Terry loss from 15.1, where $r_A, r_B$ are the reward model's scalar scores:
+
+$$
+\mathcal{L} = -\big[\,p\,\log\sigma(r_A - r_B) + (1-p)\,\log\sigma(r_B - r_A)\,\big]
+$$
+
+If the reward model currently scores $r_A - r_B = 1$: $\sigma(1) = 0.731$, $\sigma(-1) = 0.269$, so
+
+$$
+\mathcal{L} = -\big[0.75 \cdot \ln 0.731 + 0.25 \cdot \ln 0.269\big] = -\big[0.75 \cdot (-0.313) + 0.25 \cdot (-1.313)\big] = 0.235 + 0.328 = 0.563
+$$
+
+With a human hard label ($p = 1$) the loss would be just $-\ln 0.731 = 0.313$, and the gradient would keep pushing the gap wider forever. The soft target says "A is better, but only 75% sure" — the loss is minimized when $\sigma(r_A - r_B) = 0.75$, i.e. at a gap of about $1.1$, not infinity.
+
+**What the paper found** (**PUBLICLY DOCUMENTED**, on the three tasks it tested: summarization, helpful dialogue, harmless dialogue):
+
+- Human raters preferred RLAIF outputs over the plain SFT model about as often as they preferred RLHF outputs over SFT — roughly 7 in 10 times for summarization in both cases. Put head to head, RLAIF and RLHF were rated about equal.
+- On harmlessness, RLAIF actually scored *higher* than RLHF.
+- It still worked when the labeler was the **same size** as the policy being trained — so the gain is not only "a bigger model teaching a smaller one."
+- A variant, **direct RLAIF**, skips the reward model entirely: the labeler LLM scores each response 1–10 during RL and that score *is* the reward. This avoids the reward model going stale (the distribution-shift problem above), at the cost of calling a large LLM inside every RL step.
+
+**Why anyone does this.** Cost and speed. A human comparison costs real money and minutes; an LLM comparison costs fractions of a cent and milliseconds, so you can label millions of pairs, and re-label fresh on-policy samples whenever the policy drifts (exactly the iterative fix for distribution shift above).
+
+**What you give up.** The labeler's biases become your reward. If the judge likes long answers, confident tone, or its own writing style, the policy will learn to produce those — reward hacking now targets the *judge*, not humans. RLAIF moves human effort from labeling every pair to writing the labeler prompt / constitution and auditing a sample of its labels; it does not remove the need for humans.
+
+#### How sure are we about each claim in this lesson?
+
+The course marks claims by how well-supported they are:
 
 - **PUBLICLY DOCUMENTED:** the CAI critique-revise recipe and its use of AI-generated preferences; the RLAIF comparability result on the studied tasks; that DPO optimizes the same objective as the RLHF/PPO derivation (15.3).
 - **REASONABLE INDUSTRY PRACTICE:** SFT → preference optimization as the standard post-training pipeline; iterating the reward model on fresh on-policy data to combat distribution shift; using DPO as the default open-weight preference method; caching reference log-probs for DPO.
