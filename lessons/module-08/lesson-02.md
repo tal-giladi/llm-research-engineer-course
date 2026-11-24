@@ -120,10 +120,10 @@ Try it yourself: change $n$ and the dtype and watch where the matmul crosses the
 
 The roofline gives the fix for memory-bound kernels directly: **move fewer bytes.** The most important way to do that in practice is **kernel fusion**.
 
-Consider the classic transformer MLP tail: a Linear produces `z`, then you add a bias, apply GELU, and apply dropout:
+Consider the classic transformer MLP tail: a bias-free matmul produces `z`, then you add the bias as a separate kernel, apply GELU, and apply dropout:
 
 ```python
-z = x @ W + b          # matmul (compute-bound) — leave it
+z = x @ W              # matmul (compute-bound) — leave it; no bias here
 h = z + bias           # elementwise  -> reads z, writes h
 g = gelu(h)            # elementwise  -> reads h, writes g
 y = dropout(g)         # elementwise  -> reads g, writes y
