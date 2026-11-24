@@ -176,7 +176,7 @@ UltraFeedback also has an `overall_score` from GPT-4's written critique. In 1,75
 - **Splitting train and validation by row when there are several pairs per prompt.** The same prompt then appears on both sides and validation accuracy is inflated. Split by prompt. The lab keeps one pair per prompt, so a row split is a prompt split.
 - **Trusting a single-order LLM judge.** Always ask in both orders, or randomise the order and measure the bias.
 - **Comparing reward-model accuracy across datasets.** 70% on noisy human labels can be a better model than 90% on easy synthetic pairs.
-- **Keeping chosen == rejected rows.** They give a zero gradient in both DPO and Bradley-Terry and usually signal a bug upstream; `validate_pair` catches them.
+- **Keeping chosen == rejected rows.** They give a zero gradient in both DPO and Bradley-Terry and usually signal a bug upstream; `validate_pair` catches them. Identical text gets identical scores, so the loss is stuck at $\log 2$ and the push up on "chosen" exactly cancels the push down on "rejected" through the same weights. They typically appear when several samples come out the same (low temperature, or short answers like "Yes" or "Paris"), when best-vs-worst picks from tied answers, or when an indexing bug or whitespace cleanup makes both sides equal.
 
 ## 8. Exercise: does balancing length change what the reward model learns?
 
