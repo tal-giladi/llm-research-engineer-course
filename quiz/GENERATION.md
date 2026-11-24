@@ -1,7 +1,7 @@
 # Question-bank generation rules
 
 Output: one JSON file per lesson in `quiz/parts/<chapter>.json` (e.g. `quiz/parts/05.2.json`,
-frontier lessons `F.1.json`, practice sets `01.P34.json` / `07.P4.json`). Each file is a JSON array of:
+frontier lessons `F.1.json`, practice sets `07.P4.json`). Each file is a JSON array of:
 
 ```json
 {

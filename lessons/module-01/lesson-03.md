@@ -325,7 +325,7 @@ Unit mismatch. $0.693 = 1.0 \times \ln 2$, so the textbook is in bits ($\log_2$)
 
 ## Practice
 
-A separate page of practice problems for lessons 01.3 and 01.4 (math by hand, softmax and log-softmax, shapes, PyTorch, debugging), with full worked solutions at the bottom: [01.3–01.4 · Practice set](lessons/module-01/practice-03-04.md).
+A separate page of practice problems for lessons 01.3 and 01.4 (math by hand, softmax and log-softmax, shapes, PyTorch, debugging), with worked solutions under each part: [01.5 · Practice set](lessons/module-01/lesson-05.md).
 
 ## Next
 
