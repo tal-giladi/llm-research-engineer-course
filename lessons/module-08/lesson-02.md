@@ -174,10 +174,11 @@ About 98% of the bytes are $S$ and $P$, intermediates nobody needs once the outp
 
 ### 7.2 Why section 6's fusion does not work as-is
 
-Fusing bias → GELU → dropout was easy for two reasons. Both fail for attention.
+What matters is not how big a tensor is in total, but **how much of it one kernel must hold on chip at the same moment**.
 
-1. **Each output depended only on the matching input.** $\mathrm{gelu}(h_i)$ needs only $h_i$, so a thread can load a chunk, process it, write it, and never look at anything else. Softmax is different: $P_{ij} = e^{S_{ij} - m_i} / \sum_k e^{S_{ik} - m_i}$, where $m_i$ is the row maximum. To produce even one probability you need the max and the sum over the **entire row** of $T$ scores.
-2. **The intermediates fit on chip.** $h$ and $g$ were the same size as the chunk being processed, so they lived in registers. A block of 128 query rows of $S$ is $128 \times 4096 \times 4$ bytes $= 2$ MB in fp32, while an A100 SM has about 164 KB of SRAM (08.1). It does not fit, and it grows with $T$.
+In the GELU chain, each output depends only on the matching input: $\mathrm{gelu}(h_i)$ needs only $h_i$. So a thread loads a few elements of $z$, computes $h$, $g$ and $y$ for just those elements in registers, writes $y$, and moves on. The full $h$ and $g$ never exist anywhere; at any moment only a few bytes per thread are on chip, whether the whole tensor is 4 KB or 4 GB.
+
+Softmax cannot work on a small piece. $P_{ij} = e^{S_{ij} - m_i} / \sum_k e^{S_{ik} - m_i}$, where $m_i$ is the row maximum, so to produce even one probability you need the max and the sum over the **entire row** of $T$ scores. A kernel therefore has to hold whole rows of $S$ at once. A block of 128 query rows is $128 \times 4096 \times 4$ bytes $= 2$ MB in fp32, while an A100 SM has about 164 KB of SRAM (08.1). It does not fit, and it grows with $T$.
 
 Could you process one query row at a time instead? One row of 4096 scores is 16 KB and fits. But then every query row has to read **all of $K$ and $V$** from HBM again: $4096 \text{ rows} \times 1 \text{ MB} \approx 4$ GB of traffic, 30× *worse* than standard attention. Tiny tiles kill data reuse, and reuse is what buys arithmetic intensity (section 4).
 
