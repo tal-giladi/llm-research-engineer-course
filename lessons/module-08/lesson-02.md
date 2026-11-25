@@ -198,7 +198,7 @@ Same $T = 4096$, $d = 64$, $B_q = 128$:
 - total $\approx 35$ MB instead of 136 MB, for the same 4.3 GFLOP;
 - $\text{AI} \approx 124$ FLOPs/byte instead of 32. On the roofline the dot slides from ~21% of peak to ~81%, close to the ridge.
 
-The bigger win is **memory held**. The $T \times T$ matrix never exists, so attention needs $O(T)$ memory instead of $O(T^2)$. At $T = 131{,}072$ a single fp16 $T \times T$ matrix is $131072^2 \cdot 2 \approx 34$ GB, per head, per layer. Without FlashAttention, long context does not fit on the GPU at all.
+The bigger win is **memory held**. The $T \times T$ matrix never exists, so attention needs $O(T)$ memory instead of $O(T^2)$. At $T = 131{,}072$ a single fp16 $T \times T$ matrix is $131072^2 \cdot 2 \approx 34$ GB, per head, per layer. Without FlashAttention, long context runs out of HBM, which is about 40–80 GB (CUDA out-of-memory).
 
 (The $K, V$ re-reads still grow like $T^2$, but scaled by $d/B_q$, which keeps them about 4× below the standard version's $S$/$P$ traffic here. What drops to $O(T)$ is the memory held, not the traffic.)
 
