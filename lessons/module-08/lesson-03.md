@@ -10,6 +10,9 @@
 
 The roofline (08.2) tells you what *kind* of fix a kernel needs, but not *which* kernels in your model actually matter. A transformer forward+backward launches thousands of kernels; optimizing the wrong one is wasted effort. The rule is the same as in any performance work: **measure first.** A profiler records, for one real step, how long every kernel took, how they overlap between CPU and GPU, and where time is lost. Then you attack the top of the list — and only the top.
 
+> [!NOTE]
+> **When do you profile? In a separate short run, before the long one.** You do not keep the profiler on during the real training run that takes days: it slows every step and writes huge trace files. Instead, before launching that run, you start the *same* training script with the *same* model and the *same* batch size, and stop it after about 20–50 steps instead of, say, 100,000. The dataset is not made smaller — the short run simply reads the first few batches of the full dataset and never gets to the rest. Because every training step does the same work, those few steps (after skipping the first couple of warm-up steps) show how every step of the long run will behave. During the long run you only watch cheap numbers such as time per step; if those get worse, you turn the profiler on for a few steps or stop and do another short profiling run.
+
 ## 2. The PyTorch profiler
 
 `torch.profiler` wraps a slice of your code, records every operator and every CUDA kernel with timestamps, and lets you print a sorted table or export a trace to view on a timeline.
