@@ -1,0 +1,36 @@
+- id: q1
+  question: Four completions give the same wrong sum. What should the arithmetic trainer record?
+  options:
+    - A positive reward for each answer because all samples agree.
+    - Zero rewards from the verifier and zero advantages within the group.
+    - Negative advantages for all four answers because each one failed.
+    - Rewards equal to the reference policy’s probability of each answer.
+  correct: 1
+  explanation: The engineer chose an arithmetic correctness rule. The verifier rejects every answer, and their equal scores give the group no relative reward signal.
+- id: q2
+  question: You take three optimizer steps on the same sampled answers. What belongs in the denominator of each probability ratio?
+  options:
+    - The probabilities from the current forward pass before each backward pass.
+    - The probabilities from the frozen reference checkpoint throughout training.
+    - The probabilities obtained by normalizing the rewards over the group.
+    - The probabilities recorded when the policy originally sampled those answers.
+  correct: 3
+  explanation: Each ratio measures change since collection. Keep the rollout log-probabilities fixed and recompute the numerator on the same sampled choices.
+- id: q3
+  question: Your arithmetic trainer has cached rollout log-probabilities. You now enable a KL penalty against the starting checkpoint. What else do you need?
+  options:
+    - Reference distributions or reference log-probabilities for the KL calculation.
+    - An optimizer for a critic that predicts expected arithmetic rewards.
+    - A second verifier to rescore the group after every gradient step.
+    - A separate set of answers sampled from the starting checkpoint.
+  correct: 0
+  explanation: The frozen reference supplies the anchor for drift across training. Rollout values track the policy that sampled this group and can differ from that anchor.
+- id: q4
+  question: A mixed group has nonzero advantages. At the first update all ratios are one and the mean objective is zero. What should you inspect before declaring the update broken?
+  options:
+    - Whether the clip width is small enough to exclude a ratio of one.
+    - Whether every completion’s advantage has the same positive sign.
+    - Whether current log-probabilities carry gradients and rollout values are fixed.
+    - Whether the reference policy has already taken its first optimizer step.
+  correct: 2
+  explanation: Initially the two policy versions agree and centered advantages average to zero. The current probabilities still depend on the weights, so the objective can have a nonzero gradient.
