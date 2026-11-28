@@ -91,7 +91,7 @@ $s$ is one more running sum, rescaled by the same $\alpha$ as $\ell$. Three numb
 
 ## 3. Numerical example by hand
 
-One position, $C = 2$, $V = 4$, two vocabulary tiles of width $B_v = 2$.
+One position ($B = 1$, $T = 1$, so $N = 1$), $C = 2$, $V = 4$, two vocabulary tiles of width $B_v = 2$. The target token is $y = 1$ (0-indexed): the correct next token is vocabulary entry 1, whose LM-head row is $w_1 = [0, 1]$.
 
 $$
 h = [1,\ 2],\quad
