@@ -210,4 +210,4 @@ In an MoE, the router sends each token to only one or a few of the many experts,
 
 You have now seen the full parallelism toolkit: data parallelism and ZeRO/FSDP (split the data and shard the memory, 09.1–09.2) and tensor / pipeline / expert parallelism (split the model itself, this lesson). Together these are how any model larger than one GPU is trained. The next module steps back from *how to train fast* to *how big to make the model and how much data to use in the first place* — the scaling laws that turn a compute budget into an optimal model size and token count.
 
-Continue to [Module 10 · Scaling laws](lessons/module-10/lesson-01.md).
+Before moving on, [09.4 · Summary: batches, accumulation, and DDP](lessons/module-09/lesson-04.md) puts micro-batches, accumulation and DDP side by side. Then continue to [Module 10 · Scaling laws](lessons/module-10/lesson-01.md).

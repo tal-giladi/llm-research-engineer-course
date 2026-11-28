@@ -74,9 +74,16 @@
             });
           });
           hook.afterEach(function (html) {
-            return html.replace(/KATEXSTASH(\d+)END/g, function (_, i) {
+            html = html.replace(/KATEXSTASH(\d+)END/g, function (_, i) {
               return stash[+i].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             });
+            // GitHub alerts (> [!NOTE] ...) -> preview callouts.
+            var KIND = { NOTE: '', TIP: 'key', IMPORTANT: 'key', WARNING: 'warn', CAUTION: 'warn' };
+            return html.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*?)<\/blockquote>/g,
+              function (_, kind, body) {
+                return '<div class="callout ' + KIND[kind] + '"><p><strong>' + kind.charAt(0) +
+                  kind.slice(1).toLowerCase() + '.</strong> ' + body + '</div>';
+              });
           });
           // Render math with KaTeX auto-render AFTER docsify writes the DOM,
           // so $...$ inside raw-HTML blocks (prereq / callout divs) also renders.

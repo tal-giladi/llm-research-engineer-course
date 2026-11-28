@@ -1,0 +1,51 @@
+- id: q1
+  question: >-
+    A run uses 8 GPUs with DDP, DataLoader batch_size=16 and 4 accumulation steps. How many
+    examples go into each optimizer update?
+  options:
+    - 64, because DDP averages the gradients so the GPUs do not add examples.
+    - 128, because only the 8 GPUs and the batch size of 16 count.
+    - 512, because every GPU adds 16 × 4 examples before the shared update.
+    - 16, because batch_size in the DataLoader is the update batch.
+  correct: 2
+  explanation: >-
+    Global batch = micro-batch × accumulation steps × world size = 16 × 4 × 8 = 512. Averaging
+    sets the gradient's scale; it does not remove the extra examples the other ranks processed.
+- id: q2
+  question: >-
+    You remove model.no_sync() from a correct DDP accumulation loop and change nothing else.
+    What happens?
+  options:
+    - The gradients become A times too large because each micro-batch is all-reduced.
+    - Training hangs because ranks all-reduce at different micro-batches.
+    - The ranks drift apart because they now step on different gradients.
+    - The update is unchanged but every micro-batch now pays for a full all-reduce.
+  correct: 3
+  explanation: >-
+    Averaging is linear, so averaging each micro-batch and then summing gives the same window
+    gradient. no_sync() only removes the A−1 unused all-reduces per optimizer step.
+- id: q3
+  question: >-
+    A teammate wraps only loss.backward() in model.no_sync(), with the forward pass above the
+    with-block. A communication hook still fires on every micro-batch. Why?
+  options:
+    - DDP decides during the forward pass whether the next backward will synchronize.
+    - no_sync() only works when gradient clipping is turned off.
+    - The hook ignores no_sync() and always counts each backward pass.
+    - no_sync() only affects the last bucket, so the other buckets still sync.
+  correct: 0
+  explanation: >-
+    DDP prepares its reducer in forward. A forward outside no_sync() arms the all-reduce, so the
+    following backward synchronizes even inside the block.
+- id: q4
+  question: >-
+    In a DDP loop with A = 4 accumulation steps, where should clip_grad_norm_ go?
+  options:
+    - After every backward, so each micro-batch's contribution stays bounded.
+    - After the fourth backward and before optimizer.step(), on the synced gradient.
+    - Before the first forward of each window, on the gradient left from last step.
+    - Inside no_sync(), so the clipping is not repeated on every rank.
+  correct: 1
+  explanation: >-
+    Clipping uses the norm of the gradient that will be applied. Only after the last backward of
+    the window has every rank's .grad been summed and all-reduced into that gradient.

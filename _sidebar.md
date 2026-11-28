@@ -56,6 +56,7 @@
   - [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md)
   - [09.2 · ZeRO & FSDP](lessons/module-09/lesson-02.md)
   - [09.3 · Tensor / pipeline / expert parallelism](lessons/module-09/lesson-03.md)
+  - [09.4 · Summary: batches, accumulation, and DDP](lessons/module-09/lesson-04.md)
 - **10 · Scaling laws**
   - [10.1 · FLOPs & parameter counting](lessons/module-10/lesson-01.md)
   - [10.2 · Kaplan scaling laws; fit a curve](lessons/module-10/lesson-02.md)
