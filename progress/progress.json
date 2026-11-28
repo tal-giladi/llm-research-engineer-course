@@ -202,14 +202,631 @@
       "completed": "2026-09-30"
     },
     "03.3": {
-      "status": "in-progress",
+      "status": "completed",
       "history": [
         {
           "date": "2026-09-30",
           "status": "in-progress"
+        },
+        {
+          "date": "2026-09-30",
+          "status": "completed"
         }
       ],
-      "started": "2026-09-30"
+      "started": "2026-09-30",
+      "completed": "2026-09-30"
+    },
+    "04.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-09-30",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-09-30",
+      "completed": "2026-10-01"
+    },
+    "04.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-01",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-01",
+      "completed": "2026-10-01"
+    },
+    "04.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-01",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-01",
+      "completed": "2026-10-01"
+    },
+    "05.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-01",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-01",
+      "completed": "2026-10-01"
+    },
+    "05.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-01",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-01",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-01",
+      "completed": "2026-10-01"
+    },
+    "05.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-01",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-02",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-01",
+      "completed": "2026-10-02"
+    },
+    "05.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-02",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-02",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-02",
+      "completed": "2026-10-02"
+    },
+    "06.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-02",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-02",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-02",
+      "completed": "2026-10-02"
+    },
+    "06.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-02",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-02",
+      "completed": "2026-10-03"
+    },
+    "06.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-03",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-03",
+      "completed": "2026-10-03"
+    },
+    "07.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-03",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-03",
+      "completed": "2026-10-03"
+    },
+    "07.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-03",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-03",
+      "completed": "2026-10-03"
+    },
+    "07.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-03",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-03",
+      "completed": "2026-10-03"
+    },
+    "07.4": {
+      "status": "read",
+      "history": [
+        {
+          "date": "2026-10-03",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-05",
+          "status": "read"
+        }
+      ],
+      "started": "2026-10-03",
+      "read": "2026-10-05"
+    },
+    "08.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-05",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-07",
+          "status": "completed"
+        },
+        {
+          "date": "2026-10-07",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-05",
+      "completed": "2026-10-07"
+    },
+    "08.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-07",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-09",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-07",
+      "completed": "2026-10-09"
+    },
+    "08.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-07",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-10-07"
+    },
+    "08.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-09",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-10-09"
+    },
+    "09.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-09",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-10",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-09",
+      "completed": "2026-10-10"
+    },
+    "09.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-10",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-11",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-10",
+      "completed": "2026-10-11"
+    },
+    "09.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-11",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-12",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-11",
+      "completed": "2026-10-12"
+    },
+    "10.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-12",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-13",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-12",
+      "completed": "2026-10-13"
+    },
+    "10.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-13",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-16",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-13",
+      "completed": "2026-10-16"
+    },
+    "10.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-16",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-19",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-16",
+      "completed": "2026-10-19"
+    },
+    "11.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-19",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-19",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-19",
+      "completed": "2026-10-19"
+    },
+    "11.2": {
+      "status": "read",
+      "history": [
+        {
+          "date": "2026-10-19",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-19",
+          "status": "read"
+        }
+      ],
+      "started": "2026-10-19",
+      "read": "2026-10-19"
+    },
+    "11.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-19",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-19",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-19",
+      "completed": "2026-10-19"
+    },
+    "12.1": {
+      "status": "in-progress",
+      "history": [
+        {
+          "date": "2026-10-19",
+          "status": "in-progress"
+        }
+      ],
+      "started": "2026-10-19"
+    },
+    "12.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-19",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-10-20",
+          "status": "completed"
+        },
+        {
+          "date": "2026-11-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-19",
+      "completed": "2026-11-03"
+    },
+    "12.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-10-20",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-03",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-10-20",
+      "completed": "2026-11-03"
+    },
+    "12.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-03",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-03"
+    },
+    "12.5": {
+      "status": "read",
+      "history": [
+        {
+          "date": "2026-11-06",
+          "status": "read"
+        }
+      ],
+      "read": "2026-11-06"
+    },
+    "13.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-06",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-06"
+    },
+    "13.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-06",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-06",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-11-06",
+      "completed": "2026-11-06"
+    },
+    "13.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-06",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-11",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-11-06",
+      "completed": "2026-11-11"
+    },
+    "14.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-11",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-11"
+    },
+    "14.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-11",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-11"
+    },
+    "14.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-11",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-12",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-11-11",
+      "completed": "2026-11-12"
+    },
+    "15.1": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-12",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-13",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-11-12",
+      "completed": "2026-11-13"
+    },
+    "15.2": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-13",
+          "status": "in-progress"
+        },
+        {
+          "date": "2026-11-16",
+          "status": "completed"
+        },
+        {
+          "date": "2026-11-23",
+          "status": "completed"
+        }
+      ],
+      "started": "2026-11-13",
+      "completed": "2026-11-23"
+    },
+    "15.3": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-23",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-23"
+    },
+    "15.4": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-23",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-23"
+    },
+    "15.5": {
+      "status": "completed",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-11-24"
+    },
+    "16.1": {
+      "status": "in-progress",
+      "history": [
+        {
+          "date": "2026-11-24",
+          "status": "in-progress"
+        }
+      ],
+      "started": "2026-11-24"
     }
   },
   "struggles": [
@@ -217,12 +834,48 @@
       "id": "01.3",
       "note": "needs to repeat: understood it, but too much math to remember (H(p,q)=H(p)+KL split, 0 log 0 cases)",
       "date": "2026-09-27",
-      "resolved": null
+      "resolved": "2026-10-09"
     },
     {
       "id": "01.4",
       "note": "needs to repeat: understood it, but too much math to remember (cross-entropy steps, log-softmax max-shift derivation)",
       "date": "2026-09-27",
+      "resolved": null
+    },
+    {
+      "id": "05.2",
+      "note": "do the Q/V/K alone again",
+      "date": "2026-10-01",
+      "resolved": null
+    },
+    {
+      "id": "07.4",
+      "note": "memory footprint",
+      "date": "2026-10-05",
+      "resolved": null
+    },
+    {
+      "id": "08.3",
+      "note": "identify the methos in the gpu trace",
+      "date": "2026-10-09",
+      "resolved": null
+    },
+    {
+      "id": "12.1",
+      "note": "math",
+      "date": "2026-10-19",
+      "resolved": null
+    },
+    {
+      "id": "12.2",
+      "note": "math",
+      "date": "2026-10-19",
+      "resolved": null
+    },
+    {
+      "id": "15.2",
+      "note": "needs a second pass",
+      "date": "2026-11-16",
       "resolved": null
     }
   ],
@@ -338,6 +991,362 @@
     {
       "date": "2026-09-30",
       "event": "in-progress 03.3"
+    },
+    {
+      "date": "2026-09-30",
+      "event": "completed 03.3"
+    },
+    {
+      "date": "2026-09-30",
+      "event": "in-progress 04.1"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "in-progress 04.2"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "completed 04.1"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "completed 04.2"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "in-progress 04.3"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "in-progress 05.1"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "completed 04.3"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "completed 05.1"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "in-progress 05.2"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "struggle 05.2: do the Q/V/K alone again"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "in-progress 05.3"
+    },
+    {
+      "date": "2026-10-01",
+      "event": "completed 05.2"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "completed 05.3"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "in-progress 05.4"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "in-progress 06.1"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "completed 05.4"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "completed 06.1"
+    },
+    {
+      "date": "2026-10-02",
+      "event": "in-progress 06.2"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "completed 06.2"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "in-progress 06.3"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "in-progress 07.1"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "completed 06.3"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "completed 07.1"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "in-progress 07.2"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "in-progress 07.3"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "completed 07.2"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "completed 07.3"
+    },
+    {
+      "date": "2026-10-03",
+      "event": "in-progress 07.4"
+    },
+    {
+      "date": "2026-10-05",
+      "event": "read 07.4"
+    },
+    {
+      "date": "2026-10-05",
+      "event": "struggle 07.4: memory footprint"
+    },
+    {
+      "date": "2026-10-05",
+      "event": "in-progress 08.1"
+    },
+    {
+      "date": "2026-10-07",
+      "event": "in-progress 08.3"
+    },
+    {
+      "date": "2026-10-07",
+      "event": "completed 08.1"
+    },
+    {
+      "date": "2026-10-07",
+      "event": "completed 08.1"
+    },
+    {
+      "date": "2026-10-07",
+      "event": "completed 08.2"
+    },
+    {
+      "date": "2026-10-09",
+      "event": "completed 08.4"
+    },
+    {
+      "date": "2026-10-09",
+      "event": "in-progress 09.1"
+    },
+    {
+      "date": "2026-10-09",
+      "event": "completed 08.3"
+    },
+    {
+      "date": "2026-10-09",
+      "event": "struggle 08.3: identify the methos in the gpu trace"
+    },
+    {
+      "date": "2026-10-09",
+      "event": "resolve 01.3"
+    },
+    {
+      "date": "2026-10-10",
+      "event": "completed 09.1"
+    },
+    {
+      "date": "2026-10-10",
+      "event": "in-progress 09.2"
+    },
+    {
+      "date": "2026-10-11",
+      "event": "in-progress 09.3"
+    },
+    {
+      "date": "2026-10-11",
+      "event": "completed 09.2"
+    },
+    {
+      "date": "2026-10-12",
+      "event": "completed 09.3"
+    },
+    {
+      "date": "2026-10-12",
+      "event": "in-progress 10.1"
+    },
+    {
+      "date": "2026-10-13",
+      "event": "completed 10.1"
+    },
+    {
+      "date": "2026-10-13",
+      "event": "in-progress 10.2"
+    },
+    {
+      "date": "2026-10-16",
+      "event": "completed 10.2"
+    },
+    {
+      "date": "2026-10-16",
+      "event": "in-progress 10.3"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "completed 10.3"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "in-progress 11.1"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "completed 11.1"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "in-progress 11.2"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "read 11.2"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "in-progress 11.3"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "completed 11.3"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "in-progress 12.1"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "struggle 12.1: math"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "struggle 12.2: math"
+    },
+    {
+      "date": "2026-10-19",
+      "event": "in-progress 12.2"
+    },
+    {
+      "date": "2026-10-20",
+      "event": "completed 12.2"
+    },
+    {
+      "date": "2026-10-20",
+      "event": "in-progress 12.3"
+    },
+    {
+      "date": "2026-11-03",
+      "event": "completed 12.2"
+    },
+    {
+      "date": "2026-11-03",
+      "event": "completed 12.3"
+    },
+    {
+      "date": "2026-11-03",
+      "event": "completed 12.4"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "read 12.5"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "completed 13.1"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "in-progress 13.2"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "in-progress 13.3"
+    },
+    {
+      "date": "2026-11-06",
+      "event": "completed 13.2"
+    },
+    {
+      "date": "2026-11-11",
+      "event": "completed 13.3"
+    },
+    {
+      "date": "2026-11-11",
+      "event": "completed 14.1"
+    },
+    {
+      "date": "2026-11-11",
+      "event": "completed 14.2"
+    },
+    {
+      "date": "2026-11-11",
+      "event": "in-progress 14.3"
+    },
+    {
+      "date": "2026-11-12",
+      "event": "completed 14.3"
+    },
+    {
+      "date": "2026-11-12",
+      "event": "in-progress 15.1"
+    },
+    {
+      "date": "2026-11-13",
+      "event": "completed 15.1"
+    },
+    {
+      "date": "2026-11-13",
+      "event": "in-progress 15.2"
+    },
+    {
+      "date": "2026-11-16",
+      "event": "completed 15.2"
+    },
+    {
+      "date": "2026-11-16",
+      "event": "struggle 15.2: needs a second pass"
+    },
+    {
+      "date": "2026-11-23",
+      "event": "completed 15.2"
+    },
+    {
+      "date": "2026-11-23",
+      "event": "completed 15.3"
+    },
+    {
+      "date": "2026-11-23",
+      "event": "completed 15.4"
+    },
+    {
+      "date": "2026-11-23",
+      "event": "completed 01.5"
+    },
+    {
+      "date": "2026-11-24",
+      "event": "completed 15.5"
+    },
+    {
+      "date": "2026-11-24",
+      "event": "in-progress 16.1"
+    },
+    {
+      "date": "2026-11-25",
+      "event": "reset 01.5"
     }
   ]
 }

@@ -225,4 +225,4 @@ Shared experts are always active for every token (not routed). They capture know
 
 ## Next
 
-You now have every piece that separates a GPT-2 from a LLaMA/DeepSeek-style model: RoPE positions, RMSNorm, SwiGLU, GQA, and MoE. Module 13 turns to measuring these models. Continue to [13.1 · Loss, perplexity, zero-/few-shot](lessons/module-13/lesson-01.md).
+You now have every piece that separates a GPT-2 from a LLaMA/DeepSeek-style model: RoPE positions, RMSNorm, SwiGLU, GQA, and MoE. One piece is left: the newest frontier models swap most softmax attention layers for a cheaper recurrent layer. Continue to [12.5 · Linear attention, Gated DeltaNet & hybrid stacks](lessons/module-12/lesson-05.md).

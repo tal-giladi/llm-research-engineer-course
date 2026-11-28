@@ -1,0 +1,111 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8080"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "moe-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/mixture-of-experts-engineering-course"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "frontier-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8781",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/frontier-llm-research-course"
+      ],
+      "port": 8781
+    },
+    {
+      "name": "math-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8782",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/math-for-machine-learning"
+      ],
+      "port": 8782
+    },
+    {
+      "name": "cap-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8783",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/CAP-Boulanger-course"
+      ],
+      "port": 8783
+    },
+    {
+      "name": "ai-native-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8784",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/ai-native-org"
+      ],
+      "port": 8784
+    },
+    {
+      "name": "ai-security-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8785",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/ai-security-course"
+      ],
+      "port": 8785
+    },
+    {
+      "name": "law-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8786",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/activist-law-course"
+      ],
+      "port": 8786
+    },
+    {
+      "name": "capstone-course",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8787",
+        "--directory",
+        "C:/Users/TalGiladi/OneDrive/repos/course-creator/gpt-capstone-course"
+      ],
+      "port": 8787
+    }
+  ]
+}

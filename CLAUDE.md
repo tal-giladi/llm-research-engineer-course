@@ -1,5 +1,9 @@
 # Build guide — LLM Research Engineer course
 
+> **Course guidelines (binding):** before writing or changing any course content, read
+> `C:\Users\TalGiladi\OneDrive\repos\tals-academy\docs\new-course-instructions.md`. It wins over
+> anything in this file or the course plan unless Tal says otherwise in chat.
+
 This repo is a **docsify static course site** plus a **runnable PyTorch codebase** (`code/`).
 It teaches an experienced software engineer to work as an ML Research / LLM Training Engineer,
 using Stanford CS336 as the backbone and extending into frontier-model research. Source brief:
