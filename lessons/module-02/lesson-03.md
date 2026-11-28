@@ -66,8 +66,8 @@ Softmax maps a vector $\mathbf{z}$ to a vector $\mathbf{p}$, so its derivative i
 
 $$
 J = \begin{pmatrix}
-\frac{\partial p_1}{\partial z_1} & \frac{\partial p_1}{\partial z_2} & \frac{\partial p_1}{\partial z_3} \
-\frac{\partial p_2}{\partial z_1} & \frac{\partial p_2}{\partial z_2} & \frac{\partial p_2}{\partial z_3} \
+\frac{\partial p_1}{\partial z_1} & \frac{\partial p_1}{\partial z_2} & \frac{\partial p_1}{\partial z_3} \\
+\frac{\partial p_2}{\partial z_1} & \frac{\partial p_2}{\partial z_2} & \frac{\partial p_2}{\partial z_3} \\
 \frac{\partial p_3}{\partial z_1} & \frac{\partial p_3}{\partial z_2} & \frac{\partial p_3}{\partial z_3}
 \end{pmatrix}.
 $$
@@ -95,8 +95,8 @@ Filling in all nine entries for $C = 3$:
 
 $$
 J = \begin{pmatrix}
-p_1(1-p_1) & -p_1 p_2 & -p_1 p_3 \
--p_2 p_1 & p_2(1-p_2) & -p_2 p_3 \
+p_1(1-p_1) & -p_1 p_2 & -p_1 p_3 \\
+-p_2 p_1 & p_2(1-p_2) & -p_2 p_3 \\
 -p_3 p_1 & -p_3 p_2 & p_3(1-p_3)
 \end{pmatrix},
 $$
