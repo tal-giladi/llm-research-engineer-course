@@ -120,6 +120,22 @@ def test_data_parallel_grad_equals_full_batch():
         assert np.allclose(avg, full, atol=1e-6), (W, avg, full)
 
 
+def test_data_parallel_grad_accepts_plain_tuple_batch():
+    """Lesson 9.1 calls ``data_parallel_grads(mean_grad, theta, (X, y), W)``."""
+    rng = np.random.default_rng(5)
+    d, W = 3, 4
+    X = rng.standard_normal((32, d))
+    y = rng.standard_normal((32,))
+    w = rng.standard_normal((d,))
+
+    shards = split_batch((X, y), W)
+    assert len(shards) == W
+    assert all(s[0].shape == (8, d) and s[1].shape == (8,) for s in shards)
+
+    avg = data_parallel_grads(_lin_reg_mean_grad, w, (X, y), W)
+    assert np.allclose(avg, _lin_reg_mean_grad(w, (X, y)), atol=1e-6)
+
+
 def test_split_batch_requires_divisible():
     X = np.zeros((7, 2))
     y = np.zeros((7,))

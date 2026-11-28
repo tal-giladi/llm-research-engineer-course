@@ -35,13 +35,24 @@ def split_batch(batch: Sequence, world_size: int) -> List:
     required for the averaging identity to hold exactly (unequal shards would need
     a size-weighted average instead of a plain mean).
 
+    A ``tuple`` is treated as parallel fields of one batch, e.g. ``(X, y)``: each
+    field is split along its first axis and every shard is again a tuple
+    ``(X_shard, y_shard)``. All fields must have the same length ``B``.
+
     Args:
-        batch: the global batch, first axis indexed by example.
+        batch: the global batch, first axis indexed by example, or a tuple of
+            such arrays (inputs, targets, ...) sharing that first axis.
         world_size: number of simulated workers ``W``.
 
     Returns:
         List of ``W`` shards.
     """
+    if isinstance(batch, tuple):
+        lengths = {len(field) for field in batch}
+        if len(lengths) != 1:
+            raise ValueError(f"tuple batch fields have different lengths {sorted(lengths)}")
+        per_field = [split_batch(field, world_size) for field in batch]
+        return [tuple(field_shards) for field_shards in zip(*per_field)]
     B = len(batch)
     if world_size <= 0:
         raise ValueError("world_size must be >= 1")
