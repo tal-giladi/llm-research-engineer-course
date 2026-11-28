@@ -70,14 +70,25 @@ def data_parallel_grads(
     parallelism.
 
     Args:
-        grad_fn: callable ``grad_fn(params, batch_shard) -> gradient``. It MUST
-            return the gradient of the **mean** loss over ``batch_shard`` (the
-            same reduction the full-batch loss uses), as a single NumPy array or
-            torch tensor whose shape matches ``params``' gradient.
-        params: the (replicated) parameters, passed through to ``grad_fn``
-            unchanged. In this simulation every worker shares the same ``params``
-            object, exactly as real replicas hold identical weights at step start.
-        batch: global batch, length divisible by ``world_size``.
+        grad_fn: callable ``grad_fn(params, batch_shard) -> gradient``. It runs
+            the whole local step for one worker: the **forward pass** (model
+            output and mean loss on ``batch_shard``) and then the **backward
+            pass** (gradient of that loss with respect to ``params``). This
+            function is therefore called *before* any forward pass, not after.
+            It MUST return the gradient of the **mean** loss over
+            ``batch_shard`` (the same reduction the full-batch loss uses), as a
+            single NumPy array or torch tensor whose shape matches ``params``.
+        params: the current model weights (parameter values) at the start of
+            this step, e.g. the weight vector ``theta`` in linear regression or
+            the model's weight tensors. Passed to ``grad_fn`` unchanged and
+            never updated here. In this simulation every worker shares the same
+            ``params`` object, exactly as real replicas hold identical weights
+            at step start.
+        batch: the raw training examples for this step, i.e. inputs and their
+            targets (for example ``X`` rows with matching ``y`` values), not
+            activations or losses. Sliced along its first axis into
+            ``world_size`` equal shards, so its length must be divisible by
+            ``world_size``.
         world_size: number of simulated workers ``W``.
 
     Returns:
