@@ -7,3 +7,5 @@ Basic definitions in my own words.
 **Ring-reduce** — a reduce method aimed at saving traffic.
 
 **Fusion** — merging sequential operations (like add bias → GELU → dropout) into one GPU kernel, e.g. with `torch.compile`, so the intermediate results stay in the GPU chip's fast on-chip memory instead of being written to GPU memory (HBM) and read back between every step.
+
+**FlashAttention** — breaking the attention operations (Q·Kᵀ, softmax, × V) into smaller tiles so fusion can be applied to them (they are too big for regular fusion).
