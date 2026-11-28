@@ -193,4 +193,4 @@ Two things. First, even for R1, "no SFT" is only true of R1-*Zero*; the full R1 
 
 You have reconstructed the full DeepSeek-R1 pipeline, run its control flow in `mini_r1`, and learned to separate what a frontier report documents from what you infer. That completes the reasoning track (Modules 16–17): from CoT prompting, through verifiable-reward RL and GRPO, to a modern reasoning model end to end. The course now turns from *how a model reasons* to *how a model acts* — calling tools and running as an agent.
 
-Continue to [18.1 · Tool use](lessons/module-18/lesson-01.md).
+Before that, one more post-training tool: continue to [17.4 · Logit & on-policy distillation](lessons/module-17/lesson-04.md).

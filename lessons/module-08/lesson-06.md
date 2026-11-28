@@ -482,6 +482,6 @@ Cropping shifts every token's absolute position by one. With learned position em
 
 ## Next
 
-You can now predict where inference time goes: prefill is a training-like pass, decode is a bandwidth problem, and the cache is the memory that caps the batch. Module 9 takes the same bytes-versus-FLOPs reasoning from one GPU to many. When you reach [12.3](lessons/module-12/lesson-03.md), you will see GQA attack the cache size directly, and in [16.4](lessons/module-16/lesson-04.md) you will see what happens when the rollout engine of section 6.1 and the trainer disagree about the numbers.
+You can now predict where inference time goes: prefill is a training-like pass, decode is a bandwidth problem, and the cache is the memory that caps the batch. Next, quantization shrinks the weights that decode has to stream from memory every step. When you reach [12.3](lessons/module-12/lesson-03.md), you will see GQA attack the cache size directly, and in [16.4](lessons/module-16/lesson-04.md) you will see what happens when the rollout engine of section 6.1 and the trainer disagree about the numbers.
 
-Continue to [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md).
+Continue to [08.7 · Post-training quantization: int8/int4, GPTQ, AWQ](lessons/module-08/lesson-07.md).

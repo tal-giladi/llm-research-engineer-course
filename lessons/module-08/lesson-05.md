@@ -339,6 +339,6 @@ When you need the full distribution: sampling during generation, logging or stor
 
 ## Next
 
-You now have both halves of the "never materialize the big intermediate" pattern: FlashAttention for the $T \times T$ scores (08.4) and fused cross-entropy for the $N \times V$ logits (this lesson). The same trade, a little recomputation for far fewer bytes, scales up from one GPU to many in the next module.
+You now have both halves of the "never materialize the big intermediate" pattern: FlashAttention for the $T \times T$ scores (08.4) and fused cross-entropy for the $N \times V$ logits (this lesson). The same bytes-versus-FLOPs reasoning now moves from training to serving.
 
-Continue to [09.1 · Data parallelism, all-reduce, DDP](lessons/module-09/lesson-01.md).
+Continue to [08.6 · Inference serving: KV cache, batching, speculative decoding](lessons/module-08/lesson-06.md).

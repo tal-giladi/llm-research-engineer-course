@@ -268,4 +268,4 @@ Parameters, gradients, and optimizer state have exactly one number per parameter
 
 You now have the full pretraining picture: the loop (07.1), how to size and split batches (07.2), how to save and resume exactly (07.3), and how to reason about speed, cost, and memory (07.4). The memory accounting here — activations dominating, the $4P$ fixed floor — is precisely the pressure that the **memory hierarchy and efficient attention** of the next module relieve, and the $6ND$ compute rule is the foundation the **scaling laws** of Module 10 build on.
 
-Continue to [08.1 · The GPU memory hierarchy](lessons/module-08/lesson-01.md), and see the scaling-law payoff in [10.1](lessons/module-10/lesson-01.md).
+Work through the [07.4 · Practice set](lessons/module-07/practice-04.md) first, then continue to [08.1 · The GPU memory hierarchy](lessons/module-08/lesson-01.md), and see the scaling-law payoff in [10.1](lessons/module-10/lesson-01.md).

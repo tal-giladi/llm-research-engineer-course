@@ -173,4 +173,4 @@ The verifier has false positives (or is gameable): the model is learning to sati
 
 You now have the full Module 16 toolkit: GRPO (critic-free RL), RLVR (verifiable rewards), and rejection sampling — plus the judgment to distinguish outcome from process rewards and to distrust your own verifier. Module 17 turns these into modern reasoning models: chain-of-thought and self-consistency, process reward models and the DeepSeekMath training recipe in depth, and the DeepSeek-R1 case study that ties every piece together.
 
-Continue to [17.1 · CoT, self-consistency, STaR](lessons/module-17/lesson-01.md).
+Before Module 17, one systems trap in this RL loop: continue to [16.4 · Training–inference mismatch](lessons/module-16/lesson-04.md).

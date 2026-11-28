@@ -241,3 +241,5 @@ Exactly one thing changes — the norm — and everything else (corpus, tokens, 
 ## Next: keep going
 
 You have finished the course, but a research engineer never stops reading. Pick a paper you have *not* read from the [paper reading curriculum](papers/index.md) — a strong first choice is [OLMo 2](https://arxiv.org/abs/2501.00656), because its data, code, and checkpoints are fully open, so you can reproduce and ablate it against everything you built here. Read it with the nine-question method (what problem → key idea → which equations → what to implement → how it influenced later LLMs), then implement the one thing it changes inside `llmre`, wire it into `code/scripts/capstone.py`, and write the result up with the [experiment report template](papers/index.md). That loop — read, implement, test, measure, write — is the job. You are ready to do it.
+
+For what changed in the field since the core course was written, continue to the frontier updates, starting with [F.1 · MLPerf post-training: RLVR as a benchmark](lessons/frontier/update-01.md).

@@ -593,4 +593,4 @@ With a fixed batch, steps and tokens are proportional, so it does not matter. Wi
 
 You now have the full optimization toolkit: the update rule and momentum (03.1), adaptive per-parameter scaling and decoupled weight decay in AdamW (03.2), and the warmup + cosine schedule with gradient clipping that keep a real run stable, plus the batch ramp that large runs use to spend their early tokens well (03.3). Every training loop for the rest of the course uses exactly these pieces. The next module leaves optimization behind and turns to how text becomes numbers the model can consume — **tokenization**: characters, bytes, Unicode, and Byte-Pair Encoding from scratch.
 
-Continue to [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md).
+Continue to [03.4 · Muon: orthogonalized momentum for weight matrices](lessons/module-03/lesson-04.md), then on to tokenization in [04.1 · Characters, bytes, Unicode, the vocab problem](lessons/module-04/lesson-01.md).

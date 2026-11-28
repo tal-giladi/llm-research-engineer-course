@@ -325,4 +325,4 @@ Almost entirely the KV cache of the 12 full-attention layers ($2\cdot 12 \cdot 2
 
 ## Next
 
-Module 12 is complete: you have RoPE, RMSNorm, SwiGLU, GQA, MoE and now the linear/hybrid alternative to a growing KV cache. Module 13 turns to measuring these models. Continue to [13.1 · Loss, perplexity, zero-/few-shot](lessons/module-13/lesson-01.md).
+You now have RoPE, RMSNorm, SwiGLU, GQA, MoE and the linear/hybrid alternative to a growing KV cache. One more way to tame long-context attention remains: keep softmax attention but let each query look at only a few selected tokens. Continue to [12.6 · Sparse attention: DeepSeek Sparse Attention](lessons/module-12/lesson-06.md).
